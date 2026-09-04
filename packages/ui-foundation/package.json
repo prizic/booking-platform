@@ -1,0 +1,27 @@
+{
+  "name": "@wlbp/ui-foundation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src --max-warnings=0"
+  },
+  "peerDependencies": {
+    "react": "catalog:"
+  },
+  "wlbp": {
+    "distribution": "distributed"
+  }
+}

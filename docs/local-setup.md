@@ -1,53 +1,56 @@
 # Local Setup
 
-The planned local development environment: toolchain, environment variable names, bring-up sequence, and the verification commands each CI gate will run.
+The local development environment: toolchain, environment variable names, bring-up sequence, and the verification commands each CI gate runs or will run.
 
 Authoritative source: §10.1, §13.1, §14.1, §16.6, §24 of [the architecture spec](../WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md).
 
 ---
 
-## Reality check: one gate runs today
+## Reality check: the workspace runs; the backend does not yet
 
-This repository currently contains the architecture specification, the `docs/` knowledge pack, and `scripts/`. There is **no `package.json`, no `pnpm-workspace.yaml`, no `turbo.json`, no `apps/`, no `supabase/`, and no Supabase project.**
-
-One thing *is* executable and does pass today:
-
-```bash
-bash scripts/check-docs.sh
-```
-
-It is the knowledge-pack gate (issue #1): it runs `scripts/check_links.py` to resolve every relative link and anchor, checks that specification §1–§34 are all mapped in [docs/README.md](./README.md), scans for secret-shaped strings and compliance claims, and checks that tenant/brand/instance are kept distinct. Requires only `bash` and `python3`. Run it before opening any documentation pull request.
-
-Everything else below is planned:
+Issue #3 adds the private pnpm/Turborepo monorepo, all three Next.js
+application shells, the ADR-0011 package set, and local enforcement scripts.
+The `supabase/` directory reserves platform ownership only: there is still no
+Supabase project, migration, seed, or database test harness until issues #4 and
+#6.
 
 | Thing | Status | Lands in |
 | ----- | ------ | -------- |
-| Knowledge-pack gate (`bash scripts/check-docs.sh`) | **Runs today and passes** | Issue #1 (done) |
-| Monorepo scaffold (workspaces, apps, packages, `turbo.json`) | Not yet available | Issue #3 |
+| Knowledge-pack gate (`bash scripts/check-docs.sh`) | Available | Issue #1 (done) |
+| Monorepo scaffold (workspaces, apps, packages, `turbo.json`) | Available | Issue #3 |
+| Local workspace gates (format, lint, types, unit, build, boundaries, distribution, config, secrets, bundles) | Available | Issue #3 |
 | Supabase local stack (`supabase start`), migrations, seed | Not yet available | Issue #4 (environments) — scope boundary to confirm on the ticket, since #3 does not mention Supabase |
 | pgTAP / RLS tests and the tenant-isolation fixtures they need | Not yet available | Issue #6 (tenant isolation) — scope boundary to confirm on the ticket |
 | CI workflows that run the gates below | Not yet available | Issue #4 |
-| Everything in "Bring-up sequence" and the pending rows in "Verification commands" | **Intended commands only. None execute today.** | Issues #3 / #4 / #6 |
+| Browser E2E, accessibility, RTL interaction, and visual suites | Not yet available | Issue #5 (foundation), issue #4 (CI) |
 
-Do not file a bug because a planned command below fails. It fails because the code does not exist yet.
+An unavailable gate is reported as `N/A` with its owning issue. It is never
+reported as passing.
 
 ---
 
-## Planned toolchain
+## Toolchain
 
 | Tool | Role | Notes |
 | ---- | ---- | ----- |
-| **Node.js** (active LTS) | Runtime for apps and tooling | Version pinned by `.nvmrc` / `engines` in issue #3 |
-| **pnpm workspaces** | Package manager and workspace linking | §10.1. Installs are always frozen-lockfile in CI |
-| **Turborepo** | Task orchestration and caching across workspaces | §10.1. `turbo.json` defines the task graph |
-| **TypeScript** | Language for all three applications and every package | §13.1 |
-| **Next.js (App Router)** | Client, Dashboard, and Platform Admin | RSC by default; client components only for browser-state interaction (§13.1) |
+| **Node.js 22.22.0** | Runtime for apps and tooling | Pinned by `.nvmrc`; engines accept maintained Node 22 versions from 22.13 |
+| **pnpm 11.25.0 workspaces** | Package manager and workspace linking | The root manifest pins it; installs are frozen in verification and CI |
+| **Turborepo 2.10.12** | Task orchestration and caching across workspaces | `turbo.json` defines the task graph |
+| **TypeScript 6.0.3** | Language for all three applications and every package | Pinned below 6.1 for the supported TypeScript ESLint peer range |
+| **Next.js 16.3.4 / React 19.2.8** | Client, Dashboard, and Platform Admin | App Router; Server Components by default |
 | **Supabase CLI** | Local Postgres + Auth + Storage + Edge Functions stack, migrations, `supabase test db` | §14.1, §24.2. Requires Docker |
 | **Docker Desktop** (or compatible engine) | Runs the local Supabase containers | Prerequisite for the CLI stack |
 | **Playwright** | E2E and accessibility runs | §24.1 |
 | **pgTAP** | Database, RLS, and function tests | Executed via `supabase test db` |
 
-Exact versions are set by issue #3. Treat the table as the shape of the toolchain, not a lockfile.
+The lockfile is the installation authority. The workspace catalog keeps shared
+runtime and type packages on one reviewed version. Foundational dependencies
+were selected from maintained, permissively licensed packages; boundary tooling
+is development-only, and the application shells ship no provider SDK.
+ESLint is pinned to 9.39.5 because the React/import plugins consumed by the
+Next.js configuration do not yet declare ESLint 10 support. Unapproved
+dependency lifecycle scripts are denied by default; the unused
+`unrs-resolver` postinstall is explicitly denied.
 
 ---
 
@@ -112,51 +115,52 @@ These belong to Platform Admin and the provisioning automation only. **A Client 
 
 ---
 
-## Bring-up sequence (planned)
-
-Every step below is pending issues #3, #4, and #6.
+## Bring-up sequence
 
 1. **Install prerequisites** — Node LTS, `corepack enable` for pnpm, Docker, and the Supabase CLI.
 2. **Clone and install** — `pnpm install --frozen-lockfile` at the repository root.
 3. **Create your local env files** — copy the committed `.env.example` (added by issue #3) to `.env.local` in each app and fill each variable yourself. Values are never distributed.
-4. **Start the local backend** — `pnpm supabase:start` (wrapper around `supabase start`). Wait for the CLI to report the local API URL and keys.
-5. **Reset the database from zero** — `pnpm db:reset` (`supabase db reset`) to replay all migrations and apply `supabase/seed.sql`. This is also CI step 4 (§24.4); if it fails locally it will fail in CI.
-6. **Seed synthetic tenants** — the seed file provisions non-production tenants and a local hostname mapping so tenant resolution has something to resolve (§13.3). Never seed real customer data.
-7. **Generate database types** — `pnpm db:types` writes generated Supabase types into `packages/supabase-client`.
-8. **Run the apps** — `pnpm dev` (Turborepo runs Client, Dashboard, and Platform Admin). Access the Client through `LOCAL_TENANT_HOST`, not `localhost` directly, so tenant resolution behaves like production.
+4. **Start the local backend (pending issue #4)** — the future `pnpm supabase:start` wrapper will start Supabase. Until then the identity pages intentionally render without a backend.
+5. **Reset the database from zero (pending issue #4)** — the future `pnpm db:reset` command will replay migrations and synthetic seed data.
+6. **Seed synthetic tenants (pending issue #4)** — never seed real customer data.
+7. **Generate database types (pending issue #4)** — the future `pnpm db:types` command writes safe generated types into `packages/supabase-client`.
+8. **Run the apps** — `pnpm dev` starts Client on 3000, Dashboard on 3001, and Platform Admin on 3002. The issue #3 identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
 9. **Verify** — run the gates in the next section before opening a pull request.
 
-Tear down with `pnpm supabase:stop`. Wiping local volumes is safe; the local stack holds only synthetic data.
+After issue #4 adds the local stack, its future `pnpm supabase:stop` command will tear it down. Wiping those local volumes is safe because they contain synthetic data only.
 
 ---
 
 ## Verification commands
 
-These map one-to-one onto the CI gates in [engineering-rules.md](./engineering-rules.md) §9 (source monorepo CI). **Exactly one of them runs today** — the knowledge-pack gate. Every other command is still a proposal. Report a gate that does not exist yet as `N/A — not yet implemented, owned by issue #N`, never as passing (see [`../AGENTS.md`](../AGENTS.md)).
+These map onto [engineering-rules.md](./engineering-rules.md) §9. Commands marked
+available run locally now; issue #4 owns their CI wiring. Report an unavailable
+gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 
 | Gate | Intended command | Status |
 | ---- | ---------------- | ------ |
-| Knowledge pack (links, coverage, secrets, naming) | `bash scripts/check-docs.sh` | **Runs today and passes** — issue #1 |
-| Format | `pnpm format:check` | Pending — issue #3 (script), #4 (CI) |
-| Lint | `pnpm lint` | Pending — issue #3 (script), #4 (CI) |
-| Typecheck | `pnpm typecheck` | Pending — issue #3 (script), #4 (CI) |
-| Unit / domain tests | `pnpm test:unit` | Pending — issue #3 (script), #4 (CI) |
-| Component tests | `pnpm test:component` | Pending — issue #3 (script), #4 (CI) |
+| Knowledge pack (links, coverage, secrets, naming) | `pnpm check:docs` | Available — issue #1 |
+| Frozen install / lockfile | `pnpm install --frozen-lockfile` | Available — issue #3 |
+| Format | `pnpm format:check` | Available — issue #3 |
+| Lint | `pnpm lint` | Available — issue #3 |
+| Typecheck | `pnpm typecheck` | Available — issue #3 |
+| Unit / domain tests | `pnpm test:unit` | Available — issue #3 |
+| Component tests | `pnpm test:component` | Pending — issue #5 (suite), #4 (CI) |
 | Database reset from zero | `pnpm db:reset` | Pending — issue #4 (Supabase local stack and environments); scope boundary to confirm on the ticket |
 | RLS / pgTAP tests | `pnpm test:db` (`supabase test db`) | Pending — issue #6 (tenant-isolation tests), #4 (CI); scope boundary to confirm on the ticket |
-| Contract tests | `pnpm test:contract` | Pending — issue #3 (script), #4 (CI) |
-| Concurrency tests | `pnpm test:concurrency` | Pending — issue #3 (harness), #4 (CI) |
-| Build all apps | `pnpm build` | Pending — issue #3 |
-| E2E | `pnpm test:e2e` | Pending — issue #3 (script), #4 (CI) |
-| Accessibility (+ RTL) | `pnpm test:a11y` | Pending — issue #3 (script), #4 (CI) |
-| Localization parity | `pnpm test:i18n` | Pending — issue #3 (script), #4 (CI) |
+| Contract tests | `pnpm test:contract` | Pending — issue #4 |
+| Concurrency tests | `pnpm test:concurrency` | Pending — issues #4 / #6 |
+| Build all apps and packages | `pnpm build` | Available — issue #3 |
+| E2E | `pnpm test:e2e` | Pending — issues #4 / #5 |
+| Accessibility (+ RTL interaction) | `pnpm test:a11y` | Pending — issues #4 / #5 |
+| Localization parity | `pnpm test:i18n` | Pending — issue #5; issue #3 config validation already checks template message-key parity |
 | Visual regression | `pnpm test:visual` | Pending — issue #4 |
-| Instance config validation | `pnpm check:config` | Pending — issue #3 (script), #4 (CI) |
-| Forbidden imports / boundaries | `pnpm check:boundaries` | Pending — issue #3 (its acceptance criteria require it), #4 (CI wiring) |
-| Distribution export + dependency closure | `pnpm check:distribution` | Pending — issue #3 (its acceptance criteria require it), #4 (CI wiring) |
-| Secret / private-path / history scan | `pnpm check:secrets` | Pending — issue #3 (its acceptance criteria require it), #4 (CI wiring) |
-
-Command names other than `scripts/check-docs.sh` are proposals from the CI order in §24.4. Issue #3 is free to rename them; if it does, this table is updated in the same pull request. Where the owning ticket is marked "scope boundary to confirm", settle it on the ticket before building, rather than assuming this table is authoritative.
+| Instance config validation | `pnpm check:config` | Available — issue #3 |
+| Forbidden imports / boundaries / cycles | `pnpm check:boundaries` | Available — issue #3 |
+| Distribution dependency closure | `pnpm check:distribution` | Available — issue #3; actual export/history fixture is issue #4 / #29 |
+| Secret-shaped value scan | `pnpm check:secrets` | Available — issue #3; full exported-history scan is issue #4 / #29 |
+| Distributed bundle leakage | `pnpm check:bundles` after `pnpm build` | Available — issue #3 |
+| Workspace dependency graph | `pnpm graph:dependencies` | Available — issue #3 |
 
 ### Required coverage before a pull request
 

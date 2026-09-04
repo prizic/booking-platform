@@ -1,0 +1,28 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  unrs-resolver: false
+
+catalog:
+  "@supabase/ssr": 0.12.6
+  "@supabase/supabase-js": 2.115.0
+  "@types/node": 22.20.1
+  "@types/react": 19.2.18
+  "@types/react-dom": 19.2.7
+  next: 16.3.4
+  react: 19.2.8
+  react-dom: 19.2.8
+  server-only: 0.0.1
+  typescript: 6.0.3
+  vitest: 5.0.0
+
+catalogMode: strict
+
+minimumReleaseAgeExclude:
+  - "@supabase/ssr@0.12.6"
+  - eslint@9.39.5
+
+onlyBuiltDependencies:
+  - sharp

@@ -1,0 +1,6 @@
+{
+  "tenantId": "tenant-template",
+  "instanceId": "instance-template",
+  "defaultLocale": "en",
+  "supportedLocales": ["en", "ar"]
+}

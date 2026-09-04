@@ -21,10 +21,11 @@ note "3. Forbidden strings in docs and agent guidance"
 # Secret-shaped literals and instructions that must never ship in the knowledge pack.
 # Only real-looking values count; naming a forbidden token *shape* (sk_live_…) is allowed.
 patterns='(sk|rk|pk)_(live|test)_[A-Za-z0-9]{8,}|re_[A-Za-z0-9]{16,}|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{10,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|_KEY=[A-Za-z0-9/+_-]{8,}|password\s*=\s*["'"'"'][^"'"'"'<]'
-if grep -rInE "$patterns" --include='*.md' . ; then bad "secret-shaped literal above"; fi
+grep_excludes=(--exclude-dir=.git --exclude-dir=.next --exclude-dir=.turbo --exclude-dir=coverage --exclude-dir=dist --exclude-dir=node_modules)
+if grep -rInE "$patterns" "${grep_excludes[@]}" --include='*.md' . ; then bad "secret-shaped literal above"; fi
 
 note "4. Unvalidated compliance claims"
-if grep -rInE '\b(is|are|fully|GDPR|PDPL|PCI|SAMA|ZATCA)[ -]*(compliant|compliance certified)\b' --include='*.md' . \
+if grep -rInE '\b(is|are|fully|GDPR|PDPL|PCI|SAMA|ZATCA)[ -]*(compliant|compliance certified)\b' "${grep_excludes[@]}" --include='*.md' . \
    | grep -viE 'not a compliance|no compliance|requires independent legal review|never claim|compliance claim'; then
   bad "compliance claim above — use 'requires independent legal review'"
 fi

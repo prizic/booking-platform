@@ -1,0 +1,32 @@
+{
+  "name": "@wlbp/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3001",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings=0",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@wlbp/config": "workspace:*",
+    "@wlbp/i18n": "workspace:*",
+    "@wlbp/ui-foundation": "workspace:*",
+    "@wlbp/white-label-ui": "workspace:*",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "wlbp": {
+    "distribution": "distributed"
+  }
+}

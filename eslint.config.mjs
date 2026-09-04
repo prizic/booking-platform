@@ -1,0 +1,51 @@
+import eslint from "@eslint/js";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
+import globals from "globals";
+import tseslint from "typescript-eslint";
+
+export default defineConfig(
+  globalIgnores([
+    "**/.next/**",
+    "**/.turbo/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/node_modules/**",
+    "instance-template/instance/theme.css",
+  ]),
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+  ...nextVitals,
+  ...nextTypeScript,
+  {
+    settings: {
+      react: { version: "19.2" },
+    },
+  },
+  {
+    files: ["**/*.{js,mjs,cjs}"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    files: ["**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { fixStyle: "inline-type-imports" },
+      ],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "no-unused-vars": "off",
+    },
+  },
+  {
+    rules: {
+      "@next/next/no-html-link-for-pages": "off",
+    },
+  },
+);

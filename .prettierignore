@@ -1,0 +1,10 @@
+.git
+.next
+.turbo
+coverage
+dist
+node_modules
+pnpm-lock.yaml
+AGENTS.md
+WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md
+docs/

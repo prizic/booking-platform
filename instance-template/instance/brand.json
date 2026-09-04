@@ -1,0 +1,31 @@
+{
+  "name": "Example Booking",
+  "assets": {
+    "logoLight": "/assets/logo-light.svg",
+    "logoDark": "/assets/logo-dark.svg",
+    "icon": "/assets/icon.svg",
+    "favicon": "/assets/favicon.svg",
+    "socialImage": "/assets/social.svg"
+  },
+  "tokens": {
+    "color": {
+      "background": "#fffaf4",
+      "surface": "#ffffff",
+      "text": "#17211b",
+      "muted": "#526158",
+      "border": "#cad4cc",
+      "primary": "#155c3f",
+      "onPrimary": "#ffffff",
+      "success": "#137333",
+      "warning": "#8a4b00",
+      "danger": "#b3261e",
+      "focus": "#8a3ffc"
+    },
+    "radius": { "control": "0.5rem", "surface": "1rem" },
+    "motion": { "standard": "180ms", "reduced": "0ms" },
+    "typography": {
+      "bodyFamily": "system-ui, sans-serif",
+      "displayFamily": "system-ui, sans-serif"
+    }
+  }
+}

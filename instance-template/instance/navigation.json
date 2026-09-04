@@ -1,0 +1,4 @@
+{
+  "client": ["home", "services", "contact"],
+  "dashboard": ["today", "calendar", "bookings"]
+}

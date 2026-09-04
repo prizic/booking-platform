@@ -1,0 +1,25 @@
+:root {
+  --brand-color-background: #fffaf4;
+  --brand-color-surface: #ffffff;
+  --brand-color-text: #17211b;
+  --brand-color-muted: #526158;
+  --brand-color-border: #cad4cc;
+  --brand-color-primary: #155c3f;
+  --brand-color-on-primary: #ffffff;
+  --brand-color-success: #137333;
+  --brand-color-warning: #8a4b00;
+  --brand-color-danger: #b3261e;
+  --brand-color-focus: #8a3ffc;
+  --brand-radius-control: 0.5rem;
+  --brand-radius-surface: 1rem;
+  --brand-motion-standard: 180ms;
+  --brand-motion-reduced: 0ms;
+  --brand-font-body: system-ui, sans-serif;
+  --brand-font-display: system-ui, sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --brand-motion-standard: var(--brand-motion-reduced);
+  }
+}
