@@ -1,0 +1,5 @@
+{
+  "featureNotes": ["Expose safe application release identity."],
+  "upgradeNotes": ["No instance configuration changes are required."],
+  "migrationDependencies": {}
+}

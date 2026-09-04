@@ -1,0 +1,17 @@
+{
+  "commit": "0123456789abcdef0123456789abcdef01234567",
+  "migrations": [
+    {
+      "id": "20260905000100_environment_foundation",
+      "checksum": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "dependsOn": []
+    },
+    {
+      "id": "20260905000200_release_metadata",
+      "checksum": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "dependsOn": ["20260905000100_environment_foundation"]
+    }
+  ],
+  "featureNotes": ["Expose safe application release identity."],
+  "upgradeNotes": ["No instance configuration changes are required."]
+}

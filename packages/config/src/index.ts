@@ -193,6 +193,38 @@ export function isFeatureEnabled(
   );
 }
 
+export type ApplicationIdentity = "client" | "dashboard" | "platform-admin";
+
+export interface PublicReleaseIdentity extends PlatformContract {
+  readonly application: ApplicationIdentity;
+  readonly buildCommit: string;
+  readonly releaseId: string;
+  readonly schemaVersion: 1;
+}
+
+const fullGitCommitPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
+
+export function createPublicReleaseIdentity(
+  application: ApplicationIdentity,
+  platformContractValue: unknown,
+  commitCandidates: readonly (string | undefined)[],
+): PublicReleaseIdentity {
+  const contract = parsePlatformContract(platformContractValue);
+  const buildCommit =
+    commitCandidates.find(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && fullGitCommitPattern.test(candidate),
+    ) ?? "local";
+
+  return Object.freeze({
+    schemaVersion: 1,
+    application,
+    releaseId: `tenant-runtime-v${contract.whiteLabelVersion}`,
+    buildCommit,
+    ...contract,
+  });
+}
+
 export interface ContentSecurityPolicyOptions {
   readonly connectSources?: readonly string[];
   readonly development?: boolean;

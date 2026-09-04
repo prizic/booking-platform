@@ -4,9 +4,13 @@ node_modules/
 .turbo/
 
 # Builds and test artifacts
+.artifacts/
 .next/
+next-env.d.ts
 dist/
 coverage/
+playwright-report/
+test-results/
 *.tsbuildinfo
 
 # Local environment and editor state

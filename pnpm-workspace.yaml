@@ -23,6 +23,9 @@ catalogMode: strict
 minimumReleaseAgeExclude:
   - "@supabase/ssr@0.12.6"
   - eslint@9.39.5
+  - "@playwright/test@1.63.0"
+  - playwright-core@1.63.0
+  - playwright@1.63.0
 
 onlyBuiltDependencies:
   - sharp

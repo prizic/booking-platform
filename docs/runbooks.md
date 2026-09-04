@@ -4,7 +4,7 @@ Purpose: what we measure, what we promise ourselves, what to do when it breaks, 
 
 Authoritative source: §25, §26, §27 of [the architecture spec](../WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md)
 
-Related: [docs index](./README.md) · [architecture](./architecture.md) · [glossary](./glossary.md) · [engineering rules](./engineering-rules.md) · [security and privacy](./security-and-privacy.md) · [customization boundaries](./customization-boundaries.md) · [release scope](./release-scope.md) · [upstream updates](./upstream-updates.md) · [references](./references.md) · [ADRs](./adr/README.md)
+Related: [docs index](./README.md) · [architecture](./architecture.md) · [glossary](./glossary.md) · [engineering rules](./engineering-rules.md) · [security and privacy](./security-and-privacy.md) · [customization boundaries](./customization-boundaries.md) · [release scope](./release-scope.md) · [environments](./environments.md) · [upstream updates](./upstream-updates.md) · [references](./references.md) · [ADRs](./adr/README.md)
 
 ---
 
@@ -84,6 +84,7 @@ Owners are placeholders until the on-call rotation exists.
 | R-11 | [Database restore and Storage restore](#r-11-database-restore-and-storage-restore) | TBD — assign at M6 |
 | R-12 | [Tenant export / deletion / legal hold](#r-12-tenant-export--deletion--legal-hold) | TBD — assign at M6 |
 | R-13 | [Platform / tenant suspension and safe reactivation](#r-13-platform--tenant-suspension-and-safe-reactivation) | TBD — assign at M6 |
+| R-14 | [Backend release or environment identity failure](#r-14-backend-release-or-environment-identity-failure) | TBD — assign before the first hosted migration |
 
 ### R-1 Slot contention / double-booking investigation
 
@@ -137,7 +138,7 @@ Owners are placeholders until the on-call rotation exists.
 ### R-8 Bad instance release and paired rollback
 
 - **Trigger:** Post-deploy error/latency spike, or a ring-1 canary failure.
-- **First checks:** Which release and deployment ID; ring exposure; whether an expanded database contract shipped alongside the pair; contract-version compatibility.
+- **First checks:** Which release and deployment ID; ring exposure; whether an expanded database contract shipped alongside the pair; contract-version compatibility; whether each deployment's recorded environment fingerprint matches the intended backend. Previous deployments retain their old build-time environment values.
 - **Mitigation:** Halt the rollout and redirect **both application domains** to the last healthy Client + Dashboard pair. Keep the expanded, backward-compatible backend contract in place and verify it serves that pair. Never roll the schema or database contract backward; use a source revert or forward repair for the backend.
 - **Escalation:** Release owner; pause all fleet rollouts until root cause is known. See [upstream updates](./upstream-updates.md).
 
@@ -175,6 +176,13 @@ Owners are placeholders until the on-call rotation exists.
 - **First checks:** Suspension reason and approver; current offboarding phase; outstanding confirmed bookings that customers still expect.
 - **Mitigation:** Restrict new bookings first, preserve export access, then close. Reactivation restores in the reverse order and re-validates entitlements before re-enabling public booking.
 - **Escalation:** Platform owner; legal owner if abuse or a dispute is involved.
+
+### R-14 Backend release or environment identity failure
+
+- **Trigger:** Migration checksum/dependency mismatch, unexpected remote migration history, protected job failure during migration or function deployment, environment fingerprint mismatch, or a post-migration contract probe failure.
+- **First checks:** Hold the environment concurrency lock; identify the stable Supabase project reference and descriptor fingerprint without printing credentials; compare committed and remote migration history; determine whether the failing statement was transactional; check the current backend contract and the last healthy Client/Dashboard pair; verify PITR/backup state for production.
+- **Mitigation:** Stop the release before application promotion. Never run a linked reset, delete migration history, edit an already-applied migration, or attempt an unreviewed down migration. If the failed transaction rolled back, correct the source and ship a new reviewed migration. If work committed partially or a backfill failed, keep the expanded contract available and use an idempotent compensating migration/job. Re-run safe contract probes before resuming. Follow the detailed sequence in [environments](./environments.md#5-expandcontract-and-forward-repair).
+- **Escalation:** Release owner + database owner immediately; security owner if the target identity is wrong or a credential may have reached the wrong environment. A production restore is a disaster-recovery decision under R-11, never an ordinary deployment rollback.
 
 ---
 

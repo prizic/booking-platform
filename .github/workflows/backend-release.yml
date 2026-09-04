@@ -1,0 +1,300 @@
+name: Protected backend release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub environment whose Supabase project receives the release
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      release_notes_path:
+        description: Reviewed control-plane JSON containing feature, upgrade, and migration notes
+        required: true
+        type: string
+      expected_environment_fingerprint:
+        description: Reviewed sha256 fingerprint for the target environment identity
+        required: true
+        type: string
+      expected_recovery_evidence_id:
+        description: Production-only ID of independently reviewed backup/PITR evidence
+        required: false
+        type: string
+      expected_recovery_verified_at:
+        description: Production-only UTC timestamp matching the protected recovery evidence
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  release-preflight:
+    name: Validate the release source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require main for staging and a release tag for production
+        env:
+          TARGET_ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          if [ "${TARGET_ENVIRONMENT}" = "production" ]; then
+            if [[ ! "${GITHUB_REF}" =~ ^refs/tags/tenant-runtime-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error title=Invalid production ref::Production releases must run from a tenant-runtime-vMAJOR.MINOR.PATCH tag."
+              exit 1
+            fi
+          elif [ "${GITHUB_REF}" != "refs/heads/main" ] && [[ ! "${GITHUB_REF}" =~ ^refs/tags/tenant-runtime-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Invalid staging ref::Staging releases must run from main or a tenant-runtime release tag."
+            exit 1
+          fi
+
+  quality-gates:
+    name: Re-run source quality gates
+    needs: release-preflight
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
+  release-artifacts:
+    name: Build reviewed release evidence
+    needs: quality-gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      RELEASE_NOTES_PATH: ${{ inputs.release_notes_path }}
+    steps:
+      - name: Check out the reviewed release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the pinned Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable the pinned package manager
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+
+      - name: Install from the frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Match a release tag to the version authority
+        run: |
+          node --input-type=module -e '
+            import { readFile } from "node:fs/promises";
+            const contract = JSON.parse(await readFile("platform-contract.json", "utf8"));
+            const expected = `refs/tags/tenant-runtime-v${contract.whiteLabelVersion}`;
+            if (process.env.GITHUB_REF?.startsWith("refs/tags/") && process.env.GITHUB_REF !== expected) {
+              console.error(`::error file=platform-contract.json,title=Release tag mismatch::Expected ${expected}.`);
+              process.exit(1);
+            }
+          '
+
+      - name: Validate the reviewed release-notes path
+        run: |
+          node --input-type=module -e '
+            import { realpath, stat } from "node:fs/promises";
+            import path from "node:path";
+            const value = process.env.RELEASE_NOTES_PATH ?? "";
+            const safe = /^control-plane\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.json$/u.test(value)
+              && !value.split("/").some((part) => part === "." || part === "..");
+            const root = await realpath(process.cwd());
+            const resolved = await realpath(value).catch(() => undefined);
+            if (!safe || !resolved?.startsWith(`${root}${path.sep}control-plane${path.sep}`)
+                || !(await stat(resolved).catch(() => undefined))?.isFile()) {
+              console.error("::error title=Invalid release notes::Path must name a committed JSON file below control-plane/.");
+              process.exit(1);
+            }
+          '
+
+      - name: Generate and validate deterministic release metadata
+        run: |
+          mkdir -p .artifacts
+          node scripts/generate-release-manifest.mjs "${GITHUB_SHA}" "${RELEASE_NOTES_PATH}" > .artifacts/release-manifest.json
+          node scripts/check-release-contracts.mjs .artifacts/release-manifest.json
+
+      - name: Build all release surfaces from the same commit
+        run: pnpm build
+
+      - name: Generate release SBOM and checksums
+        run: |
+          pnpm run sbom
+          sha256sum .artifacts/release-manifest.json .artifacts/sbom.cdx.json > .artifacts/SHA256SUMS
+
+      - name: Upload release evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: backend-release-${{ github.sha }}
+          path: .artifacts/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 90
+
+  migrate-backend:
+    name: Apply forward-only migrations
+    needs:
+      - quality-gates
+      - release-artifacts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: ${{ inputs.environment }}
+    concurrency:
+      group: backend-release-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      ENVIRONMENT_FINGERPRINT: ${{ vars.ENVIRONMENT_FINGERPRINT }}
+      EXPECTED_ENVIRONMENT_FINGERPRINT: ${{ inputs.expected_environment_fingerprint }}
+      RECOVERY_EVIDENCE_ID: ${{ vars.RECOVERY_EVIDENCE_ID }}
+      EXPECTED_RECOVERY_EVIDENCE_ID: ${{ inputs.expected_recovery_evidence_id }}
+      RECOVERY_VERIFIED_AT: ${{ vars.RECOVERY_VERIFIED_AT }}
+      EXPECTED_RECOVERY_VERIFIED_AT: ${{ inputs.expected_recovery_verified_at }}
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - name: Check out the reviewed release commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up the pinned Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable the pinned package manager
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+
+      - name: Install from the frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate protected-environment references
+        run: |
+          if [ -z "${SUPABASE_PROJECT_REF}" ] || [ -z "${SUPABASE_ACCESS_TOKEN}" ] || [ -z "${SUPABASE_DB_PASSWORD}" ]; then
+            echo "::error title=Incomplete protected environment::Set the Supabase project reference and secret credentials on the selected GitHub environment."
+            exit 1
+          fi
+          node --input-type=module -e '
+            import { createHash } from "node:crypto";
+            const environment = process.env.TARGET_ENVIRONMENT ?? "";
+            const projectRef = process.env.SUPABASE_PROJECT_REF ?? "";
+            const stored = process.env.ENVIRONMENT_FINGERPRINT ?? "";
+            const reviewed = process.env.EXPECTED_ENVIRONMENT_FINGERPRINT ?? "";
+            const fingerprintPattern = /^sha256:[0-9a-f]{64}$/u;
+            const validEnvironment = environment === "staging" || environment === "production";
+            const validProjectRef = /^[a-z0-9]{20}$/u.test(projectRef);
+            const descriptor = JSON.stringify({ environment, supabaseProjectRef: projectRef });
+            const computed = `sha256:${createHash("sha256").update(descriptor).digest("hex")}`;
+            if (!validEnvironment || !validProjectRef || !fingerprintPattern.test(stored)
+                || !fingerprintPattern.test(reviewed) || stored !== reviewed
+                || stored !== computed) {
+              console.error("::error title=Environment identity mismatch::The selected environment, project reference, protected fingerprint, and reviewed fingerprint do not agree. No identity or credential value was printed.");
+              process.exit(1);
+            }
+          '
+
+      - name: Require fresh independent recovery evidence for production
+        run: |
+          node --input-type=module -e '
+            if (process.env.TARGET_ENVIRONMENT !== "production") process.exit(0);
+            const storedId = process.env.RECOVERY_EVIDENCE_ID ?? "";
+            const reviewedId = process.env.EXPECTED_RECOVERY_EVIDENCE_ID ?? "";
+            const storedAt = process.env.RECOVERY_VERIFIED_AT ?? "";
+            const reviewedAt = process.env.EXPECTED_RECOVERY_VERIFIED_AT ?? "";
+            const evidencePattern = /^[A-Za-z0-9][A-Za-z0-9._:/-]{7,199}$/u;
+            const verifiedAt = new Date(storedAt);
+            const age = Date.now() - verifiedAt.getTime();
+            const validTimestamp = Number.isFinite(verifiedAt.getTime())
+              && verifiedAt.toISOString() === storedAt && age >= 0
+              && age <= 24 * 60 * 60 * 1000;
+            if (!evidencePattern.test(storedId) || storedId !== reviewedId
+                || storedAt !== reviewedAt || !validTimestamp) {
+              console.error("::error title=Recovery readiness not verified::Production requires matching protected and reviewed backup/PITR evidence recorded within the previous 24 hours. No evidence or credential value was printed.");
+              process.exit(1);
+            }
+          '
+
+      - name: Refuse unchecksummed Edge Function deployment
+        run: |
+          if find supabase/functions -mindepth 2 -name index.ts -type f -print -quit | grep -q .; then
+            echo "::error title=Unchecksummed Edge Function::Function deployment remains blocked until its release manifest records deterministic source checksums."
+            exit 1
+          else
+            echo "No Edge Function entry points are present in this foundation release."
+          fi
+
+      - name: Link the selected hosted project
+        run: pnpm exec supabase link --project-ref "${SUPABASE_PROJECT_REF}"
+
+      - name: Inspect remote and local migration history
+        run: pnpm exec supabase migration list --linked
+
+      - name: Preview pending central migrations
+        run: pnpm exec supabase db push --linked --dry-run
+
+      - name: Apply pending central migrations
+        run: pnpm exec supabase db push --linked --yes
+
+      - name: Verify migration history and hosted schema health
+        run: |
+          pnpm exec supabase migration list --linked
+          pnpm exec supabase db lint --linked --level error --fail-on error
+
+      - name: Record forward-repair boundary
+        run: echo "Backend migrations applied from the private source pipeline. Schema rollback is intentionally unavailable; use a reviewed forward repair."
+
+  attest-release:
+    name: Record release provenance
+    needs:
+      - release-artifacts
+      - migrate-backend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - name: Download the exact release evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: backend-release-${{ github.sha }}
+          path: .artifacts
+
+      - name: Verify release checksums
+        run: sha256sum --check .artifacts/SHA256SUMS
+
+      - name: Attest SLSA release provenance when GitHub attestations are enabled
+        if: vars.ARTIFACT_ATTESTATIONS_ENABLED == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .artifacts/release-manifest.json
+
+      - name: Attest the release SBOM when GitHub attestations are enabled
+        if: vars.ARTIFACT_ATTESTATIONS_ENABLED == 'true'
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: .artifacts/release-manifest.json
+          sbom-path: .artifacts/sbom.cdx.json
+
+      - name: Record the paired-release handoff
+        run: |
+          echo "### Release evidence" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Release metadata, checksums, and the CycloneDX SBOM are attached to this run." >> "${GITHUB_STEP_SUMMARY}"
+          echo "Client and Dashboard promotion remains a paired operation from commit ${GITHUB_SHA}; do not promote one surface alone." >> "${GITHUB_STEP_SUMMARY}"
+          echo "Previous deployments retain their old build-time environment values. Database recovery uses forward repair, never destructive rollback." >> "${GITHUB_STEP_SUMMARY}"

@@ -6,23 +6,26 @@ Authoritative source: §10.1, §13.1, §14.1, §16.6, §24 of [the architecture 
 
 ---
 
-## Reality check: the workspace runs; the backend does not yet
+## Reality check: the workspace and local backend are reproducible
 
-Issue #3 adds the private pnpm/Turborepo monorepo, all three Next.js
+Issue #3 added the private pnpm/Turborepo monorepo, all three Next.js
 application shells, the ADR-0011 package set, and local enforcement scripts.
-The `supabase/` directory reserves platform ownership only: there is still no
-Supabase project, migration, seed, or database test harness until issues #4 and
-#6.
+Issue #4 adds the pinned Supabase CLI, a Docker-backed local project, central
+migration and Edge Function surfaces, a synthetic-only seed, and a pgTAP
+schema-boundary smoke. Issue #6 still owns tenant tables and the complete RLS
+access matrix; a passing foundation smoke is not a claim that tenant isolation
+is implemented.
 
 | Thing | Status | Lands in |
 | ----- | ------ | -------- |
 | Knowledge-pack gate (`bash scripts/check-docs.sh`) | Available | Issue #1 (done) |
 | Monorepo scaffold (workspaces, apps, packages, `turbo.json`) | Available | Issue #3 |
 | Local workspace gates (format, lint, types, unit, build, boundaries, distribution, config, secrets, bundles) | Available | Issue #3 |
-| Supabase local stack (`supabase start`), migrations, seed | Not yet available | Issue #4 (environments) — scope boundary to confirm on the ticket, since #3 does not mention Supabase |
-| pgTAP / RLS tests and the tenant-isolation fixtures they need | Not yet available | Issue #6 (tenant isolation) — scope boundary to confirm on the ticket |
-| CI workflows that run the gates below | Not yet available | Issue #4 |
-| Browser E2E, accessibility, RTL interaction, and visual suites | Not yet available | Issue #5 (foundation), issue #4 (CI) |
+| Supabase local stack, central migrations, synthetic seed | Available | Issue #4 |
+| pgTAP schema-boundary smoke | Available | Issue #4 |
+| Full RLS matrix and multi-tenant fixtures | Not yet available | Issue #6 |
+| CI workflows that run the gates below | Available | Issue #4 |
+| Browser identity E2E/accessibility/RTL smoke | Available | Issue #4; full UI coverage remains issues #5 and #40 |
 
 An unavailable gate is reported as `N/A` with its owning issue. It is never
 reported as passing.
@@ -38,7 +41,7 @@ reported as passing.
 | **Turborepo 2.10.12** | Task orchestration and caching across workspaces | `turbo.json` defines the task graph |
 | **TypeScript 6.0.3** | Language for all three applications and every package | Pinned below 6.1 for the supported TypeScript ESLint peer range |
 | **Next.js 16.3.4 / React 19.2.8** | Client, Dashboard, and Platform Admin | App Router; Server Components by default |
-| **Supabase CLI** | Local Postgres + Auth + Storage + Edge Functions stack, migrations, `supabase test db` | §14.1, §24.2. Requires Docker |
+| **Supabase CLI 2.116.0** | Local Postgres + Auth + REST + Edge Functions stack, migrations, `supabase test db` | Pinned as a root development dependency; Storage/Realtime wait for their owning tested features; requires Docker and Node 20+ |
 | **Docker Desktop** (or compatible engine) | Runs the local Supabase containers | Prerequisite for the CLI stack |
 | **Playwright** | E2E and accessibility runs | §24.1 |
 | **pgTAP** | Database, RLS, and function tests | Executed via `supabase test db` |
@@ -117,17 +120,20 @@ These belong to Platform Admin and the provisioning automation only. **A Client 
 
 ## Bring-up sequence
 
-1. **Install prerequisites** — Node LTS, `corepack enable` for pnpm, Docker, and the Supabase CLI.
+1. **Install prerequisites** — Node 22.22.0, `corepack enable` for pnpm, and Docker Desktop (or a compatible engine). The Supabase CLI is installed from the frozen workspace lockfile; a global CLI is not required.
 2. **Clone and install** — `pnpm install --frozen-lockfile` at the repository root.
 3. **Create your local env files** — copy the committed `.env.example` (added by issue #3) to `.env.local` in each app and fill each variable yourself. Values are never distributed.
-4. **Start the local backend (pending issue #4)** — the future `pnpm supabase:start` wrapper will start Supabase. Until then the identity pages intentionally render without a backend.
-5. **Reset the database from zero (pending issue #4)** — the future `pnpm db:reset` command will replay migrations and synthetic seed data.
-6. **Seed synthetic tenants (pending issue #4)** — never seed real customer data.
-7. **Generate database types (pending issue #4)** — the future `pnpm db:types` command writes safe generated types into `packages/supabase-client`.
-8. **Run the apps** — `pnpm dev` starts Client on 3000, Dashboard on 3001, and Platform Admin on 3002. The issue #3 identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
+4. **Start the local backend** — `pnpm supabase:start` starts the committed Supabase project. Use the local URL and publishable key printed by the CLI only in ignored local env files.
+5. **Reset from zero** — `pnpm db:reset` replays every central migration and `supabase/seed.sql`. It is deliberately local-only; never add `--linked` or a hosted database URL.
+6. **Run database checks** — `pnpm test:db` runs the pgTAP foundation and `pnpm db:lint` runs the database linter. Issue #6 expands both around tenant tables and RLS.
+7. **Generate database types (pending issue #6)** — issue #6 adds the safe generated-type output once application schema exists.
+8. **Run the apps** — `pnpm dev` starts Client on 3000, Dashboard on 3001, and Platform Admin on 3002. The identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
 9. **Verify** — run the gates in the next section before opening a pull request.
+10. **Stop the backend** — `pnpm supabase:stop` preserves local Docker state for the next run. A deliberate local volume wipe is safe only because local data is synthetic.
 
-After issue #4 adds the local stack, its future `pnpm supabase:stop` command will tear it down. Wiping those local volumes is safe because they contain synthetic data only.
+Hosted environment setup and the serialized release path are documented in
+[environments.md](./environments.md). Developer workstations never link to
+production as the normal migration path.
 
 ---
 
@@ -145,16 +151,17 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Lint | `pnpm lint` | Available — issue #3 |
 | Typecheck | `pnpm typecheck` | Available — issue #3 |
 | Unit / domain tests | `pnpm test:unit` | Available — issue #3 |
-| Component tests | `pnpm test:component` | Pending — issue #5 (suite), #4 (CI) |
-| Database reset from zero | `pnpm db:reset` | Pending — issue #4 (Supabase local stack and environments); scope boundary to confirm on the ticket |
-| RLS / pgTAP tests | `pnpm test:db` (`supabase test db`) | Pending — issue #6 (tenant-isolation tests), #4 (CI); scope boundary to confirm on the ticket |
-| Contract tests | `pnpm test:contract` | Pending — issue #4 |
-| Concurrency tests | `pnpm test:concurrency` | Pending — issues #4 / #6 |
+| Component tests | `pnpm test:component` | `N/A — not yet implemented, owned by issue #5` |
+| Database reset from zero | `pnpm db:reset` | Available — issue #4; Docker required |
+| Database lint | `pnpm db:lint` | Available — issue #4; Docker required |
+| pgTAP foundation | `pnpm test:db` (`supabase test db --local`) | Available — issue #4; full RLS matrix is `N/A — not yet implemented, owned by issue #6` |
+| Contract tests | `pnpm test:contract` | Available — issue #4 |
+| Concurrency tests | `pnpm test:concurrency` | `N/A — not yet implemented, owned by issues #6 and #11` |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
-| E2E | `pnpm test:e2e` | Pending — issues #4 / #5 |
-| Accessibility (+ RTL interaction) | `pnpm test:a11y` | Pending — issues #4 / #5 |
+| E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; full journeys are `N/A — not yet implemented, owned by issues #12–#18` |
+| Accessibility (+ RTL interaction) | `pnpm test:a11y` | Identity-shell smoke available — issue #4; full matrix is `N/A — not yet implemented, owned by issues #5 and #40` |
 | Localization parity | `pnpm test:i18n` | Pending — issue #5; issue #3 config validation already checks template message-key parity |
-| Visual regression | `pnpm test:visual` | Pending — issue #4 |
+| Visual regression | `pnpm test:visual` | Screenshot evidence and overflow smoke available — issue #4; pixel baselines and full brand matrix are `N/A — not yet implemented, owned by issues #5 and #40` |
 | Instance config validation | `pnpm check:config` | Available — issue #3 |
 | Forbidden imports / boundaries / cycles | `pnpm check:boundaries` | Available — issue #3 |
 | Distribution dependency closure | `pnpm check:distribution` | Available — issue #3; actual export/history fixture is issue #4 / #29 |
@@ -176,7 +183,8 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | ------- | ------------ |
 | `supabase start` hangs or fails | Docker not running, or ports already held by another local stack |
 | App loads unbranded / 404 on the Client | Requested `localhost` instead of `LOCAL_TENANT_HOST`; tenant resolution found no verified domain row (§13.3) |
-| Type errors after pulling migrations | `pnpm db:types` not re-run after `pnpm db:reset` |
+| `supabase db reset` mentions a linked project | Stop. The repository wrapper is local-only; do not continue against hosted data. |
+| Type errors after pulling migrations | Safe database types were not regenerated after the schema changed; the generation surface lands with issue #6 |
 | RLS tests pass locally, fail in CI | Local database not reset from zero; CI always replays every migration (§24.4 step 4) |
 
 ---
@@ -191,6 +199,7 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 - [customization-boundaries.md](./customization-boundaries.md) — what lives in `instance/`
 - [design-system.md](./design-system.md) — tokens and accessible primitives
 - [runbooks.md](./runbooks.md) — operational procedures
+- [environments.md](./environments.md) — environment identity and serialized backend releases
 - [upstream-updates.md](./upstream-updates.md) — instance CI and upgrade flow
 - [references.md](./references.md) — external documentation sources
 - [adr/README.md](./adr/README.md) — architecture decision records

@@ -50,6 +50,13 @@ An upgrade PR must:
 - Require human approval for major releases, authentication or payment changes, and any conflict.
 - Report deploy and rollback status back to Platform Admin.
 
+The reusable instance workflow receives the target environment's current
+`backend_contract_version` as a required, non-secret numeric input. It compares
+that value with the instance's distributed `platform-contract.json` and fails
+before build or promotion when the version is outside the inclusive range. The
+private source release validator and `control-plane/` tree are deliberately not
+distributed just to perform this check.
+
 ### Config-only vs extended-code instances
 
 | Instance tier | Upgrade path |
