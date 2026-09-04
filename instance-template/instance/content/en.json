@@ -1,0 +1,10 @@
+{
+  "site.title": "Example Booking",
+  "site.description": "Book an appointment",
+  "navigation.home": "Home",
+  "navigation.services": "Services",
+  "navigation.contact": "Contact",
+  "navigation.today": "Today",
+  "navigation.calendar": "Calendar",
+  "navigation.bookings": "Bookings"
+}

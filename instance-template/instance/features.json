@@ -1,0 +1,5 @@
+{
+  "guestBooking": { "enabled": true },
+  "requestToBook": { "enabled": true },
+  "onlinePayment": { "enabled": false }
+}

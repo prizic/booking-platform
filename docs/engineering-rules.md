@@ -4,7 +4,7 @@ The non-negotiable rules for writing code in this platform: package boundaries, 
 
 Authoritative source: §10.2, §10.7, §13.4, §13.5, §13.6, §24 of [the architecture spec](../WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md).
 
-> **Status:** one gate in this repository is executable today and passes — `bash scripts/check-docs.sh`, the knowledge-pack gate (relative links and anchors, specification coverage map, secret-shaped strings, compliance claims, tenant/brand/instance distinctness). Everything else is planned: there is no `package.json`, no application, and no Supabase project, so every *other* command referenced here is the *intended* command. The monorepo is bootstrapped by issue #3 and CI by issue #4. See [local-setup.md](./local-setup.md) for the per-gate status and owner.
+> **Status:** issue #3 provides the pnpm/Turborepo workspace, three application shells, package builds, unit tests, and local gates for formatting, lint, type checking, boundaries, distribution closure, configuration, secrets, builds, and bundle leakage. CI orchestration and the local Supabase/database-backed gate layers remain issue #4 and issue #6 work. See [local-setup.md](./local-setup.md) for the exact command and owner of every gate.
 
 ---
 

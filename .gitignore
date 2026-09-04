@@ -1,0 +1,22 @@
+# Dependencies and task caches
+node_modules/
+.pnpm-store/
+.turbo/
+
+# Builds and test artifacts
+.next/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Local environment and editor state
+.env
+.env.*
+!.env.example
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+pnpm-debug.log*

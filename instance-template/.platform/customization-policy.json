@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "defaultTier": "config-only",
+  "configOnlyPaths": [
+    "instance/brand.json",
+    "instance/content/**",
+    "instance/features.json",
+    "instance/navigation.json",
+    "instance/theme.css",
+    "instance/assets/**"
+  ],
+  "alwaysForbiddenPaths": [
+    ".platform/**",
+    "apps/platform-admin/**",
+    "control-plane/**",
+    "supabase/**",
+    "packages/supabase-admin/**",
+    "packages/email/**",
+    "packages/integrations/**"
+  ]
+}

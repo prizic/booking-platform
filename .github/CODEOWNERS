@@ -1,0 +1,14 @@
+# Default ownership
+* @SEIFSEIF4
+
+# Trust and distribution boundaries require platform-owner review.
+/apps/platform-admin/ @SEIFSEIF4
+/packages/supabase-admin/ @SEIFSEIF4
+/packages/email/ @SEIFSEIF4
+/packages/integrations/ @SEIFSEIF4
+/control-plane/ @SEIFSEIF4
+/supabase/ @SEIFSEIF4
+/instance-template/.platform/ @SEIFSEIF4
+/platform-contract.json @SEIFSEIF4
+/scripts/check-boundaries.mjs @SEIFSEIF4
+/scripts/check-distribution.mjs @SEIFSEIF4

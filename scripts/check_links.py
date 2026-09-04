@@ -13,8 +13,10 @@ def anchors(path):
     return out
 
 bad = 0
+ignored_directories = {'.git', '.next', '.turbo', 'coverage', 'dist', 'node_modules'}
+
 for src in sorted(pathlib.Path('.').rglob('*.md')):
-    if '.git' in src.parts:
+    if ignored_directories.intersection(src.parts):
         continue
     for link in re.findall(r'\]\(([^)\s]+)\)', src.read_text()):
         if re.match(r'^(https?:|mailto:|tel:)', link):

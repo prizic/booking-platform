@@ -117,17 +117,18 @@ in this repository:
 
 ## Before handing off
 
-**The only gate that runs in this repository today is
-`bash scripts/check-docs.sh`** (relative links and anchors, specification
-coverage map, secret-shaped strings, compliance claims, tenant/brand/instance
-distinctness). Run it before every handoff that touches documentation, and
-report its result.
-
-The rest of the gate list — format, lint, typecheck, unit, RLS, concurrency,
-contract, build, E2E, accessibility, localization, forbidden-import, and
-config-validation — is planned, not present. Ownership per gate is in
+Issue #3 establishes executable workspace gates for frozen install, format,
+lint, typecheck, unit tests, all-app builds, boundary/cycle enforcement,
+distribution closure, instance/config validation, secret-shaped values, and
+distributed production bundles. The knowledge-pack gate remains
+`bash scripts/check-docs.sh`. Exact commands and which larger gates remain
+unimplemented are recorded in
 [`docs/local-setup.md`](docs/local-setup.md#verification-commands). Run every
 gate that exists.
+
+Database reset, RLS, concurrency, provider integration, E2E, accessibility,
+visual, provisioning, upgrade-fixture, and recovery gates still belong to later
+issues. Do not substitute a scaffold or compile check for one of those gates.
 
 **Gate-reporting rule: when a gate does not exist yet, record it in the handoff
 report as `N/A — not yet implemented, owned by issue #N`.** Never report a
