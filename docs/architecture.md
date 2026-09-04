@@ -1,0 +1,318 @@
+# Architecture
+
+How the white-label booking platform is layered, deployed, isolated, and distributed to tenant instances.
+
+Authoritative source: §9-§21 of [the architecture spec](../WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md). This document is a navigable summary of the decisions in that spec; where the two disagree, the spec wins.
+
+Related: [docs index](./README.md) · [glossary](./glossary.md) · [product vision](./product-vision.md) · [release scope](./release-scope.md) · [engineering rules](./engineering-rules.md) · [security and privacy](./security-and-privacy.md) · [customization boundaries](./customization-boundaries.md) · [local setup](./local-setup.md) · [runbooks](./runbooks.md) · [upstream updates](./upstream-updates.md) · [references](./references.md) · [ADR index](./adr/README.md)
+
+Four rules govern everything below and are repeated where they apply:
+
+1. Only **Client**, **Dashboard**, and approved shared packages may ever enter a tenant instance repository. Platform Admin, database migrations, privileged workers, global billing logic, and operational tooling stay in the private monorepo.
+2. Database migrations are run by the **central platform pipeline only**. No tenant instance repository may run or author migrations.
+3. Booking correctness lives in the **database** (atomic RPCs and transactions), never in the browser.
+4. **RLS is mandatory on every tenant-owned table**, and every tenant-owned row carries `tenant_id NOT NULL`.
+
+---
+
+## Layers
+
+Three layers with different owners, release cadences, and blast radius. Terms are defined in the [glossary](./glossary.md); tenant, brand, and instance are not synonyms.
+
+| Layer | Contains | Owned by | Changes via | Distributed? |
+| --- | --- | --- | --- | --- |
+| Product kernel | `booking-domain`, `api-contracts`, database schema, RPCs, RLS, migrations, shared packages, Client/Dashboard source | Platform engineering | Private monorepo PR → release pipeline | Only the approved subset |
+| Instance layer | `instance/**` config, brand tokens, content, assets, feature flags, approved extension slots, generated types | Tenant (with platform guardrails) | Instance repo PR, config-first | Is the instance |
+| Control plane | Platform Admin app, provisioning jobs, distribution/export, upgrade bot, fleet state, global billing | Platform operations | Private monorepo only | Never |
+
+Ownership consequences:
+
+- Kernel changes are fleet-wide; they ship through the paired release and rollout rings described under [Control plane](#control-plane).
+- Instance changes are local and must stay inside the configuration-first path in [customization boundaries](./customization-boundaries.md). A repeated instance-level customization is a signal to promote it upstream into a flag, token, content field, or extension slot.
+- Control-plane changes never reach a tenant repository, so they can move independently.
+
+---
+
+## Topology
+
+```text
+                          Browsers / staff devices
+                                     |
+        +----------------------------+----------------------------+
+        |                            |                            |
+ +------v-------+            +-------v-------+           +--------v---------+
+ | Client       |            | Dashboard     |           | Platform Admin   |
+ | white-label  |            | white-label   |           | private          |
+ | 1 Vercel prj |            | 1 Vercel prj  |           | 1 Vercel project |
+ | per instance |            | per instance  |           | (whole platform) |
+ +------+-------+            +-------+-------+           +----+--------+----+
+        |                            |                        |        |
+        +-------------+--------------+------------------------+        |
+                      |                                                |
+     +----------------v-------------------------------+                |
+     |  Supabase application platform (1 per env)      |                |
+     |  Auth  +  api_v1 views / versioned RPCs         |                |
+     |  Postgres + RLS   <- owns all invariants        |                |
+     |  Outbox -> Queues -> Cron                       |                |
+     |  Edge Functions (verified webhooks, workers)    |                |
+     +--------------------------+----------------------+                |
+                                |                                       |
+                    +-----------v------------+          +---------------v-----------+
+                    | Providers              |          | Fleet control             |
+                    | email / payments /     |          | GitHub App + Vercel API   |
+                    | calendars              |          | (repos, projects, domains)|
+                    +------------------------+          +---------------------------+
+```
+
+- Apps may perform safe RLS-protected reads directly; **sensitive mutations go through a thin server-side data-access layer and versioned RPCs**.
+- The database owns invariants. Edge Functions own verified provider webhooks and short external calls. Queues own retries.
+- Realtime tells a UI to refetch. It never confirms a booking, locks a resource, or orders jobs.
+
+---
+
+## Trust boundaries
+
+| Boundary | Trusted for | Never trusted for |
+| --- | --- | --- |
+| Browser | User input, rendering | Tenant scope, price, availability, permission, payment success |
+| Next.js server | Session validation, input validation, orchestration | Bypassing RLS without an explicit privileged design |
+| Supabase RLS / RPC | Tenant isolation, transactional invariants | External provider delivery |
+| Edge/worker with privileged key | One narrow privileged job | Arbitrary caller-supplied tenant scope |
+| Platform Admin | Initiating control-plane requests | Direct destructive infrastructure action without a job and audit trail |
+| Provider webhook | Events *after* signature verification | Ordering, uniqueness, or tenant mapping before validation |
+| Instance repository | Client/Dashboard presentation and allowed extensions | Platform secrets, Platform Admin code, shared database migrations |
+
+The hostname decides branding and routing. It never grants data access — see [Next.js application architecture](#nextjs-application-architecture). Full threat list and expected defenses live in [security and privacy](./security-and-privacy.md).
+
+---
+
+## Deployment units
+
+| Unit | Cardinality | Notes |
+| --- | --- | --- |
+| Platform Admin Vercel project | 1, private | Control plane UI |
+| Client Vercel project | 1 per instance | Root `apps/client` |
+| Dashboard Vercel project | 1 per instance | Root `apps/dashboard` |
+| Supabase project | 1 per environment (local/dev, staging, production) | Shared row-based tenancy |
+| Resend account | 1 central at launch | Platform and/or verified tenant sending subdomains |
+| GitHub App | 1, org-owned | Narrow contents / PR / administration scopes |
+| Vercel team + API integration | 1 | Projects, env, domains, deployments, status |
+
+A dedicated Supabase project per tenant stays a documented option for physical isolation, residency, or tenant-specific recovery objectives — not the default, because it multiplies Auth config, secrets, migrations, webhooks, monitoring, and support burden.
+
+Per-instance Vercel projects are a **commercial** choice for configuration-only brands, not a technical necessity. A shared wildcard deployment would cut build overhead but trades away per-instance release control. Do not run both deployment modes until fleet size justifies it.
+
+---
+
+## Monorepo layout and package rules
+
+Private source monorepo: pnpm workspaces + Turborepo-style task orchestration. App entry points stay thin; stable domain behavior lives in owned packages.
+
+```text
+booking-platform/
+├── apps/            client · dashboard · platform-admin
+├── packages/        booking-domain · api-contracts · supabase-client · supabase-admin · auth ·
+│                    tenant-resolution · ui-foundation · white-label-ui · i18n ·
+│                    email · integrations · observability · testing · config
+├── supabase/        migrations (central pipeline only) · functions · tests · seed.sql
+├── control-plane/   provisioning · distribution · upgrade-bot · contracts
+├── instance-template/  instance/ · AGENTS.md · docs/
+└── tests/           e2e · concurrency · provisioning · upgrade-fixtures
+```
+
+Package rules (enforced in CI, not by convention):
+
+- Applications import packages. Packages never import applications.
+- `booking-domain` is framework-independent: no Supabase, no React.
+- `api-contracts` is versioned and backward-compatible within its support window.
+- Supabase client construction is split by trust level, per [ADR-0011](adr/0011-distribution-allowlist-and-contract-versions.md): `supabase-client` (distributed) constructs the anonymous browser client and the per-request user-scoped client only; `supabase-admin` (platform-only, `server-only`) is the sole constructor of the service-role client. No other package may import `@supabase/*`.
+- `ui-foundation` holds accessible primitives with no tenant opinion; `white-label-ui` maps brand tokens onto them.
+- Provider SDKs sit in platform-only `email` / `integrations` adapters. Distributed booking code consumes provider-neutral outcomes through `api-contracts` and never imports an adapter or vendor SDK.
+- Platform-only packages are denied by the distribution allowlist and **verified absent** by export CI.
+- Circular deps, deep private imports, and any import from Platform Admin into a distributed package fail CI.
+
+See [engineering rules](./engineering-rules.md) for the lint/CI enforcement details.
+
+---
+
+## Distribution boundary
+
+**Only Client, Dashboard, and approved shared packages may ever enter a tenant instance repository.** Platform Admin, database migrations, privileged workers, global billing logic, and operational tooling stay private.
+
+A tenant instance repository contains:
+
+```text
+tenant-instance/
+├── apps/client · apps/dashboard
+├── packages/            approved distributable packages only
+├── instance/            manifest · brand · features · navigation · content/{en,ar} · assets · theme.css · extensions
+├── docs/                ARCHITECTURE · WHITE_LABEL_AGENT_BRIEF · CUSTOMIZATION_BOUNDARIES · DESIGN_SYSTEM ·
+│                        FEATURE_FLAGS · LOCAL_SETUP · VERIFICATION_CHECKLIST · UPSTREAM_UPDATE_GUIDE
+├── .platform/           base.json · customization-policy.json
+└── AGENTS.md, workspace + lock files
+```
+
+It receives generated public Supabase URL/key references and safe generated API types. It receives **no** privileged key, provider secret, Platform Admin source, control-plane worker, or migration authority.
+
+Native fork vs managed logical fork:
+
+| Option | Strength | Material problem | Verdict |
+| --- | --- | --- | --- |
+| GitHub-native private fork | Familiar upstream sync | Visibility/permissions couple to upstream; deleting the private upstream deletes its private forks | Only inside one trusted org with explicit policy |
+| Repository template | Simple creation | Unrelated history, awkward ongoing merges | One-time starter kits only |
+| Managed independent repo with release ancestry | Private lifecycle, precise access, controlled upgrade PRs | Needs an upgrade bot and release manifest | **Default** |
+| One shared runtime repository | Easiest fleet updates | Less per-instance freedom and release isolation | Future config-only fleet mode |
+
+Product language may call each repository an "instance fork". Technically it is an independent private repository with a recorded `upstream_release` and a common ancestor with the sanitized distribution repository. The sanitized distribution must be a **separate repository and Git history** — a branch in the source monorepo is not a safe boundary if its history ever held Platform Admin code or secrets.
+
+Compatibility contract carried by every instance: `whiteLabelVersion`, `configSchemaVersion`, and a `backendContract` min/max range against stable versioned RPCs. Backend changes use expand/contract: add → backfill/dual-write → deploy all supported apps → observe → remove after the deprecation window.
+
+**Database migrations are run by the central platform pipeline only. No tenant instance repository may run or author migrations.** Upgrade flow and conflict handling: [upstream updates](./upstream-updates.md).
+
+---
+
+## Next.js application architecture
+
+Baseline for all three apps:
+
+- App Router + TypeScript; React Server Components by default, client components only for interaction needing browser state.
+- Server Actions for app-owned form mutations; Route Handlers for provider callbacks, tenant public APIs, webhooks, file responses, machine-to-machine endpoints.
+- Shared Zod schemas at every trust boundary; `server-only` modules for privileged orchestration.
+- CSP, secure cookies, HSTS, referrer / frame / permissions policies. Middleware and hidden navigation are never the only authorization check.
+
+Supabase SSR (`@supabase/ssr`):
+
+- Browser client uses only the public publishable/anonymous key.
+- A fresh per-request server client bound to request/response cookies.
+- A completely separate privileged client available only to controlled server/worker code, never to Client or Dashboard.
+- Authorize from a verified identity operation (`getClaims()`), never from an unverified client-stored session read.
+
+Tenant resolution: normalize hostname (lower-case, strip port/trailing dot, reject invalid IDN after safe normalization) → match an active verified `tenant_domains` row → resolve instance, tenant, deployment state, published brand revision → attach server-side tenant context → **re-authorize every read through membership/RLS or a public tenant-scoped RPC**. Preview deployments use signed preview context or preview-only domain mapping; an unrestricted `?tenant=` switch is never accepted in production.
+
+Caching rules:
+
+- Any cache key/tag holding tenant data includes tenant ID, locale, published revision, and the relevant feature/config version.
+- User-specific Dashboard data is dynamic or privately cached with verified scope — never in a shared public cache.
+- Availability has a short TTL and is **advisory**; confirmation always revalidates transactionally.
+- Brand/catalog publication invalidates tenant-specific tags.
+- Auth/session-bearing responses are private/no-store. Public-page CDN headers never vary on a session cookie without an explicit design.
+
+Data-access layer — one narrow layer per app that resolves and validates user + tenant, checks capability/location scope for mutations, calls versioned `api_v1` views/RPCs, maps database/provider errors to stable product errors, returns minimal DTOs, and emits request/tenant/actor/booking/idempotency correlation IDs without raw PII. Supabase calls are not scattered across components.
+
+i18n and a11y: locale-aware URLs and metadata; source copy stored by message key with no concatenated fragments; `dir="rtl"` and CSS logical properties for Arabic; localized digits, dates, currency, plurals, validation, emails, and downloads; UTC instants with IANA timezone IDs shown beside every bookable time; an accessible list alternative to dense calendar grids, persistent focus, status announcements, no color-only states; automated a11y checks plus manual keyboard/screen-reader passes in release gates.
+
+---
+
+## Supabase backend
+
+One project per environment, shared row-based tenancy, explicit schemas:
+
+| Schema | Purpose | Data API exposure |
+| --- | --- | --- |
+| `api_v1` | Narrow views and versioned RPCs the apps consume | Yes, intentionally |
+| `app` | Core normalized business tables | Prefer no; expose selectively |
+| `private` | RLS helpers, audit internals, provider metadata, worker state | Never |
+| `auth` / `storage` / `realtime` | Supabase-managed | Managed |
+
+Data domains: tenancy · white label · catalog · availability · customers · booking · commerce · messaging · calendar · API/integrations · control plane · governance. Sensitive intake answers and notes live in a separately permissioned domain so ordinary calendar views do not expose them.
+
+Key relationships: a tenant has memberships, instances, services, resources, and customers; a booking references a service and a customer, allocates reservations against resources, and records immutable booking events.
+
+**Every tenant-owned row — including joins, events, audit rows, outbox rows, and idempotency records — has `tenant_id NOT NULL`.** `tenant_id` participates in unique constraints, and composite foreign keys `(tenant_id, parent_id) → parent(tenant_id, id)` prevent cross-tenant relationships even from privileged code.
+
+RLS and grants:
+
+- **RLS is mandatory on every tenant-owned/exposed table.** Revoke broad defaults; grant only what is needed.
+- Separate policies per `SELECT`/`INSERT`/`UPDATE`/`DELETE`, with `USING` and `WITH CHECK` where relevant.
+- Authorize through an indexed `memberships` table and a hardened `private.is_tenant_member(...)` helper. User-editable metadata never participates in authorization.
+- `security_invoker = true` views; prefer `SECURITY INVOKER` functions.
+- Any necessary `SECURITY DEFINER` function lives in an unexposed schema with an empty search path, fully qualified objects, explicit authorization, execute revoked by default and granted narrowly.
+- Allow **and** deny tests are required for every exposed table.
+
+Public access: anonymous visitors read only published tenant-scoped catalog/brand DTOs and call narrow rate-limited availability/hold/booking functions. No raw access to customer, booking, membership, or internal availability tables. A signed manage-booking token maps to one booking and a small action scope; email OTP is required for sensitive data or high-impact changes.
+
+Database function policy — data-intensive and transactional behavior (availability, hold, confirm, reschedule, cancel, capacity allocation, idempotency) lives in database functions; Edge Functions handle payment/email/calendar network integrations. Versioned contracts: `resolve_public_tenant_v1`, `get_public_catalog_v1`, `availability_v1`, `create_hold_v1`, `submit_booking_v1`, `confirm_booking_v1`, `reschedule_booking_v1`, `cancel_booking_v1`, `accept_request_v1`, `expire_holds_v1`. Errors return stable codes (`slot_unavailable`, `capacity_exhausted`, `policy_denied`, `revision_conflict`, `payment_pending`, `idempotency_conflict`) and never reveal the conflicting customer or booking.
+
+---
+
+## Booking correctness invariants
+
+**Correctness lives in the database, never in the browser.** The displayed availability is advisory; only the atomic write is authoritative.
+
+Availability is composed from orthogonal dimensions — shape, assignment, confirmation, payment, location, occurrence, queue — rather than hard-coded "booking types". A slot survives only if it clears published service rules and duration, location hours and closures, staff/resource schedules, date overrides and time off, eligibility and resource requirements, before/after buffers and turnover, active holds and confirmed allocations, external-calendar busy periods, minimum notice / horizon / interval / daily limits / capacity, and customer-plan and approval/payment restrictions.
+
+| Concern | Mechanism |
+| --- | --- |
+| Exclusive resource, capacity 1 | Half-open `tstzrange` `[start - buffer_before, end + buffer_after)` plus a GiST exclusion constraint on `(tenant_id, resource_id, occupied_at)` where state is held/confirmed. SQLSTATE `23P01` maps to `slot_unavailable` without disclosing the conflicting row. |
+| Capacity > 1 | Fixed `occurrence_inventory` row with capacity/held/confirmed/revision; lock the row or use a conditional atomic update; succeed only when `held + confirmed + party_size <= capacity`; movements written in the same transaction. Never emulate capacity N by counting rows without a lock. Identifiable units (courts, rooms, seats) are allocated concretely instead. |
+| Holds | Short tenant-configurable TTL within platform limits. `expires_at` is data, not a moving `now()` predicate in the constraint. A cron job expires stale holds; a creation transaction may synchronously expire conflicting stale holds and retry. Active holds are limited per IP/session/customer/tenant. Confirmation succeeds only while the hold is valid. |
+| Idempotency | Every customer/server mutation takes a platform-generated key stored uniquely as `(tenant_id, operation, idempotency_key)` with a normalized request hash, state, and result reference. Same key + same payload replays the original result; same key + different payload fails. The database record outlives any provider retention window. |
+
+Atomic confirmation, one transaction: resolve tenant and actor from trusted context → claim/check idempotency → lock hold/booking revision → re-read published service and required resources → validate expiry, permission, price snapshot, party size, policies, provider state → insert all allocations in deterministic resource-ID order → create/update booking plus an immutable booking event → snapshot price, tax, policy, intake schema/answers, locale, timezone → insert integration/notification outbox events → commit and return the authoritative result.
+
+**No payment, email, or calendar provider is ever called inside that transaction.** Deadlocks and serialization failures retry a bounded number of times with jitter; exclusion constraints and locked capacity remain the final guard.
+
+Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
+
+Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.
+
+If payment succeeds after a hold is lost, the transaction enters a visible exception state and follows an explicit refund-or-escalate policy. Never silently overbook.
+
+---
+
+## Async jobs and secrets
+
+Every provider side effect follows the transactional outbox: the business transaction inserts an `outbox_event` in the same commit → a dispatcher sends due events to Supabase Queues in bounded batches → a worker claims one under a visibility timeout → the provider adapter makes an idempotent call → the worker records the attempt and provider IDs and acknowledges only after durable success. Retries use bounded exponential backoff with jitter; poison events go to a dead-letter state with replay controls.
+
+Inbound webhooks are signature-verified against the **unmodified raw body**, inserted into `webhook_inbox` under a unique provider event/delivery ID, acknowledged fast, and processed asynchronously. Both the sanitized raw event and the canonical state are stored. Duplicates and out-of-order delivery are expected.
+
+Cron (Supabase Cron) covers hold expiry, reminder scheduling, stuck-outbox recovery, payment/calendar/email reconciliation, calendar subscription renewal, retention/deletion batches, usage aggregation, orphaned object checks, and partition/index maintenance when measurements justify it. Jobs stay short and batched — current guidance is at most eight concurrent jobs and no job over ten minutes (revalidate this vendor limit at implementation time; see [references](./references.md)). Long workflows are resumable state machines, not one long invocation.
+
+Edge Functions handle verified provider webhooks, email sends, calendar/provider calls, the Supabase Auth email hook, and small provisioning steps. Each invocation is restartable and idempotent; bounded background execution is never the only durable path for critical work.
+
+Realtime uses private Broadcast topics such as `tenant:<uuid>:calendar` carrying minimal change identifiers or status, after which the client refetches through RLS. No customer PII in broadcast payloads.
+
+Storage uses buckets by data class, not per tenant: `tenant-public-assets` (public by deliberate policy), `tenant-private-docs` (private signed URLs), `upload-quarantine` (worker-only). Object keys begin `<tenant_id>/<purpose>/<uuid-or-content-hash>`; Storage RLS checks the tenant path and current membership; an application metadata row exists per object; declared vs actual MIME type, size, dimensions, and malware status are validated before promotion; deletion goes through the Storage API, never by editing metadata tables.
+
+Secret placement:
+
+| Location | Holds |
+| --- | --- |
+| Vercel environment storage | App/runtime secrets and public configuration, scoped by project and environment |
+| Supabase function secrets | Provider secrets needed by Edge Functions |
+| Supabase Vault | Only secrets that genuinely need database-side access |
+| Platform database | Encrypted secret **references and fingerprints**, never plaintext for display |
+| Instance repository | Nothing |
+
+GitHub installation tokens are minted short-lived per job, scoped to the smallest repository set, and never stored. Provider credentials rotate on a schedule with last-used/rotation timestamps. Tokens, authorization headers, customer data, and webhook bodies are redacted from ordinary logs. Handling rules and incident procedures: [security and privacy](./security-and-privacy.md) and [runbooks](./runbooks.md).
+
+---
+
+## Integration topology
+
+Detail lives in §17-§20 of the spec; what matters architecturally is the shape of each edge. Every integration is provider-neutral behind an `integrations` interface, driven by the outbox, and reconciled independently of webhooks.
+
+| Integration | Path | Authority | Non-negotiables |
+| --- | --- | --- | --- |
+| Email (§17) | booking transaction → `notification_outbox` → Queue → Edge worker → provider → webhook inbox → email event ledger | Dashboard + event ledger | The booking commits even if the email provider is down. Never send from a booking Server Action. Durable database idempotency key, provider key as a second layer only. Immutable versioned templates with HTML + plain text, English/Arabic and RTL. Custom sending domains are inactive until verified. |
+| Payments (§18) | Stripe-hosted Checkout Session on the tenant's connected account → verified webhook / server reconciliation → commerce ledger | Verified webhook or reconciliation — **never** the browser return URL | Tenant is merchant of record; v1 uses Accounts v2 direct charges with no application fee (ADR-0003). Booking payments and platform SaaS billing are separate systems. Money is integer minor units + ISO currency; no card data stored; `payment_status` stays separate from `booking_status`. Production enablement requires independent legal, finance, tax, and provider review. |
+| Calendars (§19) | OAuth connection → full sync → persisted cursor → incremental sync + periodic reconciliation; push notifications are wake-up hints only | Incremental sync and reconciliation | Encrypted refresh tokens; renew watches/subscriptions before expiry; validate webhook challenges and secrets; deterministic event IDs for booking/revision correlation. Default policy: external busy data affects future availability, but an external edit never silently changes booking essentials — surface a conflict. |
+| Tenant API and webhooks (§20) | Tenant-scoped service accounts → versioned, OpenAPI-described endpoints; outbound signed webhook envelopes | Platform contracts | Ships after core booking stabilizes. Hashed keys with named scopes and expiry; rate limits per tenant/key/endpoint; idempotency on create and payment-affecting operations; keyset pagination and ETags; secret rotation, dead-letter history, replay; at-least-once and possibly out-of-order delivery documented; never more customer data than the event scope requires. |
+
+---
+
+## Control plane
+
+The control plane provisions and operates the fleet. It is never distributed.
+
+Control-plane data records **stable external IDs, never only mutable names**: tenant/brand/instance IDs; GitHub org, installation, repository ID, default branch, ruleset state; current and desired distribution release plus customization tier; Vercel team, Client/Dashboard project IDs, deployment IDs, logical release-pair ID; domain IDs, desired DNS records, verification/certificate/cutover state; environment schema version and **secret fingerprints, not plaintext**; backend contract range; email domain/account IDs and health; payment and calendar onboarding health; rollout ring, operational state, attempts, errors, audit history.
+
+GitHub App — organization-owned, not a personal access token. Grant only the needed installation permissions (administration where repository creation requires it, contents read/write, pull requests write; checks/status/actions only where automation truly needs them). Mint one-hour installation tokens per job scoped to the smallest repository set. Validate webhook signatures, enqueue, acknowledge quickly, respect primary and secondary rate limits, and periodically reconcile desired against actual state. The Vercel GitHub App is a **separate** installation — creating a repository through the platform App does not grant Vercel access to it.
+
+Vercel projects and domains — per instance repository create `<instance-slug>-client` (root `apps/client`) and `<instance-slug>-dashboard` (root `apps/dashboard`). The slug is a display-safe derivative; `instance_id` remains the canonical identifier. Create with safe bootstrap configuration, deploy a known release, run health checks, and only then attach or cut over live domains. Environment changes affect future deployments only, so trigger and verify a new deployment. Domain ownership verification and DNS propagation are a **waiting state, not an error**. Deployment protection hardens previews and Dashboard defense in depth but never replaces application authentication and RBAC.
+
+Paired release — Client and Dashboard build from the same commit, but promotion is two external operations and is not atomic. Keep current and previous backend compatibility, wait for both deployment checks, then promote both, recording the two production deployment IDs as one logical release pair. On failure: stop the rollout ring → redirect both domains to the last healthy pair where safe → verify backend compatibility and health → land a source revert or forward fix so Git stays authoritative. Code rollback does not undo external API actions or destructive data migrations — which is why database changes use expand/contract and forward repair, and why previous deployments retain their old build-time environment values.
+
+Rollout rings, in order: internal/demo tenants → canary tenants → small production batches → remaining config-only fleet → extended-code tenants after manual resolution. Pause automatically on build failures, smoke failures, error or latency regression, contract mismatch, or unusual booking/payment errors. **Never direct-push fleet updates to default branches.** Procedures: [runbooks](./runbooks.md).
+
+Fleet economics — one repository plus two Vercel projects per tenant is justified when a customer needs independent code, deployment, ownership, release control, or contractual isolation. It is expensive for configuration-only tenants: every upgrade produces two preview and two production deployments before retries. Monitor repository count, Vercel project/build/deployment quotas, GitHub API and action limits, upgrade conflict rate, queue age, and operator time. At a defined threshold, evaluate a shared multi-tenant deployment for the config-only tier while keeping dedicated logical forks for extended-code and enterprise customers. Record that threshold as an ADR — see [ADR index](./adr/README.md).
