@@ -10,11 +10,11 @@ Authoritative source: §10.1, §13.1, §14.1, §16.6, §24 of [the architecture 
 
 Issue #3 added the private pnpm/Turborepo monorepo, all three Next.js
 application shells, the ADR-0011 package set, and local enforcement scripts.
-Issue #4 adds the pinned Supabase CLI, a Docker-backed local project, central
+Issue #4 added the pinned Supabase CLI, a Docker-backed local project, central
 migration and Edge Function surfaces, a synthetic-only seed, and a pgTAP
-schema-boundary smoke. Issue #6 still owns tenant tables and the complete RLS
-access matrix; a passing foundation smoke is not a claim that tenant isolation
-is implemented.
+schema-boundary smoke. Issue #6 adds tenant tables, deterministic multi-tenant
+fixtures, the complete RLS access matrix, and a local-only `api_v1` generated
+type drift gate.
 
 | Thing | Status | Lands in |
 | ----- | ------ | -------- |
@@ -23,7 +23,8 @@ is implemented.
 | Local workspace gates (format, lint, types, unit, build, boundaries, distribution, config, secrets, bundles) | Available | Issue #3 |
 | Supabase local stack, central migrations, synthetic seed | Available | Issue #4 |
 | pgTAP schema-boundary smoke | Available | Issue #4 |
-| Full RLS matrix and multi-tenant fixtures | Not yet available | Issue #6 |
+| Full RLS matrix and multi-tenant fixtures | Available | Issue #6 |
+| Local-only `api_v1` database type drift gate | Available | Issue #6 |
 | CI workflows that run the gates below | Available | Issue #4 |
 | Bilingual component, a11y, RTL, reduced-motion, and visual foundation | Available | Issue #5; full journey coverage remains issue #40 |
 
@@ -125,8 +126,8 @@ These belong to Platform Admin and the provisioning automation only. **A Client 
 3. **Create your local env files** — copy the committed `.env.example` (added by issue #3) to `.env.local` in each app and fill each variable yourself. Values are never distributed.
 4. **Start the local backend** — `pnpm supabase:start` starts the committed Supabase project. Use the local URL and publishable key printed by the CLI only in ignored local env files.
 5. **Reset from zero** — `pnpm db:reset` replays every central migration and `supabase/seed.sql`. It is deliberately local-only; never add `--linked` or a hosted database URL.
-6. **Run database checks** — `pnpm test:db` runs the pgTAP foundation and `pnpm db:lint` runs the database linter. Issue #6 expands both around tenant tables and RLS.
-7. **Generate database types (pending issue #6)** — issue #6 adds the safe generated-type output once application schema exists.
+6. **Run database checks** — `pnpm test:db` runs the pgTAP schema-boundary and complete tenant RLS matrix; `pnpm db:lint` runs the database linter.
+7. **Generate and verify database types** — with the reset local stack running, use `pnpm db:types` to atomically update `packages/supabase-client/src/database.types.ts`, then run `pnpm check:db-types`. Both commands are pinned to the local stack and the safe `api_v1` schema; neither requires a linked or hosted Supabase project. Generator diagnostics are suppressed so local credentials and connection details cannot enter logs.
 8. **Run the apps** — `pnpm dev` starts Client on 3000, Dashboard on 3001, and Platform Admin on 3002. The identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
 9. **Verify** — run the gates in the next section before opening a pull request.
 10. **Stop the backend** — `pnpm supabase:stop` preserves local Docker state for the next run. A deliberate local volume wipe is safe only because local data is synthetic.
@@ -154,9 +155,10 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Component tests | `pnpm test:component` | Available — issue #5; booking-flow components expand in issues #12–#18 |
 | Database reset from zero | `pnpm db:reset` | Available — issue #4; Docker required |
 | Database lint | `pnpm db:lint` | Available — issue #4; Docker required |
-| pgTAP foundation | `pnpm test:db` (`supabase test db --local`) | Available — issue #4; full RLS matrix is `N/A — not yet implemented, owned by issue #6` |
+| pgTAP schema boundary and full tenant RLS matrix | `pnpm test:db` (`supabase test db --local`) | Available — issues #4 and #6; Docker required |
+| Generated `api_v1` database type drift | `pnpm check:db-types` | Available — issue #6; reset local stack and Docker required |
 | Contract tests | `pnpm test:contract` | Available — issue #4 |
-| Concurrency tests | `pnpm test:concurrency` | `N/A — not yet implemented, owned by issues #6 and #11` |
+| Booking concurrency tests | `pnpm test:concurrency` | `N/A — not yet implemented, owned by issue #11` |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
 | E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; full journeys are `N/A — not yet implemented, owned by issues #12–#18` |
 | Accessibility (+ RTL interaction) | `pnpm test:a11y` | Client/Dashboard EN/AR × mobile/desktop × brand matrix plus reduced motion available — issue #5; full journeys remain issue #40 |
@@ -226,7 +228,7 @@ evidence, not a claim that a screen-reader pass occurred.
 | `supabase start` hangs or fails | Docker not running, or ports already held by another local stack |
 | App loads unbranded / 404 on the Client | Requested `localhost` instead of `LOCAL_TENANT_HOST`; tenant resolution found no verified domain row (§13.3) |
 | `supabase db reset` mentions a linked project | Stop. The repository wrapper is local-only; do not continue against hosted data. |
-| Type errors after pulling migrations | Safe database types were not regenerated after the schema changed; the generation surface lands with issue #6 |
+| Type errors after pulling migrations | The committed `api_v1` database types are stale; reset the local stack, regenerate with `pnpm db:types`, then run `pnpm check:db-types`. |
 | RLS tests pass locally, fail in CI | Local database not reset from zero; CI always replays every migration (§24.4 step 4) |
 
 ---

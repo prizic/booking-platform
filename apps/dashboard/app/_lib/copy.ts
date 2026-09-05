@@ -34,7 +34,24 @@ export type DashboardMessageKey =
   | "brandLabel"
   | "todaySummary"
   | "notFoundTitle"
-  | "returnHome";
+  | "returnHome"
+  | "privateStatus"
+  | "configurationTitle"
+  | "configurationSummary"
+  | "signInTitle"
+  | "signInSummary"
+  | "deniedTitle"
+  | "deniedSummary"
+  | "selectionTitle"
+  | "selectionSummary"
+  | "selectTenant"
+  | "workspaceTitle"
+  | "tenantLabel"
+  | "roleLabel"
+  | "locationsLabel"
+  | "capabilitiesLabel"
+  | "mfaVerified"
+  | "mfaNotVerified";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
@@ -73,6 +90,26 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     todaySummary: "Today summary",
     notFoundTitle: "Workspace not found",
     returnHome: "Return to the workspace",
+    privateStatus: "Private tenant view",
+    configurationTitle: "Workspace configuration unavailable",
+    configurationSummary:
+      "This private workspace is closed until its secure connection is configured.",
+    signInTitle: "Sign in required",
+    signInSummary: "Sign in to verify your current tenant membership.",
+    deniedTitle: "Access unavailable",
+    deniedSummary:
+      "We could not verify this workspace, hostname, and membership together. No tenant data was shown.",
+    selectionTitle: "Choose a workspace",
+    selectionSummary:
+      "Your account belongs to more than one tenant. Choose the workspace you want to enter.",
+    selectTenant: "Open workspace",
+    workspaceTitle: "Verified workspace context",
+    tenantLabel: "Tenant",
+    roleLabel: "Current role",
+    locationsLabel: "Permitted locations",
+    capabilitiesLabel: "Current capabilities",
+    mfaVerified: "MFA assurance verified",
+    mfaNotVerified: "MFA step-up not active",
   },
   ar: {
     eyebrow: "مساحة عمل فريق المستأجر",
@@ -109,6 +146,25 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     todaySummary: "ملخص اليوم",
     notFoundTitle: "مساحة العمل غير موجودة",
     returnHome: "العودة إلى مساحة العمل",
+    privateStatus: "عرض خاص بالمستأجر",
+    configurationTitle: "إعداد مساحة العمل غير متاح",
+    configurationSummary: "تظل مساحة العمل الخاصة مغلقة حتى يكتمل إعداد الاتصال الآمن.",
+    signInTitle: "تسجيل الدخول مطلوب",
+    signInSummary: "سجّل الدخول للتحقق من عضويتك الحالية لدى المستأجر.",
+    deniedTitle: "الوصول غير متاح",
+    deniedSummary:
+      "تعذر التحقق من مساحة العمل واسم النطاق والعضوية معًا. لم يتم عرض أي بيانات للمستأجر.",
+    selectionTitle: "اختر مساحة عمل",
+    selectionSummary:
+      "يرتبط حسابك بأكثر من مستأجر. اختر مساحة العمل التي تريد الدخول إليها.",
+    selectTenant: "فتح مساحة العمل",
+    workspaceTitle: "سياق مساحة العمل الموثق",
+    tenantLabel: "المستأجر",
+    roleLabel: "الدور الحالي",
+    locationsLabel: "المواقع المسموح بها",
+    capabilitiesLabel: "الصلاحيات الحالية",
+    mfaVerified: "تم التحقق من ضمان المصادقة متعددة العوامل",
+    mfaNotVerified: "التحقق الإضافي متعدد العوامل غير نشط",
   },
 };
 

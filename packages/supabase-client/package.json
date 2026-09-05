@@ -24,12 +24,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "test:unit": "vitest run src"
   },
   "dependencies": {
     "@supabase/ssr": "catalog:",
     "@supabase/supabase-js": "catalog:",
     "server-only": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   },
   "wlbp": {
     "distribution": "distributed"

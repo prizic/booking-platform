@@ -220,6 +220,46 @@ input:focus-visible {
   border-radius: var(--brand-radius-control);
 }
 
+.access-panel {
+  display: grid;
+  gap: var(--brand-space-md, 1rem);
+  max-inline-size: 50rem;
+  padding: var(--brand-space-xl, 2rem);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-card, 1rem);
+}
+
+.access-panel > :where(h2, p) {
+  margin: 0;
+}
+
+.tenant-choice-list {
+  display: grid;
+  gap: var(--brand-space-sm, 0.75rem);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tenant-choice-list form,
+.tenant-choice-list span {
+  display: flex;
+  gap: var(--brand-space-sm, 0.75rem);
+  align-items: center;
+}
+
+.tenant-choice-list form {
+  justify-content: space-between;
+  padding: var(--brand-space-md, 1rem);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-control, 0.75rem);
+}
+
+.tenant-choice-list span {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
 .dashboard-shell {
   --dashboard-ink: var(--brand-color-text);
   --dashboard-muted: var(--brand-color-muted);

@@ -27,8 +27,12 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
   reactStrictMode: true,
   transpilePackages: [
+    "@wlbp/api-contracts",
+    "@wlbp/auth",
     "@wlbp/config",
     "@wlbp/i18n",
+    "@wlbp/supabase-client",
+    "@wlbp/tenant-resolution",
     "@wlbp/ui-foundation",
     "@wlbp/white-label-ui",
   ],

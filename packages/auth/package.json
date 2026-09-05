@@ -19,6 +19,9 @@
     "lint": "eslint src --max-warnings=0",
     "test:unit": "vitest run"
   },
+  "dependencies": {
+    "@wlbp/api-contracts": "workspace:*"
+  },
   "devDependencies": {
     "vitest": "catalog:"
   },

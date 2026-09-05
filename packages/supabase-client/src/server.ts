@@ -11,6 +11,7 @@ import {
   type RequestCookieStore,
   type RequestScopedSupabaseClient,
 } from "./types.js";
+import type { Database } from "./database.types.js";
 
 export function createRequestScopedSupabaseClient(
   config: PublishableSupabaseConfiguration,
@@ -24,7 +25,7 @@ export function createRequestScopedSupabaseClient(
           await cookies.setAll?.(values, cacheHeaders);
         };
 
-  return createSsrServerClient(config.url, config.publishableKey, {
+  return createSsrServerClient<Database, "api_v1">(config.url, config.publishableKey, {
     cookies: {
       getAll: async () => {
         const values = await cookies.getAll();

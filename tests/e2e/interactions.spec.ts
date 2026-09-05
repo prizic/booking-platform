@@ -22,18 +22,12 @@ const clientCopy = {
 
 const dashboardCopy = {
   en: {
-    grid: "Grid view",
-    list: "List view",
-    listAlternative: "Accessible schedule list",
-    listStatus: "Schedule shown as an accessible list.",
-    timeZone: "Time zone: Asia/Riyadh",
+    configurationTitle: "Workspace configuration unavailable",
+    privateStatus: "Private tenant view",
   },
   ar: {
-    grid: "عرض شبكي",
-    list: "عرض كقائمة",
-    listAlternative: "قائمة الجدول الميسّرة",
-    listStatus: "يُعرض الجدول في قائمة ميسّرة.",
-    timeZone: "المنطقة الزمنية: Asia/Riyadh",
+    configurationTitle: "إعداد مساحة العمل غير متاح",
+    privateStatus: "عرض خاص بالمستأجر",
   },
 } as const;
 
@@ -79,35 +73,17 @@ for (const profile of responsiveProfiles) {
         await expect(field).not.toHaveAttribute("aria-invalid", "true");
       });
 
-      test(`Dashboard ${language.locale} exposes a keyboard list alternative`, async ({
+      test(`Dashboard ${language.locale} fails closed before tenant context`, async ({
         page,
       }) => {
         const copy = dashboardCopy[language.locale];
         await page.goto(`http://localhost:41731/${language.locale}`);
 
-        const gridButton = page.getByRole("button", { name: copy.grid });
-        const listButton = page.getByRole("button", { name: copy.list });
-        const scheduleList = page.getByRole("list", {
-          name: copy.listAlternative,
-        });
-
-        await expect(scheduleList).toBeVisible();
-        await expect(scheduleList.getByRole("listitem")).toHaveCount(2);
-        await expect(gridButton).toHaveAttribute("aria-pressed", "true");
-        await expect(listButton).toHaveAttribute("aria-pressed", "false");
-        await expect(listButton).toHaveAttribute(
-          "aria-controls",
-          await scheduleList.getAttribute("id"),
-        );
-        await expect(page.getByText(copy.timeZone, { exact: true })).toBeVisible();
-
-        await reachWithTab(page, listButton);
-        await page.keyboard.press("Enter");
-
-        await expect(listButton).toHaveAttribute("aria-pressed", "true");
-        await expect(gridButton).toHaveAttribute("aria-pressed", "false");
-        await expect(page.getByRole("status")).toHaveText(copy.listStatus);
-        await expect(scheduleList).toBeVisible();
+        await expect(
+          page.getByRole("heading", { level: 2, name: copy.configurationTitle }),
+        ).toBeVisible();
+        await expect(page.getByText(copy.privateStatus, { exact: true })).toBeVisible();
+        await expect(page.getByRole("list")).toHaveCount(0);
       });
     }
   });

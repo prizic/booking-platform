@@ -135,12 +135,24 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@wlbp/api-contracts':
+        specifier: workspace:*
+        version: link:../../packages/api-contracts
+      '@wlbp/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@wlbp/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@wlbp/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@wlbp/supabase-client':
+        specifier: workspace:*
+        version: link:../../packages/supabase-client
+      '@wlbp/tenant-resolution':
+        specifier: workspace:*
+        version: link:../../packages/tenant-resolution
       '@wlbp/ui-foundation':
         specifier: workspace:*
         version: link:../../packages/ui-foundation
@@ -210,9 +222,17 @@ importers:
         specifier: 'catalog:'
         version: 5.0.0(@types/node@22.20.1)(vite@8.2.2(@types/node@22.20.1))
 
-  packages/api-contracts: {}
+  packages/api-contracts:
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@types/node@22.20.1)(vite@8.2.2(@types/node@22.20.1))
 
   packages/auth:
+    dependencies:
+      '@wlbp/api-contracts':
+        specifier: workspace:*
+        version: link:../api-contracts
     devDependencies:
       vitest:
         specifier: 'catalog:'
@@ -274,6 +294,10 @@ importers:
       server-only:
         specifier: 'catalog:'
         version: 0.0.1
+    devDependencies:
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@types/node@22.20.1)(vite@8.2.2(@types/node@22.20.1))
 
   packages/tenant-resolution:
     devDependencies:

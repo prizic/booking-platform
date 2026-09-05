@@ -16,20 +16,24 @@ select ok(
 );
 
 select ok(
-  not has_schema_privilege('anon', 'app', 'USAGE'),
-  'anonymous role cannot resolve application tables'
+  has_schema_privilege('anon', 'app', 'USAGE')
+    and not has_schema_privilege('anon', 'app', 'CREATE'),
+  'anonymous role can resolve RLS-protected invoker dependencies but cannot create app objects'
 );
 select ok(
-  not has_schema_privilege('authenticated', 'app', 'USAGE'),
-  'authenticated role cannot resolve application tables'
+  has_schema_privilege('authenticated', 'app', 'USAGE')
+    and not has_schema_privilege('authenticated', 'app', 'CREATE'),
+  'authenticated role can resolve RLS-protected invoker dependencies but cannot create app objects'
 );
 select ok(
-  not has_schema_privilege('anon', 'private', 'USAGE'),
-  'anonymous role cannot resolve private objects'
+  has_schema_privilege('anon', 'private', 'USAGE')
+    and not has_schema_privilege('anon', 'private', 'CREATE'),
+  'anonymous role can execute the narrow public-context policy helper but cannot create private objects'
 );
 select ok(
-  not has_schema_privilege('authenticated', 'private', 'USAGE'),
-  'authenticated role cannot resolve private objects'
+  has_schema_privilege('authenticated', 'private', 'USAGE')
+    and not has_schema_privilege('authenticated', 'private', 'CREATE'),
+  'authenticated role can execute narrow policy helpers but cannot create private objects'
 );
 
 select * from finish();

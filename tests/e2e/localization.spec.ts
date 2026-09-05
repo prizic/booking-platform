@@ -36,14 +36,12 @@ test("Client localizes appointment, currency, and digits while retaining the IAN
   expect(main).toContain("ر.س");
 });
 
-test("Dashboard localizes counts and times while retaining the IANA zone", async ({
-  page,
-}) => {
+test("Dashboard localizes its fail-closed private state", async ({ page }) => {
   await page.goto("http://localhost:41731/ar");
 
   const main = await page.getByRole("main").innerText();
-  expect(main).toContain("Asia/Riyadh");
-  expect(main).toContain("٠٨");
-  expect(main).toContain("٠٣");
-  expect(main).toMatch(/[٠-٩]+:[٠-٩]+/u);
+  expect(main).toContain("إعداد مساحة العمل غير متاح");
+  expect(main).toContain("تظل مساحة العمل الخاصة مغلقة");
+  expect(main).not.toContain("Asia/Riyadh");
+  expect(page.getByRole("list")).toHaveCount(0);
 });
