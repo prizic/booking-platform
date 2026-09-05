@@ -40,9 +40,15 @@ export async function loadPublishedCatalog(
       runtimeEnvironment: runtimeEnvironment(),
     });
     const cookieStore = await cookies();
-    const client = createRequestScopedSupabaseClient(configuration, {
-      getAll: () => cookieStore.getAll(),
-    });
+    const client = createRequestScopedSupabaseClient(
+      {
+        url: configuration.supabaseUrl,
+        publishableKey: configuration.supabasePublishableKey,
+      },
+      {
+        getAll: () => cookieStore.getAll(),
+      },
+    );
     const { data, error } = await client.schema("api_v1").rpc("get_public_catalog_v1", {
       p_hostname: hostname,
       p_locale: locale,
