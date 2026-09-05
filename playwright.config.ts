@@ -6,28 +6,33 @@ const servers = [
   {
     command: "pnpm --filter @wlbp/client exec next dev --port 41730",
     port: 41730,
+    url: "http://127.0.0.1:41730/en",
     reuseExistingServer: reuseDevServersInCi,
   },
   {
     command: "pnpm --filter @wlbp/dashboard exec next dev --port 41731",
     port: 41731,
+    url: "http://127.0.0.1:41731/en",
     reuseExistingServer: reuseDevServersInCi,
   },
   {
     command: "pnpm --filter @wlbp/platform-admin exec next dev --port 41732",
     port: 41732,
+    url: "http://127.0.0.1:41732/en",
     reuseExistingServer: reuseDevServersInCi,
   },
   {
     command:
       "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm-client pnpm --filter @wlbp/client exec next dev --port 41733",
     port: 41733,
+    url: "http://127.0.0.1:41733/en",
     reuseExistingServer: reuseDevServersInCi,
   },
   {
     command:
       "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm-dashboard pnpm --filter @wlbp/dashboard exec next dev --port 41734",
     port: 41734,
+    url: "http://127.0.0.1:41734/en",
     // In CI, the warm Next dev server can outlive a prior Playwright project.
     // Reusing the healthy server avoids a race where a replacement fails with
     // EADDRINUSE and the tests then receive connection-refused errors.
