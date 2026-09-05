@@ -85,6 +85,7 @@ create table app.assignment_allocations (
   occupied_at tstzrange generated always as (tstzrange(starts_at - make_interval(mins => buffer_before_minutes),ends_at + make_interval(mins => buffer_after_minutes),'[)')) stored,
   state text not null default 'confirmed' check (state in ('held','confirmed','cancelled','completed')),
   primary key (id), unique (tenant_id,id),
+  unique (tenant_id,request_id,action,target_id),
   check (ends_at > starts_at), check (num_nonnulls(staff_id,resource_id) = 1),
   foreign key (tenant_id,staff_id) references app.staff_profiles(tenant_id,id) on delete restrict,
   foreign key (tenant_id,resource_id) references app.resources(tenant_id,id) on delete restrict
@@ -194,6 +195,11 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='staff_authorization_required'; end if;
+  if p_request_id is null then raise exception using errcode='22023',message='request_id_required'; end if;
+  if exists (select 1 from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='staff_deactivated' and e.target_id=p_staff_id) then
+    return query select p_staff_id,(select e.outcome from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='staff_deactivated' and e.target_id=p_staff_id limit 1),(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp()); return;
+  end if;
+  perform 1 from app.staff_profiles s where s.tenant_id=p_tenant_id and s.id=p_staff_id for update;
   if p_resolution is null or p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
@@ -226,6 +232,11 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='resource_authorization_required'; end if;
+  if p_request_id is null then raise exception using errcode='22023',message='request_id_required'; end if;
+  if exists (select 1 from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='resource_deactivated' and e.target_id=p_resource_id) then
+    return query select p_resource_id,(select e.outcome from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='resource_deactivated' and e.target_id=p_resource_id limit 1),(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp()); return;
+  end if;
+  perform 1 from app.resources r where r.tenant_id=p_tenant_id and r.id=p_resource_id for update;
   if p_resolution is null or p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
