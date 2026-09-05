@@ -1,5 +1,5 @@
 begin;
-select plan(12);
+select plan(14);
 
 select has_function(
   'api_v1'::name,
@@ -188,6 +188,35 @@ select throws_like(
   $$,
   '%staff_authorization_required%',
   'location-scoped authority is not widened to tenant management'
+);
+select throws_like(
+  $$
+    select *
+    from private.deactivate_staff_v1_internal(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8000000-0000-0000-0000-000000000011',
+      'defer',
+      null,
+      gen_random_uuid(),
+      'location manager must not mutate tenant-wide'
+    )
+  $$,
+  '%staff_authorization_required%',
+  'the private staff helper independently rejects location-scoped callers'
+);
+select throws_like(
+  $$
+    select *
+    from private.deactivate_resource_v1_internal(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8200000-0000-0000-0000-000000000011',
+      'defer',
+      gen_random_uuid(),
+      'location manager must not mutate tenant-wide'
+    )
+  $$,
+  '%resource_authorization_required%',
+  'the private resource helper independently rejects location-scoped callers'
 );
 
 reset role;

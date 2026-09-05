@@ -108,7 +108,28 @@ set search_path = ''
 as $$
 begin
   if p_tenant_id is null
-    or not (select private.can_manage_staff(p_tenant_id, null))
+    or not exists (
+      select 1
+      from app.memberships as membership
+      join app.roles as role
+        on role.tenant_id = membership.tenant_id
+        and role.id = membership.role_id
+      join app.role_permissions as permission
+        on permission.tenant_id = role.tenant_id
+        and permission.role_id = role.id
+      where membership.tenant_id = p_tenant_id
+        and membership.auth_user_id = (select private.current_auth_user_id())
+        and membership.status = 'active'
+        and permission.permission_key = 'staff.manage'
+        and permission.scope_kind = 'tenant'
+        and (
+          permission.grant_kind = 'direct'
+          or (
+            permission.grant_kind = 'approval'
+            and (select private.is_aal2())
+          )
+        )
+    )
   then
     raise exception using
       errcode = '42501',
