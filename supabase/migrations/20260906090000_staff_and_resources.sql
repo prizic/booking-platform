@@ -118,17 +118,6 @@ $$;
 revoke execute on function private.can_manage_staff(uuid,uuid) from public;
 grant execute on function private.can_manage_staff(uuid,uuid) to authenticated;
 
-create or replace function private.can_manage_staff_record(p_tenant_id uuid, p_staff_id uuid)
-returns boolean language sql stable security definer set search_path='' as $$
-  select (select private.can_manage_staff(p_tenant_id,null)) or exists (
-    select 1 from app.staff_locations sl
-    where sl.tenant_id=p_tenant_id and sl.staff_id=p_staff_id
-      and (select private.can_manage_staff(p_tenant_id,sl.location_id))
-  );
-$$;
-revoke execute on function private.can_manage_staff_record(uuid,uuid) from public;
-grant execute on function private.can_manage_staff_record(uuid,uuid) to authenticated;
-
 do $rls$
 declare t text;
 begin
@@ -141,26 +130,6 @@ begin
   end loop;
 end;
 $rls$;
-
--- Replace the broad tenant-member mutation policies for location-sensitive
--- rows with exact assigned-location authorization. Tenant admins retain the
--- tenant branch through the helper.
-drop policy staff_profiles_update on app.staff_profiles;
-drop policy staff_profiles_delete on app.staff_profiles;
-drop policy staff_services_insert on app.staff_services;
-drop policy staff_services_update on app.staff_services;
-drop policy staff_services_delete on app.staff_services;
-drop policy staff_locations_insert on app.staff_locations;
-drop policy staff_locations_update on app.staff_locations;
-drop policy staff_locations_delete on app.staff_locations;
-create policy staff_profiles_update on app.staff_profiles for update to authenticated using ((select private.can_manage_staff_record(tenant_id,id))) with check ((select private.can_manage_staff_record(tenant_id,id)));
-create policy staff_profiles_delete on app.staff_profiles for delete to authenticated using ((select private.can_manage_staff_record(tenant_id,id)));
-create policy staff_services_insert on app.staff_services for insert to authenticated with check ((select private.can_manage_staff_record(tenant_id,staff_id)));
-create policy staff_services_update on app.staff_services for update to authenticated using ((select private.can_manage_staff_record(tenant_id,staff_id))) with check ((select private.can_manage_staff_record(tenant_id,staff_id)));
-create policy staff_services_delete on app.staff_services for delete to authenticated using ((select private.can_manage_staff_record(tenant_id,staff_id)));
-create policy staff_locations_insert on app.staff_locations for insert to authenticated with check ((select private.can_manage_staff(tenant_id,location_id)));
-create policy staff_locations_update on app.staff_locations for update to authenticated using ((select private.can_manage_staff(tenant_id,location_id))) with check ((select private.can_manage_staff(tenant_id,location_id)));
-create policy staff_locations_delete on app.staff_locations for delete to authenticated using ((select private.can_manage_staff(tenant_id,location_id)));
 
 -- Anonymous callers receive only explicitly published, active, safe identity.
 create policy staff_profiles_public on app.staff_profiles for select to anon using (
@@ -198,9 +167,10 @@ grant execute on function api_v1.get_assignment_candidates_v1(uuid,uuid) to anon
 create or replace function api_v1.deactivate_staff_v1(p_tenant_id uuid,p_staff_id uuid,p_resolution text,p_replacement_staff_id uuid,p_request_id uuid,p_reason text)
 returns table(staff_id uuid,outcome text,remaining_allocations integer)
 language plpgsql security definer set search_path='' as $$
-declare n integer; actor uuid; membership uuid;
+declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='staff_authorization_required'; end if;
+  if p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   if p_resolution='reassign' then
@@ -208,11 +178,12 @@ begin
     update app.assignment_allocations a set staff_id=p_replacement_staff_id where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   elsif p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   end if;
+  audit_outcome := case when n = 0 then 'deactivated' when p_resolution='reassign' then 'reassigned' when p_resolution='cancel' then 'cancelled' else 'deferred' end;
   update app.staff_profiles set status='inactive',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_staff_id;
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
   insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
-  values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,p_resolution,jsonb_build_object('status','inactive'));
-  return query select p_staff_id,p_resolution,(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp());
+  values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,audit_outcome,jsonb_build_object('status','inactive'));
+  return query select p_staff_id,audit_outcome,(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp());
 end;
 $$;
 revoke all on function api_v1.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text) from public;
