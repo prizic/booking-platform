@@ -201,18 +201,18 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; actor uuid; membership uuid;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='staff_authorization_required'; end if;
-  select count(*)::integer into n from app.assignment_allocations where tenant_id=p_tenant_id and staff_id=p_staff_id and state in ('held','confirmed') and starts_at > statement_timestamp();
+  select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   if p_resolution='reassign' then
     if p_replacement_staff_id is null or not exists(select 1 from app.staff_profiles where tenant_id=p_tenant_id and id=p_replacement_staff_id and status='active') then raise exception using errcode='22023',message='replacement_staff_required'; end if;
-    update app.assignment_allocations set staff_id=p_replacement_staff_id where tenant_id=p_tenant_id and staff_id=p_staff_id and state in ('held','confirmed') and starts_at > statement_timestamp();
-  elsif p_resolution='cancel' then update app.assignment_allocations set state='cancelled' where tenant_id=p_tenant_id and staff_id=p_staff_id and state in ('held','confirmed') and starts_at > statement_timestamp();
+    update app.assignment_allocations a set staff_id=p_replacement_staff_id where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
+  elsif p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   end if;
   update app.staff_profiles set status='inactive',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_staff_id;
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
   insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
   values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,p_resolution,jsonb_build_object('status','inactive'));
-  return query select p_staff_id,p_resolution,(select count(*)::integer from app.assignment_allocations where tenant_id=p_tenant_id and staff_id=p_staff_id and state in ('held','confirmed') and starts_at > statement_timestamp());
+  return query select p_staff_id,p_resolution,(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp());
 end;
 $$;
 revoke all on function api_v1.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text) from public;
