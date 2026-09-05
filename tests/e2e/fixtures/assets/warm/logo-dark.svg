@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" role="img" aria-labelledby="title">
+  <title id="title">Sahra Wellness Collective</title>
+  <rect width="240" height="64" rx="12" fill="#20170f"/>
+  <circle cx="36" cy="32" r="15" fill="#fffaf2"/>
+  <path d="M28 34c7-10 13-10 17-2-4 8-10 11-17 2Z" fill="#6b2d00"/>
+  <text x="62" y="40" fill="#ffffff" font-family="system-ui, sans-serif" font-size="17" font-weight="700">Sahra Wellness</text>
+</svg>

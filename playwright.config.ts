@@ -1,9 +1,28 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const servers = [
-  { command: "pnpm --filter @wlbp/client dev", port: 3000 },
-  { command: "pnpm --filter @wlbp/dashboard dev", port: 3001 },
-  { command: "pnpm --filter @wlbp/platform-admin dev", port: 3002 },
+  {
+    command: "pnpm --filter @wlbp/client exec next dev --port 41730",
+    port: 41730,
+  },
+  {
+    command: "pnpm --filter @wlbp/dashboard exec next dev --port 41731",
+    port: 41731,
+  },
+  {
+    command: "pnpm --filter @wlbp/platform-admin exec next dev --port 41732",
+    port: 41732,
+  },
+  {
+    command:
+      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm pnpm --filter @wlbp/client exec next dev --port 41733",
+    port: 41733,
+  },
+  {
+    command:
+      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm pnpm --filter @wlbp/dashboard exec next dev --port 41734",
+    port: 41734,
+  },
 ] as const;
 
 export default defineConfig({
@@ -16,7 +35,15 @@ export default defineConfig({
   reporter: process.env.CI
     ? [["line"], ["html", { open: "never", outputFolder: "playwright-report" }]]
     : "list",
-  expect: { timeout: 10_000 },
+  expect: {
+    timeout: 10_000,
+    toHaveScreenshot: {
+      animations: "disabled",
+      caret: "hide",
+      maxDiffPixelRatio: 0.01,
+      scale: "css",
+    },
+  },
   use: {
     ...devices["Desktop Chrome"],
     trace: "retain-on-failure",
@@ -24,14 +51,22 @@ export default defineConfig({
     video: "retain-on-failure",
   },
   projects: [
-    { name: "e2e", testMatch: /smoke\.spec\.ts/u },
-    { name: "a11y", testMatch: /accessibility\.spec\.ts/u },
+    {
+      name: "e2e",
+      testMatch: /(?:smoke|foundation)\.spec\.ts$/u,
+    },
+    { name: "component", testMatch: /interactions\.spec\.ts$/u },
+    { name: "i18n", testMatch: /localization\.spec\.ts$/u },
+    {
+      name: "a11y",
+      testMatch: /(?:accessibility|reduced-motion)\.spec\.ts$/u,
+    },
     { name: "visual", testMatch: /visual\.spec\.ts/u },
   ],
   webServer: servers.map(({ command, port }) => ({
     command,
     port,
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 120_000,
   })),
 });

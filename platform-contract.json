@@ -1,5 +1,5 @@
 {
   "whiteLabelVersion": "0.1.0",
-  "configSchemaVersion": 1,
+  "configSchemaVersion": 2,
   "backendContract": { "min": 1, "max": 1 }
 }

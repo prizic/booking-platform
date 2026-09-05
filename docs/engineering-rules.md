@@ -4,7 +4,7 @@ The non-negotiable rules for writing code in this platform: package boundaries, 
 
 Authoritative source: §10.2, §10.7, §13.4, §13.5, §13.6, §24 of [the architecture spec](../WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md).
 
-> **Status:** issue #3 provides the pnpm/Turborepo workspace, three application shells, package builds, unit tests, and local gates for formatting, lint, type checking, boundaries, distribution closure, configuration, secrets, builds, and bundle leakage. CI orchestration and the local Supabase/database-backed gate layers remain issue #4 and issue #6 work. See [local-setup.md](./local-setup.md) for the exact command and owner of every gate.
+> **Status:** issues #3 and #4 provide the pnpm/Turborepo workspace, three application shells, local Supabase foundation, CI orchestration, and executable workspace, browser, release, and database-foundation gates. Issue #5 adds the semantic brand, localization, component, accessibility, RTL, reduced-motion, and visual matrices. Issue #6 still owns tenant tables and the complete RLS/concurrency matrix. See [local-setup.md](./local-setup.md) for the exact command and owner of every gate.
 
 ---
 

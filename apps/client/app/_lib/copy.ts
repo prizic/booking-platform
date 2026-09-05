@@ -15,10 +15,19 @@ export type ClientMessageKey =
   | "languageNavigation"
   | "languageEnglish"
   | "languageArabic"
+  | "appointmentLabel"
+  | "timezoneLabel"
+  | "priceLabel"
+  | "customerNameLabel"
+  | "customerNameDescription"
+  | "submitAction"
+  | "errorSummaryTitle"
+  | "nameRequired"
+  | "successMessage"
   | "notFoundTitle"
   | "returnHome";
 
-const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
+export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
     eyebrow: "Public booking experience",
     title: "Book the right time, without the back-and-forth.",
@@ -34,6 +43,15 @@ const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     languageNavigation: "Language",
     languageEnglish: "English",
     languageArabic: "Arabic",
+    appointmentLabel: "Selected appointment",
+    timezoneLabel: "Time zone",
+    priceLabel: "Total",
+    customerNameLabel: "Your name",
+    customerNameDescription: "Used to identify this booking preview.",
+    submitAction: "Review booking",
+    errorSummaryTitle: "We could not review your booking",
+    nameRequired: "Enter your name to continue.",
+    successMessage: "Booking preview ready for {name}.",
     notFoundTitle: "Page not found",
     returnHome: "Return to booking",
   },
@@ -52,6 +70,15 @@ const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     languageNavigation: "اللغة",
     languageEnglish: "الإنجليزية",
     languageArabic: "العربية",
+    appointmentLabel: "الموعد المحدد",
+    timezoneLabel: "المنطقة الزمنية",
+    priceLabel: "الإجمالي",
+    customerNameLabel: "اسمك",
+    customerNameDescription: "يُستخدم للتعرّف على معاينة هذا الحجز.",
+    submitAction: "مراجعة الحجز",
+    errorSummaryTitle: "تعذّرت مراجعة حجزك",
+    nameRequired: "أدخل اسمك للمتابعة.",
+    successMessage: "معاينة الحجز جاهزة باسم {name}.",
     notFoundTitle: "الصفحة غير موجودة",
     returnHome: "العودة إلى الحجز",
   },

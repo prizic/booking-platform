@@ -25,7 +25,7 @@ is implemented.
 | pgTAP schema-boundary smoke | Available | Issue #4 |
 | Full RLS matrix and multi-tenant fixtures | Not yet available | Issue #6 |
 | CI workflows that run the gates below | Available | Issue #4 |
-| Browser identity E2E/accessibility/RTL smoke | Available | Issue #4; full UI coverage remains issues #5 and #40 |
+| Bilingual component, a11y, RTL, reduced-motion, and visual foundation | Available | Issue #5; full journey coverage remains issue #40 |
 
 An unavailable gate is reported as `N/A` with its owning issue. It is never
 reported as passing.
@@ -151,7 +151,7 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Lint | `pnpm lint` | Available — issue #3 |
 | Typecheck | `pnpm typecheck` | Available — issue #3 |
 | Unit / domain tests | `pnpm test:unit` | Available — issue #3 |
-| Component tests | `pnpm test:component` | `N/A — not yet implemented, owned by issue #5` |
+| Component tests | `pnpm test:component` | Available — issue #5; booking-flow components expand in issues #12–#18 |
 | Database reset from zero | `pnpm db:reset` | Available — issue #4; Docker required |
 | Database lint | `pnpm db:lint` | Available — issue #4; Docker required |
 | pgTAP foundation | `pnpm test:db` (`supabase test db --local`) | Available — issue #4; full RLS matrix is `N/A — not yet implemented, owned by issue #6` |
@@ -159,9 +159,9 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Concurrency tests | `pnpm test:concurrency` | `N/A — not yet implemented, owned by issues #6 and #11` |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
 | E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; full journeys are `N/A — not yet implemented, owned by issues #12–#18` |
-| Accessibility (+ RTL interaction) | `pnpm test:a11y` | Identity-shell smoke available — issue #4; full matrix is `N/A — not yet implemented, owned by issues #5 and #40` |
-| Localization parity | `pnpm test:i18n` | Pending — issue #5; issue #3 config validation already checks template message-key parity |
-| Visual regression | `pnpm test:visual` | Screenshot evidence and overflow smoke available — issue #4; pixel baselines and full brand matrix are `N/A — not yet implemented, owned by issues #5 and #40` |
+| Accessibility (+ RTL interaction) | `pnpm test:a11y` | Client/Dashboard EN/AR × mobile/desktop × brand matrix plus reduced motion available — issue #5; full journeys remain issue #40 |
+| Localization parity | `pnpm test:i18n` | Available — issue #5; includes locale rendering plus unit coverage for messages, formatting, and DST gaps/overlaps |
+| Visual regression | `pnpm test:visual` | Client/Dashboard EN/AR × mobile/desktop × brand pixel baselines available — issue #5; full journeys remain issue #40 |
 | Instance config validation | `pnpm check:config` | Available — issue #3 |
 | Forbidden imports / boundaries / cycles | `pnpm check:boundaries` | Available — issue #3 |
 | Distribution dependency closure | `pnpm check:distribution` | Available — issue #3; actual export/history fixture is issue #4 / #29 |
@@ -169,11 +169,45 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Distributed bundle leakage | `pnpm check:bundles` after `pnpm build` | Available — issue #3 |
 | Workspace dependency graph | `pnpm graph:dependencies` | Available — issue #3 |
 
+Visual references are platform-specific. Run and review the Darwin references
+locally, but treat the `*-linux.png` references produced by the pinned
+`ubuntu-24.04` source workflow as canonical for CI. Do not regenerate Linux
+references in a different container or distribution: system and Arabic font
+metrics differ even when the Chromium and Playwright versions match. Promote an
+intentional CI-rendered reference only after reviewing the uploaded actual and
+diff artifacts.
+
 ### Required coverage before a pull request
 
 - The RLS matrix in [engineering-rules.md](./engineering-rules.md) §7 has a positive and a negative case for every changed policy.
 - The concurrency cases in [engineering-rules.md](./engineering-rules.md) §8 that touch your change still pass.
 - English and Arabic are both exercised for any user-visible string.
+
+### Manual UI foundation review
+
+Automation does not replace assistive-technology judgment. Before closing a UI
+foundation or full-journey issue, review Client, Dashboard, and Dashboard
+`/{locale}/brand-preview` in both locales and record the browser, operating
+system, assistive technology, and commit tested. The required pass is:
+
+1. Keyboard-only traversal, activation, form submission, error-summary focus,
+   error-link recovery, and schedule grid/list switching.
+2. Visible and logical focus order at desktop and mobile widths.
+3. Reflow at 200% browser zoom and text-only zoom, with no two-dimensional
+   scrolling for ordinary content.
+4. VoiceOver, NVDA, or an equivalent screen reader: headings, landmarks,
+   labels, error association, assertive errors, polite status updates, and the
+   schedule list all announce in a useful order.
+5. English and Arabic at narrow mobile width with the longest realistic tenant
+   name and content; Arabic reading order must remain chronological where time
+   is involved.
+6. Operating-system reduced motion enabled; no authored motion remains.
+7. The brand preview's default/warm token cases, light/dark asset treatments,
+   button/form/calendar/error/empty/email states, and non-color status labels.
+
+If any row has not been performed by a human, report it as pending manual
+evidence. Axe, semantic-tree inspection, and screenshots are supporting
+evidence, not a claim that a screen-reader pass occurred.
 
 ---
 

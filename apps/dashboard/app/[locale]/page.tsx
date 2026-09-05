@@ -1,8 +1,11 @@
 import { formatNumber, formatTime, type Locale } from "@wlbp/i18n";
-import { Badge, LinkButton, Surface } from "@wlbp/ui-foundation";
+import { Badge, Surface } from "@wlbp/ui-foundation";
 import { BrandShell } from "@wlbp/white-label-ui";
+import Image from "next/image";
 import Link from "next/link";
 import { getDashboardMessage } from "../_lib/copy";
+import { dashboardBrand } from "../_lib/brand";
+import { SchedulePreview } from "./schedule-preview";
 
 type DashboardPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -17,24 +20,38 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     "navCalendar",
     "navBookings",
     "navCustomers",
+    "navBrand",
   ] as const;
+  const timeZone = "Asia/Riyadh";
 
   return (
-    <BrandShell className="dashboard-shell" labelledBy="dashboard-title">
+    <BrandShell
+      className="dashboard-shell"
+      labelledBy="dashboard-title"
+      tokens={dashboardBrand.tokens}
+    >
       <aside className="dashboard-sidebar">
         <Link
           className="dashboard-brand"
           href={`/${locale}`}
-          aria-label={message("brandLabel")}
+          aria-label={dashboardBrand.name}
         >
-          <span aria-hidden="true">N</span>
-          <strong>Nawa</strong>
+          <Image
+            alt=""
+            aria-hidden="true"
+            height={36}
+            src={dashboardBrand.assets.icon}
+            width={36}
+          />
+          <strong>{dashboardBrand.name}</strong>
         </Link>
         <nav aria-label={message("primaryNavigation")}>
           {navigation.map((key, index) => (
             <Link
               key={key}
-              href={`/${locale}#${key}`}
+              href={
+                key === "navBrand" ? `/${locale}/brand-preview` : `/${locale}#${key}`
+              }
               aria-current={index === 0 ? "page" : undefined}
             >
               <span aria-hidden="true">0{index + 1}</span>
@@ -83,27 +100,33 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           </Surface>
         </section>
 
-        <Surface as="section" className="schedule" labelledBy="schedule-title">
-          <div className="schedule-heading">
-            <div>
-              <p>{message("listAlternative")}</p>
-              <h2 id="schedule-title">{message("scheduleTitle")}</h2>
-            </div>
-            <LinkButton href={`/${locale}#calendar`} variant="secondary">
-              {message("openCalendar")}
-            </LinkButton>
-          </div>
-          <ol aria-label={message("listAlternative")}>
-            <li>
-              <time dateTime="09:00">
-                {formatTime("2026-01-01T09:00:00.000Z", locale, "UTC")}
-              </time>
-              <span aria-hidden="true" />
-              <p>{message("scheduleEmpty")}</p>
-              <Badge>—</Badge>
-            </li>
-          </ol>
-        </Surface>
+        <SchedulePreview
+          gridViewLabel={message("gridView")}
+          items={[
+            {
+              dateTime: "2026-09-08T06:00:00.000Z",
+              description: message("scheduleConsultation"),
+              displayTime: formatTime("2026-09-08T06:00:00.000Z", locale, timeZone),
+              status: message("statusConfirmed"),
+              tone: "positive",
+            },
+            {
+              dateTime: "2026-09-08T08:30:00.000Z",
+              description: message("scheduleFollowUp"),
+              displayTime: formatTime("2026-09-08T08:30:00.000Z", locale, timeZone),
+              status: message("statusRequested"),
+              tone: "warning",
+            },
+          ]}
+          listAlternativeLabel={message("listAlternative")}
+          listViewLabel={message("listView")}
+          scheduleTitle={message("scheduleTitle")}
+          timeZone={timeZone}
+          timeZoneLabel={message("timeZoneLabel")}
+          viewChangedGrid={message("viewChangedGrid")}
+          viewChangedList={message("viewChangedList")}
+          viewSelectorLabel={message("viewSelector")}
+        />
       </div>
     </BrandShell>
   );

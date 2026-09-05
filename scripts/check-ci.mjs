@@ -9,7 +9,13 @@ const requiredWorkflows = new Map([
   ["ci.yml", ["pull_request:", "pnpm install --frozen-lockfile", "pnpm db:reset"]],
   [
     "instance-ci.yml",
-    ["workflow_call:", "backend_contract_version", "pnpm install --frozen-lockfile"],
+    [
+      "workflow_call:",
+      "backend_contract_version",
+      "pnpm install --frozen-lockfile",
+      "pnpm --filter @wlbp/testing exec playwright install --with-deps chromium",
+      "pnpm --filter @wlbp/testing test:instance",
+    ],
   ],
   [
     "backend-release.yml",

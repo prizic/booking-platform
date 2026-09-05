@@ -1,0 +1,70 @@
+{
+  "name": "Sahra Wellness Collective",
+  "assets": {
+    "logoLight": "/assets/warm/logo-light.svg",
+    "logoDark": "/assets/warm/logo-dark.svg",
+    "icon": "/assets/warm/icon.svg",
+    "favicon": "/assets/warm/favicon.svg",
+    "socialImage": "/assets/warm/social.svg"
+  },
+  "tokens": {
+    "color": {
+      "background": "#f7f2e8",
+      "surface": "#fffaf2",
+      "text": "#20170f",
+      "muted": "#5b493d",
+      "border": "#8f7968",
+      "primary": "#6b2d00",
+      "onPrimary": "#ffffff",
+      "success": "#0a5d2c",
+      "onSuccess": "#ffffff",
+      "warning": "#6b4300",
+      "onWarning": "#ffffff",
+      "danger": "#9f1c1c",
+      "onDanger": "#ffffff",
+      "focus": "#0047bb"
+    },
+    "typography": {
+      "bodyFamily": "system-ui, \"Noto Sans Arabic\", sans-serif",
+      "displayFamily": "Georgia, \"Noto Naskh Arabic\", serif",
+      "arabicBodyFamily": "\"Noto Sans Arabic\", Tahoma, sans-serif",
+      "arabicDisplayFamily": "\"Noto Naskh Arabic\", Tahoma, serif",
+      "size": {
+        "caption": "0.75rem",
+        "body": "1rem",
+        "label": "0.875rem",
+        "title": "1.5rem",
+        "display": "4.5rem"
+      },
+      "weight": {
+        "regular": "400",
+        "medium": "500",
+        "semibold": "600",
+        "bold": "700"
+      },
+      "lineHeight": { "compact": "1.2", "body": "1.55", "relaxed": "1.7" }
+    },
+    "radius": { "control": "1.5rem", "surface": "1.75rem", "pill": "999rem" },
+    "borderWidth": { "default": "0.0625rem", "strong": "0.125rem" },
+    "spacing": {
+      "xxs": "0.25rem",
+      "xs": "0.5rem",
+      "sm": "0.75rem",
+      "md": "1rem",
+      "lg": "1.5rem",
+      "xl": "2rem",
+      "xxl": "3rem"
+    },
+    "contentWidth": { "form": "40rem", "reading": "70ch", "wide": "78rem" },
+    "motion": {
+      "fast": "120ms",
+      "standard": "180ms",
+      "slow": "300ms",
+      "reducedFast": "0ms",
+      "reduced": "0ms",
+      "reducedSlow": "0ms",
+      "easingStandard": "cubic-bezier(0.16, 1, 0.3, 1)",
+      "easingExit": "ease-in"
+    }
+  }
+}

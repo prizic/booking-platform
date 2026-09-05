@@ -50,6 +50,10 @@ An upgrade PR must:
 - Require human approval for major releases, authentication or payment changes, and any conflict.
 - Report deploy and rollback status back to Platform Admin.
 
+Config-schema upgrades include a checked-in, exact migration guide. The first
+such migration, from the bootstrap brand surface to the complete semantic token
+contract, is [config schema 1 → 2](./config-migrations/0001-to-0002-brand-tokens.md).
+
 The reusable instance workflow receives the target environment's current
 `backend_contract_version` as a required, non-secret numeric input. It compares
 that value with the instance's distributed `platform-contract.json` and fails

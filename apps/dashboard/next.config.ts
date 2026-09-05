@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+import { loadInstanceBrand } from "@wlbp/config/instance-brand";
+
+const instanceBrand = loadInstanceBrand(import.meta.dirname);
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -15,6 +18,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  distDir: process.env.WLBP_NEXT_DIST_DIR ?? ".next",
+  env: {
+    WLBP_BRAND_CONFIG_JSON: instanceBrand.serialized,
+  },
   output: "standalone",
   poweredByHeader: false,
   productionBrowserSourceMaps: false,

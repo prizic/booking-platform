@@ -29,6 +29,21 @@ Related: [docs/README.md](./README.md) · [architecture](./architecture.md) · [
 | Motion | Duration, easing, reduced-motion overrides | Every motion token needs its reduced-motion counterpart. |
 | Assets | Light logo, dark logo, icon, favicon, social-share image | Declared in `brand.json`, files under `instance/assets/`. |
 
+The executable schema is `BrandTokens` in `packages/white-label-ui`. Its
+configuration groups are `color`, `typography`, `radius`, `borderWidth`,
+`spacing`, `contentWidth`, and `motion`. Typography declares explicit Arabic
+body and display families; every normal motion duration has a zero-duration
+reduced-motion partner. Asset paths are a separate `BrandAssets` contract and
+must be safe root-relative paths below `/assets/`.
+
+Client and Dashboard load the same complete brand definition at Next startup.
+A generated repository reads `instance/brand.json`; this source monorepo uses
+the synthetic `instance-template/instance/brand.json`. Startup materializes
+only the five validated asset roles into each app's public `/assets/` tree, and
+runtime parsing fails closed before a page renders. The browser brand matrix
+boots a second, complete config and asset set; it does not rewrite CSS variables
+after render.
+
 ### Naming
 
 - Name by **role**, not by appearance or by where it is used today: `color.text.muted`, not `color.grey` and not `color.footer-text`.
@@ -49,6 +64,13 @@ Publishing a brand runs the full validation set. Any failure blocks publish.
 | Locale | Every supported locale in `manifest.json` has complete `content/*.json`; no missing keys, no fallback-to-English gaps in the Client surface. |
 | Typography | Declared families render all supported locales, including Arabic glyph coverage. |
 | Motion | Reduced-motion overrides present for every motion token. |
+
+The publish validator accepts opaque `#RRGGBB` colors only. It enforces 4.5:1
+for body/muted text, semantic status foregrounds, and each `on-*` pair, plus
+3:1 for borders and focus indicators against both page and surface contexts.
+Unknown keys, CSS functions, selectors, remote assets, data URLs, and path
+traversal fail closed. Browser checks still cover the rendered state matrix;
+token arithmetic does not replace an automated accessibility scan.
 
 ### The preview must cover more than a hero
 

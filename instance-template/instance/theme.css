@@ -1,25 +1,60 @@
 :root {
-  --brand-color-background: #fffaf4;
-  --brand-color-surface: #ffffff;
-  --brand-color-text: #17211b;
-  --brand-color-muted: #526158;
-  --brand-color-border: #cad4cc;
-  --brand-color-primary: #155c3f;
+  --brand-color-background: #f3efe5;
+  --brand-color-surface: #fffdf8;
+  --brand-color-text: #17332e;
+  --brand-color-muted: #50645f;
+  --brand-color-border: #747d78;
+  --brand-color-primary: #106b5a;
   --brand-color-on-primary: #ffffff;
   --brand-color-success: #137333;
-  --brand-color-warning: #8a4b00;
-  --brand-color-danger: #b3261e;
-  --brand-color-focus: #8a3ffc;
-  --brand-radius-control: 0.5rem;
-  --brand-radius-surface: 1rem;
+  --brand-color-on-success: #ffffff;
+  --brand-color-warning: #7a4300;
+  --brand-color-on-warning: #ffffff;
+  --brand-color-danger: #9f251d;
+  --brand-color-on-danger: #ffffff;
+  --brand-color-focus: #9b3d0c;
+  --brand-font-body: Inter, "Noto Sans Arabic", sans-serif;
+  --brand-font-display: Georgia, "Noto Naskh Arabic", serif;
+  --brand-font-arabic-body: "Noto Sans Arabic", Tahoma, sans-serif;
+  --brand-font-arabic-display: "Noto Naskh Arabic", Tahoma, serif;
+  --brand-font-size-caption: 0.75rem;
+  --brand-font-size-body: 1rem;
+  --brand-font-size-label: 0.875rem;
+  --brand-font-size-title: 1.5rem;
+  --brand-font-size-display: 4.5rem;
+  --brand-font-weight-regular: 400;
+  --brand-font-weight-medium: 500;
+  --brand-font-weight-semibold: 600;
+  --brand-font-weight-bold: 700;
+  --brand-line-height-compact: 1.2;
+  --brand-line-height-body: 1.55;
+  --brand-line-height-relaxed: 1.7;
+  --brand-radius-control: 1.5rem;
+  --brand-radius-surface: 1.75rem;
+  --brand-radius-pill: 999rem;
+  --brand-border-width-default: 0.0625rem;
+  --brand-border-width-strong: 0.125rem;
+  --brand-space-xxs: 0.25rem;
+  --brand-space-xs: 0.5rem;
+  --brand-space-sm: 0.75rem;
+  --brand-space-md: 1rem;
+  --brand-space-lg: 1.5rem;
+  --brand-space-xl: 2rem;
+  --brand-space-xxl: 3rem;
+  --brand-content-width-form: 40rem;
+  --brand-content-width-reading: 70ch;
+  --brand-content-width-wide: 78rem;
+  --brand-motion-fast: 120ms;
   --brand-motion-standard: 180ms;
+  --brand-motion-slow: 300ms;
+  --brand-motion-reduced-fast: 0ms;
   --brand-motion-reduced: 0ms;
-  --brand-font-body: system-ui, sans-serif;
-  --brand-font-display: system-ui, sans-serif;
+  --brand-motion-reduced-slow: 0ms;
+  --brand-motion-easing-standard: cubic-bezier(0.16, 1, 0.3, 1);
+  --brand-motion-easing-exit: ease-in;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  :root {
-    --brand-motion-standard: var(--brand-motion-reduced);
-  }
+[dir="rtl"] {
+  --brand-font-body: "Noto Sans Arabic", Tahoma, sans-serif;
+  --brand-font-display: "Noto Naskh Arabic", Tahoma, serif;
 }

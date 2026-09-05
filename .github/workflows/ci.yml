@@ -63,10 +63,6 @@ jobs:
       - name: Run domain and unit tests
         run: pnpm test:unit
 
-      - name: Report component-suite ownership
-        run: |
-          echo "::notice title=Component gate::N/A — not yet implemented, owned by issue #5. Issue #4 runs the executable unit and browser foundations."
-
       - name: Start the local Supabase stack without printing generated keys
         run: |
           if ! pnpm supabase:start >"${RUNNER_TEMP}/supabase-start.log" 2>&1; then
@@ -104,7 +100,13 @@ jobs:
       - name: Run end-to-end smoke tests
         run: pnpm test:e2e
 
-      - name: Run accessibility and RTL smoke tests
+      - name: Run accessible component interaction tests
+        run: pnpm test:component
+
+      - name: Run localization parity tests
+        run: pnpm test:i18n
+
+      - name: Run accessibility, RTL, and reduced-motion tests
         run: pnpm test:a11y
 
       - name: Run visual reference tests
