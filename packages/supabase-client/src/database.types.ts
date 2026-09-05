@@ -43,7 +43,7 @@ export type Database = {
         }[];
       };
       get_public_catalog_v1: {
-        Args: { p_hostname: string; p_locale?: string; p_service_key: string | null };
+        Args: { p_hostname: string; p_locale?: string; p_service_key?: string };
         Returns: {
           approval_required: boolean;
           booking_mode: string;
