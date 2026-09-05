@@ -66,7 +66,19 @@ jobs:
 
       - name: Start the local Supabase stack without printing generated keys
         run: |
-          if ! pnpm supabase:start >"${RUNNER_TEMP}/supabase-start.log" 2>&1; then
+          started=0
+          for attempt in 1 2 3; do
+            if pnpm supabase:start >"${RUNNER_TEMP}/supabase-start.log" 2>&1; then
+              started=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning title=Local Supabase startup retry::The ephemeral stack did not become ready on attempt ${attempt}; stopping any partial stack and retrying."
+              pnpm supabase:stop > /dev/null 2>&1 || true
+              sleep 5
+            fi
+          done
+          if [ "$started" -ne 1 ]; then
             echo "::error title=Local Supabase failed::Confirm Docker is healthy and required ports are free, then reproduce with pnpm supabase:start locally. Generated credentials and connection strings were intentionally not printed."
             exit 1
           fi
