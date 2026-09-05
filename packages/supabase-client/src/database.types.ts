@@ -10,8 +10,28 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_dashboard_context_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          aal2: boolean;
+          brand_id: string;
+          capabilities: Json;
+          config_version: number;
+          dashboard_hostname: string;
+          default_locale: string;
+          feature_version: number;
+          instance_id: string;
+          location_ids: string[];
+          location_scope_mode: string;
+          membership_id: string;
+          published_brand_revision: number;
+          role_key: string;
+          tenant_id: string;
+          tenant_name: string;
+        }[];
+      };
       get_public_catalog_v1: {
-        Args: { p_hostname: string; p_locale?: string; p_service_key?: string | null };
+        Args: { p_hostname: string; p_locale: string; p_service_key: string | null };
         Returns: {
           tenant_id: string;
           publication_id: string;
@@ -56,38 +76,6 @@ export type Database = {
           publication_id: string;
           publication_revision: number;
           cache_tag: string;
-        }[];
-      };
-      get_dashboard_context_v1: {
-        Args: { p_tenant_id: string };
-        Returns: {
-          aal2: boolean;
-          brand_id: string;
-          capabilities: Json;
-          config_version: number;
-          dashboard_hostname: string;
-          default_locale: string;
-          feature_version: number;
-          instance_id: string;
-          location_ids: string[];
-          location_scope_mode: string;
-          membership_id: string;
-          published_brand_revision: number;
-          role_key: string;
-          tenant_id: string;
-          tenant_name: string;
-        }[];
-      };
-      get_payment_account_status_v1: {
-        Args: { p_tenant_id: string };
-        Returns: {
-          capabilities: Json;
-          charges_enabled: boolean;
-          payouts_enabled: boolean;
-          provider: string;
-          provider_account_reference: string;
-          requirements: Json;
-          status: string;
         }[];
       };
       list_tenant_choices_v1: {
