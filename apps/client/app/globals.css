@@ -307,6 +307,10 @@ input:focus-visible {
   max-inline-size: var(--brand-content-width-reading, 43rem);
 }
 
+.client-main > * {
+  min-inline-size: 0;
+}
+
 .client-intro h1 {
   min-inline-size: 0;
   max-inline-size: 15ch;
@@ -348,6 +352,7 @@ input:focus-visible {
 }
 
 .booking-preview {
+  min-inline-size: 0;
   padding: clamp(1.3rem, 3vw, 2rem);
   background: var(--brand-color-surface);
   border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
@@ -395,6 +400,8 @@ input:focus-visible {
 }
 
 .booking-preview__facts dd {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
   margin: 0;
   font-weight: var(--brand-font-weight-bold, 700);
 }
