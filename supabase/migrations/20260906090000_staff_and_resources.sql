@@ -124,7 +124,7 @@ returns boolean language sql stable security definer set search_path='' as $$
     where m.tenant_id=p_tenant_id and m.auth_user_id=(select private.current_auth_user_id()) and m.status='active'
       and rp.permission_key='staff.manage'
       and (rp.grant_kind='direct' or (rp.grant_kind='approval' and (select private.is_aal2())))
-      and (rp.scope_kind='tenant' or (p_location_id is not null and (select private.can_access_location(p_tenant_id,p_location_id))))
+      and (rp.scope_kind='tenant' or (p_location_id is not null and rp.scope_kind='location' and (select private.can_access_location(p_tenant_id,p_location_id))))
   );
 $$;
 revoke execute on function private.can_manage_staff(uuid,uuid) from public;
@@ -198,9 +198,11 @@ declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='staff_authorization_required'; end if;
   if p_request_id is null then raise exception using errcode='22023',message='request_id_required'; end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then raise exception using errcode='22023',message='reason_required'; end if;
   if exists (select 1 from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='staff_deactivated' and e.target_id=p_staff_id) then
     return query select p_staff_id,(select e.outcome from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='staff_deactivated' and e.target_id=p_staff_id limit 1),(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp()); return;
   end if;
+  if not exists (select 1 from app.staff_profiles s where s.tenant_id=p_tenant_id and s.id=p_staff_id) then raise exception using errcode='22023',message='staff_not_found'; end if;
   perform 1 from app.staff_profiles s where s.tenant_id=p_tenant_id and s.id=p_staff_id for update;
   if p_resolution is null or p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
@@ -214,7 +216,7 @@ begin
     return query select p_staff_id,audit_outcome,n;
     return;
   elsif p_resolution='reassign' then
-    if p_replacement_staff_id is null or not exists(select 1 from app.staff_profiles where tenant_id=p_tenant_id and id=p_replacement_staff_id and status='active') then raise exception using errcode='22023',message='replacement_staff_required'; end if;
+    if p_replacement_staff_id is null or p_replacement_staff_id=p_staff_id or not exists(select 1 from app.staff_profiles where tenant_id=p_tenant_id and id=p_replacement_staff_id and status='active') then raise exception using errcode='22023',message='replacement_staff_required'; end if;
     update app.assignment_allocations a set staff_id=p_replacement_staff_id where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   elsif p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   end if;
@@ -236,9 +238,11 @@ declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='resource_authorization_required'; end if;
   if p_request_id is null then raise exception using errcode='22023',message='request_id_required'; end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then raise exception using errcode='22023',message='reason_required'; end if;
   if exists (select 1 from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='resource_deactivated' and e.target_id=p_resource_id) then
     return query select p_resource_id,(select e.outcome from app.staff_resource_audit_events e where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.action='resource_deactivated' and e.target_id=p_resource_id limit 1),(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp()); return;
   end if;
+  if not exists (select 1 from app.resources r where r.tenant_id=p_tenant_id and r.id=p_resource_id) then raise exception using errcode='22023',message='resource_not_found'; end if;
   perform 1 from app.resources r where r.tenant_id=p_tenant_id and r.id=p_resource_id for update;
   if p_resolution is null or p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
