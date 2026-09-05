@@ -31,7 +31,7 @@ export type Database = {
         }[];
       };
       get_public_catalog_v1: {
-        Args: { p_hostname: string; p_locale: string; p_service_key: string | null };
+        Args: { p_hostname: string; p_locale?: string; p_service_key?: string };
         Returns: {
           tenant_id: string;
           publication_id: string;

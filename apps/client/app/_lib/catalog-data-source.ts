@@ -52,7 +52,6 @@ export async function loadPublishedCatalog(
     const { data, error } = await client.schema("api_v1").rpc("get_public_catalog_v1", {
       p_hostname: hostname,
       p_locale: locale,
-      p_service_key: null,
     });
     if (error || !Array.isArray(data)) return [];
     return parsePublicCatalogV1(
