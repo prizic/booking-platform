@@ -32,7 +32,9 @@ select throws_like($$select * from app.payment_accounts$$, '%permission denied%'
 reset role;
 select is((select count(*)::integer from pg_policies where schemaname = 'app' and tablename = 'payment_accounts'), 4, 'payment accounts have explicit CRUD RLS policies');
 select is((select count(*)::integer from pg_policies where schemaname = 'app' and tablename = 'commerce_ledger_entries'), 4, 'ledger has explicit CRUD RLS policies');
-select throws_like($$update app.commerce_ledger_entries set amount_minor_units = 0$$, '%permission denied%', 'ledger is not client mutable');
+insert into app.commerce_ledger_entries (tenant_id, entry_type, source_id, amount_minor_units, currency, occurred_at)
+values ('a0000000-0000-0000-0000-000000000001', 'adjustment', 'a7000000-0000-0000-0000-000000000001', 100, 'USD', statement_timestamp());
+select throws_like($$update app.commerce_ledger_entries set amount_minor_units = 0$$, '%commerce ledger is append-only%', 'ledger is not client mutable');
 
 select * from finish();
 rollback;
