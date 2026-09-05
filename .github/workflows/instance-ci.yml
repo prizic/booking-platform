@@ -87,13 +87,10 @@ jobs:
         run: pnpm build
 
       - name: Install the pinned browser runtime
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter @wlbp/testing exec playwright install --with-deps chromium
 
       - name: Run instance browser, accessibility, RTL, and visual gates
-        run: |
-          pnpm test:e2e
-          pnpm test:a11y
-          pnpm test:visual
+        run: pnpm --filter @wlbp/testing test:instance
 
       - name: Scan source and history without printing matched values
         run: |
@@ -109,8 +106,8 @@ jobs:
         with:
           name: instance-ci-evidence-${{ github.run_id }}
           path: |
-            playwright-report/
-            test-results/
+            .artifacts/instance-playwright/report/
+            .artifacts/instance-playwright/test-results/
           if-no-files-found: ignore
           include-hidden-files: false
           retention-days: 14

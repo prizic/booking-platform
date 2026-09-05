@@ -9,6 +9,7 @@ export type DashboardMessageKey =
   | "navCalendar"
   | "navBookings"
   | "navCustomers"
+  | "navBrand"
   | "metricArrivals"
   | "metricRequests"
   | "metricPayments"
@@ -16,6 +17,16 @@ export type DashboardMessageKey =
   | "scheduleEmpty"
   | "listAlternative"
   | "openCalendar"
+  | "gridView"
+  | "listView"
+  | "viewSelector"
+  | "viewChangedGrid"
+  | "viewChangedList"
+  | "timeZoneLabel"
+  | "scheduleConsultation"
+  | "scheduleFollowUp"
+  | "statusConfirmed"
+  | "statusRequested"
   | "primaryNavigation"
   | "languageNavigation"
   | "languageEnglish"
@@ -25,7 +36,7 @@ export type DashboardMessageKey =
   | "notFoundTitle"
   | "returnHome";
 
-const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
+export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
     eyebrow: "Tenant staff workspace",
     title: "Today stays clear, even when the schedule is full.",
@@ -36,6 +47,7 @@ const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
     navCalendar: "Calendar",
     navBookings: "Bookings",
     navCustomers: "Customers",
+    navBrand: "Brand & site",
     metricArrivals: "Today's arrivals",
     metricRequests: "Pending requests",
     metricPayments: "Payments needing action",
@@ -43,6 +55,16 @@ const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
     scheduleEmpty: "No live tenant data is connected in this foundation build.",
     listAlternative: "Accessible schedule list",
     openCalendar: "Open calendar",
+    gridView: "Grid view",
+    listView: "List view",
+    viewSelector: "Schedule view",
+    viewChangedGrid: "Schedule shown as a compact grid.",
+    viewChangedList: "Schedule shown as an accessible list.",
+    timeZoneLabel: "Time zone",
+    scheduleConsultation: "Initial consultation · Layla Hassan",
+    scheduleFollowUp: "Follow-up · Omar Kareem",
+    statusConfirmed: "Confirmed",
+    statusRequested: "Requested",
     primaryNavigation: "Primary navigation",
     languageNavigation: "Language",
     languageEnglish: "English",
@@ -61,6 +83,7 @@ const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
     navCalendar: "التقويم",
     navBookings: "الحجوزات",
     navCustomers: "العملاء",
+    navBrand: "الهوية والموقع",
     metricArrivals: "وصول اليوم",
     metricRequests: "الطلبات المعلّقة",
     metricPayments: "مدفوعات تتطلب إجراءً",
@@ -68,6 +91,16 @@ const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
     scheduleEmpty: "لا توجد بيانات مستأجر مباشرة متصلة في إصدار التأسيس هذا.",
     listAlternative: "قائمة الجدول الميسّرة",
     openCalendar: "فتح التقويم",
+    gridView: "عرض شبكي",
+    listView: "عرض كقائمة",
+    viewSelector: "طريقة عرض الجدول",
+    viewChangedGrid: "يُعرض الجدول في شبكة مختصرة.",
+    viewChangedList: "يُعرض الجدول في قائمة ميسّرة.",
+    timeZoneLabel: "المنطقة الزمنية",
+    scheduleConsultation: "استشارة أولية · ليلى حسن",
+    scheduleFollowUp: "متابعة · عمر كريم",
+    statusConfirmed: "مؤكد",
+    statusRequested: "قيد الطلب",
     primaryNavigation: "التنقل الرئيسي",
     languageNavigation: "اللغة",
     languageEnglish: "الإنجليزية",

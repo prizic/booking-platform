@@ -1,83 +1,74 @@
 import { Surface } from "@wlbp/ui-foundation";
 import type { CSSProperties, ReactNode } from "react";
 
-export interface BrandTokens {
-  readonly color: {
-    readonly background: string;
-    readonly surface: string;
-    readonly text: string;
-    readonly muted: string;
-    readonly border: string;
-    readonly primary: string;
-    readonly onPrimary: string;
-    readonly success: string;
-    readonly warning: string;
-    readonly danger: string;
-    readonly focus: string;
-  };
-  readonly radius: {
-    readonly control: string;
-    readonly surface: string;
-  };
-  readonly motion: {
-    readonly reduced: string;
-    readonly standard: string;
-  };
-  readonly typography: {
-    readonly bodyFamily: string;
-    readonly displayFamily: string;
-  };
-}
+import {
+  neutralBrandTokens,
+  parseBrandTokens,
+  type BrandTokens,
+} from "./brand-tokens.js";
 
-export const neutralBrandTokens: BrandTokens = {
-  color: {
-    background: "#f6f7f9",
-    surface: "#ffffff",
-    text: "#17202a",
-    muted: "#52606d",
-    border: "#cbd2d9",
-    primary: "#174ea6",
-    onPrimary: "#ffffff",
-    success: "#137333",
-    warning: "#8a4b00",
-    danger: "#b3261e",
-    focus: "#0b57d0",
-  },
-  radius: {
-    control: "0.5rem",
-    surface: "0.75rem",
-  },
-  motion: {
-    reduced: "0ms",
-    standard: "180ms",
-  },
-  typography: {
-    bodyFamily: "system-ui, sans-serif",
-    displayFamily: "system-ui, sans-serif",
-  },
-};
+export * from "./brand-assets.js";
+export * from "./brand-config.js";
+export * from "./brand-tokens.js";
 
 type BrandStyle = CSSProperties & Readonly<Record<`--brand-${string}`, string>>;
 
 export function createBrandStyle(tokens: BrandTokens): BrandStyle {
+  const validated = parseBrandTokens(tokens);
   return {
-    "--brand-color-background": tokens.color.background,
-    "--brand-color-surface": tokens.color.surface,
-    "--brand-color-text": tokens.color.text,
-    "--brand-color-muted": tokens.color.muted,
-    "--brand-color-border": tokens.color.border,
-    "--brand-color-primary": tokens.color.primary,
-    "--brand-color-on-primary": tokens.color.onPrimary,
-    "--brand-color-success": tokens.color.success,
-    "--brand-color-warning": tokens.color.warning,
-    "--brand-color-danger": tokens.color.danger,
-    "--brand-color-focus": tokens.color.focus,
-    "--brand-radius-control": tokens.radius.control,
-    "--brand-radius-surface": tokens.radius.surface,
-    "--brand-motion-reduced": tokens.motion.reduced,
-    "--brand-motion-standard": tokens.motion.standard,
-    "--brand-font-body": tokens.typography.bodyFamily,
-    "--brand-font-display": tokens.typography.displayFamily,
+    "--brand-color-background": validated.color.background,
+    "--brand-color-surface": validated.color.surface,
+    "--brand-color-text": validated.color.text,
+    "--brand-color-muted": validated.color.muted,
+    "--brand-color-border": validated.color.border,
+    "--brand-color-primary": validated.color.primary,
+    "--brand-color-on-primary": validated.color.onPrimary,
+    "--brand-color-success": validated.color.success,
+    "--brand-color-on-success": validated.color.onSuccess,
+    "--brand-color-warning": validated.color.warning,
+    "--brand-color-on-warning": validated.color.onWarning,
+    "--brand-color-danger": validated.color.danger,
+    "--brand-color-on-danger": validated.color.onDanger,
+    "--brand-color-focus": validated.color.focus,
+    "--brand-radius-control": validated.radius.control,
+    "--brand-radius-surface": validated.radius.surface,
+    "--brand-radius-pill": validated.radius.pill,
+    "--brand-border-width-default": validated.borderWidth.default,
+    "--brand-border-width-strong": validated.borderWidth.strong,
+    "--brand-space-xxs": validated.spacing.xxs,
+    "--brand-space-xs": validated.spacing.xs,
+    "--brand-space-sm": validated.spacing.sm,
+    "--brand-space-md": validated.spacing.md,
+    "--brand-space-lg": validated.spacing.lg,
+    "--brand-space-xl": validated.spacing.xl,
+    "--brand-space-xxl": validated.spacing.xxl,
+    "--brand-content-width-form": validated.contentWidth.form,
+    "--brand-content-width-reading": validated.contentWidth.reading,
+    "--brand-content-width-wide": validated.contentWidth.wide,
+    "--brand-motion-fast": validated.motion.fast,
+    "--brand-motion-standard": validated.motion.standard,
+    "--brand-motion-slow": validated.motion.slow,
+    "--brand-motion-reduced-fast": validated.motion.reducedFast,
+    "--brand-motion-reduced": validated.motion.reduced,
+    "--brand-motion-reduced-slow": validated.motion.reducedSlow,
+    "--brand-motion-easing-standard": validated.motion.easingStandard,
+    "--brand-motion-easing-exit": validated.motion.easingExit,
+    "--brand-font-body": validated.typography.bodyFamily,
+    "--brand-font-display": validated.typography.displayFamily,
+    "--brand-font-arabic-body": validated.typography.arabicBodyFamily,
+    "--brand-font-arabic-display": validated.typography.arabicDisplayFamily,
+    "--brand-font-size-caption": validated.typography.size.caption,
+    "--brand-font-size-body": validated.typography.size.body,
+    "--brand-font-size-label": validated.typography.size.label,
+    "--brand-font-size-title": validated.typography.size.title,
+    "--brand-font-size-display": validated.typography.size.display,
+    "--brand-font-weight-regular": validated.typography.weight.regular,
+    "--brand-font-weight-medium": validated.typography.weight.medium,
+    "--brand-font-weight-semibold": validated.typography.weight.semibold,
+    "--brand-font-weight-bold": validated.typography.weight.bold,
+    "--brand-line-height-compact": validated.typography.lineHeight.compact,
+    "--brand-line-height-body": validated.typography.lineHeight.body,
+    "--brand-line-height-relaxed": validated.typography.lineHeight.relaxed,
   };
 }
 

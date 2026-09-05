@@ -5,12 +5,19 @@
   "type": "module",
   "sideEffects": false,
   "files": [
-    "dist"
+    "dist",
+    "instance-brand.d.ts",
+    "instance-brand.mjs"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./instance-brand": {
+      "types": "./instance-brand.d.ts",
+      "import": "./instance-brand.mjs",
+      "default": "./instance-brand.mjs"
     }
   },
   "scripts": {

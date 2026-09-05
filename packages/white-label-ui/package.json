@@ -16,13 +16,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "test:unit": "vitest run"
   },
   "dependencies": {
     "@wlbp/ui-foundation": "workspace:*"
   },
   "peerDependencies": {
     "react": "catalog:"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   },
   "wlbp": {
     "distribution": "distributed"

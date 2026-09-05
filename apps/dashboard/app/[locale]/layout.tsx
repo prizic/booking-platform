@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDirection, isLocale, type Locale } from "@wlbp/i18n";
 import { getDashboardMessage } from "../_lib/copy";
+import { dashboardBrand } from "../_lib/brand";
 import { instanceLocalePolicy } from "../_lib/locale-policy";
 import "../globals.css";
 
@@ -27,8 +28,16 @@ export async function generateMetadata({
   const locale = requireLocale((await params).locale);
 
   return {
-    title: getDashboardMessage(locale, "title"),
+    title: `${dashboardBrand.name} — ${getDashboardMessage(locale, "title")}`,
     description: getDashboardMessage(locale, "summary"),
+    icons: {
+      icon: dashboardBrand.assets.favicon,
+      apple: dashboardBrand.assets.icon,
+    },
+    openGraph: {
+      images: [dashboardBrand.assets.socialImage],
+      siteName: dashboardBrand.name,
+    },
     alternates: {
       canonical: `/${locale}`,
       languages: {

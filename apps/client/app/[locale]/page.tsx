@@ -1,8 +1,11 @@
-import type { Locale } from "@wlbp/i18n";
-import { Badge, LinkButton, Surface } from "@wlbp/ui-foundation";
+import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
+import { Badge, LinkButton } from "@wlbp/ui-foundation";
 import { BrandShell } from "@wlbp/white-label-ui";
+import Image from "next/image";
 import Link from "next/link";
 import { getClientMessage } from "../_lib/copy";
+import { clientBrand } from "../_lib/brand";
+import { BookingPreview } from "./booking-preview";
 
 type ClientPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -12,15 +15,24 @@ export default async function ClientPage({ params }: ClientPageProps) {
   const { locale } = await params;
   const message = (key: Parameters<typeof getClientMessage>[1]) =>
     getClientMessage(locale, key);
+  const timeZone = "Asia/Riyadh";
 
   return (
-    <BrandShell className="client-shell" labelledBy="client-title">
+    <BrandShell
+      className="client-shell"
+      labelledBy="client-title"
+      tokens={clientBrand.tokens}
+    >
       <header className="client-header">
-        <Link className="wordmark" href={`/${locale}`} aria-label="Nawa">
-          <span className="wordmark-mark" aria-hidden="true">
-            N
-          </span>
-          <span>Nawa</span>
+        <Link className="wordmark" href={`/${locale}`} aria-label={clientBrand.name}>
+          <Image
+            alt=""
+            aria-hidden="true"
+            height={40}
+            src={clientBrand.assets.icon}
+            width={40}
+          />
+          <span>{clientBrand.name}</span>
         </Link>
         <nav aria-label={message("languageNavigation")}>
           <Link aria-current={locale === "en" ? "page" : undefined} href="/en">
@@ -49,30 +61,28 @@ export default async function ClientPage({ params }: ClientPageProps) {
           </div>
         </section>
 
-        <Surface as="section" className="journey-card" labelledBy="journey-label">
-          <div className="journey-card-heading">
-            <p id="journey-label">{message("previewLabel")}</p>
-            <Badge tone="positive">{message("status")}</Badge>
-          </div>
-          <ol id="journey" className="journey-steps">
-            <li>
-              <span aria-hidden="true">01</span>
-              <strong>{message("stepDiscover")}</strong>
-            </li>
-            <li>
-              <span aria-hidden="true">02</span>
-              <strong>{message("stepChoose")}</strong>
-            </li>
-            <li>
-              <span aria-hidden="true">03</span>
-              <strong>{message("stepConfirm")}</strong>
-            </li>
-          </ol>
-          <p id="status" className="timezone-note">
-            <span aria-hidden="true">◷</span>
-            {message("timezone")}
-          </p>
-        </Surface>
+        <BookingPreview
+          copy={{
+            appointmentLabel: message("appointmentLabel"),
+            customerNameDescription: message("customerNameDescription"),
+            customerNameLabel: message("customerNameLabel"),
+            errorSummaryTitle: message("errorSummaryTitle"),
+            nameRequired: message("nameRequired"),
+            previewLabel: message("previewLabel"),
+            priceLabel: message("priceLabel"),
+            status: message("status"),
+            submitAction: message("submitAction"),
+            successMessage: message("successMessage"),
+            timezoneLabel: message("timezoneLabel"),
+          }}
+          formattedDateTime={formatDateTime(
+            "2026-09-08T15:30:00.000Z",
+            locale,
+            timeZone,
+          )}
+          formattedPrice={formatCurrency(18_000, "SAR", locale)}
+          timeZone={timeZone}
+        />
       </div>
     </BrandShell>
   );

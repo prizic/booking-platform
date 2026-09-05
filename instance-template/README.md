@@ -12,3 +12,8 @@ this directory are deliberately synthetic and are replaced during provisioning.
 Provisioning stamps `whiteLabelVersion`, `configSchemaVersion`, and
 `backendContract` from the one authority at root, `platform-contract.json`, to
 produce the generated repository's final `instance/manifest.json`.
+
+The template uses the complete semantic brand-token contract. Existing schema
+1 instances must apply
+[`docs/config-migrations/0001-to-0002-brand-tokens.md`](../docs/config-migrations/0001-to-0002-brand-tokens.md)
+before adopting schema 2.

@@ -23,6 +23,7 @@ Agents: read [`../AGENTS.md`](../AGENTS.md) first. It is the contract.
 | Run it locally / know the CI gates | [local-setup.md](local-setup.md) |
 | Identify an environment or release the shared backend | [environments.md](environments.md) |
 | Build UI, tokens, Arabic/RTL, accessibility | [design-system.md](design-system.md) |
+| Upgrade an older instance brand schema | [config-migrations/0001-to-0002-brand-tokens.md](config-migrations/0001-to-0002-brand-tokens.md) |
 | Know the security and privacy rules | [security-and-privacy.md](security-and-privacy.md) |
 | Know what a tenant may customize | [customization-boundaries.md](customization-boundaries.md) |
 | Ship a release or upgrade an instance | [upstream-updates.md](upstream-updates.md) |

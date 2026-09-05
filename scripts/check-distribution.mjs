@@ -19,26 +19,30 @@ for (const edge of workspaceEdges(members)) {
   outgoing.get(edge.from.path)?.push(edge.to);
 }
 
-const roots = ["apps/client", "apps/dashboard"];
-const closure = new Set();
-const pending = [...roots];
+const exportedMembers = new Set(
+  [...expectedDistribution.entries()]
+    .filter(([, distribution]) => distribution === "distributed")
+    .map(([memberPath]) => memberPath),
+);
 
-while (pending.length > 0) {
-  const memberPath = pending.pop();
-  if (!memberPath || closure.has(memberPath)) continue;
-
+for (const memberPath of exportedMembers) {
   const member = byPath.get(memberPath);
   if (!member) {
-    errors.push(`distribution root is missing: ${memberPath}`);
+    errors.push(`ADR-0011 distributed member is missing: ${memberPath}`);
     continue;
   }
 
-  closure.add(memberPath);
   if (member.distribution !== "distributed") {
-    errors.push(`dependency closure includes non-distributed member ${memberPath}`);
+    errors.push(`export set includes non-distributed member ${memberPath}`);
   }
 
-  for (const target of outgoing.get(memberPath) ?? []) pending.push(target.path);
+  for (const target of outgoing.get(memberPath) ?? []) {
+    if (!exportedMembers.has(target.path)) {
+      errors.push(
+        `distributed member ${memberPath} depends on non-distributed member ${target.path}`,
+      );
+    }
+  }
 }
 
 for (const member of members) {
@@ -65,13 +69,14 @@ const forbiddenPathSegments = [
 ];
 const forbiddenContent = [
   /@wlbp\/supabase-admin/u,
+  /@wlbp\/platform-admin/u,
   /apps\/platform-admin/u,
   /control-plane\//u,
   /SUPABASE_SERVICE_ROLE_KEY/u,
   /SUPABASE_SECRET_KEY/u,
 ];
 
-for (const memberPath of closure) {
+for (const memberPath of exportedMembers) {
   const absoluteMemberPath = path.join(repositoryRoot, memberPath);
   const files = await walkFiles(absoluteMemberPath);
   for (const filePath of files) {
@@ -96,8 +101,8 @@ for (const memberPath of closure) {
 }
 
 if (errors.length === 0) {
-  process.stdout.write("Distribution dependency closure:\n");
-  for (const memberPath of [...closure].sort()) {
+  process.stdout.write("ADR-0011 allowlisted distribution set:\n");
+  for (const memberPath of [...exportedMembers].sort()) {
     process.stdout.write(`  - ${memberPath}\n`);
   }
 }

@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { parseBrandAssets } from "../packages/white-label-ui/src/brand-assets.ts";
+import { validateBrandTokens } from "../packages/white-label-ui/src/brand-tokens.ts";
 import { failCheck, pathExists, readJson, repositoryRoot } from "./workspace.mjs";
 
 const errors = [];
@@ -49,6 +51,166 @@ function validateBackendContract(value, label) {
   ) {
     errors.push(`${label}.min must be less than or equal to max`);
   }
+}
+
+function expectedThemeDeclarations(tokens) {
+  return {
+    root: {
+      "--brand-color-background": tokens.color.background,
+      "--brand-color-surface": tokens.color.surface,
+      "--brand-color-text": tokens.color.text,
+      "--brand-color-muted": tokens.color.muted,
+      "--brand-color-border": tokens.color.border,
+      "--brand-color-primary": tokens.color.primary,
+      "--brand-color-on-primary": tokens.color.onPrimary,
+      "--brand-color-success": tokens.color.success,
+      "--brand-color-on-success": tokens.color.onSuccess,
+      "--brand-color-warning": tokens.color.warning,
+      "--brand-color-on-warning": tokens.color.onWarning,
+      "--brand-color-danger": tokens.color.danger,
+      "--brand-color-on-danger": tokens.color.onDanger,
+      "--brand-color-focus": tokens.color.focus,
+      "--brand-font-body": tokens.typography.bodyFamily,
+      "--brand-font-display": tokens.typography.displayFamily,
+      "--brand-font-arabic-body": tokens.typography.arabicBodyFamily,
+      "--brand-font-arabic-display": tokens.typography.arabicDisplayFamily,
+      "--brand-font-size-caption": tokens.typography.size.caption,
+      "--brand-font-size-body": tokens.typography.size.body,
+      "--brand-font-size-label": tokens.typography.size.label,
+      "--brand-font-size-title": tokens.typography.size.title,
+      "--brand-font-size-display": tokens.typography.size.display,
+      "--brand-font-weight-regular": tokens.typography.weight.regular,
+      "--brand-font-weight-medium": tokens.typography.weight.medium,
+      "--brand-font-weight-semibold": tokens.typography.weight.semibold,
+      "--brand-font-weight-bold": tokens.typography.weight.bold,
+      "--brand-line-height-compact": tokens.typography.lineHeight.compact,
+      "--brand-line-height-body": tokens.typography.lineHeight.body,
+      "--brand-line-height-relaxed": tokens.typography.lineHeight.relaxed,
+      "--brand-radius-control": tokens.radius.control,
+      "--brand-radius-surface": tokens.radius.surface,
+      "--brand-radius-pill": tokens.radius.pill,
+      "--brand-border-width-default": tokens.borderWidth.default,
+      "--brand-border-width-strong": tokens.borderWidth.strong,
+      "--brand-space-xxs": tokens.spacing.xxs,
+      "--brand-space-xs": tokens.spacing.xs,
+      "--brand-space-sm": tokens.spacing.sm,
+      "--brand-space-md": tokens.spacing.md,
+      "--brand-space-lg": tokens.spacing.lg,
+      "--brand-space-xl": tokens.spacing.xl,
+      "--brand-space-xxl": tokens.spacing.xxl,
+      "--brand-content-width-form": tokens.contentWidth.form,
+      "--brand-content-width-reading": tokens.contentWidth.reading,
+      "--brand-content-width-wide": tokens.contentWidth.wide,
+      "--brand-motion-fast": tokens.motion.fast,
+      "--brand-motion-standard": tokens.motion.standard,
+      "--brand-motion-slow": tokens.motion.slow,
+      "--brand-motion-reduced-fast": tokens.motion.reducedFast,
+      "--brand-motion-reduced": tokens.motion.reduced,
+      "--brand-motion-reduced-slow": tokens.motion.reducedSlow,
+      "--brand-motion-easing-standard": tokens.motion.easingStandard,
+      "--brand-motion-easing-exit": tokens.motion.easingExit,
+    },
+    rtl: {
+      "--brand-font-body": tokens.typography.arabicBodyFamily,
+      "--brand-font-display": tokens.typography.arabicDisplayFamily,
+    },
+  };
+}
+
+function parseThemeRuleDeclarations(body, selector, themeErrors) {
+  const declarations = {};
+  const parts = body.split(";");
+  if (parts.at(-1)?.trim() !== "") {
+    themeErrors.push(`theme.css ${selector} declarations must end with semicolons`);
+  }
+
+  for (const part of parts) {
+    const declaration = part.trim();
+    if (declaration === "") continue;
+    const match = /^(--brand-[a-z0-9-]+)\s*:\s*(.+)$/u.exec(declaration);
+    if (!match) {
+      themeErrors.push(`theme.css ${selector} has invalid declaration ${declaration}`);
+      continue;
+    }
+    const [, property, value] = match;
+    if (Object.hasOwn(declarations, property)) {
+      themeErrors.push(`theme.css ${selector} duplicates ${property}`);
+      continue;
+    }
+    declarations[property] = value.trim();
+  }
+
+  return declarations;
+}
+
+function validateExactThemeDeclarations(actual, expected, selector, themeErrors) {
+  for (const property of Object.keys(actual)) {
+    if (!Object.hasOwn(expected, property)) {
+      themeErrors.push(`theme.css ${selector} has unexpected declaration ${property}`);
+    }
+  }
+  for (const [property, expectedValue] of Object.entries(expected)) {
+    if (!Object.hasOwn(actual, property)) {
+      themeErrors.push(`theme.css ${selector} is missing ${property}`);
+    } else if (actual[property] !== expectedValue) {
+      themeErrors.push(
+        `theme.css ${selector} ${property} must equal brand.json value ${expectedValue}`,
+      );
+    }
+  }
+}
+
+export function validateThemeCss(source, tokens) {
+  const themeErrors = [];
+  const expected = expectedThemeDeclarations(tokens);
+  const rules = new Map();
+  const withoutComments = source.replace(/\/\*[\s\S]*?\*\//gu, "");
+  const rulePattern = /([^{}]+)\{([^{}]*)\}/gu;
+  let lastIndex = 0;
+
+  for (const match of withoutComments.matchAll(rulePattern)) {
+    if (withoutComments.slice(lastIndex, match.index).trim() !== "") {
+      themeErrors.push("theme.css contains unsupported nested or malformed CSS");
+    }
+    lastIndex = match.index + match[0].length;
+
+    const selector = match[1].trim();
+    if (selector !== ":root" && selector !== '[dir="rtl"]') {
+      themeErrors.push(`theme.css has unsupported selector ${selector}`);
+      continue;
+    }
+    if (rules.has(selector)) {
+      themeErrors.push(`theme.css duplicates selector ${selector}`);
+      continue;
+    }
+    rules.set(selector, parseThemeRuleDeclarations(match[2], selector, themeErrors));
+  }
+
+  if (withoutComments.slice(lastIndex).trim() !== "") {
+    themeErrors.push("theme.css contains unsupported nested or malformed CSS");
+  }
+
+  if (
+    rules.has(":root") &&
+    rules.has('[dir="rtl"]') &&
+    [...rules.keys()].join("|") !== ':root|[dir="rtl"]'
+  ) {
+    themeErrors.push('theme.css selectors must be ordered :root then [dir="rtl"]');
+  }
+
+  for (const [selector, declarations] of [
+    [":root", expected.root],
+    ['[dir="rtl"]', expected.rtl],
+  ]) {
+    const actual = rules.get(selector);
+    if (actual === undefined) {
+      themeErrors.push(`theme.css is missing selector ${selector}`);
+      continue;
+    }
+    validateExactThemeDeclarations(actual, declarations, selector, themeErrors);
+  }
+
+  return themeErrors;
 }
 
 const contractPath = path.join(repositoryRoot, "platform-contract.json");
@@ -170,6 +332,11 @@ if (await pathExists(instancePath)) {
       const assetKeys = ["logoLight", "logoDark", "icon", "favicon", "socialImage"];
       requireStringFields(brand.assets, assetKeys, "brand.json assets");
       if (isPlainObject(brand.assets)) {
+        try {
+          parseBrandAssets(brand.assets);
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : String(error));
+        }
         for (const key of assetKeys) {
           const asset = brand.assets[key];
           if (typeof asset !== "string" || !asset.startsWith("/assets/")) continue;
@@ -179,69 +346,12 @@ if (await pathExists(instancePath)) {
         }
       }
 
-      requireExactKeys(
-        brand.tokens,
-        ["color", "radius", "motion", "typography"],
-        "brand.json tokens",
-      );
-      if (isPlainObject(brand.tokens)) {
-        requireStringFields(
-          brand.tokens.color,
-          [
-            "background",
-            "surface",
-            "text",
-            "muted",
-            "border",
-            "primary",
-            "onPrimary",
-            "success",
-            "warning",
-            "danger",
-            "focus",
-          ],
-          "brand.json tokens.color",
-        );
-        requireStringFields(
-          brand.tokens.radius,
-          ["control", "surface"],
-          "brand.json tokens.radius",
-        );
-        requireStringFields(
-          brand.tokens.motion,
-          ["standard", "reduced"],
-          "brand.json tokens.motion",
-        );
-        requireStringFields(
-          brand.tokens.typography,
-          ["bodyFamily", "displayFamily"],
-          "brand.json tokens.typography",
-        );
-      }
+      const tokenErrors = validateBrandTokens(brand.tokens);
+      errors.push(...tokenErrors.map((error) => `brand.json tokens: ${error}`));
 
       const theme = await readFile(path.join(instancePath, "theme.css"), "utf8");
-      for (const property of [
-        "--brand-color-background",
-        "--brand-color-surface",
-        "--brand-color-text",
-        "--brand-color-muted",
-        "--brand-color-border",
-        "--brand-color-primary",
-        "--brand-color-on-primary",
-        "--brand-color-success",
-        "--brand-color-warning",
-        "--brand-color-danger",
-        "--brand-color-focus",
-        "--brand-radius-control",
-        "--brand-radius-surface",
-        "--brand-motion-standard",
-        "--brand-motion-reduced",
-        "--brand-font-body",
-        "--brand-font-display",
-      ]) {
-        if (!theme.includes(`${property}:`)) {
-          errors.push(`theme.css is missing ${property}`);
-        }
+      if (tokenErrors.length === 0) {
+        errors.push(...validateThemeCss(theme, brand.tokens));
       }
     }
 

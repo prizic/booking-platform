@@ -6,11 +6,13 @@ node_modules/
 # Builds and test artifacts
 .artifacts/
 .next/
+.next-warm/
 next-env.d.ts
 dist/
 coverage/
 playwright-report/
 test-results/
+apps/*/public/assets/
 *.tsbuildinfo
 
 # Local environment and editor state
