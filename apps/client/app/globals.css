@@ -303,10 +303,12 @@ input:focus-visible {
 }
 
 .client-intro {
+  min-inline-size: 0;
   max-inline-size: var(--brand-content-width-reading, 43rem);
 }
 
 .client-intro h1 {
+  min-inline-size: 0;
   max-inline-size: 15ch;
   margin-block: 1.5rem 1.25rem;
   font-family: var(--brand-font-display);
@@ -314,6 +316,7 @@ input:focus-visible {
   font-weight: var(--brand-font-weight-medium, 500);
   letter-spacing: -0.04em;
   line-height: var(--brand-line-height-compact, 0.98);
+  overflow-wrap: anywhere;
   text-wrap: balance;
 }
 
