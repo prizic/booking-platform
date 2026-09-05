@@ -80,7 +80,9 @@ create table app.resource_requirements (
 create table app.assignment_allocations (
   id uuid not null, tenant_id uuid not null, staff_id uuid, resource_id uuid,
   starts_at timestamptz not null, ends_at timestamptz not null,
-  occupied_at tstzrange generated always as (tstzrange(starts_at,ends_at,'[)')) stored,
+  buffer_before_minutes integer not null default 0 check (buffer_before_minutes between 0 and 1440),
+  buffer_after_minutes integer not null default 0 check (buffer_after_minutes between 0 and 1440),
+  occupied_at tstzrange generated always as (tstzrange(starts_at - make_interval(mins => buffer_before_minutes),ends_at + make_interval(mins => buffer_after_minutes),'[)')) stored,
   state text not null default 'confirmed' check (state in ('held','confirmed','cancelled','completed')),
   primary key (id), unique (tenant_id,id),
   check (ends_at > starts_at), check (num_nonnulls(staff_id,resource_id) = 1),
@@ -105,7 +107,7 @@ create table app.staff_resource_audit_events (
   redacted_diff jsonb not null default '{}'::jsonb check (jsonb_typeof(redacted_diff)='object'),
   created_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id),
-  foreign key (tenant_id,actor_membership_id) references app.memberships(tenant_id,id) on delete set null
+  foreign key (tenant_id,actor_membership_id) references app.memberships(tenant_id,id) on delete set null (actor_membership_id)
 );
 
 create index staff_services_service_idx on app.staff_services(tenant_id,service_id,staff_id);
@@ -192,7 +194,7 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='staff_authorization_required'; end if;
-  if p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
+  if p_resolution is null or p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   if p_resolution='defer' and n > 0 then
@@ -224,7 +226,7 @@ language plpgsql security definer set search_path='' as $$
 declare n integer; actor uuid; membership uuid; audit_outcome text;
 begin
   if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='resource_authorization_required'; end if;
-  if p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
+  if p_resolution is null or p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
   if p_resolution='defer' and n > 0 then audit_outcome := 'deferred';
