@@ -30,6 +30,18 @@ export type Database = {
           tenant_name: string;
         }[];
       };
+      get_payment_account_status_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          capabilities: Json;
+          charges_enabled: boolean;
+          payouts_enabled: boolean;
+          provider: string;
+          provider_account_reference: string;
+          requirements: Json;
+          status: string;
+        }[];
+      };
       get_public_catalog_v1: {
         Args: { p_hostname: string; p_locale?: string; p_service_key: string | null };
         Returns: {
