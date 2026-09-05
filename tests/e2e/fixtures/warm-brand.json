@@ -1,11 +1,11 @@
 {
   "name": "Sahra Wellness Collective",
   "assets": {
-    "logoLight": "/assets/warm/logo-light.svg",
-    "logoDark": "/assets/warm/logo-dark.svg",
-    "icon": "/assets/warm/icon.svg",
-    "favicon": "/assets/warm/favicon.svg",
-    "socialImage": "/assets/warm/social.svg"
+    "logoLight": "/assets/warm/logo-light.png",
+    "logoDark": "/assets/warm/logo-dark.png",
+    "icon": "/assets/warm/icon.png",
+    "favicon": "/assets/warm/favicon.png",
+    "socialImage": "/assets/warm/social.png"
   },
   "tokens": {
     "color": {

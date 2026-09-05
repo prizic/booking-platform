@@ -14,25 +14,39 @@ export const dependencyFields = [
   "optionalDependencies",
 ];
 
-export const expectedDistribution = new Map([
-  ["apps/client", "distributed"],
-  ["apps/dashboard", "distributed"],
-  ["apps/platform-admin", "platform-only"],
-  ["packages/booking-domain", "distributed"],
-  ["packages/api-contracts", "distributed"],
-  ["packages/supabase-client", "distributed"],
-  ["packages/supabase-admin", "platform-only"],
-  ["packages/auth", "distributed"],
-  ["packages/tenant-resolution", "distributed"],
-  ["packages/ui-foundation", "distributed"],
-  ["packages/white-label-ui", "distributed"],
-  ["packages/i18n", "distributed"],
-  ["packages/email", "platform-only"],
-  ["packages/integrations", "platform-only"],
-  ["packages/observability", "distributed"],
-  ["packages/testing", "distributed"],
-  ["packages/config", "distributed"],
-]);
+const workspaceClassifications = [
+  ["apps/client", "@wlbp/client", "distributed"],
+  ["apps/dashboard", "@wlbp/dashboard", "distributed"],
+  ["apps/platform-admin", "@wlbp/platform-admin", "platform-only"],
+  ["packages/booking-domain", "@wlbp/booking-domain", "distributed"],
+  ["packages/api-contracts", "@wlbp/api-contracts", "distributed"],
+  ["packages/supabase-client", "@wlbp/supabase-client", "distributed"],
+  ["packages/supabase-admin", "@wlbp/supabase-admin", "platform-only"],
+  ["packages/auth", "@wlbp/auth", "distributed"],
+  ["packages/tenant-resolution", "@wlbp/tenant-resolution", "distributed"],
+  ["packages/ui-foundation", "@wlbp/ui-foundation", "distributed"],
+  ["packages/white-label-ui", "@wlbp/white-label-ui", "distributed"],
+  ["packages/i18n", "@wlbp/i18n", "distributed"],
+  ["packages/email", "@wlbp/email", "platform-only"],
+  ["packages/integrations", "@wlbp/integrations", "platform-only"],
+  ["packages/observability", "@wlbp/observability", "distributed"],
+  ["packages/testing", "@wlbp/testing", "distributed"],
+  ["packages/config", "@wlbp/config", "distributed"],
+];
+
+export const expectedDistribution = new Map(
+  workspaceClassifications.map(([memberPath, , distribution]) => [
+    memberPath,
+    distribution,
+  ]),
+);
+
+export const expectedPackageDistribution = new Map(
+  workspaceClassifications.map(([, packageName, distribution]) => [
+    packageName,
+    distribution,
+  ]),
+);
 
 export async function readJson(filePath) {
   const source = await readFile(filePath, "utf8");

@@ -18,6 +18,38 @@ export interface PublicRuntimeConfig {
   readonly supabaseUrl: string;
 }
 
+export function parsePublicSiteOrigin(
+  value: string | undefined,
+  localFallback?: string,
+): URL {
+  const candidate = value?.trim() || localFallback;
+  if (!candidate) {
+    throw new Error("Public site URL is required");
+  }
+  let url: URL;
+  try {
+    url = new URL(candidate);
+  } catch {
+    throw new Error("Public site URL is invalid");
+  }
+
+  const localHost = url.hostname === "localhost" || url.hostname === "127.0.0.1";
+  if (url.protocol !== "https:" && !(url.protocol === "http:" && localHost)) {
+    throw new Error("Public site URL must use HTTPS outside local development");
+  }
+  if (
+    url.username !== "" ||
+    url.password !== "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== ""
+  ) {
+    throw new Error("Public site URL must be an origin without credentials or a path");
+  }
+
+  return new URL(url.origin);
+}
+
 export interface InstanceManifest {
   readonly backendContract: BackendContractRange;
   readonly configSchemaVersion: number;

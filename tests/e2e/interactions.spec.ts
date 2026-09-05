@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { locales, responsiveProfiles } from "./apps";
+import { brandCases, getBrandSurfaceOrigin, locales, responsiveProfiles } from "./apps";
 
 const clientCopy = {
   en: {
@@ -142,6 +142,53 @@ for (const application of [
   });
 }
 
+for (const language of locales) {
+  for (const brand of brandCases) {
+    test(`Dashboard desktop sidebar ${language.locale} ${brand.name} focus indicators meet non-text contrast`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ height: 900, width: 1440 });
+      await page.goto(
+        `${getBrandSurfaceOrigin(
+          { name: "dashboard", origin: "http://localhost:41731", routeSuffix: "" },
+          brand,
+        )}/${language.locale}`,
+      );
+
+      const sidebarControls = page.locator(
+        ".dashboard-sidebar :is(a, button:not(:disabled))",
+      );
+      const controlCount = await sidebarControls.count();
+      expect(controlCount).toBeGreaterThan(0);
+
+      for (let index = 0; index < controlCount; index += 1) {
+        const control = sidebarControls.nth(index);
+        await reachWithTab(page, control);
+
+        const evidence = await control.evaluate((element) => {
+          const sidebar = element.closest(".dashboard-sidebar");
+          if (!(sidebar instanceof HTMLElement)) return undefined;
+
+          const controlStyle = getComputedStyle(element);
+          return {
+            backgroundColor: getComputedStyle(sidebar).backgroundColor,
+            focusVisible: element.matches(":focus-visible"),
+            outlineColor: controlStyle.outlineColor,
+            outlineWidth: Number.parseFloat(controlStyle.outlineWidth),
+          };
+        });
+
+        expect(evidence).toBeDefined();
+        expect(evidence?.focusVisible).toBe(true);
+        expect(evidence?.outlineWidth).toBeGreaterThanOrEqual(2);
+        expect(
+          contrastRatio(evidence!.outlineColor, evidence!.backgroundColor),
+        ).toBeGreaterThanOrEqual(3);
+      }
+    });
+  }
+}
+
 async function reachWithTab(page: Page, target: Locator, limit = 20) {
   for (let attempt = 0; attempt < limit; attempt += 1) {
     if (await target.evaluate((element) => element === document.activeElement)) return;
@@ -151,4 +198,40 @@ async function reachWithTab(page: Page, target: Locator, limit = 20) {
   throw new Error(
     `Keyboard focus did not reach ${await target.evaluate((element) => element.outerHTML)}`,
   );
+}
+
+function contrastRatio(first: string, second: string) {
+  const [red, green, blue, alpha] = parseComputedColor(first);
+  const background = parseComputedColor(second);
+  const renderedFocus = [red, green, blue].map(
+    (channel, index) => channel * alpha + background[index] * (1 - alpha),
+  );
+  const [lighter, darker] = [
+    relativeLuminance(renderedFocus),
+    relativeLuminance(background),
+  ].sort((a, b) => b - a);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function parseComputedColor(color: string) {
+  const channels = color
+    .match(/[\d.]+/gu)
+    ?.slice(0, 4)
+    .map(Number);
+  if (!channels || channels.length < 3) {
+    throw new Error(`Expected a computed RGB color, received ${color}`);
+  }
+
+  return [channels[0], channels[1], channels[2], channels[3] ?? 1] as const;
+}
+
+function relativeLuminance(channels: readonly number[]) {
+  const [red, green, blue] = channels.slice(0, 3).map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.04045
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return red * 0.2126 + green * 0.7152 + blue * 0.0722;
 }

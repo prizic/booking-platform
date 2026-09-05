@@ -6,11 +6,11 @@ import { parseBrandConfig } from "./brand-config.js";
 const validConfig = {
   name: "Example Booking",
   assets: {
-    logoLight: "/assets/logo-light.svg",
-    logoDark: "/assets/logo-dark.svg",
-    icon: "/assets/icon.svg",
-    favicon: "/assets/favicon.svg",
-    socialImage: "/assets/social.svg",
+    logoLight: "/assets/logo-light.png",
+    logoDark: "/assets/logo-dark.png",
+    icon: "/assets/icon.png",
+    favicon: "/assets/favicon.png",
+    socialImage: "/assets/social.png",
   },
   tokens: neutralBrandTokens,
 };

@@ -5,8 +5,10 @@ import {
   allDeclaredDependencies,
   discoverWorkspaceMembers,
   expectedDistribution,
+  expectedPackageDistribution,
   extractImportSpecifiers,
   failCheck,
+  pathExists,
   repositoryRoot,
   walkFiles,
   workspaceEdges,
@@ -16,11 +18,37 @@ const errors = [];
 const members = await discoverWorkspaceMembers();
 const byName = new Map(members.map((member) => [member.name, member]));
 const byPath = new Map(members.map((member) => [member.path, member]));
+const hasSourceTemplate = await pathExists(
+  path.join(repositoryRoot, "instance-template"),
+);
+const hasGeneratedInstance = await pathExists(path.join(repositoryRoot, "instance"));
+let repositoryMode;
+
+if (hasSourceTemplate && hasGeneratedInstance) {
+  errors.push(
+    "repository mode is ambiguous: source instance-template/ and generated instance/ cannot coexist",
+  );
+} else if (hasSourceTemplate) {
+  repositoryMode = "source-monorepo";
+} else if (hasGeneratedInstance) {
+  repositoryMode = "generated-instance";
+} else {
+  errors.push(
+    "repository mode is unknown: expected source instance-template/ or generated instance/",
+  );
+}
 
 for (const [memberPath, expected] of expectedDistribution) {
+  if (repositoryMode === "generated-instance" && expected !== "distributed") {
+    continue;
+  }
   const member = byPath.get(memberPath);
   if (!member) {
-    errors.push(`ADR-0011 workspace member is missing: ${memberPath}`);
+    errors.push(
+      repositoryMode === "generated-instance"
+        ? `ADR-0011 distributed workspace member is missing: ${memberPath}`
+        : `ADR-0011 workspace member is missing: ${memberPath}`,
+    );
     continue;
   }
   if (member.distribution !== expected) {
@@ -31,13 +59,28 @@ for (const [memberPath, expected] of expectedDistribution) {
 }
 
 for (const member of members) {
-  if (!expectedDistribution.has(member.path)) {
+  const expected = expectedDistribution.get(member.path);
+  if (expected === undefined) {
     errors.push(
       `${member.path} is not classified by ADR-0011; a superseding ADR is required`,
+    );
+  } else if (repositoryMode === "generated-instance" && expected !== "distributed") {
+    errors.push(
+      `generated instance must not contain ADR-0011 platform-only member ${member.path}`,
     );
   }
   if (!member.manifest.private) {
     errors.push(`${member.path} must set private=true until publishing is designed`);
+  }
+  const expectedByName = expectedPackageDistribution.get(member.name);
+  if (expectedByName === undefined) {
+    errors.push(
+      `${member.path} package name ${member.name} is not classified by ADR-0011`,
+    );
+  } else if (expected !== undefined && expectedByName !== expected) {
+    errors.push(
+      `${member.path} package name ${member.name} has conflicting ADR-0011 classifications`,
+    );
   }
 }
 
@@ -106,6 +149,15 @@ function isPackageImport(specifier, packageName) {
 }
 for (const member of members) {
   for (const dependency of allDeclaredDependencies(member)) {
+    if (
+      member.distribution === "distributed" &&
+      expectedPackageDistribution.get(dependency.name) === "platform-only" &&
+      !byName.has(dependency.name)
+    ) {
+      errors.push(
+        `${member.path} ${dependency.field} reaches absent platform-only package ${dependency.name}`,
+      );
+    }
     if (
       dependency.name.startsWith("@supabase/") &&
       member.path !== "packages/supabase-client" &&
@@ -180,6 +232,19 @@ for (const filePath of sourceFiles) {
     relativeFile === "packages/supabase-client/src/server.ts";
 
   for (const specifier of extractImportSpecifiers(source)) {
+    for (const [packageName, distribution] of expectedPackageDistribution) {
+      if (
+        distribution === "platform-only" &&
+        owner.distribution === "distributed" &&
+        !byName.has(packageName) &&
+        isPackageImport(specifier, packageName)
+      ) {
+        errors.push(
+          `${relativeFile} imports absent platform-only package ${packageName}`,
+        );
+      }
+    }
+
     if (
       specifier.startsWith("@supabase/") &&
       owner.path !== "packages/supabase-client" &&

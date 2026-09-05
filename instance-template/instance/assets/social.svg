@@ -1,9 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title description">
-  <title id="title">Example Booking</title>
-  <desc id="description">Synthetic social preview for the generated instance template</desc>
-  <rect width="1200" height="630" fill="#fffaf4"/>
-  <rect x="120" y="120" width="160" height="160" rx="40" fill="#155c3f"/>
-  <path d="M165 200l28 28 58-72" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="120" y="400" fill="#17211b" font-family="system-ui, sans-serif" font-size="80" font-weight="700">Example Booking</text>
-  <text x="120" y="485" fill="#526158" font-family="system-ui, sans-serif" font-size="42">Book with confidence</text>
-</svg>

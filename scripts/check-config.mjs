@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { validateBrandAssetSource } from "../packages/config/instance-brand.mjs";
 import { parseBrandAssets } from "../packages/white-label-ui/src/brand-assets.ts";
 import { validateBrandTokens } from "../packages/white-label-ui/src/brand-tokens.ts";
 import { failCheck, pathExists, readJson, repositoryRoot } from "./workspace.mjs";
@@ -25,13 +26,28 @@ function requireExactKeys(value, keys, label) {
   }
 }
 
-function requireStringFields(value, keys, label) {
-  requireExactKeys(value, keys, label);
-  if (!isPlainObject(value)) return;
-  for (const key of keys) {
+function requireOptionalStringFields(value, requiredKeys, optionalKeys, label) {
+  if (!isPlainObject(value)) {
+    errors.push(`${label} must be an object`);
+    return;
+  }
+  const allowedKeys = new Set([...requiredKeys, ...optionalKeys]);
+  const unexpectedKeys = Object.keys(value).filter((key) => !allowedKeys.has(key));
+  for (const key of requiredKeys) {
     if (typeof value[key] !== "string" || value[key].trim() === "") {
       errors.push(`${label}.${key} must be a non-empty string`);
     }
+  }
+  for (const key of optionalKeys) {
+    if (
+      value[key] !== undefined &&
+      (typeof value[key] !== "string" || value[key].trim() === "")
+    ) {
+      errors.push(`${label}.${key} must be a non-empty string when present`);
+    }
+  }
+  if (unexpectedKeys.length > 0) {
+    errors.push(`${label} has unexpected keys: ${unexpectedKeys.sort().join(", ")}`);
   }
 }
 
@@ -239,15 +255,49 @@ validateBackendContract(
   "platform-contract.json backendContract",
 );
 
-const instancePath = path.join(repositoryRoot, "instance-template", "instance");
-if (await pathExists(instancePath)) {
+const sourceTemplateRoot = path.join(repositoryRoot, "instance-template");
+const sourceInstancePath = path.join(sourceTemplateRoot, "instance");
+const generatedInstancePath = path.join(repositoryRoot, "instance");
+const hasSourceTemplate = await pathExists(sourceTemplateRoot);
+const hasGeneratedInstance = await pathExists(generatedInstancePath);
+let instancePath;
+let manifestFile;
+let manifestLabel;
+
+if (hasSourceTemplate && hasGeneratedInstance) {
+  errors.push(
+    "configuration mode is ambiguous: source instance-template/ and generated instance/ cannot coexist",
+  );
+} else if (hasSourceTemplate) {
+  instancePath = sourceInstancePath;
+  manifestFile = "manifest.template.json";
+  manifestLabel = "instance manifest template";
+} else if (hasGeneratedInstance) {
+  instancePath = generatedInstancePath;
+  manifestFile = "manifest.json";
+  manifestLabel = "generated instance manifest";
+} else {
+  errors.push(
+    "configuration mode is unknown: expected source instance-template/ or generated instance/",
+  );
+}
+
+if (instancePath !== undefined) {
+  const wrongManifestFile =
+    manifestFile === "manifest.json" ? "manifest.template.json" : "manifest.json";
+  if (await pathExists(path.join(instancePath, wrongManifestFile))) {
+    errors.push(
+      `${path.relative(repositoryRoot, instancePath)}/ must use ${manifestFile}, not ${wrongManifestFile}`,
+    );
+  }
   const requiredFiles = [
-    "manifest.template.json",
+    manifestFile,
     "brand.json",
     "features.json",
     "navigation.json",
     "content/en.json",
     "content/ar.json",
+    "theme.css",
   ];
   const missingFiles = [];
   for (const relativeFile of requiredFiles) {
@@ -257,39 +307,75 @@ if (await pathExists(instancePath)) {
   }
 
   if (missingFiles.length > 0) {
-    errors.push(`instance-template/instance is missing ${missingFiles.join(", ")}`);
+    errors.push(
+      `${path.relative(repositoryRoot, instancePath)} is missing ${missingFiles.join(", ")}`,
+    );
   } else {
-    const manifestTemplate = await readJson(
-      path.join(instancePath, "manifest.template.json"),
-    );
+    const manifestSource = await readJson(path.join(instancePath, manifestFile));
     requireExactKeys(
-      manifestTemplate,
-      ["tenantId", "instanceId", "defaultLocale", "supportedLocales"],
-      "instance manifest template",
+      manifestSource,
+      manifestFile === "manifest.template.json"
+        ? ["tenantId", "instanceId", "defaultLocale", "supportedLocales"]
+        : [
+            "tenantId",
+            "instanceId",
+            "defaultLocale",
+            "supportedLocales",
+            "whiteLabelVersion",
+            "configSchemaVersion",
+            "backendContract",
+          ],
+      manifestLabel,
     );
-    const manifest = {
-      ...manifestTemplate,
-      whiteLabelVersion: contract.whiteLabelVersion,
-      configSchemaVersion: contract.configSchemaVersion,
-      backendContract: contract.backendContract,
-    };
+    const manifest =
+      manifestFile === "manifest.template.json"
+        ? {
+            ...manifestSource,
+            whiteLabelVersion: contract.whiteLabelVersion,
+            configSchemaVersion: contract.configSchemaVersion,
+            backendContract: contract.backendContract,
+          }
+        : manifestSource;
     for (const idField of ["tenantId", "instanceId"]) {
       if (typeof manifest[idField] !== "string" || manifest[idField].trim() === "") {
-        errors.push(`instance manifest template ${idField} must be a non-empty string`);
+        errors.push(`${manifestLabel} ${idField} must be a non-empty string`);
       }
     }
     if (manifest.defaultLocale !== "en" && manifest.defaultLocale !== "ar") {
-      errors.push("instance manifest template defaultLocale must be en or ar");
+      errors.push(`${manifestLabel} defaultLocale must be en or ar`);
     }
+    validateBackendContract(
+      manifest.backendContract,
+      `${manifestLabel} backendContract`,
+    );
     if (
       !Array.isArray(manifest.supportedLocales) ||
       manifest.supportedLocales.length !== 2 ||
       !manifest.supportedLocales.includes("en") ||
       !manifest.supportedLocales.includes("ar")
     ) {
-      errors.push(
-        "instance manifest template supportedLocales must contain exactly en and ar",
-      );
+      errors.push(`${manifestLabel} supportedLocales must contain exactly en and ar`);
+    }
+    if (manifestFile === "manifest.json") {
+      if (manifest.whiteLabelVersion !== contract.whiteLabelVersion) {
+        errors.push(
+          "generated instance manifest whiteLabelVersion must match platform-contract.json",
+        );
+      }
+      if (manifest.configSchemaVersion !== contract.configSchemaVersion) {
+        errors.push(
+          "generated instance manifest configSchemaVersion must match platform-contract.json",
+        );
+      }
+      if (
+        !isPlainObject(manifest.backendContract) ||
+        manifest.backendContract.min !== contract.backendContract.min ||
+        manifest.backendContract.max !== contract.backendContract.max
+      ) {
+        errors.push(
+          "generated instance manifest backendContract must match platform-contract.json",
+        );
+      }
     }
 
     for (const app of ["client", "dashboard"]) {
@@ -314,9 +400,7 @@ if (await pathExists(instancePath)) {
         JSON.stringify(policy.supportedLocales) !==
           JSON.stringify(manifest.supportedLocales)
       ) {
-        errors.push(
-          `apps/${app} locale policy drifted from instance manifest template`,
-        );
+        errors.push(`apps/${app} locale policy drifted from ${manifestLabel}`);
       }
     }
 
@@ -329,8 +413,14 @@ if (await pathExists(instancePath)) {
     ) {
       errors.push("brand.json must contain a non-empty name");
     } else {
-      const assetKeys = ["logoLight", "logoDark", "icon", "favicon", "socialImage"];
-      requireStringFields(brand.assets, assetKeys, "brand.json assets");
+      const requiredAssetKeys = ["logoLight", "icon", "favicon", "socialImage"];
+      const assetKeys = [...requiredAssetKeys, "logoDark"];
+      requireOptionalStringFields(
+        brand.assets,
+        requiredAssetKeys,
+        ["logoDark"],
+        "brand.json assets",
+      );
       if (isPlainObject(brand.assets)) {
         try {
           parseBrandAssets(brand.assets);
@@ -339,9 +429,12 @@ if (await pathExists(instancePath)) {
         }
         for (const key of assetKeys) {
           const asset = brand.assets[key];
+          if (key === "logoDark" && asset === undefined) continue;
           if (typeof asset !== "string" || !asset.startsWith("/assets/")) continue;
-          if (!(await pathExists(path.join(instancePath, asset.slice(1))))) {
-            errors.push(`brand.json assets.${key} points to missing ${asset}`);
+          try {
+            validateBrandAssetSource(instancePath, key, asset);
+          } catch (error) {
+            errors.push(error instanceof Error ? error.message : String(error));
           }
         }
       }

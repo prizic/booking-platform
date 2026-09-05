@@ -68,7 +68,7 @@ Each `instance/` file owns a bounded concern. Putting a value in the wrong file 
 | `navigation.json` | Approved routes, order, labels | Arbitrary external scripts |
 | `content/en.json`, `content/ar.json` | Localized copy, SEO, contact details, empty states, policy references | Design tokens, unsafe HTML, secrets |
 | `theme.css` | Approved CSS custom properties | Global selectors that break component semantics |
-| `assets/` | Optimized public brand assets | Customer PII, credentials |
+| `assets/` | Optimized PNG brand assets that pass structure, checksum, dimensions, decompression, and size validation | Symlinks, non-PNG or active content, customer PII, credentials |
 | `extensions/` | Explicit typed slots | Replacing auth, tenant resolution, booking transactions, payment verification |
 
 **Entitlement rule:** runtime entitlements come from the backend. Editing `features.json` can only disable or configure a capability the tenant is already entitled to. It can never unlock a paid or unsafe feature. See [release scope](./release-scope.md) for which capabilities exist in the release at all — a flag can never turn on something that is not built.

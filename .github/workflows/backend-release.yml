@@ -32,6 +32,7 @@ permissions:
 
 env:
   CI: "true"
+  NEXT_PUBLIC_SITE_URL: "https://release-build.invalid"
   NEXT_TELEMETRY_DISABLED: "1"
   TURBO_TELEMETRY_DISABLED: "1"
 
