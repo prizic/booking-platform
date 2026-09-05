@@ -43,6 +43,7 @@ export type Database = {
           category_key: string;
           currency: string;
           duration_minutes: number;
+          locale: string;
           location_address: string;
           location_canonical_path: string;
           location_description: string;
@@ -50,7 +51,6 @@ export type Database = {
           location_key: string;
           location_name: string;
           location_time_zone: string;
-          locale: string;
           og_image_path: string;
           payment_mode: string;
           price_minor: number;
