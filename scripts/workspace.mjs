@@ -154,6 +154,7 @@ export function allDeclaredDependencies(member) {
 const ignoredDirectoryNames = new Set([
   ".git",
   ".next",
+  ".next-warm",
   ".turbo",
   "coverage",
   "dist",
