@@ -4,6 +4,8 @@ import {
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
+  parseStaffResourceDeactivationV1,
+  parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
 
@@ -168,5 +170,94 @@ describe("tenant isolation DTOs", () => {
         },
       ]),
     ).toHaveLength(1);
+  });
+
+  it("parses the minimal staff and resource management workspace", () => {
+    expect(
+      parseStaffResourceWorkspaceV1({
+        tenantId: "tenant-a",
+        items: [
+          {
+            futureAllocationCount: 2,
+            id: "staff-a",
+            kind: "staff",
+            locationIds: ["location-a"],
+            name: "Layla Hassan",
+            resourceTypeName: null,
+            serviceIds: ["service-a"],
+            status: "deactivation_pending",
+          },
+          {
+            futureAllocationCount: 0,
+            id: "resource-a",
+            kind: "resource",
+            locationIds: ["location-a"],
+            name: "Room 1",
+            resourceTypeName: "Room",
+            serviceIds: ["service-a"],
+            status: "maintenance",
+          },
+        ],
+      }),
+    ).toEqual({
+      tenantId: "tenant-a",
+      items: [
+        {
+          futureAllocationCount: 2,
+          id: "staff-a",
+          kind: "staff",
+          locationIds: ["location-a"],
+          name: "Layla Hassan",
+          resourceTypeName: null,
+          serviceIds: ["service-a"],
+          status: "deactivation_pending",
+        },
+        {
+          futureAllocationCount: 0,
+          id: "resource-a",
+          kind: "resource",
+          locationIds: ["location-a"],
+          name: "Room 1",
+          resourceTypeName: "Room",
+          serviceIds: ["service-a"],
+          status: "maintenance",
+        },
+      ],
+    });
+  });
+
+  it("rejects internal fields from the management workspace DTO", () => {
+    expect(() =>
+      parseStaffResourceWorkspaceV1({
+        tenantId: "tenant-a",
+        items: [
+          {
+            futureAllocationCount: 0,
+            id: "staff-a",
+            internalNotes: "must not escape",
+            kind: "staff",
+            locationIds: [],
+            name: "Layla Hassan",
+            resourceTypeName: null,
+            serviceIds: [],
+            status: "active",
+          },
+        ],
+      }),
+    ).toThrow("Staff/resource workspace");
+  });
+
+  it("parses a minimal deactivation outcome", () => {
+    expect(
+      parseStaffResourceDeactivationV1({
+        outcome: "deferred",
+        remainingAllocationCount: 3,
+        targetId: "staff-a",
+      }),
+    ).toEqual({
+      outcome: "deferred",
+      remainingAllocationCount: 3,
+      targetId: "staff-a",
+    });
   });
 });

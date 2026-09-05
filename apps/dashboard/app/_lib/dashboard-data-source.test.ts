@@ -133,4 +133,159 @@ describe("Dashboard Supabase adapter", () => {
       tenantName: "Tenant A",
     });
   });
+
+  it("loads the staff/resource workspace through one versioned RPC", async () => {
+    const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async (name: string, args?: Readonly<Record<string, unknown>>) => {
+          calls.push({ name, ...(args === undefined ? {} : { args }) });
+          return {
+            data: [
+              {
+                future_allocation_count: 2,
+                item_id: "staff-a",
+                item_kind: "staff",
+                location_ids: ["location-a"],
+                name: "Layla Hassan",
+                resource_type_name: null,
+                service_ids: ["service-a"],
+                status: "active",
+                tenant_id: "tenant-a",
+              },
+              {
+                future_allocation_count: 0,
+                item_id: "resource-a",
+                item_kind: "resource",
+                location_ids: ["location-a"],
+                name: "Room 1",
+                resource_type_name: "Room",
+                service_ids: ["service-a"],
+                status: "maintenance",
+                tenant_id: "tenant-a",
+              },
+            ],
+            error: null,
+          };
+        },
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+
+    const source = createDashboardDataSource(client);
+    await expect(source.getStaffResourceWorkspace("tenant-a")).resolves.toEqual({
+      tenantId: "tenant-a",
+      items: [
+        {
+          futureAllocationCount: 2,
+          id: "staff-a",
+          kind: "staff",
+          locationIds: ["location-a"],
+          name: "Layla Hassan",
+          resourceTypeName: null,
+          serviceIds: ["service-a"],
+          status: "active",
+        },
+        {
+          futureAllocationCount: 0,
+          id: "resource-a",
+          kind: "resource",
+          locationIds: ["location-a"],
+          name: "Room 1",
+          resourceTypeName: "Room",
+          serviceIds: ["service-a"],
+          status: "maintenance",
+        },
+      ],
+    });
+    expect(calls).toEqual([
+      {
+        args: { p_tenant_id: "tenant-a" },
+        name: "get_staff_resource_workspace_v1",
+      },
+    ]);
+  });
+
+  it("maps deactivation inputs and returns only the stable outcome", async () => {
+    const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async (name: string, args?: Readonly<Record<string, unknown>>) => {
+          calls.push({ name, ...(args === undefined ? {} : { args }) });
+          return {
+            data:
+              name === "deactivate_staff_v1"
+                ? [
+                    {
+                      outcome: "reassigned",
+                      remaining_allocations: 0,
+                      staff_id: "staff-a",
+                    },
+                  ]
+                : [
+                    {
+                      outcome: "deferred",
+                      remaining_allocations: 2,
+                      resource_id: "resource-a",
+                    },
+                  ],
+            error: null,
+          };
+        },
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+
+    const source = createDashboardDataSource(client);
+    await expect(
+      source.deactivateStaff({
+        reason: "Coverage changed",
+        replacementStaffId: "staff-b",
+        requestId: "request-a",
+        resolution: "reassign",
+        staffId: "staff-a",
+        tenantId: "tenant-a",
+      }),
+    ).resolves.toEqual({
+      outcome: "reassigned",
+      remainingAllocationCount: 0,
+      targetId: "staff-a",
+    });
+    await expect(
+      source.deactivateResource({
+        reason: "Maintenance window",
+        requestId: "request-b",
+        resolution: "defer",
+        resourceId: "resource-a",
+        tenantId: "tenant-a",
+      }),
+    ).resolves.toEqual({
+      outcome: "deferred",
+      remainingAllocationCount: 2,
+      targetId: "resource-a",
+    });
+    expect(calls).toEqual([
+      {
+        args: {
+          p_reason: "Coverage changed",
+          p_replacement_staff_id: "staff-b",
+          p_request_id: "request-a",
+          p_resolution: "reassign",
+          p_staff_id: "staff-a",
+          p_tenant_id: "tenant-a",
+        },
+        name: "deactivate_staff_v1",
+      },
+      {
+        args: {
+          p_reason: "Maintenance window",
+          p_request_id: "request-b",
+          p_resolution: "defer",
+          p_resource_id: "resource-a",
+          p_tenant_id: "tenant-a",
+        },
+        name: "deactivate_resource_v1",
+      },
+    ]);
+  });
 });

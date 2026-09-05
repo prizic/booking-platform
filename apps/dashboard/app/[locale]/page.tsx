@@ -1,21 +1,13 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import {
-  extractRequestHostname,
-  type RuntimeEnvironment,
-} from "@wlbp/tenant-resolution";
 import { Badge, Surface } from "@wlbp/ui-foundation";
 import { BrandShell } from "@wlbp/white-label-ui";
-import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
 
-import {
-  loadDashboardAccess,
-  type DashboardAccessState,
-} from "../_lib/dashboard-access";
+import type { DashboardAccessState } from "../_lib/dashboard-access";
 import { dashboardBrand } from "../_lib/brand";
 import { getDashboardMessage } from "../_lib/copy";
-import { createDashboardRequestDataSource } from "../_lib/dashboard-server";
+import { loadDashboardRequestAccess } from "../_lib/dashboard-server";
 import { selectTenant } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -25,42 +17,8 @@ export const fetchCache = "force-no-store";
 type DashboardPageProps = { params: Promise<{ locale: Locale }> };
 type PageState = DashboardAccessState | { readonly kind: "configuration-missing" };
 
-function environment(): RuntimeEnvironment {
-  const configured = process.env.WLBP_RUNTIME_ENV;
-  if (
-    configured === "local" ||
-    configured === "test" ||
-    configured === "development" ||
-    configured === "preview" ||
-    configured === "production"
-  ) {
-    return configured;
-  }
-  return process.env.NODE_ENV === "production" ? "production" : "development";
-}
-
 async function getPageState(locale: Locale): Promise<PageState> {
-  const source = await createDashboardRequestDataSource();
-  if (source === null) return { kind: "configuration-missing" };
-
-  let hostname: string;
-  try {
-    const localFallback = process.env.LOCAL_TENANT_HOST;
-    hostname = extractRequestHostname(await headers(), {
-      ...(localFallback === undefined ? {} : { localFallback }),
-      runtimeEnvironment: environment(),
-    });
-  } catch {
-    return { kind: "denied", reason: "invalid_host" };
-  }
-
-  return loadDashboardAccess(
-    {
-      hostname,
-      locale,
-    },
-    source,
-  );
+  return (await loadDashboardRequestAccess(locale)).state;
 }
 
 function AccessPanel({ locale, state }: { locale: Locale; state: PageState }) {
@@ -186,6 +144,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     "navCalendar",
     "navBookings",
     "navCustomers",
+    "navTeamResources",
     "navBrand",
   ] as const;
 
@@ -215,7 +174,11 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             <Link
               key={key}
               href={
-                key === "navBrand" ? `/${locale}/brand-preview` : `/${locale}#${key}`
+                key === "navBrand"
+                  ? `/${locale}/brand-preview`
+                  : key === "navTeamResources"
+                    ? `/${locale}/team-resources`
+                    : `/${locale}#${key}`
               }
               aria-current={index === 0 ? "page" : undefined}
             >

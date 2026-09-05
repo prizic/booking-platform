@@ -2,8 +2,12 @@ import {
   capabilityNames,
   parseDashboardContextV1,
   parseResolvePublicTenantV1,
+  parseStaffResourceDeactivationV1,
+  parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
   type CapabilityName,
+  type StaffResourceDeactivationV1,
+  type StaffResourceWorkspaceV1,
 } from "@wlbp/api-contracts";
 import { getVerifiedIdentity } from "@wlbp/auth";
 import type { RequestScopedSupabaseClient } from "@wlbp/supabase-client";
@@ -22,6 +26,31 @@ interface RpcResult {
 
 interface RpcSchema {
   rpc(name: string, args?: Readonly<Record<string, unknown>>): PromiseLike<RpcResult>;
+}
+
+export interface DeactivateStaffInput {
+  readonly reason: string;
+  readonly replacementStaffId: string | null;
+  readonly requestId: string;
+  readonly resolution: "cancel" | "defer" | "reassign";
+  readonly staffId: string;
+  readonly tenantId: string;
+}
+
+export interface DeactivateResourceInput {
+  readonly reason: string;
+  readonly requestId: string;
+  readonly resolution: "cancel" | "defer";
+  readonly resourceId: string;
+  readonly tenantId: string;
+}
+
+export interface TeamResourcesDataSource {
+  deactivateResource(
+    input: DeactivateResourceInput,
+  ): Promise<StaffResourceDeactivationV1>;
+  deactivateStaff(input: DeactivateStaffInput): Promise<StaffResourceDeactivationV1>;
+  getStaffResourceWorkspace(tenantId: string): Promise<StaffResourceWorkspaceV1>;
 }
 
 function firstRow(value: unknown): Record<string, unknown> | null {
@@ -89,10 +118,81 @@ function assertRpc(result: RpcResult): unknown {
 
 export function createDashboardDataSource(
   client: RequestScopedSupabaseClient,
-): DashboardDataSource {
+): DashboardDataSource & TeamResourcesDataSource {
   const api = client.schema("api_v1") as unknown as RpcSchema;
 
   return {
+    deactivateResource: async (input) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("deactivate_resource_v1", {
+            p_reason: input.reason,
+            p_request_id: input.requestId,
+            p_resolution: input.resolution,
+            p_resource_id: input.resourceId,
+            p_tenant_id: input.tenantId,
+          }),
+        ),
+      );
+      if (row === null) throw new Error("Resource deactivation returned no result");
+      return parseStaffResourceDeactivationV1({
+        outcome: row.outcome,
+        remainingAllocationCount: row.remaining_allocations,
+        targetId: row.resource_id,
+      });
+    },
+
+    deactivateStaff: async (input) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("deactivate_staff_v1", {
+            p_reason: input.reason,
+            p_replacement_staff_id: input.replacementStaffId,
+            p_request_id: input.requestId,
+            p_resolution: input.resolution,
+            p_staff_id: input.staffId,
+            p_tenant_id: input.tenantId,
+          }),
+        ),
+      );
+      if (row === null) throw new Error("Staff deactivation returned no result");
+      return parseStaffResourceDeactivationV1({
+        outcome: row.outcome,
+        remainingAllocationCount: row.remaining_allocations,
+        targetId: row.staff_id,
+      });
+    },
+
+    getStaffResourceWorkspace: async (tenantId) => {
+      const rows = assertRpc(
+        await api.rpc("get_staff_resource_workspace_v1", {
+          p_tenant_id: tenantId,
+        }),
+      );
+      if (!Array.isArray(rows)) {
+        throw new Error("Staff/resource workspace is invalid");
+      }
+      return parseStaffResourceWorkspaceV1({
+        tenantId,
+        items: rows.map((rawRow) => {
+          const row = firstRow(rawRow);
+          if (row === null || row.tenant_id !== tenantId) {
+            throw new Error("Staff/resource workspace tenant mismatch");
+          }
+          return {
+            futureAllocationCount: row.future_allocation_count,
+            id: row.item_id,
+            kind: row.item_kind,
+            locationIds: row.location_ids,
+            name: row.name,
+            resourceTypeName: row.resource_type_name,
+            serviceIds: row.service_ids,
+            status: row.status,
+          };
+        }),
+      });
+    },
+
     getVerifiedIdentity: async () =>
       getVerifiedIdentity(client as Parameters<typeof getVerifiedIdentity>[0]),
 

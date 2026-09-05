@@ -214,73 +214,119 @@ export interface PublicCatalogItemV1 {
 /** Customer-safe assignment choices; internal notes and authorization are
  * deliberately absent. */
 export interface AssignmentCandidateV1 {
-  readonly assignmentMode:
-    "fixed_staff" | "customer_choice" | "any_available" | "round_robin";
-  readonly candidateRank: number;
+  readonly assignmentMode: "fixed_staff" | "customer_choice" | "any" | "round_robin";
   readonly staffId: string | null;
   readonly staffName: string | null;
   readonly resourceId: string | null;
   readonly resourceName: string | null;
 }
 
-export function parseAssignmentCandidatesV1(
+export interface StaffResourceWorkspaceItemV1 {
+  readonly futureAllocationCount: number;
+  readonly id: string;
+  readonly kind: "resource" | "staff";
+  readonly locationIds: readonly LocationId[];
+  readonly name: string;
+  readonly resourceTypeName: string | null;
+  readonly serviceIds: readonly string[];
+  readonly status: "active" | "deactivation_pending" | "inactive" | "maintenance";
+}
+
+export interface StaffResourceWorkspaceV1 {
+  readonly items: readonly StaffResourceWorkspaceItemV1[];
+  readonly tenantId: TenantId;
+}
+
+export interface StaffResourceDeactivationV1 {
+  readonly outcome: "cancelled" | "deactivated" | "deferred" | "reassigned";
+  readonly remainingAllocationCount: number;
+  readonly targetId: string;
+}
+
+export function parseStaffResourceDeactivationV1(
   value: unknown,
-): readonly AssignmentCandidateV1[] {
-  if (!Array.isArray(value)) throw new Error("Assignment candidates must be an array");
+): StaffResourceDeactivationV1 {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["outcome", "remainingAllocationCount", "targetId"]) ||
+    (value.outcome !== "cancelled" &&
+      value.outcome !== "deactivated" &&
+      value.outcome !== "deferred" &&
+      value.outcome !== "reassigned") ||
+    !Number.isSafeInteger(value.remainingAllocationCount) ||
+    (value.remainingAllocationCount as number) < 0
+  ) {
+    throw new Error("Staff/resource deactivation result is invalid");
+  }
 
-  const keys = [
-    "assignmentMode",
-    "candidateRank",
-    "resourceId",
-    "resourceName",
-    "staffId",
-    "staffName",
-  ] as const;
+  return Object.freeze({
+    outcome: value.outcome,
+    remainingAllocationCount: value.remainingAllocationCount as number,
+    targetId: requireNonEmptyString(value.targetId),
+  });
+}
 
-  return Object.freeze(
-    value.map((candidate) => {
-      if (!isRecord(candidate) || !hasExactKeys(candidate, keys)) {
-        throw new Error("Assignment candidate has an unexpected shape");
-      }
-      if (
-        !["fixed_staff", "customer_choice", "any_available", "round_robin"].includes(
-          candidate.assignmentMode as string,
-        ) ||
-        !Number.isSafeInteger(candidate.candidateRank) ||
-        (candidate.candidateRank as number) < 1
-      ) {
-        throw new Error("Assignment candidate is invalid");
-      }
+export function parseStaffResourceWorkspaceV1(
+  value: unknown,
+): StaffResourceWorkspaceV1 {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["items", "tenantId"]) ||
+    !Array.isArray(value.items)
+  ) {
+    throw new Error("Staff/resource workspace has an unexpected shape");
+  }
 
-      const hasStaff =
-        typeof candidate.staffId === "string" &&
-        candidate.staffId.trim() !== "" &&
-        typeof candidate.staffName === "string" &&
-        candidate.staffName.trim() !== "";
-      const hasResource =
-        typeof candidate.resourceId === "string" &&
-        candidate.resourceId.trim() !== "" &&
-        typeof candidate.resourceName === "string" &&
-        candidate.resourceName.trim() !== "";
-      const emptyStaff = candidate.staffId === null && candidate.staffName === null;
-      const emptyResource =
-        candidate.resourceId === null && candidate.resourceName === null;
+  const items = value.items.map((item): StaffResourceWorkspaceItemV1 => {
+    const keys = [
+      "futureAllocationCount",
+      "id",
+      "kind",
+      "locationIds",
+      "name",
+      "resourceTypeName",
+      "serviceIds",
+      "status",
+    ] as const;
+    if (
+      !isRecord(item) ||
+      !hasExactKeys(item, keys) ||
+      (item.kind !== "staff" && item.kind !== "resource") ||
+      (item.status !== "active" &&
+        item.status !== "deactivation_pending" &&
+        item.status !== "inactive" &&
+        item.status !== "maintenance") ||
+      (item.kind === "staff" && item.status === "maintenance") ||
+      !Array.isArray(item.locationIds) ||
+      !Array.isArray(item.serviceIds) ||
+      !Number.isSafeInteger(item.futureAllocationCount) ||
+      (item.futureAllocationCount as number) < 0 ||
+      (item.resourceTypeName !== null && typeof item.resourceTypeName !== "string") ||
+      (item.kind === "staff" && item.resourceTypeName !== null) ||
+      (item.kind === "resource" && item.resourceTypeName === null)
+    ) {
+      throw new Error("Staff/resource workspace item is invalid");
+    }
 
-      if (!((hasStaff && emptyResource) || (hasResource && emptyStaff))) {
-        throw new Error("Assignment candidate identity is invalid");
-      }
+    return Object.freeze({
+      futureAllocationCount: item.futureAllocationCount as number,
+      id: requireNonEmptyString(item.id),
+      kind: item.kind,
+      locationIds: Object.freeze(item.locationIds.map(requireNonEmptyString)),
+      name: requireNonEmptyString(item.name),
+      resourceTypeName:
+        item.resourceTypeName === null
+          ? null
+          : requireNonEmptyString(item.resourceTypeName),
+      serviceIds: Object.freeze(item.serviceIds.map(requireNonEmptyString)),
+      status: item.status,
+    });
+  });
 
-      return Object.freeze({
-        assignmentMode:
-          candidate.assignmentMode as AssignmentCandidateV1["assignmentMode"],
-        candidateRank: candidate.candidateRank as number,
-        resourceId: candidate.resourceId as string | null,
-        resourceName: candidate.resourceName as string | null,
-        staffId: candidate.staffId as string | null,
-        staffName: candidate.staffName as string | null,
-      });
-    }),
-  );
+  return Object.freeze({
+    items: Object.freeze(items),
+    tenantId: requireNonEmptyString(value.tenantId),
+  });
 }
 
 export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {

@@ -1,7 +1,10 @@
 import { parsePublicRuntimeConfig, type RuntimeEnvironment } from "@wlbp/config";
 import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server";
-import { cookies } from "next/headers";
+import { extractRequestHostname } from "@wlbp/tenant-resolution";
+import type { Locale } from "@wlbp/i18n";
+import { cookies, headers } from "next/headers";
 
+import { loadDashboardAccess, type DashboardAccessState } from "./dashboard-access";
 import { createDashboardDataSource } from "./dashboard-data-source";
 
 function runtimeEnvironment(): RuntimeEnvironment {
@@ -46,4 +49,42 @@ export async function createDashboardRequestDataSource() {
     { getAll: () => cookieStore.getAll() },
   );
   return createDashboardDataSource(client);
+}
+
+export type DashboardRequestAccess =
+  | {
+      readonly source: null;
+      readonly state: { readonly kind: "configuration-missing" };
+    }
+  | {
+      readonly source: Awaited<ReturnType<typeof createDashboardRequestDataSource>>;
+      readonly state: DashboardAccessState;
+    };
+
+export async function loadDashboardRequestAccess(
+  locale: Locale,
+): Promise<DashboardRequestAccess> {
+  const source = await createDashboardRequestDataSource();
+  if (source === null) {
+    return { source: null, state: { kind: "configuration-missing" } };
+  }
+
+  let hostname: string;
+  try {
+    const localFallback = process.env.LOCAL_TENANT_HOST;
+    hostname = extractRequestHostname(await headers(), {
+      ...(localFallback === undefined ? {} : { localFallback }),
+      runtimeEnvironment: runtimeEnvironment(),
+    });
+  } catch {
+    return {
+      source,
+      state: { kind: "denied", reason: "invalid_host" },
+    };
+  }
+
+  return {
+    source,
+    state: await loadDashboardAccess({ hostname, locale }, source),
+  };
 }
