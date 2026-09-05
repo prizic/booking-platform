@@ -227,6 +227,8 @@ input:focus-visible {
 }
 
 .client-shell {
+  inline-size: 100%;
+  min-inline-size: 0;
   min-block-size: 100vh;
   padding-block: clamp(1.25rem, 3vw, 2.5rem);
   padding-inline: clamp(1.25rem, 5vw, 5rem);
@@ -237,12 +239,18 @@ input:focus-visible {
   font-family: var(--brand-font-body);
 }
 
+.client-shell > .wlbp-surface {
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
 :lang(ar) .client-shell {
   font-family: var(--brand-font-arabic-body);
 }
 
 .client-header {
   display: flex;
+  min-inline-size: 0;
   align-items: center;
   justify-content: space-between;
   max-inline-size: var(--brand-content-width-wide, 78rem);
@@ -364,6 +372,7 @@ input:focus-visible {
 
 .booking-preview__heading {
   display: flex;
+  min-inline-size: 0;
   flex-wrap: wrap;
   gap: 1rem;
   align-items: center;
@@ -371,6 +380,12 @@ input:focus-visible {
   padding-block-end: 1.25rem;
   border-block-end: var(--brand-border-width-default, 1px) solid
     var(--brand-color-border);
+}
+
+.booking-preview__heading > * {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
 }
 
 .booking-preview__heading p {
@@ -381,12 +396,14 @@ input:focus-visible {
 
 .booking-preview__facts {
   display: grid;
+  min-inline-size: 0;
   gap: 0;
   margin-block: 0 1.5rem;
 }
 
 .booking-preview__facts > div {
   display: grid;
+  min-inline-size: 0;
   grid-template-columns: minmax(7rem, 0.65fr) 1fr;
   gap: 1rem;
   padding-block: 0.85rem;
