@@ -67,6 +67,8 @@ Files are named `NNNN-kebab-title.md`: a zero-padded four-digit sequence number,
 | 0013 | [Tenant context and live authorization](./0013-tenant-context-and-live-authorization.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | A cross-tenant test fails, custom roles replace fixed bundles, or a new surface cannot use the live-membership/audited-grant model |
 | 0014 | [Catalog publication boundary and public DTO](./0014-catalog-publication-and-public-dto.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | Custom roles, a new locale, multi-brand publishing, or booking snapshots need a new revision shape |
 
+| 0015 | [Staff and resource assignment boundary](./0015-staff-and-resource-assignment-boundary.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Multi-resource services, custom roles, group capacity, or non-exclusive inventory changes the MVP model |
+
 Dates are `—` while status is `Proposed` and undated; set the date when the status changes.
 
 ## Related documents

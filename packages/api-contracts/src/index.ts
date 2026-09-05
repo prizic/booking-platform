@@ -211,6 +211,15 @@ export interface PublicCatalogItemV1 {
   readonly cacheTag: string;
 }
 
+/** Customer-safe assignment choices; internal notes and authorization are deliberately absent. */
+export interface AssignmentCandidateV1 {
+  readonly assignmentMode: "fixed_staff" | "customer_choice" | "any" | "round_robin";
+  readonly staffId: string | null;
+  readonly staffName: string | null;
+  readonly resourceId: string | null;
+  readonly resourceName: string | null;
+}
+
 export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {
   if (!Array.isArray(value)) throw new Error("Public catalog must be an array");
   return Object.freeze(

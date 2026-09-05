@@ -76,6 +76,27 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_assignment_candidates_v1: {
+        Args: { p_location_id: string; p_service_id: string };
+        Returns: {
+          assignment_mode: string;
+          resource_id: string | null;
+          resource_name: string | null;
+          staff_id: string | null;
+          staff_name: string | null;
+        }[];
+      };
+      deactivate_staff_v1: {
+        Args: {
+          p_reason: string;
+          p_replacement_staff_id: string | null;
+          p_request_id: string;
+          p_resolution: string;
+          p_staff_id: string;
+          p_tenant_id: string;
+        };
+        Returns: { outcome: string; remaining_allocations: number; staff_id: string }[];
+      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {
