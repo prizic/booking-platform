@@ -1,5 +1,5 @@
 begin;
-select plan(18);
+select plan(19);
 
 select has_table('app','catalog_services');
 select has_table('app','catalog_service_revisions');

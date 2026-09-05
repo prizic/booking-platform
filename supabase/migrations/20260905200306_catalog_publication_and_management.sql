@@ -115,7 +115,10 @@ create policy catalog_service_locations_insert on app.catalog_service_locations 
 create policy catalog_service_locations_update on app.catalog_service_locations for update to authenticated using ((select private.can_manage_catalog(tenant_id,location_id))) with check ((select private.can_manage_catalog(tenant_id,location_id)));
 create policy catalog_service_locations_delete on app.catalog_service_locations for delete to authenticated using ((select private.can_manage_catalog(tenant_id,location_id)));
 
-revoke all on all tables in schema app from anon,authenticated;
+revoke all on app.catalog_publications, app.catalog_categories,
+  app.catalog_category_revisions, app.catalog_services,
+  app.catalog_service_revisions, app.catalog_location_revisions,
+  app.catalog_service_locations from anon,authenticated;
 grant usage on schema app to anon,authenticated;
 grant select on app.catalog_publications,app.catalog_categories,app.catalog_category_revisions,app.catalog_services,app.catalog_service_revisions,app.catalog_location_revisions,app.catalog_service_locations to anon,authenticated;
 grant insert,update,delete on app.catalog_publications,app.catalog_categories,app.catalog_category_revisions,app.catalog_services,app.catalog_service_revisions,app.catalog_location_revisions,app.catalog_service_locations to authenticated;
