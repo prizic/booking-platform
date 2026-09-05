@@ -15,7 +15,7 @@ create table app.staff_profiles (
   public_name text not null check (public_name = btrim(public_name) and char_length(public_name) between 1 and 160),
   public_bio text not null default '',
   internal_notes text not null default '',
-  status text not null default 'active' check (status in ('active','inactive')),
+  status text not null default 'active' check (status in ('active','inactive','deactivation_pending')),
   offered_hours_per_week numeric(6,2) not null default 40 check (offered_hours_per_week > 0 and offered_hours_per_week <= 168),
   created_at timestamptz not null default statement_timestamp(),
   updated_at timestamptz not null default statement_timestamp(),
@@ -53,7 +53,7 @@ create table app.resources (
   key text not null check (key = lower(key) and key ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   public_name text not null check (public_name = btrim(public_name) and char_length(public_name) between 1 and 160),
   internal_notes text not null default '',
-  status text not null default 'active' check (status in ('active','maintenance','inactive')),
+  status text not null default 'active' check (status in ('active','maintenance','inactive','deactivation_pending')),
   capacity integer not null default 1 check (capacity = 1),
   created_at timestamptz not null default statement_timestamp(), updated_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id), unique (tenant_id,key),
@@ -147,10 +147,12 @@ $rls$;
 -- ordinary tenant member. They require the live management capability.
 drop policy staff_profiles_member on app.staff_profiles;
 drop policy resources_member on app.resources;
+drop policy resources_update on app.resources;
 drop policy assignment_allocations_member on app.assignment_allocations;
 drop policy staff_resource_audit_events_member on app.staff_resource_audit_events;
 create policy staff_profiles_member on app.staff_profiles for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
 create policy resources_member on app.resources for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
+create policy resources_update on app.resources for update to authenticated using ((select private.can_manage_staff(tenant_id,null))) with check ((select private.can_manage_staff(tenant_id,null)) and status in ('active','maintenance'));
 create policy assignment_allocations_member on app.assignment_allocations for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
 create policy staff_resource_audit_events_member on app.staff_resource_audit_events for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
 drop policy staff_profiles_update on app.staff_profiles;
@@ -205,6 +207,7 @@ begin
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   if p_resolution='defer' and n > 0 then
     audit_outcome := 'deferred';
+    update app.staff_profiles set status='deactivation_pending',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_staff_id;
     actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
     insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
     values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,audit_outcome,'{}'::jsonb);
@@ -216,7 +219,7 @@ begin
   elsif p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   end if;
   audit_outcome := case when n = 0 then 'deactivated' when p_resolution='reassign' then 'reassigned' when p_resolution='cancel' then 'cancelled' else 'deferred' end;
-  update app.staff_profiles set status='inactive',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_staff_id;
+  update app.staff_profiles set status=case when audit_outcome='deferred' then 'deactivation_pending' else 'inactive' end,updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_staff_id;
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
   insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
   values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,audit_outcome,jsonb_build_object('status','inactive'));
@@ -240,14 +243,17 @@ begin
   if p_resolution is null or p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
-  if p_resolution='defer' and n > 0 then audit_outcome := 'deferred';
-  else
+  if p_resolution='defer' and n > 0 then
+    audit_outcome := 'deferred';
+    update app.resources set status='deactivation_pending',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_resource_id;
+  end if;
+  if audit_outcome is null then
     if p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp(); end if;
     audit_outcome := case when n=0 then 'deactivated' else 'cancelled' end;
-    update app.resources set status='inactive',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_resource_id;
+    update app.resources set status=case when audit_outcome='deferred' then 'deactivation_pending' else 'inactive' end,updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_resource_id;
   end if;
   insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
-  values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'resource_deactivated',p_resource_id,p_reason,audit_outcome,jsonb_build_object('status',case when audit_outcome='deferred' then 'active' else 'inactive' end));
+  values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'resource_deactivated',p_resource_id,p_reason,audit_outcome,jsonb_build_object('status',case when audit_outcome='deferred' then 'deactivation_pending' else 'inactive' end));
   return query select p_resource_id,audit_outcome,(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp());
 end;
 $$;
