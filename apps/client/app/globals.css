@@ -439,14 +439,23 @@ input:focus-visible {
 
 @media (max-width: 52rem) {
   .client-main {
+    inline-size: 100%;
+    min-inline-size: 0;
     grid-template-columns: 1fr;
     min-block-size: auto;
     padding-block: 4rem 3rem;
   }
 
   .client-intro h1 {
-    max-inline-size: 17ch;
+    inline-size: 100%;
+    max-inline-size: 100%;
     font-size: clamp(3rem, 14vw, 5.2rem);
+  }
+
+  .client-main > .client-intro,
+  .client-main > .booking-preview {
+    inline-size: 100%;
+    max-inline-size: 100%;
   }
 }
 
