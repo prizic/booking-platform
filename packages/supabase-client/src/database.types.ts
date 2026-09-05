@@ -40,7 +40,7 @@ export type Database = {
           cache_tag: string;
           canonical_path: string;
           capacity_mode: string;
-          category_key: string | null;
+          category_key: string;
           currency: string;
           duration_minutes: number;
           location_address: string;
@@ -51,7 +51,7 @@ export type Database = {
           location_name: string;
           location_time_zone: string;
           locale: string;
-          og_image_path: string | null;
+          og_image_path: string;
           payment_mode: string;
           price_minor: number;
           publication_id: string;
