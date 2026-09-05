@@ -74,6 +74,7 @@ create table app.catalog_service_locations (
   foreign key(tenant_id,service_id) references app.catalog_services(tenant_id,id) on delete cascade,
   foreign key(tenant_id,location_id) references app.locations(tenant_id,id) on delete cascade
 );
+alter table app.catalog_service_locations enable row level security;
 create unique index catalog_one_published_service on app.catalog_service_revisions(tenant_id,service_id,locale) where state='published';
 create unique index catalog_one_published_category on app.catalog_category_revisions(tenant_id,category_id,locale) where state='published';
 create unique index catalog_one_published_location on app.catalog_location_revisions(tenant_id,location_id,locale) where state='published';

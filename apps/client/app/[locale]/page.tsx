@@ -86,16 +86,27 @@ export default async function ClientPage({ params }: ClientPageProps) {
           timeZone={timeZone}
         />
         <section aria-labelledby="catalog-title" className="catalog-section">
-          <h2 id="catalog-title">{locale === "ar" ? "الخدمات المتاحة" : "Available services"}</h2>
+          <h2 id="catalog-title">
+            {locale === "ar" ? "الخدمات المتاحة" : "Available services"}
+          </h2>
           {catalog.length === 0 ? (
-            <p>{locale === "ar" ? "لا توجد خدمات منشورة حاليًا." : "No published services are available yet."}</p>
+            <p>
+              {locale === "ar"
+                ? "لا توجد خدمات منشورة حاليًا."
+                : "No published services are available yet."}
+            </p>
           ) : (
             <ul>
               {catalog.map((item) => (
                 <li key={`${item.serviceId}:${item.locationId}`}>
-                  <Link href={`/${locale}${item.canonicalPath}`}><strong>{item.serviceName}</strong></Link>
+                  <Link href={`/${locale}${item.canonicalPath}`}>
+                    <strong>{item.serviceName}</strong>
+                  </Link>
                   <p>{item.serviceDescription}</p>
-                  <small>{item.locationName} · {item.durationMinutes} {locale === "ar" ? "دقيقة" : "minutes"}</small>
+                  <small>
+                    {item.locationName} · {item.durationMinutes}{" "}
+                    {locale === "ar" ? "دقيقة" : "minutes"}
+                  </small>
                 </li>
               ))}
             </ul>

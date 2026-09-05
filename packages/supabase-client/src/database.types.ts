@@ -45,8 +45,18 @@ export type Database = {
         }[];
       };
       publish_catalog_v1: {
-        Args: { p_tenant_id: string; p_publication_id: string; p_service_revision_ids: string[]; p_category_revision_ids: string[]; p_location_revision_ids: string[] };
-        Returns: { publication_id: string; publication_revision: number; cache_tag: string }[];
+        Args: {
+          p_tenant_id: string;
+          p_publication_id: string;
+          p_service_revision_ids: string[];
+          p_category_revision_ids: string[];
+          p_location_revision_ids: string[];
+        };
+        Returns: {
+          publication_id: string;
+          publication_revision: number;
+          cache_tag: string;
+        }[];
       };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };

@@ -213,19 +213,69 @@ export interface PublicCatalogItemV1 {
 
 export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {
   if (!Array.isArray(value)) throw new Error("Public catalog must be an array");
-  return Object.freeze(value.map((item) => {
-    if (!isRecord(item)) throw new Error("Public catalog item is invalid");
-    const stringKeys = ["tenantId","publicationId","locale","serviceId","serviceKey","serviceName","serviceDescription","canonicalPath","locationId","locationKey","locationName","locationDescription","locationAddress","locationTimeZone","locationCanonicalPath","cacheTag"];
-    for (const key of stringKeys) if (key !== "locale" && (typeof item[key] !== "string" || item[key] === "")) throw new Error("Public catalog string is invalid");
-    if (item.locale !== "en" && item.locale !== "ar") throw new Error("Public catalog locale is invalid");
-    if (item.categoryKey !== null && typeof item.categoryKey !== "string") throw new Error("Public catalog category is invalid");
-    const positive = ["publicationRevision","durationMinutes"];
-    for (const key of positive) if (typeof item[key] !== "number" || !Number.isSafeInteger(item[key]) || item[key] < 1) throw new Error("Public catalog number is invalid");
-    for (const key of ["bufferBeforeMinutes","bufferAfterMinutes","priceMinor","taxRateBps"]) if (typeof item[key] !== "number" || !Number.isSafeInteger(item[key]) || item[key] < 0) throw new Error("Public catalog value is invalid");
-    if (typeof item.price !== "object" || item.price === null || typeof (item.price as Record<string, unknown>).currency !== "string" || typeof (item.price as Record<string, unknown>).minorUnits !== "number") throw new Error("Public catalog price is invalid");
-    if (!(["exclusive","group"] as unknown[]).includes(item.capacityMode) || !(["appointment","exclusive_resource"] as unknown[]).includes(item.bookingMode) || !(["none","deposit","full"] as unknown[]).includes(item.paymentMode) || typeof item.approvalRequired !== "boolean") throw new Error("Public catalog rules are invalid");
-    return Object.freeze(item as PublicCatalogItemV1);
-  }));
+  return Object.freeze(
+    value.map((item) => {
+      if (!isRecord(item)) throw new Error("Public catalog item is invalid");
+      const stringKeys = [
+        "tenantId",
+        "publicationId",
+        "locale",
+        "serviceId",
+        "serviceKey",
+        "serviceName",
+        "serviceDescription",
+        "canonicalPath",
+        "locationId",
+        "locationKey",
+        "locationName",
+        "locationDescription",
+        "locationAddress",
+        "locationTimeZone",
+        "locationCanonicalPath",
+        "cacheTag",
+      ];
+      for (const key of stringKeys)
+        if (key !== "locale" && (typeof item[key] !== "string" || item[key] === ""))
+          throw new Error("Public catalog string is invalid");
+      if (item.locale !== "en" && item.locale !== "ar")
+        throw new Error("Public catalog locale is invalid");
+      if (item.categoryKey !== null && typeof item.categoryKey !== "string")
+        throw new Error("Public catalog category is invalid");
+      const positive = ["publicationRevision", "durationMinutes"];
+      for (const key of positive)
+        if (
+          typeof item[key] !== "number" ||
+          !Number.isSafeInteger(item[key]) ||
+          item[key] < 1
+        )
+          throw new Error("Public catalog number is invalid");
+      for (const key of ["bufferBeforeMinutes", "bufferAfterMinutes", "taxRateBps"])
+        if (
+          typeof item[key] !== "number" ||
+          !Number.isSafeInteger(item[key]) ||
+          item[key] < 0
+        )
+          throw new Error("Public catalog value is invalid");
+      if (
+        typeof item.price !== "object" ||
+        item.price === null ||
+        typeof (item.price as Record<string, unknown>).currency !== "string" ||
+        typeof (item.price as Record<string, unknown>).minorUnits !== "number" ||
+        !Number.isSafeInteger((item.price as Record<string, unknown>).minorUnits)
+      )
+        throw new Error("Public catalog price is invalid");
+      if (
+        !(["exclusive", "group"] as unknown[]).includes(item.capacityMode) ||
+        !(["appointment", "exclusive_resource"] as unknown[]).includes(
+          item.bookingMode,
+        ) ||
+        !(["none", "deposit", "full"] as unknown[]).includes(item.paymentMode) ||
+        typeof item.approvalRequired !== "boolean"
+      )
+        throw new Error("Public catalog rules are invalid");
+      return Object.freeze(item as PublicCatalogItemV1);
+    }),
+  );
 }
 
 export interface AvailabilityV1Request {
