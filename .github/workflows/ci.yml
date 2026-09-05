@@ -64,7 +64,8 @@ jobs:
         run: pnpm test:unit
 
       - name: Report component-suite ownership
-        run: echo "::notice title=Component gate::N/A — not yet implemented, owned by issue #5. Issue #4 runs the executable unit and browser foundations."
+        run: |
+          echo "::notice title=Component gate::N/A — not yet implemented, owned by issue #5. Issue #4 runs the executable unit and browser foundations."
 
       - name: Start the local Supabase stack without printing generated keys
         run: |
@@ -84,13 +85,15 @@ jobs:
         run: pnpm test:db
 
       - name: Report full RLS and concurrency-suite ownership
-        run: echo "::notice title=Database coverage::N/A — not yet implemented, owned by issue #6. This run proves reset and pgTAP foundation execution only."
+        run: |
+          echo "::notice title=Database coverage::N/A — not yet implemented, owned by issue #6. This run proves reset and pgTAP foundation execution only."
 
       - name: Validate release and compatibility contracts
         run: pnpm test:contract
 
       - name: Report provider-integration ownership
-        run: echo "::notice title=Provider integration gate::N/A — not yet implemented, owned by issues #19–#23. No provider integration gate is reported as passing."
+        run: |
+          echo "::notice title=Provider integration gate::N/A — not yet implemented, owned by issues #19–#23. No provider integration gate is reported as passing."
 
       - name: Build all three applications and packages
         run: pnpm build

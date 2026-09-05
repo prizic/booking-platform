@@ -51,6 +51,11 @@ const workflowFiles = await walkFiles(workflowDirectory, {
 for (const filePath of workflowFiles) {
   const source = await readFile(filePath, "utf8");
   const relative = path.relative(repositoryRoot, filePath).split(path.sep).join("/");
+  if (/^\s*run:\s+[^|>]\S*.*#/mu.test(source)) {
+    errors.push(
+      `${relative} has an inline run command containing #; use a block scalar so YAML cannot truncate the shell command`,
+    );
+  }
   for (const match of source.matchAll(/^\s*-?\s*uses:\s*([^\s#]+)(?:\s+#.*)?$/gmu)) {
     const reference = match[1];
     if (reference.startsWith("./")) continue;
