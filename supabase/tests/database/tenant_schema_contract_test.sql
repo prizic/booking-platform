@@ -2,33 +2,33 @@ begin;
 
 select plan(45);
 
-select has_table('app', 'tenants');
-select has_table('app', 'permissions');
-select has_table('app', 'brands');
-select has_table('app', 'brand_revisions');
-select has_table('app', 'instances');
-select has_table('app', 'tenant_domains');
-select has_table('app', 'tenant_settings');
-select has_table('app', 'locations');
-select has_table('app', 'roles');
-select has_table('app', 'role_permissions');
-select has_table('app', 'memberships');
-select has_table('app', 'membership_location_scopes');
-select has_table('app', 'invitations');
-select has_table('app', 'invitation_location_scopes');
+select has_table('app'::name, 'tenants'::name);
+select has_table('app'::name, 'permissions'::name);
+select has_table('app'::name, 'brands'::name);
+select has_table('app'::name, 'brand_revisions'::name);
+select has_table('app'::name, 'instances'::name);
+select has_table('app'::name, 'tenant_domains'::name);
+select has_table('app'::name, 'tenant_settings'::name);
+select has_table('app'::name, 'locations'::name);
+select has_table('app'::name, 'roles'::name);
+select has_table('app'::name, 'role_permissions'::name);
+select has_table('app'::name, 'memberships'::name);
+select has_table('app'::name, 'membership_location_scopes'::name);
+select has_table('app'::name, 'invitations'::name);
+select has_table('app'::name, 'invitation_location_scopes'::name);
 
-select col_not_null('app', 'brands', 'tenant_id');
-select col_not_null('app', 'brand_revisions', 'tenant_id');
-select col_not_null('app', 'instances', 'tenant_id');
-select col_not_null('app', 'tenant_domains', 'tenant_id');
-select col_not_null('app', 'tenant_settings', 'tenant_id');
-select col_not_null('app', 'locations', 'tenant_id');
-select col_not_null('app', 'roles', 'tenant_id');
-select col_not_null('app', 'role_permissions', 'tenant_id');
-select col_not_null('app', 'memberships', 'tenant_id');
-select col_not_null('app', 'membership_location_scopes', 'tenant_id');
-select col_not_null('app', 'invitations', 'tenant_id');
-select col_not_null('app', 'invitation_location_scopes', 'tenant_id');
+select col_not_null('app'::name, 'brands'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'brand_revisions'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'instances'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'tenant_domains'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'tenant_settings'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'locations'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'roles'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'role_permissions'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'memberships'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'membership_location_scopes'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'invitations'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'invitation_location_scopes'::name, 'tenant_id'::name);
 
 select ok(
   not exists (
@@ -176,8 +176,8 @@ select ok(
   ),
   'no tenant table is published to Realtime by the identity foundation'
 );
-select hasnt_table('api_v1', 'storage_objects', 'the API has no Storage placeholder table');
-select hasnt_table('api_v1', 'realtime_messages', 'the API has no Realtime placeholder table');
+select hasnt_table('api_v1'::name, 'storage_objects'::name, 'the API has no Storage placeholder table');
+select hasnt_table('api_v1'::name, 'realtime_messages'::name, 'the API has no Realtime placeholder table');
 
 select * from finish();
 rollback;
