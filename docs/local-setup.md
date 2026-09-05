@@ -144,6 +144,24 @@ These map onto [engineering-rules.md](./engineering-rules.md) §9. Commands mark
 available run locally now; issue #4 owns their CI wiring. Report an unavailable
 gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 
+### Fast feedback loop
+
+Use `pnpm check:fast` while iterating and before pushing a pull request. It
+validates the lockfile, workflow controls, formatting, release/configuration
+contracts, distribution closure, secret-shaped values, documentation links, and
+the affected workspace packages through Turborepo. Locally it compares against
+`origin/main` when that ref is available; set `FAST_BASE_SHA` and
+`FAST_HEAD_SHA` to override the comparison. If no usable base is available, it
+checks every workspace package.
+
+The matching [Fast PR feedback](../.github/workflows/fast-feedback.yml)
+workflow caches the pnpm store and Turborepo task results and cancels obsolete
+commits. It is intentionally informational and does not start Docker, reset
+Supabase, install Chromium, run browser/database gates, build every application,
+or replace the required [Source monorepo CI](../.github/workflows/ci.yml)
+ordered source gates. A fast pass is therefore an early signal, never release
+evidence.
+
 | Gate | Intended command | Status |
 | ---- | ---------------- | ------ |
 | Knowledge pack (links, coverage, secrets, naming) | `pnpm check:docs` | Available — issue #1 |

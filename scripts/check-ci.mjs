@@ -45,6 +45,15 @@ const requiredWorkflows = new Map([
       "NEXT_PUBLIC_SITE_URL",
     ],
   ],
+  [
+    "fast-feedback.yml",
+    [
+      "pull_request:",
+      "pnpm install --frozen-lockfile --prefer-offline",
+      "pnpm check:fast",
+      "TURBO_TELEMETRY_DISABLED",
+    ],
+  ],
 ]);
 
 for (const [fileName, requiredFragments] of requiredWorkflows) {
