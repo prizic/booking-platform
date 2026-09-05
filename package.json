@@ -23,6 +23,8 @@
     "test:i18n": "pnpm --filter @wlbp/i18n test:unit && playwright test --project=i18n",
     "test:a11y": "playwright test --project=a11y",
     "test:visual": "playwright test --project=visual",
+    "fonts:provenance": "node scripts/font-provenance/generate.mjs",
+    "check:fonts": "node scripts/check-font-assets.mjs",
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "db:reset": "supabase db reset --local",

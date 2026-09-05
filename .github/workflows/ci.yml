@@ -55,6 +55,9 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      - name: Validate pinned local fonts and provenance
+        run: pnpm check:fonts
+
       - name: Lint and enforce module boundaries
         run: pnpm lint
 

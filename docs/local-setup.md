@@ -205,6 +205,13 @@ metrics differ even when the Chromium and Playwright versions match. Promote an
 intentional CI-rendered reference only after reviewing the uploaded actual and
 diff artifacts.
 
+Client and Dashboard use the checked-in WOFF2 assets documented in
+[docs/fonts/README.md](./fonts/README.md). `pnpm check:fonts` verifies that all
+three app/template copies match the recorded SHA-256 values, licenses are
+present, and CSS contains no remote resource URL. The canonical Linux reference
+workflow records the OS, architecture, Playwright, Chromium, and font
+provenance alongside its actual/diff artifacts.
+
 ### Required coverage before a pull request
 
 - The RLS matrix in [engineering-rules.md](./engineering-rules.md) §7 has a positive and a negative case for every changed policy.
