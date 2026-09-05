@@ -9,8 +9,8 @@ select col_not_null('app'::name, 'payment_accounts'::name, 'tenant_id'::name, 'p
 select col_not_null('app'::name, 'payment_attempts'::name, 'amount_minor_units'::name, 'attempt amount is required');
 select col_not_null('app'::name, 'payment_attempts'::name, 'currency'::name, 'attempt currency is required');
 select col_not_null('app'::name, 'commerce_ledger_entries'::name, 'occurred_at'::name, 'ledger occurrence is required');
-select row_security_active('app.payment_accounts'::name);
-select row_security_active('app.commerce_ledger_entries'::name);
+select ok((select relrowsecurity from pg_class where oid = 'app.payment_accounts'::regclass), 'payment accounts have RLS enabled');
+select ok((select relrowsecurity from pg_class where oid = 'app.commerce_ledger_entries'::regclass), 'commerce ledger has RLS enabled');
 
 select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}', true);
 set local role authenticated;
@@ -30,8 +30,8 @@ set local role service_role;
 select throws_like($$select * from app.payment_accounts$$, '%permission denied%', 'generic service role cannot read payment records');
 
 reset role;
-select is((select count(*) from pg_policies where schemaname = 'app' and tablename = 'payment_accounts'), 1, 'payment accounts have an explicit RLS policy');
-select is((select count(*) from pg_policies where schemaname = 'app' and tablename = 'commerce_ledger_entries'), 1, 'ledger has an explicit RLS policy');
+select is((select count(*)::integer from pg_policies where schemaname = 'app' and tablename = 'payment_accounts'), 4, 'payment accounts have explicit CRUD RLS policies');
+select is((select count(*)::integer from pg_policies where schemaname = 'app' and tablename = 'commerce_ledger_entries'), 4, 'ledger has explicit CRUD RLS policies');
 select throws_like($$update app.commerce_ledger_entries set amount_minor_units = 0$$, '%permission denied%', 'ledger is not client mutable');
 
 select * from finish();

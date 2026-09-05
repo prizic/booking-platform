@@ -128,13 +128,6 @@ create table app.payment_webhook_events (
   unique (provider, provider_event_reference), unique (tenant_id, id)
 );
 
-create function private.can_manage_payments(p_tenant_id uuid)
-returns boolean language sql stable security definer set search_path = '' as $$
-  select private.has_direct_capability(p_tenant_id, 'integration.manage') and private.is_aal2();
-$$;
-revoke execute on function private.can_manage_payments(uuid) from public;
-grant execute on function private.can_manage_payments(uuid) to authenticated;
-
 create function private.reject_ledger_mutation() returns trigger language plpgsql set search_path = '' as $$
 begin raise exception 'commerce ledger is append-only'; end;
 $$;
@@ -146,17 +139,24 @@ begin
   foreach t in array array['payment_accounts','provider_object_mappings','payment_price_snapshots','payment_attempts','payment_charges','payment_refunds','payment_disputes','payment_transfers','commerce_ledger_entries','payment_webhook_events'] loop
     execute format('alter table app.%I enable row level security', t);
     execute format('create policy %I on app.%I for select to authenticated using (private.is_active_tenant_member(tenant_id) and private.has_direct_capability(tenant_id, ''integration.manage''))', t || '_read', t);
+    execute format('create policy %I on app.%I for insert to authenticated with check (false)', t || '_insert_denied', t);
+    execute format('create policy %I on app.%I for update to authenticated using (false) with check (false)', t || '_update_denied', t);
+    execute format('create policy %I on app.%I for delete to authenticated using (false)', t || '_delete_denied', t);
   end loop;
 end $rls$;
 
-grant select on app.payment_accounts, app.provider_object_mappings, app.payment_attempts, app.payment_charges, app.payment_refunds, app.payment_disputes, app.payment_transfers, app.commerce_ledger_entries, app.payment_webhook_events to authenticated;
+grant select, insert on app.payment_accounts to authenticated;
+grant select on app.provider_object_mappings, app.payment_attempts, app.payment_charges, app.payment_refunds, app.payment_disputes, app.payment_transfers, app.commerce_ledger_entries, app.payment_webhook_events to authenticated;
 grant select on app.payment_price_snapshots to authenticated;
 
 create function api_v1.get_payment_account_status_v1(p_tenant_id uuid)
 returns table (provider text, provider_account_reference text, status text, charges_enabled boolean, payouts_enabled boolean, requirements jsonb, capabilities jsonb)
 language sql stable security invoker set search_path = '' as $$
   select provider, provider_account_reference, status, charges_enabled, payouts_enabled, requirements, capabilities
-  from app.payment_accounts where tenant_id = p_tenant_id and private.can_manage_payments(p_tenant_id);
+  from app.payment_accounts
+  where tenant_id = p_tenant_id
+    and private.has_direct_capability(p_tenant_id, 'integration.manage')
+    and private.is_aal2();
 $$;
 
 revoke all on function api_v1.get_payment_account_status_v1(uuid) from public;
