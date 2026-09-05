@@ -6,6 +6,7 @@ import Link from "next/link";
 import { getClientMessage } from "../_lib/copy";
 import { clientBrand } from "../_lib/brand";
 import { BookingPreview } from "./booking-preview";
+import { loadPublishedCatalog } from "../_lib/catalog-data-source";
 
 type ClientPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -16,6 +17,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
   const message = (key: Parameters<typeof getClientMessage>[1]) =>
     getClientMessage(locale, key);
   const timeZone = "Asia/Riyadh";
+  const catalog = await loadPublishedCatalog(locale);
 
   return (
     <BrandShell
@@ -83,6 +85,33 @@ export default async function ClientPage({ params }: ClientPageProps) {
           formattedPrice={formatCurrency(18_000, "SAR", locale)}
           timeZone={timeZone}
         />
+        <section aria-labelledby="catalog-title" className="catalog-section">
+          <h2 id="catalog-title">
+            {locale === "ar" ? "الخدمات المتاحة" : "Available services"}
+          </h2>
+          {catalog.length === 0 ? (
+            <p>
+              {locale === "ar"
+                ? "لا توجد خدمات منشورة حاليًا."
+                : "No published services are available yet."}
+            </p>
+          ) : (
+            <ul>
+              {catalog.map((item) => (
+                <li key={`${item.serviceId}:${item.locationId}`}>
+                  <Link href={`/${locale}${item.canonicalPath}`}>
+                    <strong>{item.serviceName}</strong>
+                  </Link>
+                  <p>{item.serviceDescription}</p>
+                  <small>
+                    {item.locationName} · {item.durationMinutes}{" "}
+                    {locale === "ar" ? "دقيقة" : "minutes"}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </BrandShell>
   );

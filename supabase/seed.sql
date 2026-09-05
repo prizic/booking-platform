@@ -205,3 +205,24 @@ insert into app.invitation_location_scopes (
 values
   ('a0000000-0000-0000-0000-000000000001', 'a6000000-0000-0000-0000-000000000001', 'a5000000-0000-0000-0000-000000000001', '2026-09-05 00:00:00+00'),
   ('b0000000-0000-0000-0000-000000000001', 'b6000000-0000-0000-0000-000000000001', 'b5000000-0000-0000-0000-000000000001', '2026-09-05 00:00:00+00');
+
+-- Published catalog fixtures are synthetic and deliberately bilingual.
+insert into app.catalog_publications (id, tenant_id, revision, state, published_at, published_by)
+values ('a7000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',1,'published','2026-09-05 00:00:00+00','a1000000-0000-0000-0000-000000000002'),
+       ('b7000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001',1,'published','2026-09-05 00:00:00+00','b1000000-0000-0000-0000-000000000001');
+insert into app.catalog_categories (id,tenant_id,key) values
+ ('a7100000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','consultations'),
+ ('b7100000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001','consultations');
+insert into app.catalog_services (id,tenant_id,key,category_id) values
+ ('a7200000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','initial-consultation','a7100000-0000-0000-0000-000000000001'),
+ ('b7200000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001','initial-consultation','b7100000-0000-0000-0000-000000000001');
+insert into app.catalog_category_revisions (id,tenant_id,category_id,revision,locale,state,name,publication_id,published_at) values
+ ('a7110000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a7100000-0000-0000-0000-000000000001',1,'en','published','Consultations','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00'),
+ ('a7110000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a7100000-0000-0000-0000-000000000001',1,'ar','published','الاستشارات','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00');
+insert into app.catalog_service_revisions (id,tenant_id,service_id,revision,locale,state,name,description,canonical_path,duration_minutes,price_minor,currency,intake_schema,publication_id,published_at) values
+ ('a7210000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001',1,'en','published','Initial consultation','A focused first conversation.','/services/initial-consultation',45,18000,'SAR','{"fields":[]}'::jsonb,'a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00'),
+ ('a7210000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001',1,'ar','published','استشارة أولية','محادثة أولى مركّزة.','/services/initial-consultation',45,18000,'SAR','{"fields":[]}'::jsonb,'a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00');
+insert into app.catalog_location_revisions (id,tenant_id,location_id,revision,locale,state,name,description,address,canonical_path,publication_id,published_at) values
+ ('a7310000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',1,'en','published','Downtown','Our central location.','Main Street','/locations/location-a-one','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00'),
+ ('a7310000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',1,'ar','published','وسط المدينة','موقعنا الرئيسي.','الشارع الرئيسي','/locations/location-a-one','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00');
+insert into app.catalog_service_locations (tenant_id,service_id,location_id) values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001');

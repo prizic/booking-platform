@@ -42,6 +42,40 @@ export type Database = {
           status: string;
         }[];
       };
+      get_public_catalog_v1: {
+        Args: { p_hostname: string; p_locale?: string; p_service_key?: string };
+        Returns: {
+          approval_required: boolean;
+          booking_mode: string;
+          buffer_after_minutes: number;
+          buffer_before_minutes: number;
+          cache_tag: string;
+          canonical_path: string;
+          capacity_mode: string;
+          category_key: string;
+          currency: string;
+          duration_minutes: number;
+          locale: string;
+          location_address: string;
+          location_canonical_path: string;
+          location_description: string;
+          location_id: string;
+          location_key: string;
+          location_name: string;
+          location_time_zone: string;
+          og_image_path: string;
+          payment_mode: string;
+          price_minor: number;
+          publication_id: string;
+          publication_revision: number;
+          service_description: string;
+          service_id: string;
+          service_key: string;
+          service_name: string;
+          tax_rate_bps: number;
+          tenant_id: string;
+        }[];
+      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {
@@ -50,6 +84,20 @@ export type Database = {
           role_key: string;
           tenant_id: string;
           tenant_name: string;
+        }[];
+      };
+      publish_catalog_v1: {
+        Args: {
+          p_category_revision_ids: string[];
+          p_location_revision_ids: string[];
+          p_publication_id: string;
+          p_service_revision_ids: string[];
+          p_tenant_id: string;
+        };
+        Returns: {
+          cache_tag: string;
+          publication_id: string;
+          publication_revision: number;
         }[];
       };
       resolve_public_tenant_v1: {

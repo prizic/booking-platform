@@ -1,8 +1,48 @@
 import { describe, expect, it } from "vitest";
 
-import { parseDashboardContextV1, parseTenantChoicesV1 } from "./index.js";
+import {
+  parseDashboardContextV1,
+  parsePublicCatalogV1,
+  parseTenantChoicesV1,
+} from "./index.js";
 
 describe("tenant isolation DTOs", () => {
+  it("parses a customer-safe bilingual catalog item", () => {
+    const [item] = parsePublicCatalogV1([
+      {
+        tenantId: "tenant-a",
+        publicationId: "publication-a",
+        publicationRevision: 1,
+        locale: "ar",
+        serviceId: "service-a",
+        serviceKey: "consultation",
+        categoryKey: null,
+        serviceName: "استشارة",
+        serviceDescription: "وصف",
+        canonicalPath: "/services/consultation",
+        durationMinutes: 45,
+        bufferBeforeMinutes: 0,
+        bufferAfterMinutes: 10,
+        price: { currency: "SAR", minorUnits: 18000 },
+        taxRateBps: 1500,
+        capacityMode: "exclusive",
+        bookingMode: "appointment",
+        approvalRequired: false,
+        paymentMode: "none",
+        locationId: "location-a",
+        locationKey: "riyadh",
+        locationName: "الرياض",
+        locationDescription: "موقع",
+        locationAddress: "العنوان",
+        locationTimeZone: "Asia/Riyadh",
+        locationCanonicalPath: "/locations/riyadh",
+        cacheTag: "catalog:tenant-a:1:ar",
+      },
+    ]);
+    expect(item?.locale).toBe("ar");
+    expect(item?.cacheTag).toBe("catalog:tenant-a:1:ar");
+  });
+
   it("parses a minimal tenant-safe Dashboard context", () => {
     expect(
       parseDashboardContextV1({
