@@ -273,7 +273,7 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
         typeof item.approvalRequired !== "boolean"
       )
         throw new Error("Public catalog rules are invalid");
-      return Object.freeze(item as PublicCatalogItemV1);
+      return Object.freeze(item as unknown as PublicCatalogItemV1);
     }),
   );
 }
