@@ -1,0 +1,116 @@
+name: Reusable instance CI
+
+on:
+  workflow_call:
+    inputs:
+      backend_contract_version:
+        description: Current integer contract version reported by the target backend
+        required: true
+        type: number
+
+permissions:
+  contents: read
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  instance-quality:
+    name: Distributable instance gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out the calling instance
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up the pinned Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable the pinned package manager
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+
+      - name: Install from the frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Reject private platform surfaces and migrations
+        run: |
+          for forbidden_path in apps/platform-admin control-plane packages/supabase-admin packages/email packages/integrations supabase; do
+            if [ -e "${forbidden_path}" ]; then
+              echo "::error file=${forbidden_path},title=Forbidden instance path::Private platform code or migrations must never enter an instance repository."
+              exit 1
+            fi
+          done
+
+      - name: Validate the lockfile and instance configuration
+        run: |
+          pnpm check:lockfile
+          pnpm check:config
+
+      - name: Check formatting, imports, and types
+        run: |
+          pnpm format:check
+          pnpm lint
+          pnpm typecheck
+
+      - name: Run unit tests
+        run: pnpm test:unit
+
+      - name: Reject an unsupported target backend contract
+        env:
+          BACKEND_CONTRACT_VERSION: ${{ inputs.backend_contract_version }}
+        run: |
+          node --input-type=module -e '
+            import { readFile } from "node:fs/promises";
+            const contract = JSON.parse(await readFile("platform-contract.json", "utf8"));
+            const deployed = Number(process.env.BACKEND_CONTRACT_VERSION);
+            const minimum = contract?.backendContract?.min;
+            const maximum = contract?.backendContract?.max;
+            if (!Number.isSafeInteger(deployed) || !Number.isSafeInteger(minimum)
+                || !Number.isSafeInteger(maximum) || minimum < 1 || minimum > maximum
+                || deployed < minimum || deployed > maximum) {
+              console.error("::error title=Unsupported backend contract::The target backend is outside this instance release range.");
+              process.exit(1);
+            }
+            console.log(`Backend contract ${deployed} is supported by range ${minimum}-${maximum}.`);
+          '
+
+      - name: Build the paired Client and Dashboard
+        run: pnpm build
+
+      - name: Install the pinned browser runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run instance browser, accessibility, RTL, and visual gates
+        run: |
+          pnpm test:e2e
+          pnpm test:a11y
+          pnpm test:visual
+
+      - name: Scan source and history without printing matched values
+        run: |
+          pnpm check:secrets
+          node scripts/check-ci-history.mjs
+
+      - name: Reject high-severity dependency advisories
+        run: pnpm audit --audit-level=high
+
+      - name: Upload non-secret browser evidence
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: instance-ci-evidence-${{ github.run_id }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          include-hidden-files: false
+          retention-days: 14

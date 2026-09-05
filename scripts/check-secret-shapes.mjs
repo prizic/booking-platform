@@ -50,6 +50,7 @@ const files = await walkFiles(repositoryRoot, {
     const relative = path.relative(repositoryRoot, filePath);
     const topLevel = relative.split(path.sep)[0];
     if (excludedTopLevel.has(topLevel)) return false;
+    if (relative.startsWith(`supabase${path.sep}.temp${path.sep}`)) return false;
     if (
       relative === "AGENTS.md" ||
       relative === "WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md"

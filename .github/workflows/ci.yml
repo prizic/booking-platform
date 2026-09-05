@@ -1,0 +1,155 @@
+name: Source monorepo CI
+
+on:
+  merge_group:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: "true"
+  NEXT_TELEMETRY_DISABLED: "1"
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  quality-gates:
+    name: Ordered source gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out the complete source history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up the pinned Node runtime
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Enable the pinned package manager
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.25.0 --activate
+
+      - name: Install from the frozen lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate lockfile and workflow controls
+        run: |
+          pnpm check:lockfile
+          pnpm check:ci
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint and enforce module boundaries
+        run: pnpm lint
+
+      - name: Typecheck all workspaces
+        run: pnpm typecheck
+
+      - name: Run domain and unit tests
+        run: pnpm test:unit
+
+      - name: Report component-suite ownership
+        run: |
+          echo "::notice title=Component gate::N/A — not yet implemented, owned by issue #5. Issue #4 runs the executable unit and browser foundations."
+
+      - name: Start the local Supabase stack without printing generated keys
+        run: |
+          if ! pnpm supabase:start >"${RUNNER_TEMP}/supabase-start.log" 2>&1; then
+            echo "::error title=Local Supabase failed::Confirm Docker is healthy and required ports are free, then reproduce with pnpm supabase:start locally. Generated credentials and connection strings were intentionally not printed."
+            exit 1
+          fi
+          echo "Local Supabase started with ephemeral synthetic-only credentials."
+
+      - name: Reset migrations and synthetic seed from zero
+        run: pnpm db:reset
+
+      - name: Lint the local database
+        run: pnpm db:lint
+
+      - name: Run executable database and pgTAP foundation
+        run: pnpm test:db
+
+      - name: Report full RLS and concurrency-suite ownership
+        run: |
+          echo "::notice title=Database coverage::N/A — not yet implemented, owned by issue #6. This run proves reset and pgTAP foundation execution only."
+
+      - name: Validate release and compatibility contracts
+        run: pnpm test:contract
+
+      - name: Report provider-integration ownership
+        run: |
+          echo "::notice title=Provider integration gate::N/A — not yet implemented, owned by issues #19–#23. No provider integration gate is reported as passing."
+
+      - name: Build all three applications and packages
+        run: pnpm build
+
+      - name: Install the pinned browser runtime
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run end-to-end smoke tests
+        run: pnpm test:e2e
+
+      - name: Run accessibility and RTL smoke tests
+        run: pnpm test:a11y
+
+      - name: Run visual reference tests
+        run: pnpm test:visual
+
+      - name: Validate instance configuration and distribution closure
+        run: |
+          pnpm check:config
+          pnpm check:distribution
+
+      - name: Scan source and Git history without printing matched values
+        run: |
+          pnpm check:secrets
+          node scripts/check-ci-history.mjs
+
+      - name: Verify distributed production bundles
+        run: pnpm check:bundles
+
+      - name: Validate the knowledge pack
+        run: pnpm check:docs
+
+      - name: Reject high-severity dependency advisories
+        run: pnpm audit --audit-level=high
+
+      - name: Exercise fail-closed distribution and contract fixtures
+        run: |
+          node scripts/check-ci-fixtures.mjs
+          pnpm test:contract
+
+      - name: Generate the CycloneDX software bill of materials
+        run: pnpm run sbom
+
+      - name: Stop the local Supabase stack
+        if: always()
+        run: pnpm supabase:stop || true
+
+      - name: Upload non-secret verification evidence
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: source-ci-evidence-${{ github.run_id }}
+          path: |
+            .artifacts/sbom.cdx.json
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          include-hidden-files: true
+          retention-days: 14

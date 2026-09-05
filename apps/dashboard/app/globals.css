@@ -1,7 +1,7 @@
 :root {
   color-scheme: light;
   --dashboard-ink: #18201e;
-  --dashboard-muted: #67726e;
+  --dashboard-muted: #59645f;
   --dashboard-canvas: #e9ede8;
   --dashboard-surface: #f8faf6;
   --dashboard-sidebar: #172d28;
@@ -157,9 +157,13 @@ a:focus-visible {
 }
 
 .dashboard-sidebar nav span {
-  color: #7f938a;
+  color: #84988f;
   font-size: 0.65rem;
   font-variant-numeric: tabular-nums;
+}
+
+.dashboard-sidebar nav a[aria-current="page"] span {
+  color: #cdd8d2;
 }
 
 .dashboard-sidebar > :last-child {

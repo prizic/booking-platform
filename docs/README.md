@@ -21,6 +21,7 @@ Agents: read [`../AGENTS.md`](../AGENTS.md) first. It is the contract.
 | Understand the system shape | [architecture.md](architecture.md) |
 | Write code that will be accepted | [engineering-rules.md](engineering-rules.md) |
 | Run it locally / know the CI gates | [local-setup.md](local-setup.md) |
+| Identify an environment or release the shared backend | [environments.md](environments.md) |
 | Build UI, tokens, Arabic/RTL, accessibility | [design-system.md](design-system.md) |
 | Know the security and privacy rules | [security-and-privacy.md](security-and-privacy.md) |
 | Know what a tenant may customize | [customization-boundaries.md](customization-boundaries.md) |
@@ -65,7 +66,7 @@ Full table in specification §2. The load-bearing ones:
 | 6 | Core user journeys | [journeys.md](journeys.md) |
 | 7 | State models | [journeys.md](journeys.md) |
 | 8 | Functional scope by release | [release-scope.md](release-scope.md) |
-| 9 | System architecture | [architecture.md](architecture.md) |
+| 9 | System architecture | [architecture.md](architecture.md), [environments.md](environments.md) |
 | 10 | Monorepo and code ownership | [architecture.md](architecture.md), [customization-boundaries.md](customization-boundaries.md), [upstream-updates.md](upstream-updates.md) |
 | 11 | White-label customization contract | [customization-boundaries.md](customization-boundaries.md), [design-system.md](design-system.md) |
 | 12 | AI agent instruction pack | [instance-docs-contract.md](instance-docs-contract.md), [`../AGENTS.md`](../AGENTS.md) |
@@ -80,7 +81,7 @@ Full table in specification §2. The load-bearing ones:
 | 21 | Provisioning and fleet management | [architecture.md](architecture.md), [upstream-updates.md](upstream-updates.md) |
 | 22 | Security architecture | [security-and-privacy.md](security-and-privacy.md) |
 | 23 | Privacy, data governance, compliance | [security-and-privacy.md](security-and-privacy.md), [ADR-0008](adr/0008-privacy-retention-and-support-access.md) |
-| 24 | Testing and release quality | [engineering-rules.md](engineering-rules.md), [local-setup.md](local-setup.md) |
+| 24 | Testing and release quality | [engineering-rules.md](engineering-rules.md), [local-setup.md](local-setup.md), [environments.md](environments.md) |
 | 25 | Observability, SLOs, operations | [runbooks.md](runbooks.md) |
 | 26 | Backup and disaster recovery | [runbooks.md](runbooks.md) |
 | 27 | Analytics and product measurement | [runbooks.md](runbooks.md), [ADR-0009](adr/0009-analytics-definitions.md) |

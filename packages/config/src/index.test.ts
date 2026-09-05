@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createContentSecurityPolicy,
+  createPublicReleaseIdentity,
   parseInstanceManifest,
   parsePlatformContract,
   parsePublicRuntimeConfig,
@@ -82,5 +83,39 @@ describe("configuration validation", () => {
     );
     expect(policy).toContain("frame-ancestors 'none'");
     expect(() => createContentSecurityPolicy("unsafe nonce")).toThrow("nonce");
+  });
+
+  it("builds a safe release identity from the shared platform contract", () => {
+    expect(
+      createPublicReleaseIdentity(
+        "client",
+        {
+          whiteLabelVersion: "0.1.0",
+          configSchemaVersion: 1,
+          backendContract: { min: 1, max: 1 },
+        },
+        ["unsafe", "0123456789abcdef0123456789abcdef01234567"],
+      ),
+    ).toEqual({
+      schemaVersion: 1,
+      application: "client",
+      releaseId: "tenant-runtime-v0.1.0",
+      buildCommit: "0123456789abcdef0123456789abcdef01234567",
+      whiteLabelVersion: "0.1.0",
+      configSchemaVersion: 1,
+      backendContract: { min: 1, max: 1 },
+    });
+
+    expect(
+      createPublicReleaseIdentity(
+        "dashboard",
+        {
+          whiteLabelVersion: "0.1.0",
+          configSchemaVersion: 1,
+          backendContract: { min: 1, max: 1 },
+        },
+        [undefined, "not-a-commit"],
+      ).buildCommit,
+    ).toBe("local");
   });
 });

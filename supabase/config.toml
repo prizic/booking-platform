@@ -1,0 +1,69 @@
+# Local-only Supabase configuration. Hosted environment identity and secrets are
+# supplied by protected CI environments; they never belong in this file.
+# Reference: https://supabase.com/docs/guides/local-development/cli/config
+project_id = "white-label-booking-platform"
+
+[api]
+enabled = true
+port = 54321
+# `api_v1` is the only application-owned Data API surface. Domain tables belong
+# in unexposed schemas and are introduced with explicit grants by issue #6.
+schemas = ["api_v1"]
+extra_search_path = ["extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+health_timeout = "2m"
+major_version = 17
+
+[db.migrations]
+enabled = true
+schema_paths = []
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[realtime]
+# Enabled by its owning product issue together with publication and RLS tests.
+enabled = false
+
+[studio]
+# The issue #4 gate is headless; Studio is optional local tooling.
+enabled = false
+port = 54323
+api_url = "http://127.0.0.1"
+
+[storage]
+# Storage is not part of the issue #4 foundation schema. Keep the local service
+# off until an owning product issue introduces buckets, RLS, and access tests.
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = [
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3001",
+  "http://127.0.0.1:3002",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+enable_manual_linking = false
+minimum_password_length = 8
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = true
+
+[edge_runtime]
+enabled = true
+policy = "per_worker"
+inspector_port = 8083
