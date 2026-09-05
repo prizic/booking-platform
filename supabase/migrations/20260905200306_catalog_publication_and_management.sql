@@ -125,7 +125,7 @@ grant insert,update,delete on app.catalog_publications,app.catalog_categories,ap
 
 create or replace function api_v1.get_public_catalog_v1(p_hostname text, p_locale text default 'en', p_service_key text default null)
 returns table(tenant_id uuid,publication_id uuid,publication_revision bigint,locale text,service_id uuid,service_key text,category_key text,service_name text,service_description text,canonical_path text,og_image_path text,duration_minutes integer,buffer_before_minutes integer,buffer_after_minutes integer,price_minor bigint,tax_rate_bps integer,currency text,capacity_mode text,booking_mode text,approval_required boolean,payment_mode text,location_id uuid,location_key text,location_name text,location_description text,location_address text,location_time_zone text,location_canonical_path text,cache_tag text)
-language sql stable security invoker set search_path='' as $$
+language sql stable security definer set search_path='' as $$
   select t.id,p.id,p.revision,sr.locale,s.id,s.key,c.key,sr.name,sr.description,sr.canonical_path,sr.og_image_path,sr.duration_minutes,sr.buffer_before_minutes,sr.buffer_after_minutes,sr.price_minor,sr.tax_rate_bps,sr.currency,sr.capacity_mode,sr.booking_mode,sr.approval_required,sr.payment_mode,l.id,l.key,lr.name,lr.description,lr.address,l.time_zone,lr.canonical_path,concat('catalog:',t.id::text,':',p.revision::text,':',sr.locale)
   from app.tenant_domains d join app.instances i on i.tenant_id=d.tenant_id and i.id=d.instance_id join app.tenants t on t.id=d.tenant_id
   join app.catalog_publications p on p.tenant_id=t.id and p.state='published' join app.catalog_services s on s.tenant_id=t.id and s.status='active'
@@ -133,7 +133,7 @@ language sql stable security invoker set search_path='' as $$
   left join app.catalog_categories c on c.tenant_id=s.tenant_id and c.id=s.category_id join app.catalog_service_locations sl on sl.tenant_id=s.tenant_id and sl.service_id=s.id
   join app.locations l on l.tenant_id=sl.tenant_id and l.id=sl.location_id and l.status='active'
   join app.catalog_location_revisions lr on lr.tenant_id=l.tenant_id and lr.location_id=l.id and lr.publication_id=p.id and lr.locale=sr.locale and lr.state='published'
-  where d.hostname=lower(btrim(p_hostname)) and d.application='client' and d.kind='production' and d.verification_status='verified' and d.active and t.status='active' and i.deployment_state='active' and p_locale in ('en','ar') and (p_service_key is null or s.key=p_service_key)
+  where p_hostname = lower(btrim(p_hostname)) and p_hostname ~ '^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$' and d.hostname=p_hostname and d.application='client' and d.kind='production' and d.verification_status='verified' and d.active and t.status='active' and i.deployment_state='active' and p_locale in ('en','ar') and (p_service_key is null or s.key=p_service_key)
   order by sr.name,l.key;
 $$;
 revoke all on function api_v1.get_public_catalog_v1(text,text,text) from public;

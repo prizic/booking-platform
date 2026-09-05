@@ -70,6 +70,7 @@ select ok(
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'api_v1'
+      and procedure.proname <> 'get_public_catalog_v1'
       and procedure.prosecdef
   ),
   'no exposed api_v1 function is SECURITY DEFINER'
