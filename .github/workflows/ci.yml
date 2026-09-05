@@ -94,7 +94,22 @@ jobs:
         run: pnpm test:db
 
       - name: Verify generated api_v1 database types are current
-        run: pnpm check:db-types
+        run: |
+          checked=0
+          for attempt in 1 2 3; do
+            if pnpm check:db-types; then
+              checked=1
+              break
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning title=Database type check retry::The local Supabase API was not ready on attempt ${attempt}; waiting before retrying."
+              sleep 5
+            fi
+          done
+          if [ "$checked" -ne 1 ]; then
+            echo "::error title=Database type check failed::Generated api_v1 types did not match after three attempts. Reproduce with pnpm check:db-types locally; generated credentials and connection strings were intentionally not printed."
+            exit 1
+          fi
 
       - name: Report booking concurrency-suite ownership
         run: |
