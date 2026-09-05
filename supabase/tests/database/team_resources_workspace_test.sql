@@ -1,5 +1,5 @@
 begin;
-select plan(14);
+select plan(15);
 
 select has_function(
   'api_v1'::name,
@@ -217,6 +217,21 @@ select throws_like(
   $$,
   '%resource_authorization_required%',
   'the private resource helper independently rejects location-scoped callers'
+);
+
+reset role;
+set local role anon;
+select is(
+  (
+    select count(*)::integer
+    from api_v1.get_assignment_candidates_v1(
+      'a7200000-0000-0000-0000-000000000001',
+      'a5000000-0000-0000-0000-000000000001'
+    )
+    where staff_id = 'a8000000-0000-0000-0000-000000000011'
+  ),
+  1,
+  'the invoker API wrapper still returns published assignment candidates to anonymous callers'
 );
 
 reset role;

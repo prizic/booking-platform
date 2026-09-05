@@ -12,7 +12,6 @@ import {
   loadTeamResourcesWorkspace,
   type TeamResourcesWorkspaceState,
 } from "../../_lib/team-resources-workspace";
-import { deactivateResourceAction, deactivateStaffAction } from "./actions";
 import { TeamResourcesView } from "./team-resources-view";
 
 export const dynamic = "force-dynamic";
@@ -21,21 +20,7 @@ export const fetchCache = "force-no-store";
 
 type TeamResourcesPageProps = {
   readonly params: Promise<{ locale: Locale }>;
-  readonly searchParams: Promise<{ result?: string | string[] }>;
 };
-
-const results = [
-  "cancelled",
-  "deactivated",
-  "deferred",
-  "failed",
-  "reassigned",
-] as const;
-
-function parseResult(value: string | string[] | undefined) {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  return results.find((result) => result === candidate);
-}
 
 async function loadPageState(locale: Locale): Promise<TeamResourcesWorkspaceState> {
   const request = await loadDashboardRequestAccess(locale);
@@ -47,13 +32,9 @@ async function loadPageState(locale: Locale): Promise<TeamResourcesWorkspaceStat
   return loadTeamResourcesWorkspace(request.state, request.source);
 }
 
-export default async function TeamResourcesPage({
-  params,
-  searchParams,
-}: TeamResourcesPageProps) {
+export default async function TeamResourcesPage({ params }: TeamResourcesPageProps) {
   const { locale } = await params;
-  const [{ result }, state] = await Promise.all([searchParams, loadPageState(locale)]);
-  const parsedResult = parseResult(result);
+  const state = await loadPageState(locale);
   const dashboardMessage = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const teamMessage = (key: Parameters<typeof getTeamResourcesMessage>[1]) =>
@@ -113,13 +94,7 @@ export default async function TeamResourcesPage({
             </Link>
           </nav>
         </header>
-        <TeamResourcesView
-          locale={locale}
-          onDeactivateResource={deactivateResourceAction}
-          onDeactivateStaff={deactivateStaffAction}
-          {...(parsedResult === undefined ? {} : { result: parsedResult })}
-          state={state}
-        />
+        <TeamResourcesView locale={locale} state={state} />
       </div>
     </BrandShell>
   );

@@ -31,15 +31,11 @@ const workspace: StaffResourceWorkspaceV1 = {
   ],
 };
 
-const action = async () => undefined;
-
 describe("Team and resources workspace view", () => {
   it("renders labelled management controls and explicit disabled seams", () => {
     const html = renderToStaticMarkup(
       createElement(TeamResourcesView, {
         locale: "en",
-        onDeactivateResource: action,
-        onDeactivateStaff: action,
         state: {
           context: {} as never,
           kind: "ready",
@@ -52,7 +48,8 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain("Layla Hassan");
     expect(html).toContain("Room 1");
     expect(html).toContain('disabled=""');
-    expect(html).toContain('for="staff-a8000000-0000-0000-0000-000000000001-reason"');
+    expect(html).not.toContain("<form");
+    expect(html).toContain("Deactivate safely");
     expect(html).toContain('aria-describedby="management-api-note"');
   });
 
@@ -60,8 +57,6 @@ describe("Team and resources workspace view", () => {
     const html = renderToStaticMarkup(
       createElement(TeamResourcesView, {
         locale: "ar",
-        onDeactivateResource: action,
-        onDeactivateStaff: action,
         state: {
           kind: "access-unavailable",
           reason: "location-scope-unavailable",

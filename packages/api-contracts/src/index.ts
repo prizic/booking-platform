@@ -237,35 +237,6 @@ export interface StaffResourceWorkspaceV1 {
   readonly tenantId: TenantId;
 }
 
-export interface StaffResourceDeactivationV1 {
-  readonly outcome: "cancelled" | "deactivated" | "deferred" | "reassigned";
-  readonly remainingAllocationCount: number;
-  readonly targetId: string;
-}
-
-export function parseStaffResourceDeactivationV1(
-  value: unknown,
-): StaffResourceDeactivationV1 {
-  if (
-    !isRecord(value) ||
-    !hasExactKeys(value, ["outcome", "remainingAllocationCount", "targetId"]) ||
-    (value.outcome !== "cancelled" &&
-      value.outcome !== "deactivated" &&
-      value.outcome !== "deferred" &&
-      value.outcome !== "reassigned") ||
-    !Number.isSafeInteger(value.remainingAllocationCount) ||
-    (value.remainingAllocationCount as number) < 0
-  ) {
-    throw new Error("Staff/resource deactivation result is invalid");
-  }
-
-  return Object.freeze({
-    outcome: value.outcome,
-    remainingAllocationCount: value.remainingAllocationCount as number,
-    targetId: requireNonEmptyString(value.targetId),
-  });
-}
-
 export function parseStaffResourceWorkspaceV1(
   value: unknown,
 ): StaffResourceWorkspaceV1 {

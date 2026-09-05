@@ -85,7 +85,40 @@ grant execute on function api_v1.deactivate_resource_v1(uuid, uuid, text, uuid, 
   to authenticated;
 
 alter function api_v1.get_assignment_candidates_v1(uuid, uuid)
-  security invoker;
+  set schema private;
+alter function private.get_assignment_candidates_v1(uuid, uuid)
+  rename to get_assignment_candidates_v1_internal;
+revoke all on function private.get_assignment_candidates_v1_internal(uuid, uuid)
+  from public, service_role;
+grant execute on function private.get_assignment_candidates_v1_internal(uuid, uuid)
+  to anon, authenticated;
+
+create function api_v1.get_assignment_candidates_v1(
+  p_service_id uuid,
+  p_location_id uuid
+)
+returns table (
+  assignment_mode text,
+  staff_id uuid,
+  staff_name text,
+  resource_id uuid,
+  resource_name text
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select *
+  from private.get_assignment_candidates_v1_internal(
+    p_service_id,
+    p_location_id
+  );
+$$;
+revoke all on function api_v1.get_assignment_candidates_v1(uuid, uuid)
+  from public, service_role;
+grant execute on function api_v1.get_assignment_candidates_v1(uuid, uuid)
+  to anon, authenticated;
 
 create or replace function api_v1.get_staff_resource_workspace_v1(
   p_tenant_id uuid

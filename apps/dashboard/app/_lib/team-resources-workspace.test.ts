@@ -30,8 +30,6 @@ const context: DashboardContextV1 = {
 
 function source(tenantId = "tenant-a"): TeamResourcesDataSource {
   return {
-    deactivateResource: vi.fn(),
-    deactivateStaff: vi.fn(),
     getStaffResourceWorkspace: vi.fn(async () => ({ items: [], tenantId })),
   };
 }

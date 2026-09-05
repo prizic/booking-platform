@@ -50,7 +50,7 @@ export const teamResourcesCopy: Record<
     backendUnavailable: "Team and resource data is temporarily unavailable.",
     cancelFuture: "Cancel future allocations and deactivate",
     createEditUnavailable:
-      "Creating and editing stays unavailable until the scoped management API is connected.",
+      "Creating, editing, and deactivation stay unavailable until revision-safe scoped management APIs are connected.",
     deactivate: "Deactivate safely",
     deactivateReason: "Reason",
     deactivateResolution: "Future booking resolution",
@@ -94,7 +94,7 @@ export const teamResourcesCopy: Record<
     backendUnavailable: "بيانات الفريق والموارد غير متاحة مؤقتًا.",
     cancelFuture: "إلغاء التخصيصات المستقبلية وإلغاء التنشيط",
     createEditUnavailable:
-      "يظل الإنشاء والتعديل غير متاحين حتى توصيل واجهة الإدارة محددة النطاق.",
+      "يظل الإنشاء والتعديل وإلغاء التنشيط غير متاح حتى توصيل واجهات إدارة محددة النطاق وآمنة من تعارض النسخ.",
     deactivate: "إلغاء التنشيط بأمان",
     deactivateReason: "السبب",
     deactivateResolution: "معالجة الحجوزات المستقبلية",

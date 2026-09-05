@@ -8,15 +8,8 @@ import {
 } from "../../_lib/team-resources-copy";
 import type { TeamResourcesWorkspaceState } from "../../_lib/team-resources-workspace";
 
-type DeactivationAction = (formData: FormData) => Promise<void>;
-type DeactivationResult =
-  "cancelled" | "deactivated" | "deferred" | "failed" | "reassigned";
-
 interface TeamResourcesViewProps {
   readonly locale: Locale;
-  readonly onDeactivateResource: DeactivationAction;
-  readonly onDeactivateStaff: DeactivationAction;
-  readonly result?: DeactivationResult;
   readonly state: TeamResourcesWorkspaceState;
 }
 
@@ -24,21 +17,6 @@ function statusKey(
   status: StaffResourceWorkspaceItemV1["status"],
 ): TeamResourcesMessageKey {
   return status === "deactivation_pending" ? "deactivationPending" : status;
-}
-
-function resultKey(result: DeactivationResult): TeamResourcesMessageKey {
-  switch (result) {
-    case "cancelled":
-      return "deactivationCancelled";
-    case "deactivated":
-      return "deactivationSucceeded";
-    case "deferred":
-      return "deactivationDeferred";
-    case "reassigned":
-      return "deactivationReassigned";
-    default:
-      return "deactivationFailed";
-  }
 }
 
 function UnavailableState({
@@ -123,89 +101,14 @@ function ItemFacts({
   );
 }
 
-function DeactivationForm({
-  action,
-  item,
-  locale,
-  replacementStaff,
-}: {
-  readonly action: DeactivationAction;
-  readonly item: StaffResourceWorkspaceItemV1;
-  readonly locale: Locale;
-  readonly replacementStaff: readonly StaffResourceWorkspaceItemV1[];
-}) {
-  const message = (key: TeamResourcesMessageKey) =>
-    getTeamResourcesMessage(locale, key);
-  const prefix = `${item.kind}-${item.id}`;
-  return (
-    <details className="team-resource-deactivation">
-      <summary>{message("deactivate")}</summary>
-      <form action={action}>
-        <input name="locale" type="hidden" value={locale} />
-        <input name="targetId" type="hidden" value={item.id} />
-        <label htmlFor={`${prefix}-resolution`}>
-          {message("deactivateResolution")}
-        </label>
-        <select
-          className="wlbp-field__input"
-          defaultValue="defer"
-          id={`${prefix}-resolution`}
-          name="resolution"
-        >
-          <option value="defer">{message("deferDeactivation")}</option>
-          <option value="cancel">{message("cancelFuture")}</option>
-          {item.kind === "staff" ? (
-            <option value="reassign">{message("reassignFuture")}</option>
-          ) : null}
-        </select>
-        {item.kind === "staff" ? (
-          <>
-            <label htmlFor={`${prefix}-replacement`}>
-              {message("replacementStaff")}
-            </label>
-            <select
-              className="wlbp-field__input"
-              defaultValue=""
-              id={`${prefix}-replacement`}
-              name="replacementStaffId"
-            >
-              <option value="">—</option>
-              {replacementStaff.map((staff) => (
-                <option key={staff.id} value={staff.id}>
-                  {staff.name}
-                </option>
-              ))}
-            </select>
-          </>
-        ) : null}
-        <label htmlFor={`${prefix}-reason`}>{message("deactivateReason")}</label>
-        <input
-          className="wlbp-field__input"
-          id={`${prefix}-reason`}
-          maxLength={500}
-          name="reason"
-          required
-        />
-        <button className="wlbp-button" type="submit">
-          {message("submitDeactivation")}
-        </button>
-      </form>
-    </details>
-  );
-}
-
 function ItemList({
-  action,
   emptyMessage,
   items,
   locale,
-  replacementStaff,
 }: {
-  readonly action: DeactivationAction;
   readonly emptyMessage: TeamResourcesMessageKey;
   readonly items: readonly StaffResourceWorkspaceItemV1[];
   readonly locale: Locale;
-  readonly replacementStaff: readonly StaffResourceWorkspaceItemV1[];
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
@@ -232,14 +135,14 @@ function ItemList({
             </header>
             <ItemFacts item={item} locale={locale} />
             {item.status === "active" ? (
-              <DeactivationForm
-                action={action}
-                item={item}
-                locale={locale}
-                replacementStaff={replacementStaff.filter(
-                  (staff) => staff.id !== item.id,
-                )}
-              />
+              <button
+                aria-describedby="management-api-note"
+                className="wlbp-button wlbp-button--secondary"
+                disabled
+                type="button"
+              >
+                {message("deactivate")}
+              </button>
             ) : null}
           </article>
         </li>
@@ -248,13 +151,7 @@ function ItemList({
   );
 }
 
-export function TeamResourcesView({
-  locale,
-  onDeactivateResource,
-  onDeactivateStaff,
-  result,
-  state,
-}: TeamResourcesViewProps) {
+export function TeamResourcesView({ locale, state }: TeamResourcesViewProps) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
   const intro = (
@@ -274,16 +171,10 @@ export function TeamResourcesView({
 
   const staff = state.workspace.items.filter((item) => item.kind === "staff");
   const resources = state.workspace.items.filter((item) => item.kind === "resource");
-  const activeStaff = staff.filter((item) => item.status === "active");
 
   return (
     <>
       {intro}
-      {result === undefined ? null : (
-        <p className="team-resources-result" role="status" aria-live="polite">
-          {message(resultKey(result))}
-        </p>
-      )}
       <Surface as="section" className="team-resources-management">
         <div>
           <button
@@ -309,30 +200,18 @@ export function TeamResourcesView({
         <Surface
           as="section"
           className="team-resources-section"
-          aria-labelledby="staff-list-title"
+          labelledBy="staff-list-title"
         >
           <h2 id="staff-list-title">{message("staffTitle")}</h2>
-          <ItemList
-            action={onDeactivateStaff}
-            emptyMessage="staffEmpty"
-            items={staff}
-            locale={locale}
-            replacementStaff={activeStaff}
-          />
+          <ItemList emptyMessage="staffEmpty" items={staff} locale={locale} />
         </Surface>
         <Surface
           as="section"
           className="team-resources-section"
-          aria-labelledby="resource-list-title"
+          labelledBy="resource-list-title"
         >
           <h2 id="resource-list-title">{message("resourcesTitle")}</h2>
-          <ItemList
-            action={onDeactivateResource}
-            emptyMessage="resourcesEmpty"
-            items={resources}
-            locale={locale}
-            replacementStaff={activeStaff}
-          />
+          <ItemList emptyMessage="resourcesEmpty" items={resources} locale={locale} />
         </Surface>
       </div>
     </>

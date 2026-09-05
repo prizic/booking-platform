@@ -4,7 +4,6 @@ import {
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
-  parseStaffResourceDeactivationV1,
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
@@ -245,19 +244,5 @@ describe("tenant isolation DTOs", () => {
         ],
       }),
     ).toThrow("Staff/resource workspace");
-  });
-
-  it("parses a minimal deactivation outcome", () => {
-    expect(
-      parseStaffResourceDeactivationV1({
-        outcome: "deferred",
-        remainingAllocationCount: 3,
-        targetId: "staff-a",
-      }),
-    ).toEqual({
-      outcome: "deferred",
-      remainingAllocationCount: 3,
-      targetId: "staff-a",
-    });
   });
 });
