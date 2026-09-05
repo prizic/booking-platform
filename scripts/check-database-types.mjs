@@ -40,8 +40,13 @@ if (generated.error || generated.status !== 0) {
   );
 }
 
+const prettierConfig = await prettier.resolveConfig(generatedTypesPath);
 const generatedTypes = normalizeNewlines(
-  await prettier.format(generated.stdout ?? "", { parser: "typescript" }),
+  await prettier.format(generated.stdout ?? "", {
+    ...(prettierConfig ?? {}),
+    parser: "typescript",
+    filepath: generatedTypesPath,
+  }),
 );
 
 if (!/\bapi_v1:\s*\{/u.test(generatedTypes)) {
