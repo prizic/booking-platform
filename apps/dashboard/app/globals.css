@@ -654,8 +654,9 @@ input:focus-visible {
 }
 
 .brand-preview-header strong {
+  inline-size: min(100%, 36ch);
   min-inline-size: 0;
-  max-inline-size: 36ch;
+  max-inline-size: 100%;
   overflow-wrap: anywhere;
   text-align: end;
 }
