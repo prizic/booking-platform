@@ -85,7 +85,6 @@ create table app.assignment_allocations (
   occupied_at tstzrange generated always as (tstzrange(starts_at - make_interval(mins => buffer_before_minutes),ends_at + make_interval(mins => buffer_after_minutes),'[)')) stored,
   state text not null default 'confirmed' check (state in ('held','confirmed','cancelled','completed')),
   primary key (id), unique (tenant_id,id),
-  unique (tenant_id,request_id,action,target_id),
   check (ends_at > starts_at), check (num_nonnulls(staff_id,resource_id) = 1),
   foreign key (tenant_id,staff_id) references app.staff_profiles(tenant_id,id) on delete restrict,
   foreign key (tenant_id,resource_id) references app.resources(tenant_id,id) on delete restrict
@@ -108,6 +107,7 @@ create table app.staff_resource_audit_events (
   redacted_diff jsonb not null default '{}'::jsonb check (jsonb_typeof(redacted_diff)='object'),
   created_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id),
+  unique (tenant_id,request_id,action,target_id),
   foreign key (tenant_id,actor_membership_id) references app.memberships(tenant_id,id) on delete set null (actor_membership_id)
 );
 
