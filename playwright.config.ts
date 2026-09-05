@@ -1,26 +1,28 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const reuseDevServersInCi = Boolean(process.env.CI);
+
 const servers = [
   {
     command: "pnpm --filter @wlbp/client exec next dev --port 41730",
     port: 41730,
-    reuseExistingServer: false,
+    reuseExistingServer: reuseDevServersInCi,
   },
   {
     command: "pnpm --filter @wlbp/dashboard exec next dev --port 41731",
     port: 41731,
-    reuseExistingServer: false,
+    reuseExistingServer: reuseDevServersInCi,
   },
   {
     command: "pnpm --filter @wlbp/platform-admin exec next dev --port 41732",
     port: 41732,
-    reuseExistingServer: false,
+    reuseExistingServer: reuseDevServersInCi,
   },
   {
     command:
       "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm pnpm --filter @wlbp/client exec next dev --port 41733",
     port: 41733,
-    reuseExistingServer: false,
+    reuseExistingServer: reuseDevServersInCi,
   },
   {
     command:
@@ -29,7 +31,7 @@ const servers = [
     // In CI, the warm Next dev server can outlive a prior Playwright project.
     // Reusing the healthy server avoids a race where a replacement fails with
     // EADDRINUSE and the tests then receive connection-refused errors.
-    reuseExistingServer: Boolean(process.env.CI),
+    reuseExistingServer: reuseDevServersInCi,
   },
 ] as const;
 
