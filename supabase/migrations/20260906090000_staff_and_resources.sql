@@ -2,6 +2,8 @@
 -- candidates, and safe deactivation. Auth memberships remain identities and
 -- authorization; a staff profile is operational domain data.
 
+create extension if not exists btree_gist with schema extensions;
+
 alter table app.catalog_services
   add column assignment_mode text not null default 'any'
     check (assignment_mode in ('fixed_staff', 'customer_choice', 'any', 'round_robin'));
@@ -78,6 +80,7 @@ create table app.resource_requirements (
 create table app.assignment_allocations (
   id uuid not null, tenant_id uuid not null, staff_id uuid, resource_id uuid,
   starts_at timestamptz not null, ends_at timestamptz not null,
+  occupied_at tstzrange generated always as (tstzrange(starts_at,ends_at,'[)')) stored,
   state text not null default 'confirmed' check (state in ('held','confirmed','cancelled','completed')),
   primary key (id), unique (tenant_id,id),
   check (ends_at > starts_at), check (num_nonnulls(staff_id,resource_id) = 1),
@@ -86,6 +89,12 @@ create table app.assignment_allocations (
 );
 create index assignment_allocations_staff_future on app.assignment_allocations(tenant_id,staff_id,starts_at) where state in ('held','confirmed');
 create index assignment_allocations_resource_future on app.assignment_allocations(tenant_id,resource_id,starts_at) where state in ('held','confirmed');
+alter table app.assignment_allocations add constraint assignment_staff_no_overlap
+  exclude using gist (tenant_id with =, staff_id with =, occupied_at with &&)
+  where (staff_id is not null and state in ('held','confirmed'));
+alter table app.assignment_allocations add constraint assignment_resource_no_overlap
+  exclude using gist (tenant_id with =, resource_id with =, occupied_at with &&)
+  where (resource_id is not null and state in ('held','confirmed'));
 
 create table app.staff_resource_audit_events (
   id uuid not null, tenant_id uuid not null references app.tenants(id) on delete restrict,
@@ -131,6 +140,19 @@ begin
 end;
 $rls$;
 
+-- Internal notes, allocation rows, and audit metadata are not readable by an
+-- ordinary tenant member. They require the live management capability.
+drop policy staff_profiles_member on app.staff_profiles;
+drop policy resources_member on app.resources;
+drop policy assignment_allocations_member on app.assignment_allocations;
+drop policy staff_resource_audit_events_member on app.staff_resource_audit_events;
+create policy staff_profiles_member on app.staff_profiles for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
+create policy resources_member on app.resources for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
+create policy assignment_allocations_member on app.assignment_allocations for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
+create policy staff_resource_audit_events_member on app.staff_resource_audit_events for select to authenticated using ((select private.can_manage_staff(tenant_id,null)));
+drop policy staff_profiles_update on app.staff_profiles;
+create policy staff_profiles_update on app.staff_profiles for update to authenticated using ((select private.can_manage_staff(tenant_id,null))) with check ((select private.can_manage_staff(tenant_id,null)) and status='active');
+
 -- Anonymous callers receive only explicitly published, active, safe identity.
 create policy staff_profiles_public on app.staff_profiles for select to anon using (
   status='active' and exists (select 1 from app.staff_services ss join app.catalog_service_revisions sr on sr.tenant_id=ss.tenant_id and sr.service_id=ss.service_id and sr.state='published' where ss.tenant_id=staff_profiles.tenant_id and ss.staff_id=staff_profiles.id)
@@ -173,7 +195,14 @@ begin
   if p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
   select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   if n > 0 and p_resolution not in ('reassign','cancel','defer') then raise exception using errcode='22023',message='deactivation_resolution_required'; end if;
-  if p_resolution='reassign' then
+  if p_resolution='defer' and n > 0 then
+    audit_outcome := 'deferred';
+    actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
+    insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
+    values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'staff_deactivated',p_staff_id,p_reason,audit_outcome,'{}'::jsonb);
+    return query select p_staff_id,audit_outcome,n;
+    return;
+  elsif p_resolution='reassign' then
     if p_replacement_staff_id is null or not exists(select 1 from app.staff_profiles where tenant_id=p_tenant_id and id=p_replacement_staff_id and status='active') then raise exception using errcode='22023',message='replacement_staff_required'; end if;
     update app.assignment_allocations a set staff_id=p_replacement_staff_id where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
   elsif p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.staff_id=p_staff_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
@@ -188,3 +217,26 @@ end;
 $$;
 revoke all on function api_v1.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text) from public;
 grant execute on function api_v1.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text) to authenticated;
+
+create or replace function api_v1.deactivate_resource_v1(p_tenant_id uuid,p_resource_id uuid,p_resolution text,p_request_id uuid,p_reason text)
+returns table(resource_id uuid,outcome text,remaining_allocations integer)
+language plpgsql security definer set search_path='' as $$
+declare n integer; actor uuid; membership uuid; audit_outcome text;
+begin
+  if not (select private.can_manage_staff(p_tenant_id,null)) then raise exception using errcode='42501',message='resource_authorization_required'; end if;
+  if p_resolution not in ('cancel','defer') then raise exception using errcode='22023',message='resource_deactivation_resolution_required'; end if;
+  select count(*)::integer into n from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp();
+  actor := (select private.current_auth_user_id()); membership := (select private.current_membership_id(p_tenant_id));
+  if p_resolution='defer' and n > 0 then audit_outcome := 'deferred';
+  else
+    if p_resolution='cancel' then update app.assignment_allocations a set state='cancelled' where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp(); end if;
+    audit_outcome := case when n=0 then 'deactivated' else 'cancelled' end;
+    update app.resources set status='inactive',updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=p_resource_id;
+  end if;
+  insert into app.staff_resource_audit_events(id,tenant_id,actor_membership_id,effective_actor_id,request_id,action,target_id,reason,outcome,redacted_diff)
+  values(gen_random_uuid(),p_tenant_id,membership,actor,p_request_id,'resource_deactivated',p_resource_id,p_reason,audit_outcome,jsonb_build_object('status',case when audit_outcome='deferred' then 'active' else 'inactive' end));
+  return query select p_resource_id,audit_outcome,(select count(*)::integer from app.assignment_allocations a where a.tenant_id=p_tenant_id and a.resource_id=p_resource_id and a.state in ('held','confirmed') and a.starts_at > statement_timestamp());
+end;
+$$;
+revoke all on function api_v1.deactivate_resource_v1(uuid,uuid,text,uuid,text) from public;
+grant execute on function api_v1.deactivate_resource_v1(uuid,uuid,text,uuid,text) to authenticated;

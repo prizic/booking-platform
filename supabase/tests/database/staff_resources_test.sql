@@ -1,5 +1,5 @@
 begin;
-select plan(21);
+select plan(25);
 
 select has_table('app'::name,'staff_profiles'::name);
 select has_table('app'::name,'resources'::name);
@@ -7,12 +7,14 @@ select has_table('app'::name,'assignment_allocations'::name);
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname='staff_profiles'),'staff profiles have RLS');
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname='resources'),'resources have RLS');
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname='assignment_allocations'),'allocations have RLS');
+select ok((select count(*)::integer from pg_constraint where conname in ('assignment_staff_no_overlap','assignment_resource_no_overlap')) = 2,'active allocations have GiST overlap protection');
 
 reset role;
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 insert into app.staff_profiles(id,tenant_id,public_name) values ('a8000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','Alex Staff');
 select is((select count(*)::integer from app.staff_profiles where tenant_id='a0000000-0000-0000-0000-000000000001'),1,'tenant admin can create staff');
+select throws_like($$update app.staff_profiles set status='inactive' where id='a8000000-0000-0000-0000-000000000001'$$,'%row-level security%','direct status deactivation cannot bypass resolution RPC');
 select throws_like($$insert into app.staff_profiles(id,tenant_id,public_name) values ('b8000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001','Cross tenant')$$,'%row-level security%','tenant admin cannot create another tenant staff');
 insert into app.resource_types(id,tenant_id,key,name) values ('a8100000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','room','Room');
 insert into app.resources(id,tenant_id,resource_type_id,key,public_name) values ('a8200000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001','room-one','Room One');
@@ -33,6 +35,8 @@ select is((select status from app.staff_profiles where id='a8000000-0000-0000-00
 select is((select count(*)::integer from app.staff_resource_audit_events where target_id='a8000000-0000-0000-0000-000000000001'),1,'deactivation creates audit evidence');
 select ok((select redacted_diff ? 'status' from app.staff_resource_audit_events where target_id='a8000000-0000-0000-0000-000000000001'),'audit diff is redacted and minimal');
 select ok((select not (redacted_diff ? 'internal_notes') from app.staff_resource_audit_events where target_id='a8000000-0000-0000-0000-000000000001'),'audit excludes sensitive notes');
+select is((select outcome from api_v1.deactivate_resource_v1('a0000000-0000-0000-0000-000000000001','a8200000-0000-0000-0000-000000000001','defer',gen_random_uuid(),'resource unavailable')),'deactivated','resource deactivation records outcome');
+select is((select status from app.resources where id='a8200000-0000-0000-0000-000000000001'),'inactive','resource is inactive after safe deactivation');
 
 reset role;
 select set_config('request.jwt.claims','{"sub":"b1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal1"}',true);

@@ -97,6 +97,10 @@ export type Database = {
         };
         Returns: { outcome: string; remaining_allocations: number; staff_id: string }[];
       };
+      deactivate_resource_v1: {
+        Args: { p_reason: string; p_request_id: string; p_resolution: string; p_resource_id: string; p_tenant_id: string };
+        Returns: { outcome: string; remaining_allocations: number; resource_id: string }[];
+      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {

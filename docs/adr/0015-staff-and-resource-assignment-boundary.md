@@ -24,6 +24,9 @@ Administrative changes use live capability and location authorization.
 Deactivation checks future held or confirmed allocations and requires
 reassignment, cancellation, or deferral; the action writes actor,
 effective-actor, request, reason, outcome, and a minimal redacted diff.
+The staff/resource authorization helper is a narrow private security-definer
+surface with pinned search path and an explicit authenticated grant, recorded
+in the tenant schema contract.
 
 ## Consequences
 
