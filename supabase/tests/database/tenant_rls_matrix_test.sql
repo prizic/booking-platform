@@ -33,7 +33,7 @@ update app.tenant_settings
 set revision = revision + 1
 where tenant_id = 'a0000000-0000-0000-0000-000000000001';
 select is(
-  (select revision from app.tenant_settings where tenant_id = 'a0000000-0000-0000-0000-000000000001'),
+  (select revision::integer from app.tenant_settings where tenant_id = 'a0000000-0000-0000-0000-000000000001'),
   1,
   'location-scoped policy.edit cannot mutate tenant-wide settings'
 );
@@ -111,7 +111,7 @@ update app.tenant_settings
 set revision = revision + 1
 where tenant_id = 'a0000000-0000-0000-0000-000000000001';
 select is(
-  (select revision from app.tenant_settings where tenant_id = 'a0000000-0000-0000-0000-000000000001'),
+  (select revision::integer from app.tenant_settings where tenant_id = 'a0000000-0000-0000-0000-000000000001'),
   2,
   'tenant-scoped policy.edit can mutate same-tenant settings'
 );
@@ -119,7 +119,7 @@ update app.tenant_settings
 set revision = revision + 1
 where tenant_id = 'b0000000-0000-0000-0000-000000000001';
 select is(
-  (select revision from app.tenant_settings where tenant_id = 'b0000000-0000-0000-0000-000000000001'),
+  (select revision::integer from app.tenant_settings where tenant_id = 'b0000000-0000-0000-0000-000000000001'),
   1,
   'Tenant A admin cannot mutate Tenant B settings'
 );
