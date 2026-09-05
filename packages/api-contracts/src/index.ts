@@ -102,6 +102,35 @@ export type BookingStatusDto =
   | "expired";
 export type PaymentStatusDto =
   "requires_payment" | "processing" | "succeeded" | "failed" | "cancelled" | "disputed";
+export type PaymentProviderDto = "stripe" | (string & {});
+export type PaymentAccountStatusDto =
+  | "connected"
+  | "requirements_due"
+  | "restricted"
+  | "suspended"
+  | "disconnected"
+  | "error";
+export interface PaymentAccountStatusV1 {
+  readonly provider: PaymentProviderDto;
+  readonly providerAccountReference: string;
+  readonly status: PaymentAccountStatusDto;
+  readonly chargesEnabled: boolean;
+  readonly payoutsEnabled: boolean;
+  readonly requirements: readonly string[];
+  readonly capabilities: Readonly<Record<string, "active" | "pending" | "inactive">>;
+}
+export interface BookingPaymentV1 {
+  readonly paymentId: string;
+  readonly bookingId: BookingId;
+  readonly amount: MoneyDto;
+  readonly status: PaymentStatusDto;
+}
+export interface BookingRefundV1 {
+  readonly refundId: string;
+  readonly paymentId: string;
+  readonly amount: MoneyDto;
+  readonly status: RefundStatusDto;
+}
 export type RefundStatusDto =
   "eligible" | "pending" | "succeeded" | "failed" | "manual_review";
 export type NotificationStatusDto =
