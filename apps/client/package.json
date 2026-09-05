@@ -11,10 +11,13 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@wlbp/api-contracts": "workspace:*",
     "@wlbp/config": "workspace:*",
     "@wlbp/i18n": "workspace:*",
     "@wlbp/ui-foundation": "workspace:*",
     "@wlbp/white-label-ui": "workspace:*",
+    "@wlbp/supabase-client": "workspace:*",
+    "@wlbp/tenant-resolution": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"

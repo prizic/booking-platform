@@ -179,6 +179,55 @@ export interface DashboardContextV1 {
   readonly tenantName: string;
 }
 
+/** Customer-safe catalog projection. It intentionally has no intake schema,
+ * internal notes, authorization fields, or raw tenant-table shape. */
+export interface PublicCatalogItemV1 {
+  readonly tenantId: TenantId;
+  readonly publicationId: string;
+  readonly publicationRevision: number;
+  readonly locale: ContractLocale;
+  readonly serviceId: string;
+  readonly serviceKey: string;
+  readonly categoryKey: string | null;
+  readonly serviceName: string;
+  readonly serviceDescription: string;
+  readonly canonicalPath: string;
+  readonly durationMinutes: number;
+  readonly bufferBeforeMinutes: number;
+  readonly bufferAfterMinutes: number;
+  readonly price: MoneyDto;
+  readonly taxRateBps: number;
+  readonly capacityMode: "exclusive" | "group";
+  readonly bookingMode: "appointment" | "exclusive_resource";
+  readonly approvalRequired: boolean;
+  readonly paymentMode: "none" | "deposit" | "full";
+  readonly locationId: LocationId;
+  readonly locationKey: string;
+  readonly locationName: string;
+  readonly locationDescription: string;
+  readonly locationAddress: string;
+  readonly locationTimeZone: string;
+  readonly locationCanonicalPath: string;
+  readonly cacheTag: string;
+}
+
+export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {
+  if (!Array.isArray(value)) throw new Error("Public catalog must be an array");
+  return Object.freeze(value.map((item) => {
+    if (!isRecord(item)) throw new Error("Public catalog item is invalid");
+    const stringKeys = ["tenantId","publicationId","locale","serviceId","serviceKey","serviceName","serviceDescription","canonicalPath","locationId","locationKey","locationName","locationDescription","locationAddress","locationTimeZone","locationCanonicalPath","cacheTag"];
+    for (const key of stringKeys) if (key !== "locale" && (typeof item[key] !== "string" || item[key] === "")) throw new Error("Public catalog string is invalid");
+    if (item.locale !== "en" && item.locale !== "ar") throw new Error("Public catalog locale is invalid");
+    if (item.categoryKey !== null && typeof item.categoryKey !== "string") throw new Error("Public catalog category is invalid");
+    const positive = ["publicationRevision","durationMinutes"];
+    for (const key of positive) if (typeof item[key] !== "number" || !Number.isSafeInteger(item[key]) || item[key] < 1) throw new Error("Public catalog number is invalid");
+    for (const key of ["bufferBeforeMinutes","bufferAfterMinutes","priceMinor","taxRateBps"]) if (typeof item[key] !== "number" || !Number.isSafeInteger(item[key]) || item[key] < 0) throw new Error("Public catalog value is invalid");
+    if (typeof item.price !== "object" || item.price === null || typeof (item.price as Record<string, unknown>).currency !== "string" || typeof (item.price as Record<string, unknown>).minorUnits !== "number") throw new Error("Public catalog price is invalid");
+    if (!(["exclusive","group"] as unknown[]).includes(item.capacityMode) || !(["appointment","exclusive_resource"] as unknown[]).includes(item.bookingMode) || !(["none","deposit","full"] as unknown[]).includes(item.paymentMode) || typeof item.approvalRequired !== "boolean") throw new Error("Public catalog rules are invalid");
+    return Object.freeze(item as PublicCatalogItemV1);
+  }));
+}
+
 export interface AvailabilityV1Request {
   readonly locale: ContractLocale;
   readonly locationId: LocationId;

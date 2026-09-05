@@ -10,6 +10,44 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      get_public_catalog_v1: {
+        Args: { p_hostname: string; p_locale?: string; p_service_key?: string | null };
+        Returns: {
+          tenant_id: string;
+          publication_id: string;
+          publication_revision: number;
+          locale: string;
+          service_id: string;
+          service_key: string;
+          category_key: string | null;
+          service_name: string;
+          service_description: string;
+          canonical_path: string;
+          og_image_path: string | null;
+          duration_minutes: number;
+          buffer_before_minutes: number;
+          buffer_after_minutes: number;
+          price_minor: number;
+          tax_rate_bps: number;
+          currency: string;
+          capacity_mode: string;
+          booking_mode: string;
+          approval_required: boolean;
+          payment_mode: string;
+          location_id: string;
+          location_key: string;
+          location_name: string;
+          location_description: string;
+          location_address: string;
+          location_time_zone: string;
+          location_canonical_path: string;
+          cache_tag: string;
+        }[];
+      };
+      publish_catalog_v1: {
+        Args: { p_tenant_id: string; p_publication_id: string; p_service_revision_ids: string[]; p_category_revision_ids: string[]; p_location_revision_ids: string[] };
+        Returns: { publication_id: string; publication_revision: number; cache_tag: string }[];
+      };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };
         Returns: {

@@ -65,6 +65,7 @@ Files are named `NNNN-kebab-title.md`: a zero-padded four-digit sequence number,
 | 0011 | [Distribution allowlist, contract versions, and locale URLs](./0011-distribution-allowlist-and-contract-versions.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A package is added to or removed from the allowlist, the export check finds platform-only code in a distributed tree, or `backendContract` widens or narrows |
 | 0012 | [Instance ownership and support tiers](./0012-instance-ownership-and-support-tiers.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A repository transfer is requested, a stated response target is missed twice in one quarter, or a voided tier is disputed |
 | 0013 | [Tenant context and live authorization](./0013-tenant-context-and-live-authorization.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | A cross-tenant test fails, custom roles replace fixed bundles, or a new surface cannot use the live-membership/audited-grant model |
+| 0014 | [Catalog publication boundary and public DTO](./0014-catalog-publication-and-public-dto.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | Custom roles, a new locale, multi-brand publishing, or booking snapshots need a new revision shape |
 
 Dates are `—` while status is `Proposed` and undated; set the date when the status changes.
 

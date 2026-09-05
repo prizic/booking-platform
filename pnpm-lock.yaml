@@ -95,12 +95,21 @@ importers:
 
   apps/client:
     dependencies:
+      '@wlbp/api-contracts':
+        specifier: workspace:*
+        version: link:../../packages/api-contracts
       '@wlbp/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@wlbp/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@wlbp/supabase-client':
+        specifier: workspace:*
+        version: link:../../packages/supabase-client
+      '@wlbp/tenant-resolution':
+        specifier: workspace:*
+        version: link:../../packages/tenant-resolution
       '@wlbp/ui-foundation':
         specifier: workspace:*
         version: link:../../packages/ui-foundation
