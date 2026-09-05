@@ -169,6 +169,14 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Distributed bundle leakage | `pnpm check:bundles` after `pnpm build` | Available — issue #3 |
 | Workspace dependency graph | `pnpm graph:dependencies` | Available — issue #3 |
 
+Visual references are platform-specific. Run and review the Darwin references
+locally, but treat the `*-linux.png` references produced by the pinned
+`ubuntu-24.04` source workflow as canonical for CI. Do not regenerate Linux
+references in a different container or distribution: system and Arabic font
+metrics differ even when the Chromium and Playwright versions match. Promote an
+intentional CI-rendered reference only after reviewing the uploaded actual and
+diff artifacts.
+
 ### Required coverage before a pull request
 
 - The RLS matrix in [engineering-rules.md](./engineering-rules.md) §7 has a positive and a negative case for every changed policy.

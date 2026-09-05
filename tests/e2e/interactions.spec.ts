@@ -47,7 +47,6 @@ for (const profile of responsiveProfiles) {
       }) => {
         const copy = clientCopy[language.locale];
         await page.goto(`http://localhost:41730/${language.locale}`);
-        await page.waitForLoadState("networkidle");
 
         const field = page.getByRole("textbox", { name: copy.field });
         const submit = page.getByRole("button", { name: copy.submit });
@@ -85,7 +84,6 @@ for (const profile of responsiveProfiles) {
       }) => {
         const copy = dashboardCopy[language.locale];
         await page.goto(`http://localhost:41731/${language.locale}`);
-        await page.waitForLoadState("networkidle");
 
         const gridButton = page.getByRole("button", { name: copy.grid });
         const listButton = page.getByRole("button", { name: copy.list });
