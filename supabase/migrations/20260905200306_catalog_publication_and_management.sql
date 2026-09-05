@@ -96,11 +96,11 @@ begin
   foreach t in array array['catalog_publications','catalog_categories','catalog_category_revisions','catalog_services','catalog_service_revisions','catalog_location_revisions'] loop
     execute format('alter table app.%I enable row level security',t);
     if t in ('catalog_publications','catalog_category_revisions','catalog_service_revisions','catalog_location_revisions') then
-      execute format('create policy %I on app.%I for select to anon,authenticated using ((select private.is_public_tenant_context(tenant_id)) and state=''published'')',t,t);
+      execute format('create policy %I on app.%I for select to anon using ((select private.is_public_tenant_context(tenant_id)) and state=''published'')',t,t);
     elsif t = 'catalog_categories' then
-      execute format('create policy %I on app.%I for select to anon,authenticated using ((select private.is_public_tenant_context(tenant_id)) and status=''active'')',t,t);
+      execute format('create policy %I on app.%I for select to anon using ((select private.is_public_tenant_context(tenant_id)) and status=''active'')',t,t);
     else
-      execute format('create policy %I on app.%I for select to anon,authenticated using ((select private.is_public_tenant_context(tenant_id)) and status=''active'')',t,t);
+      execute format('create policy %I on app.%I for select to anon using ((select private.is_public_tenant_context(tenant_id)) and status=''active'')',t,t);
     end if;
     execute format('create policy %I on app.%I for select to authenticated using ((select private.can_manage_catalog(tenant_id,null)))',t||'_member',t);
     execute format('create policy %I on app.%I for insert to authenticated with check ((select private.can_manage_catalog(tenant_id,null)))',t||'_insert',t);
@@ -109,7 +109,7 @@ begin
   end loop;
 end;
 $rls$;
-create policy catalog_service_locations_public on app.catalog_service_locations for select to anon,authenticated using ((select private.is_public_tenant_context(catalog_service_locations.tenant_id)) and exists(select 1 from app.catalog_service_revisions r where r.tenant_id=catalog_service_locations.tenant_id and r.service_id=catalog_service_locations.service_id and r.state='published'));
+create policy catalog_service_locations_public on app.catalog_service_locations for select to anon using ((select private.is_public_tenant_context(catalog_service_locations.tenant_id)) and exists(select 1 from app.catalog_service_revisions r where r.tenant_id=catalog_service_locations.tenant_id and r.service_id=catalog_service_locations.service_id and r.state='published'));
 create policy catalog_service_locations_member on app.catalog_service_locations for select to authenticated using ((select private.is_active_tenant_member(tenant_id)));
 create policy catalog_service_locations_insert on app.catalog_service_locations for insert to authenticated with check ((select private.can_manage_catalog(tenant_id,location_id)));
 create policy catalog_service_locations_update on app.catalog_service_locations for update to authenticated using ((select private.can_manage_catalog(tenant_id,location_id))) with check ((select private.can_manage_catalog(tenant_id,location_id)));

@@ -1,12 +1,12 @@
 begin;
-select plan(19);
+select plan(18);
 
-select has_table('app','catalog_services');
-select has_table('app','catalog_service_revisions');
-select has_table('app','catalog_location_revisions');
-select has_table('app','catalog_publications');
-select col_not_null('app','catalog_service_revisions','tenant_id');
-select col_not_null('app','catalog_service_revisions','locale');
+select has_table('app'::name,'catalog_services'::name);
+select has_table('app'::name,'catalog_service_revisions'::name);
+select has_table('app'::name,'catalog_location_revisions'::name);
+select has_table('app'::name,'catalog_publications'::name);
+select col_not_null('app'::name,'catalog_service_revisions'::name,'tenant_id'::name);
+select col_not_null('app'::name,'catalog_service_revisions'::name,'locale'::name);
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname='catalog_services'),'services have RLS');
 select ok((select relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='app' and c.relname='catalog_service_revisions'),'service revisions have RLS');
 
