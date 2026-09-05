@@ -42,7 +42,12 @@ jobs:
       - name: Install the pinned Chromium runtime
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Generate Linux references (run one)
+      - name: Capture current Linux actual and diff artifacts
+        id: baseline-comparison
+        continue-on-error: true
+        run: pnpm test:visual
+
+      - name: Generate Linux references (reviewed candidate)
         run: pnpm test:visual --update-snapshots
 
       - name: Verify Linux references (run two)
