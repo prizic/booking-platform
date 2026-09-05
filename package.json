@@ -32,6 +32,7 @@
     "check": "pnpm check:lockfile && pnpm check:ci && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:contract && pnpm test:config && pnpm test:ci-fixtures && pnpm check:config && pnpm check:distribution && pnpm check:secrets && pnpm check:docs && pnpm build && pnpm check:bundles",
     "check:boundaries": "node scripts/check-boundaries.mjs && dependency-cruiser --config .dependency-cruiser.cjs apps packages",
     "check:lockfile": "node scripts/check-lockfile.mjs",
+    "check:fast": "node scripts/check-fast.mjs",
     "check:ci": "node scripts/check-ci.mjs",
     "check:db-types": "node scripts/check-database-types.mjs",
     "test:ci-fixtures": "node scripts/check-ci-fixtures.mjs",
