@@ -64,6 +64,16 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      list_tenant_choices_v1: {
+        Args: never;
+        Returns: {
+          dashboard_hostname: string;
+          membership_id: string;
+          role_key: string;
+          tenant_id: string;
+          tenant_name: string;
+        }[];
+      };
       publish_catalog_v1: {
         Args: {
           p_tenant_id: string;
@@ -76,16 +86,6 @@ export type Database = {
           cache_tag: string;
           publication_id: string;
           publication_revision: number;
-        }[];
-      };
-      list_tenant_choices_v1: {
-        Args: never;
-        Returns: {
-          dashboard_hostname: string;
-          membership_id: string;
-          role_key: string;
-          tenant_id: string;
-          tenant_name: string;
         }[];
       };
       resolve_public_tenant_v1: {
