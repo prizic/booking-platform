@@ -33,35 +33,35 @@ export type Database = {
       get_public_catalog_v1: {
         Args: { p_hostname: string; p_locale?: string; p_service_key?: string };
         Returns: {
-          tenant_id: string;
-          publication_id: string;
-          publication_revision: number;
-          locale: string;
-          service_id: string;
-          service_key: string;
-          category_key: string | null;
-          service_name: string;
-          service_description: string;
-          canonical_path: string;
-          og_image_path: string | null;
-          duration_minutes: number;
-          buffer_before_minutes: number;
-          buffer_after_minutes: number;
-          price_minor: number;
-          tax_rate_bps: number;
-          currency: string;
-          capacity_mode: string;
-          booking_mode: string;
           approval_required: boolean;
-          payment_mode: string;
+          booking_mode: string;
+          buffer_after_minutes: number;
+          buffer_before_minutes: number;
+          cache_tag: string;
+          canonical_path: string;
+          capacity_mode: string;
+          category_key: string | null;
+          currency: string;
+          duration_minutes: number;
+          location_address: string;
+          location_canonical_path: string;
+          location_description: string;
           location_id: string;
           location_key: string;
           location_name: string;
-          location_description: string;
-          location_address: string;
           location_time_zone: string;
-          location_canonical_path: string;
-          cache_tag: string;
+          locale: string;
+          og_image_path: string | null;
+          payment_mode: string;
+          price_minor: number;
+          publication_id: string;
+          publication_revision: number;
+          service_description: string;
+          service_id: string;
+          service_key: string;
+          service_name: string;
+          tax_rate_bps: number;
+          tenant_id: string;
         }[];
       };
       publish_catalog_v1: {
@@ -73,9 +73,9 @@ export type Database = {
           p_location_revision_ids: string[];
         };
         Returns: {
+          cache_tag: string;
           publication_id: string;
           publication_revision: number;
-          cache_tag: string;
         }[];
       };
       list_tenant_choices_v1: {
