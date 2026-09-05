@@ -76,11 +76,11 @@ export type Database = {
       };
       publish_catalog_v1: {
         Args: {
-          p_tenant_id: string;
-          p_publication_id: string;
-          p_service_revision_ids: string[];
           p_category_revision_ids: string[];
           p_location_revision_ids: string[];
+          p_publication_id: string;
+          p_service_revision_ids: string[];
+          p_tenant_id: string;
         };
         Returns: {
           cache_tag: string;
