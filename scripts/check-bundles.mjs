@@ -29,6 +29,12 @@ for (const app of ["client", "dashboard"]) {
 
   const files = await walkFiles(buildPath);
   for (const filePath of files) {
+    // The Playwright web servers use `next dev` and leave a `.next/dev`
+    // directory behind. It is a development server cache, not a production
+    // bundle, and may contain dependency documentation examples.
+    const relativePath = path.relative(buildPath, filePath);
+    if (relativePath.split(path.sep).includes("dev")) continue;
+
     // Next.js emits server source maps even when browser source maps are
     // disabled. They contain dependency comments and source text (including
     // documentation examples such as SUPABASE_SECRET_KEY), but are not
