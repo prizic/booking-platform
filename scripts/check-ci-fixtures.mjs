@@ -164,7 +164,7 @@ try {
     [
       "install",
       "--lockfile-only",
-      "--offline",
+      "--prefer-offline",
       "--no-frozen-lockfile",
       "--ignore-scripts",
     ],
