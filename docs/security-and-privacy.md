@@ -43,8 +43,11 @@ Rules:
 
 - Never encode authorization in a JWT claim that outlives the underlying membership. Read membership at the point of use.
 - Tenant switching is always explicit for multi-tenant staff users. No implicit "last tenant" resolution for a mutation.
+- The selected-tenant cookie or form value is a convenience selector, not an authorization credential. The database rechecks that selection against the actor's current membership, capability bundle, and location scope on every protected path.
 - Step-up auth is required for owner transfer, payout/merchant changes, and provider-key changes. Tenant administrators use recent authentication plus MFA for authorized export/correction work; customers use an intent-scoped link plus email OTP for export, correction, deletion, and restriction requests.
 - Never trust a hostname, URL parameter, form value, JWT user metadata, or hidden UI control as authorization.
+
+The concrete request-to-database authority flow is recorded in [ADR-0013](./adr/0013-tenant-context-and-live-authorization.md). Hostname resolution may select only an active verified routing context. It cannot add a membership or capability, and a changed host cannot revive a revoked membership. Missing, malformed, ambiguous, preview, and multi-tenant-without-selection contexts fail closed or enter an explicit safe selection flow.
 
 ---
 
@@ -81,6 +84,7 @@ Applies to Client, Dashboard, and Platform Admin unless noted.
 - Composite tenant foreign keys and tenant-scoped unique constraints, so a cross-tenant reference cannot be represented at all.
 - RLS and grant tests for every operation × principal combination (the RLS matrix).
 - Separate exposed, application, and private schemas. Only the exposed schema is reachable by the API role.
+- Current membership, role-permission, and location-scope rows are read at authorization time; an otherwise valid stale Auth session cannot preserve revoked authority.
 - `SECURITY DEFINER` functions hardened (fixed `search_path`, explicit tenant checks) with execute grants revoked by default and granted deliberately.
 - Migration pipeline serialized, reviewed, backed up before apply, and contract-tested against the previous application release.
 - Append-only application audit events carrying: actor, effective actor, tenant, action, target, outcome, reason, request ID, timestamp, redacted diff.

@@ -1,18 +1,184 @@
-import { formatNumber, formatTime, type Locale } from "@wlbp/i18n";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import {
+  extractRequestHostname,
+  type RuntimeEnvironment,
+} from "@wlbp/tenant-resolution";
 import { Badge, Surface } from "@wlbp/ui-foundation";
 import { BrandShell } from "@wlbp/white-label-ui";
+import { headers } from "next/headers";
 import Image from "next/image";
 import Link from "next/link";
-import { getDashboardMessage } from "../_lib/copy";
-import { dashboardBrand } from "../_lib/brand";
-import { SchedulePreview } from "./schedule-preview";
 
-type DashboardPageProps = {
-  params: Promise<{ locale: Locale }>;
-};
+import {
+  loadDashboardAccess,
+  type DashboardAccessState,
+} from "../_lib/dashboard-access";
+import { dashboardBrand } from "../_lib/brand";
+import { getDashboardMessage } from "../_lib/copy";
+import { createDashboardRequestDataSource } from "../_lib/dashboard-server";
+import { selectTenant } from "./actions";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
+
+type DashboardPageProps = { params: Promise<{ locale: Locale }> };
+type PageState = DashboardAccessState | { readonly kind: "configuration-missing" };
+
+function environment(): RuntimeEnvironment {
+  const configured = process.env.WLBP_RUNTIME_ENV;
+  if (
+    configured === "local" ||
+    configured === "test" ||
+    configured === "development" ||
+    configured === "preview" ||
+    configured === "production"
+  ) {
+    return configured;
+  }
+  return process.env.NODE_ENV === "production" ? "production" : "development";
+}
+
+async function getPageState(locale: Locale): Promise<PageState> {
+  const source = await createDashboardRequestDataSource();
+  if (source === null) return { kind: "configuration-missing" };
+
+  let hostname: string;
+  try {
+    const localFallback = process.env.LOCAL_TENANT_HOST;
+    hostname = extractRequestHostname(await headers(), {
+      ...(localFallback === undefined ? {} : { localFallback }),
+      runtimeEnvironment: environment(),
+    });
+  } catch {
+    return { kind: "denied", reason: "invalid_host" };
+  }
+
+  return loadDashboardAccess(
+    {
+      hostname,
+      locale,
+    },
+    source,
+  );
+}
+
+function AccessPanel({ locale, state }: { locale: Locale; state: PageState }) {
+  const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
+    getDashboardMessage(locale, key);
+
+  if (state.kind === "configuration-missing") {
+    return (
+      <Surface as="section" className="access-panel" aria-labelledby="access-title">
+        <h2 id="access-title">{message("configurationTitle")}</h2>
+        <p>{message("configurationSummary")}</p>
+      </Surface>
+    );
+  }
+  if (state.kind === "unauthenticated") {
+    return (
+      <Surface as="section" className="access-panel" aria-labelledby="access-title">
+        <h2 id="access-title">{message("signInTitle")}</h2>
+        <p>{message("signInSummary")}</p>
+      </Surface>
+    );
+  }
+  if (state.kind === "denied") {
+    return (
+      <Surface as="section" className="access-panel" aria-labelledby="access-title">
+        <h2 id="access-title">{message("deniedTitle")}</h2>
+        <p>{message("deniedSummary")}</p>
+      </Surface>
+    );
+  }
+  if (state.kind === "selection-required") {
+    return (
+      <Surface as="section" className="access-panel" aria-labelledby="access-title">
+        <h2 id="access-title">{message("selectionTitle")}</h2>
+        <p>{message("selectionSummary")}</p>
+        <ul className="tenant-choice-list">
+          {state.choices.map((choice) => (
+            <li key={choice.membershipId}>
+              <form action={selectTenant}>
+                <input name="locale" type="hidden" value={locale} />
+                <input name="tenantId" type="hidden" value={choice.tenantId} />
+                <span>
+                  <strong>{choice.tenantName}</strong>
+                  <small>{choice.roleKey}</small>
+                </span>
+                <button className="wlbp-button" type="submit">
+                  {message("selectTenant")}
+                </button>
+              </form>
+            </li>
+          ))}
+        </ul>
+      </Surface>
+    );
+  }
+
+  return (
+    <section aria-labelledby="workspace-context-title">
+      <h2 id="workspace-context-title">{message("workspaceTitle")}</h2>
+      <div className="metrics">
+        <Surface as="article" className="metric-card">
+          <span>{message("tenantLabel")}</span>
+          <strong>{state.context.tenantName}</strong>
+          <small>{state.context.roleKey}</small>
+        </Surface>
+        <Surface as="article" className="metric-card">
+          <span>{message("locationsLabel")}</span>
+          <strong>{formatNumber(state.context.locationIds.length, locale)}</strong>
+          <small>
+            {message("roleLabel")}: {state.context.roleKey}
+          </small>
+        </Surface>
+        <Surface as="article" className="metric-card">
+          <span>{message("capabilitiesLabel")}</span>
+          <strong>{formatNumber(state.context.grants.length, locale)}</strong>
+          <small>
+            {state.context.aal2 ? message("mfaVerified") : message("mfaNotVerified")}
+          </small>
+        </Surface>
+      </div>
+      {state.choices.length > 1 ? (
+        <Surface
+          as="section"
+          className="access-panel"
+          aria-labelledby="tenant-switcher-title"
+        >
+          <h3 id="tenant-switcher-title">{message("selectionTitle")}</h3>
+          <p>{message("selectionSummary")}</p>
+          <ul className="tenant-choice-list">
+            {state.choices.map((choice) => (
+              <li key={choice.membershipId}>
+                <form action={selectTenant}>
+                  <input name="locale" type="hidden" value={locale} />
+                  <input name="tenantId" type="hidden" value={choice.tenantId} />
+                  <span>
+                    <strong>{choice.tenantName}</strong>
+                    <small>{choice.roleKey}</small>
+                  </span>
+                  <button
+                    className="wlbp-button"
+                    disabled={choice.tenantId === state.context.tenantId}
+                    type="submit"
+                  >
+                    {message("selectTenant")}
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      ) : null}
+    </section>
+  );
+}
 
 export default async function DashboardPage({ params }: DashboardPageProps) {
   const { locale } = await params;
+  const state = await getPageState(locale);
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const navigation = [
@@ -22,7 +188,6 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     "navCustomers",
     "navBrand",
   ] as const;
-  const timeZone = "Asia/Riyadh";
 
   return (
     <BrandShell
@@ -59,7 +224,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
             </Link>
           ))}
         </nav>
-        <Badge tone="positive">{message("status")}</Badge>
+        <Badge tone="positive">{message("privateStatus")}</Badge>
       </aside>
 
       <div className="dashboard-main">
@@ -82,51 +247,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
           <p>{message("summary")}</p>
         </section>
 
-        <section className="metrics" aria-label={message("todaySummary")}>
-          <Surface as="article" className="metric-card">
-            <span>{message("metricArrivals")}</span>
-            <strong>{formatNumber(8, locale, { minimumIntegerDigits: 2 })}</strong>
-            <small>{formatNumber(2, locale, { signDisplay: "always" })}</small>
-          </Surface>
-          <Surface as="article" className="metric-card">
-            <span>{message("metricRequests")}</span>
-            <strong>{formatNumber(3, locale, { minimumIntegerDigits: 2 })}</strong>
-            <small>{formatNumber(3, locale)}</small>
-          </Surface>
-          <Surface as="article" className="metric-card metric-card-alert">
-            <span>{message("metricPayments")}</span>
-            <strong>{formatNumber(1, locale, { minimumIntegerDigits: 2 })}</strong>
-            <small>{formatNumber(1, locale)}</small>
-          </Surface>
-        </section>
-
-        <SchedulePreview
-          gridViewLabel={message("gridView")}
-          items={[
-            {
-              dateTime: "2026-09-08T06:00:00.000Z",
-              description: message("scheduleConsultation"),
-              displayTime: formatTime("2026-09-08T06:00:00.000Z", locale, timeZone),
-              status: message("statusConfirmed"),
-              tone: "positive",
-            },
-            {
-              dateTime: "2026-09-08T08:30:00.000Z",
-              description: message("scheduleFollowUp"),
-              displayTime: formatTime("2026-09-08T08:30:00.000Z", locale, timeZone),
-              status: message("statusRequested"),
-              tone: "warning",
-            },
-          ]}
-          listAlternativeLabel={message("listAlternative")}
-          listViewLabel={message("listView")}
-          scheduleTitle={message("scheduleTitle")}
-          timeZone={timeZone}
-          timeZoneLabel={message("timeZoneLabel")}
-          viewChangedGrid={message("viewChangedGrid")}
-          viewChangedList={message("viewChangedList")}
-          viewSelectorLabel={message("viewSelector")}
-        />
+        <AccessPanel locale={locale} state={state} />
       </div>
     </BrandShell>
   );

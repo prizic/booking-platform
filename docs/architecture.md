@@ -187,7 +187,7 @@ Supabase SSR (`@supabase/ssr`):
 - A completely separate privileged client available only to controlled server/worker code, never to Client or Dashboard.
 - Authorize from a verified identity operation (`getClaims()`), never from an unverified client-stored session read.
 
-Tenant resolution: normalize hostname (lower-case, strip port/trailing dot, reject invalid IDN after safe normalization) → match an active verified `tenant_domains` row → resolve instance, tenant, deployment state, published brand revision → attach server-side tenant context → **re-authorize every read through membership/RLS or a public tenant-scoped RPC**. Preview deployments use signed preview context or preview-only domain mapping; an unrestricted `?tenant=` switch is never accepted in production.
+Tenant resolution: normalize exactly one hostname (lower-case, strip a valid port/trailing root dot, reject ambiguous input and invalid IDN after safe normalization) → match an active verified `tenant_domains` row for the requested application surface → resolve Instance, Tenant, Brand, deployment state, and published revision → attach server-side routing context → **re-authorize every protected read through current membership/RLS or use a narrow public tenant-scoped RPC**. The hostname and an explicit tenant-selection preference are untrusted selectors, never authority. Preview context fails closed until its owning issue supplies a signed preview mechanism; an unrestricted `?tenant=` switch is never accepted in production. See [ADR-0013](./adr/0013-tenant-context-and-live-authorization.md).
 
 Caching rules:
 
@@ -220,16 +220,20 @@ Key relationships: a tenant has memberships, instances, services, resources, and
 
 **Every tenant-owned row — including joins, events, audit rows, outbox rows, and idempotency records — has `tenant_id NOT NULL`.** `tenant_id` participates in unique constraints, and composite foreign keys `(tenant_id, parent_id) → parent(tenant_id, id)` prevent cross-tenant relationships even from privileged code.
 
+`tenants` is the global identity root and the capability-name vocabulary is a global immutable catalog. Roles and role-permission bundles are tenant-owned fixed v1 rows so memberships always reference a role through a composite tenant key; issue #50 may add tenant-defined bundles without replacing that relationship. Platform operator roles are separate from tenant memberships. Minimal Brand, Instance, domain, settings, and Location identity rows land with the isolation foundation; their publishing, catalog, and control-plane workflows remain with their owning issues.
+
 RLS and grants:
 
 - **RLS is mandatory on every tenant-owned/exposed table.** Revoke broad defaults; grant only what is needed.
 - Separate policies per `SELECT`/`INSERT`/`UPDATE`/`DELETE`, with `USING` and `WITH CHECK` where relevant.
-- Authorize through an indexed `memberships` table and a hardened `private.is_tenant_member(...)` helper. User-editable metadata never participates in authorization.
+- Authorize through indexed current `memberships`, tenant role-permission bundles, and location scopes plus hardened `private` helpers. A valid Auth session does not preserve authority after membership revocation, and user-editable JWT metadata never participates in authorization.
 - `security_invoker = true` views; prefer `SECURITY INVOKER` functions.
 - Any necessary `SECURITY DEFINER` function lives in an unexposed schema with an empty search path, fully qualified objects, explicit authorization, execute revoked by default and granted narrowly.
 - Allow **and** deny tests are required for every exposed table.
 
 Public access: anonymous visitors read only published tenant-scoped catalog/brand DTOs and call narrow rate-limited availability/hold/booking functions. No raw access to customer, booking, membership, or internal availability tables. A signed manage-booking token maps to one booking and a small action scope; email OTP is required for sensitive data or high-impact changes.
+
+The tenant-isolation foundation exposes only three pre-booking v1 surfaces: published public tenant resolution, the authenticated actor's current tenant choices, and an explicitly selected Dashboard context. Caller-supplied tenant identifiers only narrow a request; RLS and live membership decide whether a row is returned. Storage and Realtime remain disabled and grant no application access until their owning issues add tested policies.
 
 Database function policy — data-intensive and transactional behavior (availability, hold, confirm, reschedule, cancel, capacity allocation, idempotency) lives in database functions; Edge Functions handle payment/email/calendar network integrations. Versioned contracts: `resolve_public_tenant_v1`, `get_public_catalog_v1`, `availability_v1`, `create_hold_v1`, `submit_booking_v1`, `confirm_booking_v1`, `reschedule_booking_v1`, `cancel_booking_v1`, `accept_request_v1`, `expire_holds_v1`. Errors return stable codes (`slot_unavailable`, `capacity_exhausted`, `policy_denied`, `revision_conflict`, `payment_pending`, `idempotency_conflict`) and never reveal the conflicting customer or booking.
 

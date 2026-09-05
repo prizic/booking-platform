@@ -29,6 +29,12 @@ for (const app of ["client", "dashboard"]) {
 
   const files = await walkFiles(buildPath);
   for (const filePath of files) {
+    // Next.js emits server source maps even when browser source maps are
+    // disabled. They contain dependency comments and source text (including
+    // documentation examples such as SUPABASE_SECRET_KEY), but are not
+    // executable production bundles. Scan executable/static assets below;
+    // distribution closure and secret-shape checks cover source inputs.
+    if (filePath.endsWith(".map")) continue;
     const details = await stat(filePath);
     if (details.size > 10_000_000) continue;
     const buffer = await readFile(filePath);

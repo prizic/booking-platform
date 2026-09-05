@@ -120,9 +120,10 @@ Create every migration through the pinned CLI before editing it:
 pnpm exec supabase migration new <descriptive_name>
 ```
 
-After a migration, reset from zero, run pgTAP, lint the database, and inspect the
-migration list. The pull request must include any generated safe application
-types once issue #6 introduces the type-generation surface.
+After a migration, reset from zero, run pgTAP, lint the database, inspect the
+migration list, and run `pnpm check:db-types`. The pull request includes the
+generated safe `api_v1` application types; `app` and `private` types are never
+distributed.
 
 ## 4. Hosted release path
 
@@ -200,16 +201,17 @@ an otherwise healthy build may target an old project or incompatible contract.
 Never mutate a production variable and assume an already-built deployment now
 uses it.
 
-## 7. Gate maturity at issue #4
+## 7. Gate maturity
 
 Issue #4 establishes the runnable local reset, schema-boundary pgTAP smoke, and
-CI surfaces. These later gates must remain explicit in handoffs until their
-owning issues land:
+CI surfaces. Issue #6 adds the tenant/RLS matrix and safe type-drift gate. These
+later gates must remain explicit in handoffs until their owning issues land:
 
 | Gate | Current report |
 | --- | --- |
-| Full tenant/RLS matrix and cross-tenant negative cases | `N/A — not yet implemented, owned by issue #6` |
-| Booking concurrency suite | `N/A — not yet implemented, owned by issues #6 and #11` |
+| Full tenant/RLS matrix and cross-tenant negative cases | Available — issue #6 |
+| Safe `api_v1` generated-type drift | Available — issue #6 |
+| Booking concurrency suite | `N/A — not yet implemented, owned by issue #11` |
 | Complete customer/staff E2E journeys | `N/A — not yet implemented, owned by issues #12–#18` |
 | Full accessibility, RTL interaction, and visual matrix | `N/A — not yet implemented, owned by issues #5 and #40` |
 | Provisioning replay against GitHub/Vercel/domain state | `N/A — not yet implemented, owned by issues #30–#32` |
