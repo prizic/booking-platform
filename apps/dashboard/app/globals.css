@@ -5,6 +5,7 @@
   --dashboard-canvas: #e9ede8;
   --dashboard-surface: #f8faf6;
   --dashboard-sidebar: #172d28;
+  --dashboard-sidebar-focus: #f1f6f2;
   --dashboard-accent: #b8ea77;
   --dashboard-border: #d6ddd6;
   --dashboard-danger: #9a3f2e;
@@ -258,6 +259,10 @@ input:focus-visible {
   padding-inline: 1.4rem;
   color: #f1f6f2;
   background: var(--dashboard-sidebar);
+}
+
+.dashboard-sidebar :is(a, button):focus-visible {
+  outline-color: var(--dashboard-sidebar-focus);
 }
 
 .dashboard-brand {

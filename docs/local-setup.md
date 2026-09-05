@@ -69,7 +69,7 @@ Use the literal string `<set-in-your-own-env>` as the stand-in below.
 | -------- | ------- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Base URL of the Supabase project the app talks to (local stack URL during development). |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Public publishable/anonymous key used by the browser client. Grants nothing beyond RLS-permitted anonymous access. |
-| `NEXT_PUBLIC_SITE_URL` | Canonical origin used for locale-aware URLs, metadata, and redirect targets. |
+| `NEXT_PUBLIC_SITE_URL` | Canonical origin used for locale-aware URLs, metadata, and redirect targets. Required for production/preview builds; localhost fallback exists only outside production. |
 | `LOCAL_TENANT_HOST` | Hostname used to exercise tenant resolution locally against a seeded synthetic tenant (§13.3). |
 
 Example line shape in your local env file:
@@ -168,6 +168,14 @@ gate as `N/A — not yet implemented, owned by issue #N`, never as passing.
 | Secret-shaped value scan | `pnpm check:secrets` | Available — issue #3; full exported-history scan is issue #4 / #29 |
 | Distributed bundle leakage | `pnpm check:bundles` after `pnpm build` | Available — issue #3 |
 | Workspace dependency graph | `pnpm graph:dependencies` | Available — issue #3 |
+
+`check:config` and `check:boundaries` detect exactly one repository mode. The
+private source monorepo validates `instance-template/instance/` with
+`manifest.template.json` and the complete ADR-0011 source classification. A
+generated repository validates `instance/` with the stamped `manifest.json`
+and permits only ADR-0011 distributed workspace members. Having both mode
+markers, neither marker, the wrong manifest filename, or a missing
+configuration directory fails; configuration validation is never skipped.
 
 Visual references are platform-specific. Run and review the Darwin references
 locally, but treat the `*-linux.png` references produced by the pinned

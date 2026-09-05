@@ -15,6 +15,7 @@ import Link from "next/link";
 import { dashboardBrand } from "../../_lib/brand";
 import { getBrandPreviewMessage } from "../../_lib/brand-preview-copy";
 import { instanceLocalePolicy } from "../../_lib/locale-policy";
+import { getDashboardSiteOrigin } from "../../_lib/site-origin";
 
 type BrandPreviewPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -24,16 +25,20 @@ export async function generateMetadata({
   params,
 }: BrandPreviewPageProps): Promise<Metadata> {
   const { locale } = await params;
+  const siteOrigin = getDashboardSiteOrigin();
 
   return {
     title: getBrandPreviewMessage(locale, "title"),
     description: getBrandPreviewMessage(locale, "summary"),
     alternates: {
-      canonical: `/${locale}/brand-preview`,
+      canonical: new URL(`/${locale}/brand-preview`, siteOrigin),
       languages: {
-        en: "/en/brand-preview",
-        ar: "/ar/brand-preview",
-        "x-default": `/${instanceLocalePolicy.defaultLocale}/brand-preview`,
+        en: new URL("/en/brand-preview", siteOrigin),
+        ar: new URL("/ar/brand-preview", siteOrigin),
+        "x-default": new URL(
+          `/${instanceLocalePolicy.defaultLocale}/brand-preview`,
+          siteOrigin,
+        ),
       },
     },
   };

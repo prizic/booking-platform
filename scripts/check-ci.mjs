@@ -6,7 +6,15 @@ import { failCheck, pathExists, repositoryRoot, walkFiles } from "./workspace.mj
 const errors = [];
 const workflowDirectory = path.join(repositoryRoot, ".github", "workflows");
 const requiredWorkflows = new Map([
-  ["ci.yml", ["pull_request:", "pnpm install --frozen-lockfile", "pnpm db:reset"]],
+  [
+    "ci.yml",
+    [
+      "pull_request:",
+      "pnpm install --frozen-lockfile",
+      "pnpm db:reset",
+      "NEXT_PUBLIC_SITE_URL",
+    ],
+  ],
   [
     "instance-ci.yml",
     [
@@ -15,6 +23,7 @@ const requiredWorkflows = new Map([
       "pnpm install --frozen-lockfile",
       "pnpm --filter @wlbp/testing exec playwright install --with-deps chromium",
       "pnpm --filter @wlbp/testing test:instance",
+      "NEXT_PUBLIC_SITE_URL",
     ],
   ],
   [
@@ -33,6 +42,7 @@ const requiredWorkflows = new Map([
       "supabase db push",
       "cancel-in-progress: false",
       "Unchecksummed Edge Function",
+      "NEXT_PUBLIC_SITE_URL",
     ],
   ],
 ]);

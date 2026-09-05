@@ -1,7 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 64" role="img" aria-labelledby="title">
-  <title id="title">Example Booking</title>
-  <rect width="240" height="64" rx="12" fill="#17211b"/>
-  <path d="M24 18h28v28H24z" rx="6" fill="#ffffff"/>
-  <path d="M31 33l5 5 10-13" fill="none" stroke="#155c3f" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="66" y="40" fill="#ffffff" font-family="system-ui, sans-serif" font-size="20" font-weight="700">Example Booking</text>
-</svg>

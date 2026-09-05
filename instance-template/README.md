@@ -13,7 +13,9 @@ Provisioning stamps `whiteLabelVersion`, `configSchemaVersion`, and
 `backendContract` from the one authority at root, `platform-contract.json`, to
 produce the generated repository's final `instance/manifest.json`.
 
-The template uses the complete semantic brand-token contract. Existing schema
-1 instances must apply
+The template uses the complete semantic brand-token contract and fully validated
+PNG brand assets. Existing schema 1 instances must apply
 [`docs/config-migrations/0001-to-0002-brand-tokens.md`](../docs/config-migrations/0001-to-0002-brand-tokens.md)
-before adopting schema 2.
+before adopting schema 2. Schema 2 instances must then apply
+[`docs/config-migrations/0002-to-0003-raster-brand-assets.md`](../docs/config-migrations/0002-to-0003-raster-brand-assets.md)
+before adopting schema 3.

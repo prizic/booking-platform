@@ -6,6 +6,7 @@ import {
   parseInstanceManifest,
   parsePlatformContract,
   parsePublicRuntimeConfig,
+  parsePublicSiteOrigin,
 } from "./index.js";
 
 describe("configuration validation", () => {
@@ -46,6 +47,33 @@ describe("configuration validation", () => {
       supabaseUrl: "http://127.0.0.1:54321",
       supabasePublishableKey: "local-public-value",
     });
+  });
+
+  it("normalizes a configured public site origin and permits local HTTP", () => {
+    expect(
+      parsePublicSiteOrigin("https://booking.example.com", "http://localhost:3000"),
+    ).toEqual(new URL("https://booking.example.com/"));
+    expect(parsePublicSiteOrigin("", "http://localhost:3000")).toEqual(
+      new URL("http://localhost:3000/"),
+    );
+  });
+
+  it("rejects unsafe or non-origin public site URLs", () => {
+    for (const value of [
+      "http://booking.example.com",
+      "https://user@booking.example.com",
+      "https://booking.example.com/path",
+      "https://booking.example.com/?query=1",
+      "https://booking.example.com/#fragment",
+      "not a URL",
+    ]) {
+      expect(() => parsePublicSiteOrigin(value, "http://localhost:3000")).toThrow(
+        /Public site URL/u,
+      );
+    }
+    expect(() => parsePublicSiteOrigin(undefined)).toThrow(
+      "Public site URL is required",
+    );
   });
 
   it("accepts the committed instance manifest contract", () => {

@@ -34,7 +34,13 @@ configuration groups are `color`, `typography`, `radius`, `borderWidth`,
 `spacing`, `contentWidth`, and `motion`. Typography declares explicit Arabic
 body and display families; every normal motion duration has a zero-duration
 reduced-motion partner. Asset paths are a separate `BrandAssets` contract and
-must be safe root-relative paths below `/assets/`.
+must be safe root-relative paths below `/assets/`. Tenant-authored SVG and every
+non-PNG format are not accepted. Each declared asset must be a non-symlink
+regular file under the canonical `instance/assets/` root. Publishing validates
+PNG structure and checksums, bounded dimensions, decompressed pixel rows, and
+role-specific file-size limits before copying a validated in-memory snapshot
+into either app. EXIF, text, and other metadata chunks are rejected so private
+image metadata cannot enter the public asset tree.
 
 Client and Dashboard load the same complete brand definition at Next startup.
 A generated repository reads `instance/brand.json`; this source monorepo uses
@@ -60,7 +66,7 @@ Publishing a brand runs the full validation set. Any failure blocks publish.
 | --- | --- |
 | Contrast | Every declared color combination is validated at publish time, not sampled by hand. |
 | Metadata | Tenant-specific title/description, canonical URL, Open Graph assets, robots rules, sitemap. |
-| Assets | Light and dark logo, icon, favicon, social-share image present and optimized; no PII, no credentials in `assets/`. |
+| Assets | Light logo, optional dark logo, icon, favicon, and social-share PNG present and optimized; structure, checksums, dimensions, decompressed rows, and size limits verified; no symlinks, active content, PII, or credentials in `assets/`. |
 | Locale | Every supported locale in `manifest.json` has complete `content/*.json`; no missing keys, no fallback-to-English gaps in the Client surface. |
 | Typography | Declared families render all supported locales, including Arabic glyph coverage. |
 | Motion | Reduced-motion overrides present for every motion token. |

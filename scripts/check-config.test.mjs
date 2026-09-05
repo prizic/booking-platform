@@ -12,6 +12,7 @@ const temporaryRoots = [];
 async function createRepositoryFixture() {
   const fixtureRoot = await mkdtemp(path.join(os.tmpdir(), "wlbp-config-test-"));
   temporaryRoots.push(fixtureRoot);
+  await mkdir(path.join(fixtureRoot, "packages", "config"), { recursive: true });
 
   await Promise.all([
     cp(
@@ -27,6 +28,10 @@ async function createRepositoryFixture() {
       path.join(repositoryRoot, "packages", "white-label-ui", "src"),
       path.join(fixtureRoot, "packages", "white-label-ui", "src"),
       { recursive: true },
+    ),
+    cp(
+      path.join(repositoryRoot, "packages", "config", "instance-brand.mjs"),
+      path.join(fixtureRoot, "packages", "config", "instance-brand.mjs"),
     ),
     cp(
       path.join(repositoryRoot, "platform-contract.json"),
@@ -162,5 +167,28 @@ describe("theme.css configuration validation", () => {
       result.stderr,
       /theme\.css selectors must be ordered :root then \[dir="rtl"\]/u,
     );
+  });
+});
+
+describe("brand asset configuration validation", () => {
+  it("accepts an omitted optional dark logo", async () => {
+    const fixtureRoot = await createRepositoryFixture();
+    const brandPath = path.join(
+      fixtureRoot,
+      "instance-template",
+      "instance",
+      "brand.json",
+    );
+    const brand = JSON.parse(await readFile(brandPath, "utf8"));
+    delete brand.assets.logoDark;
+    await writeFile(brandPath, `${JSON.stringify(brand, null, 2)}\n`, "utf8");
+
+    const result = spawnSync(
+      process.execPath,
+      [path.join(fixtureRoot, "scripts/check-config.mjs")],
+      { cwd: fixtureRoot, encoding: "utf8" },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
   });
 });
