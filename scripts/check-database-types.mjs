@@ -94,8 +94,14 @@ try {
 }
 
 if (generatedTypes !== committedTypes) {
+  const generatedLines = generatedTypes.split("\n");
+  const committedLines = committedTypes.split("\n");
+  const firstDifference = Math.max(
+    0,
+    generatedLines.findIndex((line, index) => line !== committedLines[index]),
+  );
   fail(
-    "packages/supabase-client/src/database.types.ts is stale. Regenerate it from the reset local stack with: pnpm db:types",
+    `packages/supabase-client/src/database.types.ts is stale at line ${firstDifference + 1}. Generated=${JSON.stringify(generatedLines[firstDifference] ?? "<EOF>")} committed=${JSON.stringify(committedLines[firstDifference] ?? "<EOF>")}. Regenerate it from the reset local stack with: pnpm db:types`,
   );
 }
 
