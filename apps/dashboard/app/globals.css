@@ -639,6 +639,8 @@ input:focus-visible {
 }
 
 .brand-preview-shell > .wlbp-surface {
+  inline-size: 100%;
+  min-inline-size: 0;
   max-inline-size: var(--brand-content-width-wide);
   margin-inline: auto;
 }
