@@ -211,7 +211,8 @@ export interface PublicCatalogItemV1 {
   readonly cacheTag: string;
 }
 
-/** Customer-safe assignment choices; internal notes and authorization are deliberately absent. */
+/** Customer-safe assignment choices; internal notes and authorization are
+ * deliberately absent. */
 export interface AssignmentCandidateV1 {
   readonly assignmentMode:
     | "fixed_staff"
