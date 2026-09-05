@@ -22,6 +22,7 @@ describe("GET /.well-known/platform-release", () => {
 
   it("does not reflect an unsafe commit-shaped environment value", async () => {
     vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "unsafe-value");
+    vi.stubEnv("GITHUB_SHA", "");
 
     await expect(GET().json()).resolves.toMatchObject({ buildCommit: "local" });
   });
