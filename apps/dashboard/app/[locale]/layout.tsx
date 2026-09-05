@@ -32,6 +32,13 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
 
   return (
     <html lang={locale} dir={getDirection(locale)}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `document.documentElement.lang=${JSON.stringify(locale)};document.documentElement.dir=${JSON.stringify(getDirection(locale))}`,
+          }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
