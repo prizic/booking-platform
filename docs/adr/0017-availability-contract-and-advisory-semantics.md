@@ -42,6 +42,13 @@ contract without widening the backend contract range in `platform-contract.json`
    civil-time schedules and exceptions, policy bounds, buffers, and active
    allocations. Candidate intervals and allocations are half-open. A candidate
    survives only when its buffered occupied interval does not overlap a blocker.
+   Slot starts align to the location's civil-time grid independently of request
+   bounds. Fold identity is computed before window, notice, and interval filters;
+   the bounded grid includes 28 hours of context on each side to retain repeated
+   civil times. All context points count toward the 250,000 candidate/grid work
+   limit, and only candidates inside the requested bounds reach schedule checks.
+   A slot's fold describes its start; buffered location and subject starts have
+   their own folds for matching schedule exceptions.
 5. Availability may use a short tenant-aware cache. Keys include tenant, locale,
    publication, configuration, feature-entitlement, schedule, and allocation
    revisions. The database projection owns revision inputs; callers may not cache

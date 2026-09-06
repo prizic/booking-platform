@@ -50,6 +50,14 @@ select is(
   30,
   'duration, opening hours, staff schedule, and 15-minute interval produce bounded slots'
 );
+select is(
+  (select array_agg(a.slot_start order by requested.window_start,a.slot_start)
+    from (values ('2026-09-07 13:01+00'::timestamptz),('2026-09-07 13:00:30+00'::timestamptz)) requested(window_start)
+    cross join lateral api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,requested.window_start,'2026-09-07 14:00+00',1,'America/New_York') a
+    where a.result_kind='slot'),
+  array['2026-09-07 13:15+00'::timestamptz,'2026-09-07 13:15+00'::timestamptz],
+  'non-grid minute and second window starts retain only the in-bounds 13:15 grid slot'
+);
 update app.schedule_scopes set time_zone='America/Chicago'
 where id='a5600000-0000-0000-0000-000000000001';
 update app.weekly_schedules set start_minute=480,end_minute=540
@@ -84,6 +92,26 @@ select is(
   2,
   'an explicit exception fold exposes only the selected repeated civil-time occurrence'
 );
+select is(
+  (select array_agg(slot_start order by slot_start)
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 06:00+00','2026-11-01 07:00+00',1,'America/New_York')
+    where result_kind='slot' and fold=1),
+  array['2026-11-01 06:00+00'::timestamptz,'2026-11-01 06:15+00'::timestamptz],
+  'a window containing only the second repeated hour preserves fold 1 and its exceptions'
+);
+savepoint buffered_fold;
+update app.schedule_exceptions set fold=null
+where id in ('a8900000-0000-0000-0000-000000000001','a8900000-0000-0000-0000-000000000002');
+insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,staff_id,policy_key,value)
+values ('a8820000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','staff','a8000000-0000-0000-0000-000000000001','buffer_before_minutes','30');
+select is(
+  (select array_agg(fold order by slot_start)
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 06:00+00','2026-11-01 07:00+00',1,'America/New_York')
+    where result_kind='slot'),
+  array[1,1]::smallint[],
+  'public fold identifies the slot start even when its buffer begins in the first repeated hour'
+);
+rollback to savepoint buffered_fold;
 select is(
   (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-08 13:00+00','2026-09-08 14:00+00',1,'America/New_York') where result_kind='summary'),
   'no_matching_availability',
@@ -196,6 +224,11 @@ select throws_ok(
   $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
   '54000','availability_query_too_complex',
   'high candidate cardinality combined with the maximum window is rejected before slot generation'
+);
+select throws_ok(
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-09-13 00:00+00',1,'America/New_York')$$,
+  '54000','availability_query_too_complex',
+  'fold context is included in the 250000-point candidate workload bound'
 );
 select is(
   (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') limit 1),

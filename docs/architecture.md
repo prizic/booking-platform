@@ -262,6 +262,13 @@ activated, and availability must remain uncached unless every tenant,
 publication, configuration, entitlement, schedule, and allocation revision is
 available for the cache key.
 
+Slot generation aligns to the location's civil-time grid before applying request
+bounds. Fold numbering precedes window, notice, and interval filtering, using
+28 hours of grid context on either side. That context counts toward the same
+250,000 candidate/grid work limit; it never widens the returned window. Schedule
+exceptions use the buffered occupied start's fold in each scope's timezone, while
+the public slot fold identifies the unbuffered start.
+
 Availability is composed from orthogonal dimensions — shape, assignment, confirmation, payment, location, occurrence, queue — rather than hard-coded "booking types". A slot survives only if it clears published service rules and duration, location hours and closures, staff/resource schedules, date overrides and time off, eligibility and resource requirements, before/after buffers and turnover, active holds and confirmed allocations, external-calendar busy periods, minimum notice / horizon / interval / daily limits / capacity, and customer-plan and approval/payment restrictions. Staff assignment modes are fixed staff, customer choice, any eligible candidate, or deterministic round-robin normalized by offered hours; inactive and maintenance resources never enter a public candidate set.
 
 | Concern | Mechanism |

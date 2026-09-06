@@ -158,6 +158,8 @@ declare
   v_fixed_staff_id uuid;
   v_candidate_count bigint;
   v_grid_point_count bigint;
+  v_grid_start timestamptz;
+  v_grid_end timestamptz;
   -- Bounds the candidate/grid cross product before generate_series. This is a
   -- correctness-preserving rejection limit: eligible subjects are never truncated.
   v_max_candidate_grid_work constant bigint := 250000;
@@ -262,7 +264,18 @@ begin
     where rr.tenant_id=v_tenant_id and rr.service_id=p_service_id
       and v_allocation_kind='exclusive_resource' and p_staff_preference_id is null
   ) eligible_candidates;
-  v_grid_point_count := floor(extract(epoch from (p_window_end-p_window_start))/300)::bigint+1;
+  -- Floor the instant using its location civil minute, preserving the UTC
+  -- occurrence during a fold instead of converting an ambiguous local time.
+  v_grid_start := p_window_start
+    - make_interval(secs=>extract(second from p_window_start at time zone v_location_time_zone)::double precision)
+    - make_interval(mins=>mod(extract(minute from p_window_start at time zone v_location_time_zone)::integer,5));
+  -- Include both occurrences before computing folds. The 28-hour context
+  -- covers the full difference between supported IANA UTC offsets (-14..+14),
+  -- independent of request bounds, notice, buffers, and slot interval. Charge
+  -- every padded point to the same workload bound before generating anything.
+  v_grid_start := v_grid_start-interval '28 hours';
+  v_grid_end := p_window_end+interval '28 hours';
+  v_grid_point_count := floor(extract(epoch from (v_grid_end-v_grid_start))/300)::bigint+1;
   if v_candidate_count>v_max_candidate_grid_work/v_grid_point_count then
     raise exception using errcode='54000',message='availability_query_too_complex';
   end if;
@@ -326,17 +339,20 @@ begin
       (g+make_interval(mins=>c.duration_minutes+c.after_minutes+c.turnover_minutes)) at time zone c.subject_time_zone as occupied_subject_end,
       tsrange((g at time zone 'UTC')-make_interval(mins=>c.before_minutes+c.travel_minutes),
               ((g+make_interval(mins=>c.duration_minutes)) at time zone 'UTC')+make_interval(mins=>c.after_minutes+c.turnover_minutes),'[)') as occupied
-    from candidates c cross join lateral pg_catalog.generate_series(p_window_start,p_window_end,interval '5 minutes') g
-    where g+make_interval(mins=>c.duration_minutes)<=p_window_end
-      and g>=v_now+make_interval(mins=>c.notice_minutes)
-      and g<v_now+make_interval(days=>c.horizon_days)
-      and mod((extract(hour from g at time zone v_location_time_zone)::integer*60+
-               extract(minute from g at time zone v_location_time_zone)::integer),c.interval_minutes)=0
-  ), generated as (
+    from candidates c cross join lateral pg_catalog.generate_series(v_grid_start,v_grid_end,interval '5 minutes') g
+  ), generated_folds as (
     select r.*,
+      (row_number() over(partition by coalesce(r.staff_id,r.resource_id),r.location_start order by r.starts_at)-1)::smallint as slot_fold,
       (row_number() over(partition by coalesce(r.staff_id,r.resource_id),r.occupied_location_start order by r.occupied_starts_at)-1)::smallint as location_fold,
       (row_number() over(partition by coalesce(r.staff_id,r.resource_id),r.occupied_subject_start order by r.occupied_starts_at)-1)::smallint as subject_fold
     from generated_raw r
+  ), generated as (
+    select f.* from generated_folds f
+    where f.starts_at>=p_window_start and f.ends_at<=p_window_end
+      and f.starts_at>=v_now+make_interval(mins=>f.notice_minutes)
+      and f.starts_at<v_now+make_interval(days=>f.horizon_days)
+      and mod((extract(hour from f.location_start)::integer*60+
+               extract(minute from f.location_start)::integer),f.interval_minutes)=0
   ), valid as (
     select g.*
     from generated g
@@ -411,8 +427,7 @@ begin
   ), ranked as (
     select v.*,row_number() over(partition by v.starts_at order by
       (select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id and a.staff_id=v.staff_id and a.state in ('confirmed','completed')),
-      coalesce(v.staff_id,v.resource_id))::integer as slot_rank,
-      v.location_fold as slot_fold
+      coalesce(v.staff_id,v.resource_id))::integer as slot_rank
     from valid v
   ), bounded as (
     select * from ranked order by starts_at,slot_rank,staff_id limit 500
@@ -448,7 +463,7 @@ begin
 end;
 $function$;
 comment on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) is
-  'Availability v1 engine. Before generating slots it rejects candidate count x inclusive five-minute grid points above 250000 with availability_query_too_complex; it never truncates eligible candidates.';
+  'Availability v1 engine. Before generating slots it rejects candidate count x inclusive five-minute grid points (including 28-hour fold context on both sides) above 250000 with availability_query_too_complex; it never truncates eligible candidates.';
 revoke all on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) from public;
 grant execute on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) to anon,authenticated;
 
