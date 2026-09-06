@@ -13,6 +13,8 @@ import {
   type TeamResourcesWorkspaceState,
 } from "../../_lib/team-resources-workspace";
 import {
+  deactivateResourceAction,
+  deactivateStaffAction,
   saveResourceAction,
   saveResourceTypeAction,
   saveStaffProfileAction,
@@ -109,6 +111,8 @@ export default async function TeamResourcesPage({
         </header>
         <TeamResourcesView
           actions={{
+            deactivateResource: deactivateResourceAction,
+            deactivateStaff: deactivateStaffAction,
             saveResource: saveResourceAction,
             saveResourceType: saveResourceTypeAction,
             saveStaffProfile: saveStaffProfileAction,
@@ -118,6 +122,10 @@ export default async function TeamResourcesPage({
           }}
           locale={locale}
           {...(query.result === "saved" ||
+          query.result === "cancelled" ||
+          query.result === "deactivated" ||
+          query.result === "deferred" ||
+          query.result === "reassigned" ||
           query.result === "invalid-request" ||
           query.result === "not-authorized" ||
           query.result === "revision-conflict" ||

@@ -82,6 +82,7 @@ a:focus-visible,
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
+textarea:focus-visible,
 summary:focus-visible {
   border-radius: 0.4rem;
   outline: var(--brand-border-width-strong, 0.2rem) solid
@@ -894,6 +895,16 @@ summary:focus-visible {
 
 .team-resource-editor .wlbp-button {
   inline-size: fit-content;
+}
+
+.team-resource-editor--danger {
+  border-block-start-color: var(--dashboard-danger);
+}
+
+.wlbp-button--danger {
+  color: #fff;
+  background: var(--dashboard-danger);
+  border-color: var(--dashboard-danger);
 }
 
 .team-resources-management > p,

@@ -358,4 +358,82 @@ describe("Dashboard Supabase adapter", () => {
       },
     ]);
   });
+
+  it("maps safe deactivation workflows to the exact versioned RPC arguments", async () => {
+    const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async (name: string, args?: Readonly<Record<string, unknown>>) => {
+          calls.push({ name, ...(args === undefined ? {} : { args }) });
+          return {
+            data:
+              name === "deactivate_staff_v1"
+                ? [
+                    {
+                      outcome: "reassigned",
+                      remaining_allocations: 0,
+                      staff_id: "staff-a",
+                    },
+                  ]
+                : [
+                    {
+                      outcome: "deferred",
+                      remaining_allocations: 2,
+                      resource_id: "resource-a",
+                    },
+                  ],
+            error: null,
+          };
+        },
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+    const source = createDashboardDataSource(client);
+
+    await expect(
+      source.deactivateStaff({
+        reason: "Reassign coverage",
+        replacementStaffId: "staff-b",
+        requestId: "request-a",
+        resolution: "reassign",
+        staffId: "staff-a",
+        tenantId: "tenant-a",
+      }),
+    ).resolves.toMatchObject({ outcome: "reassigned", targetId: "staff-a" });
+    await expect(
+      source.deactivateResource({
+        reason: "Pause room",
+        replacementResourceId: null,
+        requestId: "request-b",
+        resolution: "defer",
+        resourceId: "resource-a",
+        tenantId: "tenant-a",
+      }),
+    ).resolves.toMatchObject({ outcome: "deferred", targetId: "resource-a" });
+
+    expect(calls).toEqual([
+      {
+        name: "deactivate_staff_v1",
+        args: {
+          p_reason: "Reassign coverage",
+          p_replacement_staff_id: "staff-b",
+          p_request_id: "request-a",
+          p_resolution: "reassign",
+          p_staff_id: "staff-a",
+          p_tenant_id: "tenant-a",
+        },
+      },
+      {
+        name: "deactivate_resource_v1",
+        args: {
+          p_reason: "Pause room",
+          p_replacement_resource_id: null,
+          p_request_id: "request-b",
+          p_resolution: "defer",
+          p_resource_id: "resource-a",
+          p_tenant_id: "tenant-a",
+        },
+      },
+    ]);
+  });
 });

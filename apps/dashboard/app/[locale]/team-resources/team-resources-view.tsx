@@ -17,6 +17,8 @@ import type { TeamResourcesWorkspaceState } from "../../_lib/team-resources-work
 type ManagementAction = (formData: FormData) => Promise<void>;
 
 export interface TeamResourcesActions {
+  readonly deactivateResource: ManagementAction;
+  readonly deactivateStaff: ManagementAction;
   readonly saveResource: ManagementAction;
   readonly saveResourceType: ManagementAction;
   readonly saveStaffProfile: ManagementAction;
@@ -30,9 +32,13 @@ interface TeamResourcesViewProps {
   readonly locale: Locale;
   readonly result?:
     | "backend-unavailable"
+    | "cancelled"
+    | "deactivated"
+    | "deferred"
     | "invalid-request"
     | "not-authorized"
     | "revision-conflict"
+    | "reassigned"
     | "saved";
   readonly state: TeamResourcesWorkspaceState;
 }
@@ -52,6 +58,19 @@ function hasTenantCapability(
       grant.capability === capability &&
       grant.scope === "tenant" &&
       (!grant.requiresApproval || context.aal2),
+  );
+}
+
+function hasCapability(
+  context: DashboardContextV1,
+  capability: CapabilityName,
+): boolean {
+  return context.grants.some(
+    (grant) =>
+      grant.capability === capability &&
+      (!grant.requiresApproval || context.aal2) &&
+      (grant.scope === "tenant" ||
+        (grant.scope === "location" && context.locationIds.length > 0)),
   );
 }
 
@@ -301,7 +320,7 @@ function StaffForm({
         </label>
         <ReasonField id={`${prefix}-reason`} locale={locale} />
         <button className="wlbp-button" type="submit">
-          {message("submitStaff")}
+          {message(item === undefined ? "submitStaff" : "saveStaff")}
         </button>
       </form>
     </details>
@@ -367,7 +386,9 @@ function ResourceTypeForm({
         </label>
         <ReasonField id={`type-${resourceType?.id ?? "new"}-reason`} locale={locale} />
         <button className="wlbp-button" type="submit">
-          {message("submitResourceType")}
+          {message(
+            resourceType === undefined ? "submitResourceType" : "saveResourceType",
+          )}
         </button>
       </form>
     </details>
@@ -452,7 +473,7 @@ function ResourceForm({
         </label>
         <ReasonField id={`${prefix}-reason`} locale={locale} />
         <button className="wlbp-button" type="submit">
-          {message("submitResource")}
+          {message(item === undefined ? "submitResource" : "saveResource")}
         </button>
       </form>
     </details>
@@ -576,9 +597,83 @@ function EligibilityForm({
   );
 }
 
+function DeactivationForm({
+  action,
+  item,
+  locale,
+  replacements,
+}: {
+  readonly action: ManagementAction;
+  readonly item: StaffResourceWorkspaceItemV1;
+  readonly locale: Locale;
+  readonly replacements: readonly StaffResourceWorkspaceItemV1[];
+}) {
+  const message = (key: TeamResourcesMessageKey) =>
+    getTeamResourcesMessage(locale, key);
+  const prefix = `${item.kind}-${item.id}-deactivation`;
+  const replacementName =
+    item.kind === "staff" ? "replacementStaffId" : "replacementResourceId";
+  return (
+    <details className="team-resource-editor team-resource-editor--danger">
+      <summary>{message("deactivate")}</summary>
+      <form action={action}>
+        <HiddenContext locale={locale} />
+        <input
+          name={item.kind === "staff" ? "staffId" : "resourceId"}
+          type="hidden"
+          value={item.id}
+        />
+        <label className="team-resource-field" htmlFor={`${prefix}-resolution`}>
+          <span>{message("deactivateResolution")}</span>
+          <select
+            className="wlbp-field__input"
+            defaultValue="defer"
+            id={`${prefix}-resolution`}
+            name="resolution"
+          >
+            <option value="defer">{message("deferDeactivation")}</option>
+            <option value="cancel">{message("cancelFuture")}</option>
+            <option disabled={replacements.length === 0} value="reassign">
+              {message("reassignFuture")}
+            </option>
+          </select>
+        </label>
+        <label className="team-resource-field" htmlFor={`${prefix}-replacement`}>
+          <span>
+            {message(
+              item.kind === "staff" ? "replacementStaff" : "replacementResource",
+            )}
+          </span>
+          <select
+            className="wlbp-field__input"
+            defaultValue=""
+            disabled={replacements.length === 0}
+            id={`${prefix}-replacement`}
+            name={replacementName}
+          >
+            <option value="">—</option>
+            {replacements.map((replacement) => (
+              <option key={replacement.id} value={replacement.id}>
+                {replacement.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <ReasonField id={`${prefix}-reason`} locale={locale} />
+        <button className="wlbp-button wlbp-button--danger" type="submit">
+          {message("submitDeactivation")}
+        </button>
+      </form>
+    </details>
+  );
+}
+
 function ItemList({
   action,
+  canDeactivate,
+  deactivateAction,
   canEdit,
+  canManageEligibility,
   editAction,
   emptyMessage,
   items,
@@ -588,7 +683,10 @@ function ItemList({
   services,
 }: {
   readonly action: ManagementAction;
+  readonly canDeactivate: boolean;
+  readonly deactivateAction: ManagementAction;
   readonly canEdit: boolean;
+  readonly canManageEligibility: boolean;
   readonly editAction: ManagementAction;
   readonly emptyMessage: TeamResourcesMessageKey;
   readonly items: readonly StaffResourceWorkspaceItemV1[];
@@ -633,13 +731,30 @@ function ItemList({
                 />
               )
             ) : null}
-            <EligibilityForm
-              action={action}
-              item={item}
-              locale={locale}
-              locations={locations}
-              services={services}
-            />
+            {canManageEligibility ? (
+              <EligibilityForm
+                action={action}
+                item={item}
+                locale={locale}
+                locations={locations}
+                services={services}
+              />
+            ) : null}
+            {canDeactivate && item.status !== "inactive" ? (
+              <DeactivationForm
+                action={deactivateAction}
+                item={item}
+                locale={locale}
+                replacements={items.filter(
+                  (candidate) =>
+                    candidate.id !== item.id &&
+                    candidate.kind === item.kind &&
+                    candidate.status === "active" &&
+                    (item.kind === "staff" ||
+                      candidate.resourceTypeId === item.resourceTypeId),
+                )}
+              />
+            ) : null}
           </article>
         </li>
       ))}
@@ -654,6 +769,10 @@ function resultKey(
   if (result === "not-authorized") return "notAuthorized";
   if (result === "invalid-request") return "invalidRequest";
   if (result === "revision-conflict") return "revisionConflict";
+  if (result === "cancelled") return "deactivationCancelled";
+  if (result === "deactivated") return "deactivationSucceeded";
+  if (result === "deferred") return "deactivationDeferred";
+  if (result === "reassigned") return "deactivationReassigned";
   return "backendUnavailable";
 }
 
@@ -682,6 +801,8 @@ export function TeamResourcesView({
   const resources = state.workspace.items.filter((item) => item.kind === "resource");
   const canManageStaff = hasTenantCapability(state.context, "staff.manage");
   const canManageCatalog = hasTenantCapability(state.context, "catalog.edit");
+  const canManageStaffEligibility = hasCapability(state.context, "staff.manage");
+  const canManageResourceEligibility = hasCapability(state.context, "catalog.edit");
   return (
     <>
       {intro}
@@ -734,7 +855,10 @@ export function TeamResourcesView({
           <h2 id="staff-list-title">{message("staffTitle")}</h2>
           <ItemList
             action={actions.setStaffEligibility}
+            canDeactivate={canManageStaff}
+            deactivateAction={actions.deactivateStaff}
             canEdit={canManageStaff}
+            canManageEligibility={canManageStaffEligibility}
             editAction={actions.saveStaffProfile}
             emptyMessage="staffEmpty"
             items={staff}
@@ -752,7 +876,10 @@ export function TeamResourcesView({
           <h2 id="resource-list-title">{message("resourcesTitle")}</h2>
           <ItemList
             action={actions.setResourceLocationEligibility}
+            canDeactivate={canManageStaff}
+            deactivateAction={actions.deactivateResource}
             canEdit={canManageCatalog}
+            canManageEligibility={canManageResourceEligibility}
             editAction={actions.saveResource}
             emptyMessage="resourcesEmpty"
             items={resources}

@@ -16,6 +16,31 @@ export type TeamResourcesCommandResult =
       readonly ok: false;
     };
 
+export type DeactivationCommandResult =
+  | {
+      readonly ok: true;
+      readonly outcome: "cancelled" | "deactivated" | "deferred" | "reassigned";
+      readonly remainingAllocationCount: number;
+    }
+  | {
+      readonly code: "backend_unavailable" | "invalid_request" | "not_authorized";
+      readonly ok: false;
+    };
+
+interface StaffDeactivationRequest {
+  readonly reason: unknown;
+  readonly replacementStaffId: unknown;
+  readonly resolution: unknown;
+  readonly staffId: unknown;
+}
+
+interface ResourceDeactivationRequest {
+  readonly reason: unknown;
+  readonly replacementResourceId: unknown;
+  readonly resolution: unknown;
+  readonly resourceId: unknown;
+}
+
 interface SaveStaffProfileRequest {
   readonly bio: unknown;
   readonly expectedRevision?: unknown;
@@ -389,4 +414,98 @@ export async function executeResourceRequirement(
       tenantId: context.tenantId,
     }),
   );
+}
+
+export async function executeStaffDeactivation(
+  request: StaffDeactivationRequest,
+  context: DashboardContextV1,
+  source: TeamResourcesDataSource,
+  requestId: string,
+): Promise<DeactivationCommandResult> {
+  if (!hasTenantCapability(context, "staff.manage")) {
+    return { ok: false, code: "not_authorized" };
+  }
+  const reason = requiredText(request.reason, 500);
+  const staffId = requiredUuid(request.staffId);
+  const replacementStaffId = optionalUuid(request.replacementStaffId);
+  const resolution = request.resolution;
+  if (
+    reason === null ||
+    staffId === null ||
+    !uuidPattern.test(requestId) ||
+    replacementStaffId === undefined ||
+    (resolution !== "cancel" && resolution !== "defer" && resolution !== "reassign") ||
+    (resolution === "reassign" &&
+      (replacementStaffId === null || replacementStaffId === staffId))
+  ) {
+    return { ok: false, code: "invalid_request" };
+  }
+
+  try {
+    const outcome = await source.deactivateStaff({
+      reason,
+      replacementStaffId: resolution === "reassign" ? replacementStaffId : null,
+      requestId,
+      resolution,
+      staffId,
+      tenantId: context.tenantId,
+    });
+    if (outcome.targetId !== staffId) {
+      return { ok: false, code: "backend_unavailable" };
+    }
+    return {
+      ok: true,
+      outcome: outcome.outcome,
+      remainingAllocationCount: outcome.remainingAllocationCount,
+    };
+  } catch {
+    return { ok: false, code: "backend_unavailable" };
+  }
+}
+
+export async function executeResourceDeactivation(
+  request: ResourceDeactivationRequest,
+  context: DashboardContextV1,
+  source: TeamResourcesDataSource,
+  requestId: string,
+): Promise<DeactivationCommandResult> {
+  if (!hasTenantCapability(context, "staff.manage")) {
+    return { ok: false, code: "not_authorized" };
+  }
+  const reason = requiredText(request.reason, 500);
+  const resourceId = requiredUuid(request.resourceId);
+  const replacementResourceId = optionalUuid(request.replacementResourceId);
+  const resolution = request.resolution;
+  if (
+    reason === null ||
+    resourceId === null ||
+    !uuidPattern.test(requestId) ||
+    replacementResourceId === undefined ||
+    (resolution !== "cancel" && resolution !== "defer" && resolution !== "reassign") ||
+    (resolution === "reassign" &&
+      (replacementResourceId === null || replacementResourceId === resourceId))
+  ) {
+    return { ok: false, code: "invalid_request" };
+  }
+
+  try {
+    const outcome = await source.deactivateResource({
+      reason,
+      replacementResourceId: resolution === "reassign" ? replacementResourceId : null,
+      requestId,
+      resolution,
+      resourceId,
+      tenantId: context.tenantId,
+    });
+    if (outcome.targetId !== resourceId) {
+      return { ok: false, code: "backend_unavailable" };
+    }
+    return {
+      ok: true,
+      outcome: outcome.outcome,
+      remainingAllocationCount: outcome.remainingAllocationCount,
+    };
+  } catch {
+    return { ok: false, code: "backend_unavailable" };
+  }
 }

@@ -22,7 +22,7 @@ const workspace: StaffResourceWorkspaceV1 = {
       key: null,
       kind: "staff",
       locationIds: ["location-a"],
-      membershipId: null,
+      membershipId: "a3000000-0000-0000-0000-000000000010",
       name: "Layla Hassan",
       offeredHoursPerWeek: 40,
       publicBio: "Booking specialist",
@@ -49,6 +49,40 @@ const workspace: StaffResourceWorkspaceV1 = {
       serviceIds: ["service-a"],
       status: "maintenance",
     },
+    {
+      futureAllocationCount: 0,
+      id: "a8000000-0000-0000-0000-000000000002",
+      internalNotes: "",
+      key: null,
+      kind: "staff",
+      locationIds: ["location-a"],
+      membershipId: null,
+      name: "Omar Saleh",
+      offeredHoursPerWeek: 40,
+      publicBio: "",
+      resourceTypeId: null,
+      resourceTypeName: null,
+      revision: 1,
+      serviceIds: ["service-a"],
+      status: "active",
+    },
+    {
+      futureAllocationCount: 0,
+      id: "a8200000-0000-0000-0000-000000000002",
+      internalNotes: "",
+      key: "room-two",
+      kind: "resource",
+      locationIds: ["location-a"],
+      membershipId: null,
+      name: "Room 2",
+      offeredHoursPerWeek: null,
+      publicBio: null,
+      resourceTypeId: "type-a",
+      resourceTypeName: "Room",
+      revision: 1,
+      serviceIds: ["service-a"],
+      status: "active",
+    },
   ],
 };
 
@@ -71,6 +105,8 @@ describe("Team and resources workspace view", () => {
           workspace,
         },
         actions: {
+          deactivateResource: action,
+          deactivateStaff: action,
           saveResource: action,
           saveResourceType: action,
           saveStaffProfile: action,
@@ -91,6 +127,71 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain("Create team member");
     expect(html).toContain("Update exact eligibility");
     expect(html).toContain('name="expectedRevision" value="2"');
+    expect(html).toContain('value="a3000000-0000-0000-0000-000000000010"');
+    expect(html).toContain("Booking specialist</textarea>");
+    expect(html).toContain("Morning shifts</textarea>");
+    expect(html).toContain('name="offeredHoursPerWeek"');
+    expect(html).toContain('name="offeredHoursPerWeek" value="40"');
+    expect(html).toContain('name="expectedRevision" value="1"');
+    expect(html).toContain('id="type-type-a-key"');
+    expect(html).toContain('value="room"');
+    expect(html).toContain('name="expectedRevision" value="3"');
+    expect(html).toContain('value="room-one"');
+    expect(html).not.toContain('option value="inactive"');
+    expect(html).toContain("Save team member");
+    expect(html).toContain("Save resource type");
+    expect(html).toContain("Save resource");
+    expect(html).toContain('name="resolution"');
+    expect(html).toContain('name="replacementStaffId"');
+    expect(html).toContain('name="replacementResourceId"');
+    expect(html).toContain("Apply safe resolution");
+  });
+
+  it("keeps tenant-wide editors hidden for a location-scoped operator", () => {
+    const html = renderToStaticMarkup(
+      createElement(TeamResourcesView, {
+        locale: "en",
+        state: {
+          context: {
+            aal2: true,
+            grants: [
+              {
+                capability: "staff.manage",
+                requiresApproval: true,
+                scope: "location",
+              },
+              {
+                capability: "catalog.edit",
+                requiresApproval: true,
+                scope: "location",
+              },
+            ],
+            locationIds: ["location-a"],
+            tenantId: "tenant-a",
+          } as never,
+          kind: "ready",
+          workspace,
+        },
+        actions: {
+          deactivateResource: action,
+          deactivateStaff: action,
+          saveResource: action,
+          saveResourceType: action,
+          saveStaffProfile: action,
+          setResourceLocationEligibility: action,
+          setResourceRequirement: action,
+          setStaffEligibility: action,
+        },
+      }),
+    );
+
+    expect(html).not.toContain('name="publicName"');
+    expect(html).not.toContain('name="expectedRevision"');
+    expect(html).not.toContain('name="resourceTypeId" type="hidden"');
+    expect(html).not.toContain('name="resolution"');
+    expect(html).toContain('name="serviceId"');
+    expect(html).toContain('name="locationId"');
+    expect(html).toContain("Update exact eligibility");
   });
 
   it("renders the same protected state in Arabic", () => {
@@ -98,6 +199,8 @@ describe("Team and resources workspace view", () => {
       createElement(TeamResourcesView, {
         locale: "ar",
         actions: {
+          deactivateResource: action,
+          deactivateStaff: action,
           saveResource: action,
           saveResourceType: action,
           saveStaffProfile: action,
@@ -120,7 +223,10 @@ describe("Team and resources workspace view", () => {
     const html = renderToStaticMarkup(
       createElement(TeamResourcesView, {
         locale: "ar",
+        result: "reassigned",
         actions: {
+          deactivateResource: action,
+          deactivateStaff: action,
           saveResource: action,
           saveResourceType: action,
           saveStaffProfile: action,
@@ -146,6 +252,7 @@ describe("Team and resources workspace view", () => {
 
     expect(html).toContain("إنشاء عضو فريق");
     expect(html).toContain("تحديث الأهلية الدقيقة");
+    expect(html).toContain("أُعيد تعيين");
     expect(html).toContain('aria-live="polite"');
   });
 });

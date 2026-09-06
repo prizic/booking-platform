@@ -6,16 +6,21 @@ import {
   type TeamResourcesDataSource,
 } from "./dashboard-data-source";
 import {
+  executeResourceDeactivation,
   executeSaveResource,
   executeSaveStaffProfile,
+  executeStaffDeactivation,
   executeStaffEligibility,
 } from "./team-resources-commands";
 
 const tenantId = "a0000000-0000-0000-0000-000000000001";
 const staffId = "a8000000-0000-0000-0000-000000000001";
+const replacementStaffId = "a8000000-0000-0000-0000-000000000002";
 const serviceId = "a7200000-0000-0000-0000-000000000001";
 const locationId = "a5000000-0000-0000-0000-000000000001";
 const resourceTypeId = "a8100000-0000-0000-0000-000000000001";
+const resourceId = "a8200000-0000-0000-0000-000000000001";
+const replacementResourceId = "a8200000-0000-0000-0000-000000000002";
 const requestId = "a9000000-0000-0000-0000-000000000001";
 
 const context: DashboardContextV1 = {
@@ -41,6 +46,22 @@ const context: DashboardContextV1 = {
 
 function source() {
   return {
+    deactivateResource: vi.fn(async (input) => ({
+      outcome:
+        input.resolution === "reassign"
+          ? ("reassigned" as const)
+          : ("deferred" as const),
+      remainingAllocationCount: input.resolution === "defer" ? 2 : 0,
+      targetId: input.resourceId,
+    })),
+    deactivateStaff: vi.fn(async (input) => ({
+      outcome:
+        input.resolution === "reassign"
+          ? ("reassigned" as const)
+          : ("cancelled" as const),
+      remainingAllocationCount: 0,
+      targetId: input.staffId,
+    })),
     getStaffResourceWorkspace: vi.fn(async () => ({
       items: [],
       locations: [],
@@ -58,6 +79,107 @@ function source() {
 }
 
 describe("Team and resource management commands", () => {
+  it("uses tenant staff authority for safe staff reassignment", async () => {
+    const dataSource = source();
+
+    await expect(
+      executeStaffDeactivation(
+        {
+          reason: "  Coverage changed  ",
+          replacementStaffId,
+          resolution: "reassign",
+          staffId,
+        },
+        context,
+        dataSource,
+        requestId,
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      outcome: "reassigned",
+      remainingAllocationCount: 0,
+    });
+    expect(dataSource.deactivateStaff).toHaveBeenCalledWith({
+      reason: "Coverage changed",
+      replacementStaffId,
+      requestId,
+      resolution: "reassign",
+      staffId,
+      tenantId,
+    });
+  });
+
+  it("passes a same-type replacement resource to the versioned workflow", async () => {
+    const dataSource = source();
+
+    await expect(
+      executeResourceDeactivation(
+        {
+          reason: "Replace room",
+          replacementResourceId,
+          resolution: "reassign",
+          resourceId,
+        },
+        context,
+        dataSource,
+        requestId,
+      ),
+    ).resolves.toMatchObject({ ok: true, outcome: "reassigned" });
+    expect(dataSource.deactivateResource).toHaveBeenCalledWith({
+      reason: "Replace room",
+      replacementResourceId,
+      requestId,
+      resolution: "reassign",
+      resourceId,
+      tenantId,
+    });
+  });
+
+  it("denies deactivation to location-scoped operators before the RPC", async () => {
+    const dataSource = source();
+    const locationContext: DashboardContextV1 = {
+      ...context,
+      grants: [
+        { capability: "staff.manage", requiresApproval: true, scope: "location" },
+      ],
+      locationIds: [locationId],
+      locationScope: { kind: "restricted", locationIds: [locationId] },
+    };
+
+    await expect(
+      executeResourceDeactivation(
+        {
+          reason: "Out of scope",
+          replacementResourceId: "",
+          resolution: "defer",
+          resourceId,
+        },
+        locationContext,
+        dataSource,
+        requestId,
+      ),
+    ).resolves.toEqual({ ok: false, code: "not_authorized" });
+    expect(dataSource.deactivateResource).not.toHaveBeenCalled();
+  });
+
+  it("requires a distinct replacement for reassign", async () => {
+    const dataSource = source();
+    await expect(
+      executeStaffDeactivation(
+        {
+          reason: "Coverage changed",
+          replacementStaffId: staffId,
+          resolution: "reassign",
+          staffId,
+        },
+        context,
+        dataSource,
+        requestId,
+      ),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+    expect(dataSource.deactivateStaff).not.toHaveBeenCalled();
+  });
+
   it("derives tenant authority and normalizes a new staff profile", async () => {
     const dataSource = source();
 

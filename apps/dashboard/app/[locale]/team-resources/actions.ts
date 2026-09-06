@@ -7,17 +7,67 @@ import { redirect } from "next/navigation";
 
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import {
+  executeResourceDeactivation,
   executeResourceLocationEligibility,
   executeResourceRequirement,
   executeSaveResource,
   executeSaveResourceType,
   executeSaveStaffProfile,
   executeStaffEligibility,
+  executeStaffDeactivation,
   type TeamResourcesCommandResult,
 } from "../../_lib/team-resources-commands";
 
 function localeFrom(formData: FormData): Locale {
   return formData.get("locale") === "ar" ? "ar" : "en";
+}
+
+export async function deactivateStaffAction(formData: FormData): Promise<never> {
+  const locale = localeFrom(formData);
+  const request = await loadDashboardRequestAccess(locale);
+  if (request.source === null || request.state.kind !== "ready") {
+    redirect(resultUrl(locale, "not-authorized"));
+  }
+
+  const result = await executeStaffDeactivation(
+    {
+      reason: formData.get("reason"),
+      replacementStaffId: formData.get("replacementStaffId"),
+      resolution: formData.get("resolution"),
+      staffId: formData.get("staffId"),
+    },
+    request.state.context,
+    request.source,
+    crypto.randomUUID(),
+  );
+  if (result.ok) revalidatePath(`/${locale}/team-resources`);
+  redirect(
+    resultUrl(locale, result.ok ? result.outcome : result.code.replaceAll("_", "-")),
+  );
+}
+
+export async function deactivateResourceAction(formData: FormData): Promise<never> {
+  const locale = localeFrom(formData);
+  const request = await loadDashboardRequestAccess(locale);
+  if (request.source === null || request.state.kind !== "ready") {
+    redirect(resultUrl(locale, "not-authorized"));
+  }
+
+  const result = await executeResourceDeactivation(
+    {
+      reason: formData.get("reason"),
+      replacementResourceId: formData.get("replacementResourceId"),
+      resolution: formData.get("resolution"),
+      resourceId: formData.get("resourceId"),
+    },
+    request.state.context,
+    request.source,
+    crypto.randomUUID(),
+  );
+  if (result.ok) revalidatePath(`/${locale}/team-resources`);
+  redirect(
+    resultUrl(locale, result.ok ? result.outcome : result.code.replaceAll("_", "-")),
+  );
 }
 
 function resultUrl(locale: Locale, result: string): string {

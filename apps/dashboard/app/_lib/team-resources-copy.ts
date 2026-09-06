@@ -41,6 +41,7 @@ export type TeamResourcesMessageKey =
   | "publicName"
   | "reassignFuture"
   | "replacementStaff"
+  | "replacementResource"
   | "resourceType"
   | "resourceTypeId"
   | "resourceLocationEligibility"
@@ -62,6 +63,9 @@ export type TeamResourcesMessageKey =
   | "submitResource"
   | "submitResourceType"
   | "submitStaff"
+  | "saveResource"
+  | "saveResourceType"
+  | "saveStaff"
   | "updateEligibility"
   | "updateRequirement"
   | "saved"
@@ -122,6 +126,7 @@ export const teamResourcesCopy: Record<
     publicName: "Public name",
     reassignFuture: "Reassign future allocations and deactivate",
     replacementStaff: "Replacement team member",
+    replacementResource: "Replacement resource",
     resourceType: "Resource type",
     resourceTypeId: "Resource type ID",
     resourceLocationEligibility: "Location eligibility",
@@ -144,6 +149,9 @@ export const teamResourcesCopy: Record<
     submitResource: "Create resource",
     submitResourceType: "Create resource type",
     submitStaff: "Create team member",
+    saveResource: "Save resource",
+    saveResourceType: "Save resource type",
+    saveStaff: "Save team member",
     updateEligibility: "Update exact eligibility",
     updateRequirement: "Update requirement",
     saved: "The change was saved.",
@@ -199,6 +207,7 @@ export const teamResourcesCopy: Record<
     publicName: "الاسم العام",
     reassignFuture: "إعادة تعيين التخصيصات المستقبلية وإلغاء التنشيط",
     replacementStaff: "عضو الفريق البديل",
+    replacementResource: "المورد البديل",
     resourceType: "نوع المورد",
     resourceTypeId: "معرّف نوع المورد",
     resourceLocationEligibility: "أهلية الموقع",
@@ -220,6 +229,9 @@ export const teamResourcesCopy: Record<
     submitResource: "إنشاء المورد",
     submitResourceType: "إنشاء نوع المورد",
     submitStaff: "إنشاء عضو الفريق",
+    saveResource: "حفظ المورد",
+    saveResourceType: "حفظ نوع المورد",
+    saveStaff: "حفظ عضو الفريق",
     updateEligibility: "تحديث الأهلية الدقيقة",
     updateRequirement: "تحديث المتطلب",
     saved: "حُفظ التغيير.",

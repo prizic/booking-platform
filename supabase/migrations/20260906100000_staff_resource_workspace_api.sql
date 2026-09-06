@@ -177,6 +177,7 @@ begin
       and link.resource_id = resource.id
       and (
         v_catalog_tenant
+        or v_staff_tenant
         or coalesce(
           (select private.can_manage_catalog(resource.tenant_id, link.location_id)),
           false
@@ -198,6 +199,7 @@ begin
       and allocation.starts_at > statement_timestamp()
       and (
         v_catalog_tenant
+        or v_staff_tenant
         or coalesce(
           (select private.can_manage_catalog(resource.tenant_id, allocation.location_id)),
           false
@@ -207,6 +209,7 @@ begin
   where resource.tenant_id = p_tenant_id
     and (
       v_catalog_tenant
+      or v_staff_tenant
       or exists (
         select 1
         from app.resource_locations as visible_location
@@ -289,6 +292,7 @@ begin
     where service_revision.tenant_id = service.tenant_id
       and service_revision.service_id = service.id
       and service_revision.locale = p_locale
+      and service_revision.state = 'published'
     order by service_revision.revision desc
     limit 1
   ) as localized on true

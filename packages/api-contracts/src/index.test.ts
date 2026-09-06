@@ -4,6 +4,7 @@ import {
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
+  parseStaffResourceDeactivationV1,
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
@@ -70,6 +71,31 @@ describe("assignment candidate DTO", () => {
 });
 
 describe("tenant isolation DTOs", () => {
+  it("parses a minimal deactivation outcome", () => {
+    expect(
+      parseStaffResourceDeactivationV1({
+        outcome: "reassigned",
+        remainingAllocationCount: 0,
+        targetId: "staff-a",
+      }),
+    ).toEqual({
+      outcome: "reassigned",
+      remainingAllocationCount: 0,
+      targetId: "staff-a",
+    });
+  });
+
+  it("rejects internal deactivation evidence", () => {
+    expect(() =>
+      parseStaffResourceDeactivationV1({
+        affectedAllocationIds: ["booking-a"],
+        outcome: "cancelled",
+        remainingAllocationCount: 0,
+        targetId: "staff-a",
+      }),
+    ).toThrow("deactivation result");
+  });
+
   it("parses a customer-safe bilingual catalog item", () => {
     const [item] = parsePublicCatalogV1([
       {
