@@ -1,6 +1,46 @@
 begin;
 select no_plan();
 
+-- Keep ordinary Monday fixtures beyond notice, regardless of the run date or
+-- New York's current UTC offset. Day offsets are elapsed 24-hour periods so
+-- maximum-window tests stay exactly 31 days across a seasonal clock change.
+select set_config('test.availability_day',
+  (date_trunc('week',statement_timestamp() at time zone 'America/New_York')::date+14)::text,true);
+create function pg_temp.availability_time(p_days integer,p_time time)
+returns timestamptz language sql stable as $$
+  select ((current_setting('test.availability_day')::date+p_time) at time zone 'America/New_York')
+    + make_interval(hours=>24*p_days);
+$$;
+do $$ begin
+  execute format('grant usage on schema %I to authenticated',pg_my_temp_schema()::regnamespace::text);
+end $$;
+
+-- Prefer the next New York fold. Occasionally consecutive November folds are
+-- 371 days apart, outside the allowed 365-day horizon; Sydney's April fold
+-- supplies an in-horizon case then, so DST assertions never depend on a skip.
+with candidates as (
+  select zone,local_hour,make_date(year,month,1) as month_start
+  from generate_series(extract(year from statement_timestamp())::integer,
+                       extract(year from statement_timestamp())::integer+1) year
+  cross join (values ('America/New_York',11,1),('Australia/Sydney',4,2)) zones(zone,month,local_hour)
+), transitions as (
+  select zone,local_hour,month_start+mod(7-extract(dow from month_start)::integer,7) as local_date
+  from candidates
+), upcoming as (
+  select *, (local_date+make_time(local_hour,0,0)) at time zone zone as second_hour
+  from transitions
+)
+select set_config('test.fold_zone',zone,true),set_config('test.fold_date',local_date::text,true),
+  set_config('test.fold_minute',(local_hour*60)::text,true),set_config('test.fold_at',second_hour::text,true)
+from upcoming
+where second_hour-interval '1 hour'>statement_timestamp()+interval '2 hours'
+  and second_hour+interval '1 hour'<statement_timestamp()+interval '365 days'
+order by (zone='America/New_York') desc,second_hour limit 1;
+create function pg_temp.fold_time(p_minutes integer)
+returns timestamptz language sql stable as $$
+  select current_setting('test.fold_at')::timestamptz+make_interval(mins=>p_minutes);
+$$;
+
 select has_table('app'::name, 'availability_revisions'::name);
 select is((select count(*)::integer from app.availability_revisions), (select count(*)::integer from app.tenants), 'existing tenants receive availability revision rows during migration');
 select ok((select relrowsecurity from pg_class where oid='app.availability_revisions'::regclass), 'availability revisions require RLS');
@@ -9,28 +49,29 @@ select has_function('api_v1'::name, 'get_availability_v1'::name, array['text','t
 select ok(has_function_privilege('anon','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'anonymous Client callers can request availability');
 select ok(has_function_privilege('authenticated','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'authenticated Dashboard callers can request availability');
 select ok(not (select p.prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='api_v1' and p.proname='get_availability_v1'), 'public availability wrapper is security invoker');
+select ok((select p.proconfig @> array['statement_timeout=2s'] from pg_proc p where p.oid='api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)'::regprocedure), 'exposed availability RPC declares the timeout PostgREST hoists');
 select ok(not has_function_privilege('anon','private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)','execute'), 'anonymous callers cannot execute the private policy resolver');
 select ok(not has_function_privilege('authenticated','private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)','execute'), 'authenticated callers cannot execute the private policy resolver');
 
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 12:00+00','2026-10-09 12:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'08:00'),pg_temp.availability_time(32,'08:00'),1,'America/New_York')$$,
   '22023','availability_window_too_large','availability windows are bounded'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 12:00+00','2026-09-08 12:00+00',2,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'08:00'),pg_temp.availability_time(1,'08:00'),2,'America/New_York')$$,
   '22023','availability_party_size_out_of_bounds','v1 rejects unsupported party sizes'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 12:00+00','2026-09-08 12:00+00',1,'Mars/Olympus')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'08:00'),pg_temp.availability_time(1,'08:00'),1,'Mars/Olympus')$$,
   '22023','availability_invalid_timezone','unknown timezones are rejected'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('preview.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 12:00+00','2026-09-08 12:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('preview.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'08:00'),pg_temp.availability_time(1,'08:00'),1,'America/New_York')$$,
   '42501','availability_context_required','unverified preview hosts fail closed'
 );
 
 -- A bookable staff member and matching civil-time schedule make the seeded
--- published service available on Monday 2026-09-07 in New York.
+-- published service available on the derived Monday in New York.
 insert into app.staff_profiles(id,tenant_id,public_name)
 values ('a8000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','Available staff');
 insert into app.staff_services(tenant_id,staff_id,service_id)
@@ -46,7 +87,7 @@ values ('a8200000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-00000000
 
 select set_config('test.availability_revision',(select revision::text from app.availability_revisions where tenant_id='a0000000-0000-0000-0000-000000000001'),true);
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot'),
   30,
   'duration, opening hours, staff schedule, and 15-minute interval produce bounded slots'
 );
@@ -65,7 +106,7 @@ insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,star
 values ('a8200000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000002',1,540,1020);
 select is(
   (select array[count(*)::integer,count(distinct staff_id)::integer,max(candidate_rank)]
-    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 13:45+00',1,'America/New_York')
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'09:45'),1,'America/New_York')
     where result_kind='slot' and allocation_kind='appointment'),
   array[2,2,2],
   'appointment offers preserve distinct public staff choices at the same time'
@@ -73,18 +114,18 @@ select is(
 rollback to savepoint staff_choices;
 select is(
   (select array_agg(a.slot_start order by requested.window_start,a.slot_start)
-    from (values ('2026-09-07 13:01+00'::timestamptz),('2026-09-07 13:00:30+00'::timestamptz)) requested(window_start)
-    cross join lateral api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,requested.window_start,'2026-09-07 14:00+00',1,'America/New_York') a
+    from (values (pg_temp.availability_time(0,'09:01')),(pg_temp.availability_time(0,'09:00:30'))) requested(window_start)
+    cross join lateral api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,requested.window_start,pg_temp.availability_time(0,'10:00'),1,'America/New_York') a
     where a.result_kind='slot'),
-  array['2026-09-07 13:15+00'::timestamptz,'2026-09-07 13:15+00'::timestamptz],
-  'non-grid minute and second window starts retain only the in-bounds 13:15 grid slot'
+  array[pg_temp.availability_time(0,'09:15'),pg_temp.availability_time(0,'09:15')],
+  'non-grid minute and second window starts retain only the in-bounds 09:15 local grid slot'
 );
 update app.schedule_scopes set time_zone='America/Chicago'
 where id='a5600000-0000-0000-0000-000000000001';
 update app.weekly_schedules set start_minute=480,end_minute=540
 where schedule_scope_id='a5600000-0000-0000-0000-000000000001' and day_of_week=1;
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 14:00+00',1,'America/New_York') where result_kind='slot' and location_time_zone='America/Chicago'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'10:00'),1,'America/New_York') where result_kind='slot' and location_time_zone='America/Chicago'),
   2,
   'location civil hours and returned zone use the authoritative location schedule scope timezone'
 );
@@ -97,7 +138,7 @@ where id='a8100000-0000-0000-0000-000000000001';
 update app.weekly_schedules set start_minute=480,end_minute=960
 where id='a8200000-0000-0000-0000-000000000001';
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot'),
   30,
   'subject working hours are interpreted in the subject schedule timezone'
 );
@@ -105,19 +146,25 @@ update app.schedule_scopes set time_zone='America/New_York'
 where id='a8100000-0000-0000-0000-000000000001';
 update app.weekly_schedules set start_minute=540,end_minute=1020
 where id='a8200000-0000-0000-0000-000000000001';
+savepoint dst_fixtures;
+update app.schedule_scopes set time_zone=current_setting('test.fold_zone')
+where id in ('a5600000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001');
+insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,service_id,policy_key,value) values
+ ('a8840000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','service','a7200000-0000-0000-0000-000000000001','horizon_days','365'),
+ ('a8840000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','service','a7200000-0000-0000-0000-000000000001','minimum_notice_minutes','0');
 insert into app.schedule_exceptions(id,tenant_id,schedule_scope_id,local_date,exception_kind,start_minute,end_minute,fold) values
- ('a8900000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001','2026-11-01','override',60,120,1),
- ('a8900000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001','2026-11-01','override',60,120,1);
+ ('a8900000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001',current_setting('test.fold_date')::date,'override',current_setting('test.fold_minute')::integer,current_setting('test.fold_minute')::integer+60,1),
+ ('a8900000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001',current_setting('test.fold_date')::date,'override',current_setting('test.fold_minute')::integer,current_setting('test.fold_minute')::integer+60,1);
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 05:00+00','2026-11-01 07:00+00',1,'America/New_York') where result_kind='slot' and fold=1),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-60),pg_temp.fold_time(60),1,current_setting('test.fold_zone')) where result_kind='slot' and fold=1),
   2,
   'an explicit exception fold exposes only the selected repeated civil-time occurrence'
 );
 select is(
   (select array_agg(slot_start order by slot_start)
-    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 06:00+00','2026-11-01 07:00+00',1,'America/New_York')
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(0),pg_temp.fold_time(60),1,current_setting('test.fold_zone'))
     where result_kind='slot' and fold=1),
-  array['2026-11-01 06:00+00'::timestamptz,'2026-11-01 06:15+00'::timestamptz],
+  array[pg_temp.fold_time(0),pg_temp.fold_time(15)],
   'a window containing only the second repeated hour preserves fold 1 and its exceptions'
 );
 savepoint buffered_fold;
@@ -127,19 +174,54 @@ insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,staff_id,polic
 values ('a8820000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','staff','a8000000-0000-0000-0000-000000000001','buffer_before_minutes','30');
 select is(
   (select array_agg(fold order by slot_start)
-    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 06:00+00','2026-11-01 07:00+00',1,'America/New_York')
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(0),pg_temp.fold_time(60),1,current_setting('test.fold_zone'))
     where result_kind='slot'),
   array[1,1]::smallint[],
   'public fold identifies the slot start even when its buffer begins in the first repeated hour'
 );
 rollback to savepoint buffered_fold;
+savepoint fold_breaks;
+update app.schedule_exceptions set fold=null,start_minute=0,end_minute=current_setting('test.fold_minute')::integer+120
+where id in ('a8900000-0000-0000-0000-000000000001','a8900000-0000-0000-0000-000000000002');
+insert into app.schedule_breaks(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute) values
+ ('a8830000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001',0,10,20),
+ ('a8830000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001',0,10,20);
 select is(
-  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-08 13:00+00','2026-09-08 14:00+00',1,'America/New_York') where result_kind='summary'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  1,
+  'a first-fold-crossing slot survives non-overlapping Sunday breaks without reversed civil ranges'
+);
+update app.schedule_breaks set start_minute=current_setting('test.fold_minute')::integer+45,end_minute=current_setting('test.fold_minute')::integer+60
+where id='a8830000-0000-0000-0000-000000000001';
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  0,
+  'a break inside the first repeated hour blocks a slot crossing the fold'
+);
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(0),pg_temp.fold_time(45),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  1,
+  'an occupied interval ending exactly at the second-hour break start remains available'
+);
+update app.schedule_breaks set start_minute=current_setting('test.fold_minute')::integer,end_minute=current_setting('test.fold_minute')::integer+15
+where id='a8830000-0000-0000-0000-000000000002';
+select is(
+  (select count(*)::integer
+    from (values (pg_temp.fold_time(-60)),(pg_temp.fold_time(0))) repeated(starts_at)
+    cross join lateral api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,repeated.starts_at,repeated.starts_at+interval '45 minutes',1,current_setting('test.fold_zone')) a
+    where a.result_kind='slot'),
+  0,
+  'a subject break blocks both occurrences of the same local minutes'
+);
+rollback to savepoint fold_breaks;
+rollback to savepoint dst_fixtures;
+select is(
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(1,'09:00'),pg_temp.availability_time(1,'10:00'),1,'America/New_York') where result_kind='summary'),
   'no_matching_availability',
   'missing subject schedule is minimized to no matching availability'
 );
 select is(
-  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2027-01-04 14:00+00','2027-01-04 15:00+00',1,'America/New_York') where result_kind='summary'),
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(120,'10:00'),pg_temp.availability_time(120,'11:00'),1,'America/New_York') where result_kind='summary'),
   'outside_booking_window',
   'notice and horizon rejection use the coarse outside-window code'
 );
@@ -161,7 +243,7 @@ insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,location_id,se
  ('a8800000-0000-0000-0000-000000000011','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'turnover_minutes','20'),
  ('a8800000-0000-0000-0000-000000000012','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','turnover_minutes','30');
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot'),
   26,
   'subject policy precedence drives interval and occupied travel/turnover containment'
 );
@@ -192,7 +274,7 @@ values ('a8600000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-00000000
 insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute)
 values ('a8700000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a8600000-0000-0000-0000-000000000001',1,540,1020);
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
   14,
   'exclusive-resource slots expose their kind while resource identity remains private'
 );
@@ -206,7 +288,7 @@ insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,star
 values ('a8700000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8600000-0000-0000-0000-000000000002',1,540,1020);
 select is(
   (select array[count(*)::integer,count(distinct (slot_start,slot_end,allocation_kind))::integer,max(candidate_rank)]
-    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 14:00+00','2026-09-07 14:45+00',1,'America/New_York')
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'10:00'),pg_temp.availability_time(0,'10:45'),1,'America/New_York')
     where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
   array[1,1,1],
   'two interchangeable resources produce one private-identity public slot with deterministic rank'
@@ -225,7 +307,7 @@ insert into app.catalog_service_revisions(
 insert into app.catalog_service_locations(tenant_id,service_id,location_id)
 values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001');
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York')$$,
   '22023','availability_selection_unavailable','deferred group capacity fails closed even for party size one'
 );
 
@@ -253,55 +335,55 @@ insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,star
 select ('30000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,('20000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,2,540,1020 from generate_series(1,128) i
 union all select 'f9200000-0000-0000-0000-000000000001'::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'f9100000-0000-0000-0000-000000000001'::uuid,1,540,1020;
 select ok(
-  exists(select 1 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 15:00+00',1,'America/New_York') where result_kind='slot' and staff_id='f9000000-0000-0000-0000-000000000001'),
+  exists(select 1 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'11:00'),1,'America/New_York') where result_kind='slot' and staff_id='f9000000-0000-0000-0000-000000000001'),
   'availability evaluates the valid later subject beyond the former 128-candidate truncation'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'00:00'),pg_temp.availability_time(31,'00:00'),1,'America/New_York')$$,
   '54000','availability_query_too_complex',
   'high candidate cardinality combined with the maximum window is rejected before slot generation'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-09-13 00:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'00:00'),pg_temp.availability_time(6,'00:00'),1,'America/New_York')$$,
   '54000','availability_query_too_complex',
   'fold context is included in the 250000-point candidate workload bound'
 );
 select is(
-  (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') limit 1),
+  (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') limit 1),
   'not_applicable',
   'external calendar health remains explicitly deferred'
 );
 select is(
-  (select allocation_kind from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot' limit 1),
+  (select allocation_kind from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot' limit 1),
   'appointment',
   'slot DTO identifies appointment versus exclusive-resource allocation without leaking resource IDs'
 );
 select ok(
-  (select bool_and(cache_tag like 'availability:a0000000-0000-0000-0000-000000000001:1:3:1:%') from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')),
+  (select bool_and(cache_tag like 'availability:a0000000-0000-0000-0000-000000000001:1:3:1:%') from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York')),
   'cache tag includes tenant, publication, config, feature, and availability revisions'
 );
 
 insert into app.assignment_allocations(id,tenant_id,service_id,location_id,staff_id,starts_at,ends_at)
-values ('a8300000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001','2026-09-07 13:00+00','2026-09-07 13:45+00');
+values ('a8300000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'09:45'));
 select cmp_ok(
   (select revision from app.availability_revisions where tenant_id='a0000000-0000-0000-0000-000000000001'),
   '>',current_setting('test.availability_revision')::bigint,
   'allocation mutations invalidate tenant availability cache tags'
 );
 select is(
-  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York') where result_kind='slot'),
   23,
   'active allocation occupied ranges remove overlapping advisory slots'
 );
 select is(
-  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 13:45+00',1,'America/New_York') where result_kind='summary'),
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'09:45'),1,'America/New_York') where result_kind='summary'),
   'capacity_unavailable',
   'allocation conflicts use a coarse capacity code without conflict details'
 );
 insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,staff_id,policy_key,value)
 values ('a8800000-0000-0000-0000-000000000013','a0000000-0000-0000-0000-000000000001','staff','a8000000-0000-0000-0000-000000000001','daily_limit_per_staff','1');
 select is(
-  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 18:00+00','2026-09-07 19:00+00',1,'America/New_York') where result_kind='summary'),
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'14:00'),pg_temp.availability_time(0,'15:00'),1,'America/New_York') where result_kind='summary'),
   'policy_restricted',
   'daily limits use a coarse policy code'
 );
@@ -332,22 +414,22 @@ select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000
 select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'daily_limit_per_staff',null),1,'daily limit uses subject precedence');
 
 select ok(
-  (select count(*) <= 500 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')),
+  (select count(*) <= 500 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'00:00'),pg_temp.availability_time(31,'00:00'),1,'America/New_York')),
   'a maximum-size request cannot return more than 500 rows'
 );
 select lives_ok(
-  $$explain (analyze,buffers,format json) select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
+  $$explain (analyze,buffers,format json) select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'00:00'),pg_temp.availability_time(31,'00:00'),1,'America/New_York')$$,
   'representative accepted-bound maximum-window plan completes within the RPC statement timeout'
 );
 
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 select lives_ok(
-  $$select * from api_v1.get_availability_v1('dashboard.tenant-a.example.invalid','dashboard','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('dashboard.tenant-a.example.invalid','dashboard','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York')$$,
   'a live tenant member receives the same Dashboard availability semantics'
 );
 select throws_ok(
-  $$select * from api_v1.get_availability_v1('dashboard.tenant-b.example.invalid','dashboard','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')$$,
+  $$select * from api_v1.get_availability_v1('dashboard.tenant-b.example.invalid','dashboard','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(0,'09:00'),pg_temp.availability_time(0,'18:00'),1,'America/New_York')$$,
   '42501','availability_context_required','Dashboard context requires a live membership in the resolved tenant'
 );
 reset role;

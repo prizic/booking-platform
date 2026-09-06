@@ -53,6 +53,12 @@ contract without widening the backend contract range in `platform-contract.json`
    limit, and only candidates inside the requested bounds reach schedule checks.
    A slot's fold describes its start; buffered location and subject starts have
    their own folds for matching schedule exceptions.
+   Break overlap checks walk the occupied UTC minutes and map each to the
+   relevant scope's local weekday/minute, preserving half-open boundaries across
+   repeated hours. Existing duration and offset constraints bound that walk.
+   The exposed RPC declares the two-second statement timeout so PostgREST can
+   hoist it to the request transaction; a private-helper setting alone is not
+   sufficient for that enforcement.
 5. Availability may use a short tenant-aware cache. Keys include tenant, locale,
    publication, configuration, feature-entitlement, schedule, and allocation
    revisions. The database projection owns revision inputs; callers may not cache

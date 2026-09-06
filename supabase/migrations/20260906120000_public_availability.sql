@@ -362,6 +362,7 @@ begin
     left join app.schedule_scopes rs on rs.id=g.subject_scope_id and g.resource_id is not null
     where g.occupied_location_start::date=g.occupied_location_end::date
       and g.occupied_subject_start::date=g.occupied_subject_end::date
+      and g.occupied_ends_at-g.occupied_starts_at between interval '1 minute' and interval '7200 minutes'
       and ((g.staff_id is not null and ss.id is not null) or (g.resource_id is not null and rs.id is not null))
       and not exists(select 1 from app.holidays h where h.tenant_id=v_tenant_id and h.location_id=p_location_id and h.local_date=g.location_start::date)
       and not exists(select 1 from app.blackouts b where b.tenant_id=v_tenant_id and b.location_id=p_location_id
@@ -415,15 +416,21 @@ begin
           and e.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
           and e.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer)
       ))
-      and not exists(select 1 from app.schedule_breaks b where b.tenant_id=v_tenant_id
-        and ((b.schedule_scope_id=ls.id and b.day_of_week=extract(dow from g.occupied_location_start)::integer
-          and int4range(b.start_minute,b.end_minute,'[)') && int4range(
-            extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer,
-            extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer,'[)'))
-          or (b.schedule_scope_id=coalesce(ss.id,rs.id) and b.day_of_week=extract(dow from g.occupied_subject_start)::integer
-          and int4range(b.start_minute,b.end_minute,'[)') && int4range(
-            extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer,
-            extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer,'[)'))))
+      -- Grid starts and all occupied offsets are whole minutes. Walking the
+      -- half-open UTC interval tests every occupied civil minute, including
+      -- both sides of a fold, without constructing a reversed local range.
+      -- Existing duration/buffer/travel/turnover constraints bound this walk
+      -- to at most 7200 minutes per candidate, and it runs only for its scopes.
+      and not exists(select 1 from app.schedule_breaks b
+        where b.tenant_id=v_tenant_id and b.schedule_scope_id in (ls.id,coalesce(ss.id,rs.id))
+          and exists(select 1
+            from pg_catalog.generate_series(g.occupied_starts_at,
+              least(g.occupied_ends_at,g.occupied_starts_at+interval '7200 minutes')-interval '1 minute',interval '1 minute') minute_start
+            cross join lateral (select minute_start at time zone
+              case when b.schedule_scope_id=ls.id then v_location_time_zone else g.subject_time_zone end as local_minute) civil
+            where b.day_of_week=extract(dow from civil.local_minute)::integer
+              and b.start_minute<=extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer
+              and b.end_minute>extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer))
   ), ranked as (
     select v.*,row_number() over(partition by v.starts_at,v.ends_at order by
       (select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id and a.staff_id=v.staff_id and a.state in ('confirmed','completed')),
@@ -483,7 +490,7 @@ returns table(
   local_start timestamp,utc_offset_seconds integer,fold smallint,advisory_as_of timestamptz,
   advisory_until timestamptz,no_slot_code text,provider_health_code text,cache_tag text
 )
-language sql stable security invoker set search_path='' as $$
+language sql stable security invoker set search_path='' set statement_timeout='2s' as $$
   select * from private.get_availability_v1(
     p_hostname,p_application,p_service_id,p_location_id,p_staff_preference_id,
     p_window_start,p_window_end,p_party_size,p_customer_time_zone
