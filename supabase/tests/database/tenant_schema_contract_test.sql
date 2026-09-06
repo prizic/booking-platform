@@ -84,8 +84,8 @@ select is(
     where namespace.nspname = 'private'
       and procedure.prosecdef
   ),
-  6,
-  'exactly six narrow private policy helpers use SECURITY DEFINER'
+  16,
+  'exactly sixteen narrow private policy and transaction helpers use SECURITY DEFINER'
 );
 
 select ok(

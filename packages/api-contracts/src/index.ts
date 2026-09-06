@@ -211,6 +211,78 @@ export interface PublicCatalogItemV1 {
   readonly cacheTag: string;
 }
 
+/** Customer-safe assignment choices; internal notes and authorization are
+ * deliberately absent. */
+export interface AssignmentCandidateV1 {
+  readonly assignmentMode:
+    "fixed_staff" | "customer_choice" | "any_available" | "round_robin";
+  readonly candidateRank: number;
+  readonly staffId: string | null;
+  readonly staffName: string | null;
+  readonly resourceId: string | null;
+  readonly resourceName: string | null;
+}
+
+export function parseAssignmentCandidatesV1(
+  value: unknown,
+): readonly AssignmentCandidateV1[] {
+  if (!Array.isArray(value)) throw new Error("Assignment candidates must be an array");
+
+  const keys = [
+    "assignmentMode",
+    "candidateRank",
+    "resourceId",
+    "resourceName",
+    "staffId",
+    "staffName",
+  ] as const;
+
+  return Object.freeze(
+    value.map((candidate) => {
+      if (!isRecord(candidate) || !hasExactKeys(candidate, keys)) {
+        throw new Error("Assignment candidate has an unexpected shape");
+      }
+      if (
+        !["fixed_staff", "customer_choice", "any_available", "round_robin"].includes(
+          candidate.assignmentMode as string,
+        ) ||
+        !Number.isSafeInteger(candidate.candidateRank) ||
+        (candidate.candidateRank as number) < 1
+      ) {
+        throw new Error("Assignment candidate is invalid");
+      }
+
+      const hasStaff =
+        typeof candidate.staffId === "string" &&
+        candidate.staffId.trim() !== "" &&
+        typeof candidate.staffName === "string" &&
+        candidate.staffName.trim() !== "";
+      const hasResource =
+        typeof candidate.resourceId === "string" &&
+        candidate.resourceId.trim() !== "" &&
+        typeof candidate.resourceName === "string" &&
+        candidate.resourceName.trim() !== "";
+      const emptyStaff = candidate.staffId === null && candidate.staffName === null;
+      const emptyResource =
+        candidate.resourceId === null && candidate.resourceName === null;
+
+      if (!((hasStaff && emptyResource) || (hasResource && emptyStaff))) {
+        throw new Error("Assignment candidate identity is invalid");
+      }
+
+      return Object.freeze({
+        assignmentMode:
+          candidate.assignmentMode as AssignmentCandidateV1["assignmentMode"],
+        candidateRank: candidate.candidateRank as number,
+        resourceId: candidate.resourceId as string | null,
+        resourceName: candidate.resourceName as string | null,
+        staffId: candidate.staffId as string | null,
+        staffName: candidate.staffName as string | null,
+      });
+    }),
+  );
+}
+
 export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {
   if (!Array.isArray(value)) throw new Error("Public catalog must be an array");
   return Object.freeze(
