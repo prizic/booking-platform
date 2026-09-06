@@ -62,7 +62,9 @@ function mapRows(value: unknown): AvailabilityV1Response {
     const slotRows = rows.filter((row) => row.result_kind === "slot");
     const rawNoSlotReason = first.no_slot_code;
     const noSlotReason =
-      rawNoSlotReason === "none_available" ? "no_matching_availability" : rawNoSlotReason;
+      rawNoSlotReason === "none_available"
+        ? "no_matching_availability"
+        : rawNoSlotReason;
     return parseAvailabilityV1Response({
       advisory: true,
       displayTimeZone: first.customer_time_zone,
