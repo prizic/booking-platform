@@ -68,6 +68,7 @@ Files are named `NNNN-kebab-title.md`: a zero-padded four-digit sequence number,
 | 0014 | [Catalog publication boundary and public DTO](./0014-catalog-publication-and-public-dto.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | Custom roles, a new locale, multi-brand publishing, or booking snapshots need a new revision shape |
 
 | 0015 | [Staff and resource assignment boundary](./0015-staff-and-resource-assignment-boundary.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Multi-resource services, custom roles, group capacity, or non-exclusive inventory changes the MVP model |
+| 0016 | [Civil-time schedules and policy bounds](./0016-schedule-civil-time-and-policy-bounds.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | A new schedule kind, policy bound, or DST interpretation is required |
 
 Dates are `—` while status is `Proposed` and undated; set the date when the status changes.
 

@@ -4,6 +4,8 @@ import {
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
+  parseSaveScheduleConfigV1,
+  parseScheduleWorkspaceV1,
   parseStaffResourceDeactivationV1,
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
@@ -67,6 +69,72 @@ describe("assignment candidate DTO", () => {
         },
       ]),
     ).toThrow("Assignment candidate");
+  });
+});
+
+describe("schedule Dashboard DTOs", () => {
+  it("accepts only the explicit normalized workspace shape", () => {
+    const [row] = parseScheduleWorkspaceV1([
+      {
+        kind: "weekly",
+        id: "weekly-a",
+        scopeId: "scope-a",
+        locationId: "location-a",
+        staffId: null,
+        resourceId: null,
+        localDate: null,
+        dayOfWeek: 1,
+        startMinute: 540,
+        endMinute: 1020,
+        startsAt: null,
+        endsAt: null,
+        exceptionKind: null,
+        timeZone: "America/New_York",
+        reason: null,
+        policyKey: null,
+        value: null,
+        revision: 2,
+      },
+    ]);
+    expect(row).toMatchObject({ kind: "weekly", dayOfWeek: 1, revision: 2 });
+  });
+
+  it("rejects private rows with undeclared columns", () => {
+    expect(() =>
+      parseScheduleWorkspaceV1([
+        {
+          kind: "time_off",
+          id: "off-a",
+          scopeId: null,
+          locationId: "location-a",
+          staffId: "staff-a",
+          resourceId: null,
+          localDate: null,
+          dayOfWeek: null,
+          startMinute: null,
+          endMinute: null,
+          startsAt: "2026-09-06T09:00:00Z",
+          endsAt: "2026-09-06T10:00:00Z",
+          exceptionKind: null,
+          timeZone: "UTC",
+          reason: "private",
+          policyKey: null,
+          value: null,
+          revision: 1,
+          internal_note: "must not escape",
+        },
+      ]),
+    ).toThrow("unexpected shape");
+  });
+
+  it("requires a positive revision on save responses", () => {
+    expect(parseSaveScheduleConfigV1({ targetId: "row-a", revision: 3 })).toEqual({
+      targetId: "row-a",
+      revision: 3,
+    });
+    expect(() => parseSaveScheduleConfigV1({ targetId: "row-a", revision: 0 })).toThrow(
+      "positive revision",
+    );
   });
 });
 

@@ -7,6 +7,13 @@ import {
   createMoney,
   createTimeRange,
   rangesOverlap,
+  applyScheduleConstraints,
+  applyScheduleException,
+  createWeeklySchedule,
+  evaluateSchedulePolicy,
+  resolveScheduleCivilTime,
+  resolveSchedulePolicy,
+  type SchedulePolicyOverrides,
   withBuffers,
 } from "./index.js";
 
@@ -55,5 +62,122 @@ describe("booking state transitions", () => {
     expect(canTransitionBooking("completed", "confirmed")).toBe(true);
     expect(canTransitionBooking("no_show", "checked_in")).toBe(true);
     expect(canTransitionBooking("no_show", "completed")).toBe(true);
+  });
+});
+
+describe("civil-time schedule rules", () => {
+  it("subtracts breaks and keeps adjacent working intervals valid", () => {
+    const schedule = createWeeklySchedule({
+      dayOfWeek: 1,
+      intervals: [{ startMinute: 9 * 60, endMinute: 17 * 60 }],
+      breaks: [{ startMinute: 12 * 60, endMinute: 13 * 60 }],
+      timeZone: "America/New_York",
+    });
+
+    expect(applyScheduleConstraints(schedule, [])).toEqual([
+      { startMinute: 540, endMinute: 720 },
+      { startMinute: 780, endMinute: 1020 },
+    ]);
+  });
+
+  it("rejects overlapping intervals instead of normalizing them", () => {
+    expect(() =>
+      createWeeklySchedule({
+        dayOfWeek: 1,
+        intervals: [
+          { startMinute: 9 * 60, endMinute: 12 * 60 },
+          { startMinute: 11 * 60, endMinute: 13 * 60 },
+        ],
+        breaks: [],
+        timeZone: "America/New_York",
+      }),
+    ).toThrow("overlap");
+  });
+
+  it("resolves policy overrides from least to most specific scope", () => {
+    const overrides: SchedulePolicyOverrides = {
+      tenant: { minimumNoticeMinutes: 60, horizonDays: 90 },
+      location: { minimumNoticeMinutes: 240 },
+      service: { minimumNoticeMinutes: 120, slotIntervalMinutes: 30 },
+    };
+
+    expect(resolveSchedulePolicy(overrides)).toMatchObject({
+      minimumNoticeMinutes: 120,
+      horizonDays: 90,
+      slotIntervalMinutes: 30,
+    });
+  });
+
+  it("applies a closed exception and rejects a conflicting override", () => {
+    const schedule = createWeeklySchedule({
+      dayOfWeek: 0,
+      intervals: [{ startMinute: 540, endMinute: 1020 }],
+      breaks: [],
+      timeZone: "America/New_York",
+    });
+    expect(
+      applyScheduleException(schedule, {
+        localDate: "2026-11-01",
+        kind: "closed",
+        intervals: [],
+        fold: null,
+      }),
+    ).toEqual([]);
+    expect(() =>
+      applyScheduleException(schedule, {
+        localDate: "2026-11-01",
+        kind: "override",
+        intervals: [{ startMinute: 600, endMinute: 700 }],
+        fold: 0,
+      }),
+    ).not.toThrow();
+  });
+
+  it("deterministically identifies DST gaps and folds in named zones", () => {
+    expect(
+      resolveScheduleCivilTime("2026-03-08T02:30", "America/New_York"),
+    ).toMatchObject({ kind: "gap" });
+    expect(
+      resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York"),
+    ).toMatchObject({ kind: "ambiguous" });
+    expect(
+      resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York", 1),
+    ).toMatchObject({ kind: "exact", fold: 1 });
+  });
+
+  it("enforces notice, horizon, and daily staff limits", () => {
+    const policy = resolveSchedulePolicy({
+      tenant: { minimumNoticeMinutes: 60, horizonDays: 10, dailyLimitPerStaff: 2 },
+    });
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-01T10:30:00Z",
+          staffBookingsToday: 0,
+        },
+        policy,
+      ),
+    ).toBe(false);
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-05T10:00:00Z",
+          staffBookingsToday: 2,
+        },
+        policy,
+      ),
+    ).toBe(false);
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-05T10:00:00Z",
+          staffBookingsToday: 1,
+        },
+        policy,
+      ),
+    ).toBe(true);
   });
 });

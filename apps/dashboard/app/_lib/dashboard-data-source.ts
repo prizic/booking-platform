@@ -5,6 +5,8 @@ import {
   parseStaffResourceDeactivationV1,
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
+  parseScheduleWorkspaceV1,
+  parseSaveScheduleConfigV1,
   type CapabilityName,
   type StaffResourceDeactivationV1,
   type StaffResourceWorkspaceV1,
@@ -475,6 +477,35 @@ export function createDashboardDataSource(
         roleKey: row.role_key,
         tenantId: row.tenant_id,
         tenantName: row.tenant_name,
+      });
+    },
+
+    getScheduleWorkspace: async (tenantId, locationId) => {
+      const rows = assertRpc(
+        await api.rpc("get_schedule_workspace_v1", {
+          p_tenant_id: tenantId,
+          ...(locationId === undefined ? {} : { p_location_id: locationId }),
+        }),
+      );
+      return parseScheduleWorkspaceV1(rows);
+    },
+
+    saveScheduleConfig: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("save_schedule_config_v1", {
+            p_tenant_id: request.tenantId,
+            p_operation: request.operation,
+            p_payload: request.payload,
+            p_expected_revision: request.expectedRevision,
+            p_request_id: crypto.randomUUID(),
+          }),
+        ),
+      );
+      if (row === null) throw new Error("Schedule save returned no result");
+      return parseSaveScheduleConfigV1({
+        targetId: row.target_id,
+        revision: row.revision,
       });
     },
   };

@@ -179,6 +179,59 @@ export interface DashboardContextV1 {
   readonly tenantName: string;
 }
 
+export type ScheduleOperationV1 =
+  | "scope"
+  | "weekly"
+  | "break"
+  | "exception"
+  | "time_off"
+  | "holiday"
+  | "blackout"
+  | "maintenance"
+  | "policy";
+
+export interface ScheduleWorkspaceRowV1 {
+  readonly kind:
+    | "scope"
+    | "weekly"
+    | "break"
+    | "exception"
+    | "time_off"
+    | "holiday"
+    | "blackout"
+    | "maintenance"
+    | "policy";
+  readonly id: string;
+  readonly scopeId: string | null;
+  readonly locationId: string | null;
+  readonly staffId: string | null;
+  readonly resourceId: string | null;
+  readonly localDate: string | null;
+  readonly dayOfWeek: number | null;
+  readonly startMinute: number | null;
+  readonly endMinute: number | null;
+  readonly startsAt: string | null;
+  readonly endsAt: string | null;
+  readonly exceptionKind: "closed" | "override" | null;
+  readonly timeZone: string | null;
+  readonly reason: string | null;
+  readonly policyKey: string | null;
+  readonly value: number | null;
+  readonly revision: number;
+}
+
+export interface SaveScheduleConfigV1Request {
+  readonly tenantId: TenantId;
+  readonly operation: ScheduleOperationV1;
+  readonly payload: Readonly<Record<string, unknown>>;
+  readonly expectedRevision: number | null;
+}
+
+export interface SaveScheduleConfigV1Response {
+  readonly targetId: string;
+  readonly revision: number;
+}
+
 /** Customer-safe catalog projection. It intentionally has no intake schema,
  * internal notes, authorization fields, or raw tenant-table shape. */
 export interface PublicCatalogItemV1 {
@@ -778,5 +831,107 @@ export function parseResolvePublicTenantV1(
     instanceId: requireNonEmptyString(value.instanceId),
     publishedBrandRevision: requirePositiveRevision(value.publishedBrandRevision),
     tenantId: requireNonEmptyString(value.tenantId),
+  });
+}
+
+const scheduleKinds = [
+  "scope",
+  "weekly",
+  "break",
+  "exception",
+  "time_off",
+  "holiday",
+  "blackout",
+  "maintenance",
+  "policy",
+] as const;
+
+export function parseScheduleWorkspaceV1(
+  value: unknown,
+): readonly ScheduleWorkspaceRowV1[] {
+  if (!Array.isArray(value)) throw new Error("Schedule workspace is not an array");
+  return Object.freeze(
+    value.map((entry) => {
+      const keys = [
+        "kind",
+        "id",
+        "scopeId",
+        "locationId",
+        "staffId",
+        "resourceId",
+        "localDate",
+        "dayOfWeek",
+        "startMinute",
+        "endMinute",
+        "startsAt",
+        "endsAt",
+        "exceptionKind",
+        "timeZone",
+        "reason",
+        "policyKey",
+        "value",
+        "revision",
+      ] as const;
+      if (
+        !isRecord(entry) ||
+        !hasExactKeys(entry, keys) ||
+        !scheduleKinds.includes(entry.kind as (typeof scheduleKinds)[number])
+      )
+        throw new Error("Schedule workspace row has an unexpected shape");
+      const nullableString = (raw: unknown) =>
+        raw === null ? null : requireNonEmptyString(raw);
+      const nullableInteger = (raw: unknown) =>
+        raw === null
+          ? null
+          : typeof raw === "number" && Number.isSafeInteger(raw)
+            ? raw
+            : (() => {
+                throw new Error("Schedule integer is invalid");
+              })();
+      if (
+        entry.exceptionKind !== null &&
+        entry.exceptionKind !== "closed" &&
+        entry.exceptionKind !== "override"
+      )
+        throw new Error("Schedule exception kind is invalid");
+      return Object.freeze({
+        kind: entry.kind as (typeof scheduleKinds)[number],
+        id: requireNonEmptyString(entry.id),
+        scopeId: nullableString(entry.scopeId),
+        locationId: nullableString(entry.locationId),
+        staffId: nullableString(entry.staffId),
+        resourceId: nullableString(entry.resourceId),
+        localDate: nullableString(entry.localDate),
+        dayOfWeek: nullableInteger(entry.dayOfWeek),
+        startMinute: nullableInteger(entry.startMinute),
+        endMinute: nullableInteger(entry.endMinute),
+        startsAt: nullableString(entry.startsAt),
+        endsAt: nullableString(entry.endsAt),
+        exceptionKind: entry.exceptionKind,
+        timeZone: nullableString(entry.timeZone),
+        reason: nullableString(entry.reason),
+        policyKey: nullableString(entry.policyKey),
+        value:
+          entry.value === null
+            ? null
+            : typeof entry.value === "number" && Number.isFinite(entry.value)
+              ? entry.value
+              : (() => {
+                  throw new Error("Schedule policy value is invalid");
+                })(),
+        revision: requirePositiveRevision(entry.revision),
+      });
+    }),
+  );
+}
+
+export function parseSaveScheduleConfigV1(
+  value: unknown,
+): SaveScheduleConfigV1Response {
+  if (!isRecord(value) || !hasExactKeys(value, ["targetId", "revision"]))
+    throw new Error("Schedule save response has an unexpected shape");
+  return Object.freeze({
+    targetId: requireNonEmptyString(value.targetId),
+    revision: requirePositiveRevision(value.revision),
   });
 }
