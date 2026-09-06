@@ -16,8 +16,8 @@ create table app.staff_profiles (
   tenant_id uuid not null references app.tenants(id) on delete restrict,
   membership_id uuid,
   public_name text not null check (public_name = btrim(public_name) and char_length(public_name) between 1 and 160),
-  public_bio text not null default '',
-  internal_notes text not null default '',
+  public_bio text not null default '' check (char_length(public_bio) <= 2000),
+  internal_notes text not null default '' check (char_length(internal_notes) <= 2000),
   status text not null default 'active' check (status in ('active','inactive','deactivation_pending')),
   offered_hours_per_week numeric(6,2) not null default 40 check (offered_hours_per_week > 0 and offered_hours_per_week <= 168),
   revision bigint not null default 1 check (revision > 0),
@@ -74,7 +74,7 @@ create table app.resources (
   id uuid not null, tenant_id uuid not null, resource_type_id uuid not null,
   key text not null check (key = lower(key) and key ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   public_name text not null check (public_name = btrim(public_name) and char_length(public_name) between 1 and 160),
-  internal_notes text not null default '',
+  internal_notes text not null default '' check (char_length(internal_notes) <= 2000),
   status text not null default 'active' check (status in ('active','maintenance','inactive','deactivation_pending')),
   capacity integer not null default 1 check (capacity = 1),
   revision bigint not null default 1 check (revision > 0),
@@ -458,7 +458,8 @@ begin
     raise exception using errcode='22023',message='reason_required';
   end if;
   if p_public_name is null or char_length(btrim(p_public_name)) not between 1 and 160
-    or p_public_bio is null or p_internal_notes is null
+    or p_public_bio is null or char_length(p_public_bio)>2000
+    or p_internal_notes is null or char_length(p_internal_notes)>2000
     or p_offered_hours_per_week is null
     or p_offered_hours_per_week<=0 or p_offered_hours_per_week>168 then
     raise exception using errcode='22023',message='staff_profile_invalid';
@@ -699,7 +700,8 @@ begin
   if p_resource_type_id is null or p_key is null or btrim(p_key)<>lower(btrim(p_key))
     or btrim(p_key)!~'^[a-z0-9]+(?:-[a-z0-9]+)*$'
     or p_public_name is null or char_length(btrim(p_public_name)) not between 1 and 160
-    or p_internal_notes is null or p_status not in ('active','maintenance') then
+    or p_internal_notes is null or char_length(p_internal_notes)>2000
+    or p_status not in ('active','maintenance') then
     raise exception using errcode='22023',message='resource_invalid';
   end if;
 
