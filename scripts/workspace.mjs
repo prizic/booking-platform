@@ -155,6 +155,8 @@ const ignoredDirectoryNames = new Set([
   ".git",
   ".next",
   ".next-warm",
+  ".next-warm-client",
+  ".next-warm-dashboard",
   ".turbo",
   "coverage",
   "dist",

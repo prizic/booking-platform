@@ -14,9 +14,9 @@
   --brand-color-on-danger: #ffffff;
   --brand-color-focus: #9b3d0c;
   --brand-font-body: Inter, "Noto Sans Arabic", sans-serif;
-  --brand-font-display: Georgia, "Noto Naskh Arabic", serif;
-  --brand-font-arabic-body: "Noto Sans Arabic", Tahoma, sans-serif;
-  --brand-font-arabic-display: "Noto Naskh Arabic", Tahoma, serif;
+  --brand-font-display: Inter, "Noto Sans Arabic", sans-serif;
+  --brand-font-arabic-body: "Noto Sans Arabic", sans-serif;
+  --brand-font-arabic-display: "Noto Naskh Arabic", sans-serif;
   --brand-font-size-caption: 0.75rem;
   --brand-font-size-body: 1rem;
   --brand-font-size-label: 0.875rem;
@@ -55,6 +55,6 @@
 }
 
 [dir="rtl"] {
-  --brand-font-body: "Noto Sans Arabic", Tahoma, sans-serif;
-  --brand-font-display: "Noto Naskh Arabic", Tahoma, serif;
+  --brand-font-body: "Noto Sans Arabic", sans-serif;
+  --brand-font-display: "Noto Naskh Arabic", sans-serif;
 }

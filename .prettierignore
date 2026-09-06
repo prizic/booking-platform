@@ -1,5 +1,7 @@
 .git
 .next
+.next-warm-client
+.next-warm-dashboard
 .turbo
 coverage
 dist

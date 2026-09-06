@@ -1,0 +1,54 @@
+{
+  "generatedAt": "2026-09-05",
+  "generator": "scripts/font-provenance/generate.mjs",
+  "conversion": "Google Fonts upstream variable TTF converted to WOFF2 with fontTools 4.63.0 and Brotli",
+  "distribution": {
+    "client": "apps/client/public/fonts",
+    "dashboard": "apps/dashboard/public/fonts",
+    "instance": "instance-template/instance/assets/fonts"
+  },
+  "renderEnvironment": {
+    "os": "ubuntu-24.04",
+    "architecture": "x86_64",
+    "playwright": "1.63.0",
+    "chromium": "Playwright-managed Chromium (installed with --with-deps)"
+  },
+  "fonts": [
+    {
+      "asset": "Inter-Variable.woff2",
+      "family": "Inter",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-Inter.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter%5Bopsz,wght%5D.ttf",
+      "weights": "100–900",
+      "sha256": "af31b0357e4f71623023b41111eb7297c70b5aef12918290922ff9167fd06274"
+    },
+    {
+      "asset": "NotoSansArabic-Variable.woff2",
+      "family": "Noto Sans Arabic",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-Noto-Sans-Arabic.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/notosansarabic/NotoSansArabic%5Bwdth,wght%5D.ttf",
+      "weights": "100–900",
+      "sha256": "a2f6351d4813fcb6a1ebb567376dded5c8e9a866150ba7a5cefa969786ebf731"
+    },
+    {
+      "asset": "NotoNaskhArabic-Variable.woff2",
+      "family": "Noto Naskh Arabic",
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-Noto-Naskh-Arabic.txt",
+      "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/notonaskharabic/NotoNaskhArabic%5Bwght%5D.ttf",
+      "weights": "400–700",
+      "sha256": "97c1aee90f41995d927014498157aeeb256b0468352577ac10f538b2d7e03fef"
+    }
+  ],
+  "policy": {
+    "runtimeSource": "self",
+    "remoteFontRequests": false,
+    "fallback": "Use the first shipped family in a semantic token; generic CSS families are allowed only as the final fallback.",
+    "visualReferences": {
+      "linux": "Canonical ubuntu-24.04 CI output; review actual and diff artifacts before promotion.",
+      "darwin": "Developer reference only; never promoted as the Linux baseline."
+    }
+  }
+}
