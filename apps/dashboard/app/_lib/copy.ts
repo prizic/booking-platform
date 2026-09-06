@@ -9,6 +9,7 @@ export type DashboardMessageKey =
   | "navCalendar"
   | "navBookings"
   | "navCustomers"
+  | "navTeamResources"
   | "navBrand"
   | "metricArrivals"
   | "metricRequests"
@@ -64,6 +65,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCalendar: "Calendar",
     navBookings: "Bookings",
     navCustomers: "Customers",
+    navTeamResources: "Team & resources",
     navBrand: "Brand & site",
     metricArrivals: "Today's arrivals",
     metricRequests: "Pending requests",
@@ -120,6 +122,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCalendar: "التقويم",
     navBookings: "الحجوزات",
     navCustomers: "العملاء",
+    navTeamResources: "الفريق والموارد",
     navBrand: "الهوية والموقع",
     metricArrivals: "وصول اليوم",
     metricRequests: "الطلبات المعلّقة",

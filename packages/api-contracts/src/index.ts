@@ -283,6 +283,221 @@ export function parseAssignmentCandidatesV1(
   );
 }
 
+export interface StaffResourceWorkspaceItemV1 {
+  readonly futureAllocationCount: number;
+  readonly id: string;
+  readonly internalNotes: string | null;
+  readonly key: string | null;
+  readonly kind: "resource" | "staff";
+  readonly locationIds: readonly LocationId[];
+  readonly membershipId: string | null;
+  readonly name: string;
+  readonly offeredHoursPerWeek: number | null;
+  readonly publicBio: string | null;
+  readonly resourceTypeId: string | null;
+  readonly resourceTypeName: string | null;
+  readonly revision: number | null;
+  readonly serviceIds: readonly string[];
+  readonly status: "active" | "deactivation_pending" | "inactive" | "maintenance";
+}
+
+export interface StaffResourceChoiceV1 {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface ResourceTypeChoiceV1 extends StaffResourceChoiceV1 {
+  readonly exclusive: boolean;
+  readonly key: string;
+  readonly revision: number;
+}
+
+export interface StaffResourceWorkspaceV1 {
+  readonly items: readonly StaffResourceWorkspaceItemV1[];
+  readonly locations: readonly StaffResourceChoiceV1[];
+  readonly resourceTypes: readonly ResourceTypeChoiceV1[];
+  readonly services: readonly StaffResourceChoiceV1[];
+  readonly tenantId: TenantId;
+}
+
+export interface StaffResourceDeactivationV1 {
+  readonly outcome: "cancelled" | "deactivated" | "deferred" | "reassigned";
+  readonly remainingAllocationCount: number;
+  readonly targetId: string;
+}
+
+export function parseStaffResourceDeactivationV1(
+  value: unknown,
+): StaffResourceDeactivationV1 {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, ["outcome", "remainingAllocationCount", "targetId"]) ||
+    (value.outcome !== "cancelled" &&
+      value.outcome !== "deactivated" &&
+      value.outcome !== "deferred" &&
+      value.outcome !== "reassigned") ||
+    !Number.isSafeInteger(value.remainingAllocationCount) ||
+    (value.remainingAllocationCount as number) < 0
+  ) {
+    throw new Error("Staff/resource deactivation result is invalid");
+  }
+
+  return Object.freeze({
+    outcome: value.outcome,
+    remainingAllocationCount: value.remainingAllocationCount as number,
+    targetId: requireNonEmptyString(value.targetId),
+  });
+}
+
+export function parseStaffResourceWorkspaceV1(
+  value: unknown,
+): StaffResourceWorkspaceV1 {
+  if (
+    !isRecord(value) ||
+    !hasExactKeys(value, [
+      "items",
+      "locations",
+      "resourceTypes",
+      "services",
+      "tenantId",
+    ]) ||
+    !Array.isArray(value.items) ||
+    !Array.isArray(value.locations) ||
+    !Array.isArray(value.resourceTypes) ||
+    !Array.isArray(value.services)
+  ) {
+    throw new Error("Staff/resource workspace has an unexpected shape");
+  }
+
+  const items = value.items.map((item): StaffResourceWorkspaceItemV1 => {
+    const keys = [
+      "futureAllocationCount",
+      "id",
+      "internalNotes",
+      "key",
+      "kind",
+      "locationIds",
+      "membershipId",
+      "name",
+      "offeredHoursPerWeek",
+      "publicBio",
+      "resourceTypeId",
+      "resourceTypeName",
+      "revision",
+      "serviceIds",
+      "status",
+    ] as const;
+    if (
+      !isRecord(item) ||
+      !hasExactKeys(item, keys) ||
+      (item.kind !== "staff" && item.kind !== "resource") ||
+      (item.status !== "active" &&
+        item.status !== "deactivation_pending" &&
+        item.status !== "inactive" &&
+        item.status !== "maintenance") ||
+      (item.kind === "staff" && item.status === "maintenance") ||
+      !Array.isArray(item.locationIds) ||
+      !Array.isArray(item.serviceIds) ||
+      !Number.isSafeInteger(item.futureAllocationCount) ||
+      (item.futureAllocationCount as number) < 0 ||
+      (item.internalNotes !== null && typeof item.internalNotes !== "string") ||
+      (item.key !== null && typeof item.key !== "string") ||
+      (item.membershipId !== null && typeof item.membershipId !== "string") ||
+      (item.offeredHoursPerWeek !== null &&
+        (typeof item.offeredHoursPerWeek !== "number" ||
+          !Number.isFinite(item.offeredHoursPerWeek) ||
+          item.offeredHoursPerWeek <= 0 ||
+          item.offeredHoursPerWeek > 168)) ||
+      (item.publicBio !== null && typeof item.publicBio !== "string") ||
+      (item.resourceTypeId !== null && typeof item.resourceTypeId !== "string") ||
+      (item.resourceTypeName !== null && typeof item.resourceTypeName !== "string") ||
+      (item.revision !== null &&
+        (!Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) ||
+      (item.kind === "staff" &&
+        (item.key !== null ||
+          item.resourceTypeId !== null ||
+          item.resourceTypeName !== null)) ||
+      (item.kind === "staff" && item.resourceTypeName !== null) ||
+      (item.kind === "resource" &&
+        (item.membershipId !== null ||
+          item.offeredHoursPerWeek !== null ||
+          item.publicBio !== null ||
+          item.resourceTypeName === null))
+    ) {
+      throw new Error("Staff/resource workspace item is invalid");
+    }
+
+    return Object.freeze({
+      futureAllocationCount: item.futureAllocationCount as number,
+      id: requireNonEmptyString(item.id),
+      internalNotes: item.internalNotes,
+      key: item.key === null ? null : requireNonEmptyString(item.key),
+      kind: item.kind,
+      locationIds: Object.freeze(item.locationIds.map(requireNonEmptyString)),
+      membershipId:
+        item.membershipId === null ? null : requireNonEmptyString(item.membershipId),
+      name: requireNonEmptyString(item.name),
+      offeredHoursPerWeek: item.offeredHoursPerWeek as number | null,
+      publicBio: item.publicBio,
+      resourceTypeId:
+        item.resourceTypeId === null
+          ? null
+          : requireNonEmptyString(item.resourceTypeId),
+      resourceTypeName:
+        item.resourceTypeName === null
+          ? null
+          : requireNonEmptyString(item.resourceTypeName),
+      revision: item.revision as number | null,
+      serviceIds: Object.freeze(item.serviceIds.map(requireNonEmptyString)),
+      status: item.status,
+    });
+  });
+
+  const parseChoices = (
+    choices: readonly unknown[],
+  ): readonly StaffResourceChoiceV1[] =>
+    Object.freeze(
+      choices.map((choice) => {
+        if (!isRecord(choice) || !hasExactKeys(choice, ["id", "name"])) {
+          throw new Error("Staff/resource workspace choice is invalid");
+        }
+        return Object.freeze({
+          id: requireNonEmptyString(choice.id),
+          name: requireNonEmptyString(choice.name),
+        });
+      }),
+    );
+
+  const resourceTypes = Object.freeze(
+    value.resourceTypes.map((choice) => {
+      if (
+        !isRecord(choice) ||
+        !hasExactKeys(choice, ["exclusive", "id", "key", "name", "revision"]) ||
+        typeof choice.exclusive !== "boolean" ||
+        !Number.isSafeInteger(choice.revision) ||
+        (choice.revision as number) < 1
+      ) {
+        throw new Error("Staff/resource workspace resource type is invalid");
+      }
+      return Object.freeze({
+        exclusive: choice.exclusive,
+        id: requireNonEmptyString(choice.id),
+        key: requireNonEmptyString(choice.key),
+        name: requireNonEmptyString(choice.name),
+        revision: choice.revision as number,
+      });
+    }),
+  );
+
+  return Object.freeze({
+    items: Object.freeze(items),
+    locations: parseChoices(value.locations),
+    resourceTypes,
+    services: parseChoices(value.services),
+    tenantId: requireNonEmptyString(value.tenantId),
+  });
+}
+
 export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItemV1[] {
   if (!Array.isArray(value)) throw new Error("Public catalog must be an array");
   return Object.freeze(

@@ -4,6 +4,8 @@ import {
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
+  parseStaffResourceDeactivationV1,
+  parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
 
@@ -69,6 +71,31 @@ describe("assignment candidate DTO", () => {
 });
 
 describe("tenant isolation DTOs", () => {
+  it("parses a minimal deactivation outcome", () => {
+    expect(
+      parseStaffResourceDeactivationV1({
+        outcome: "reassigned",
+        remainingAllocationCount: 0,
+        targetId: "staff-a",
+      }),
+    ).toEqual({
+      outcome: "reassigned",
+      remainingAllocationCount: 0,
+      targetId: "staff-a",
+    });
+  });
+
+  it("rejects internal deactivation evidence", () => {
+    expect(() =>
+      parseStaffResourceDeactivationV1({
+        affectedAllocationIds: ["booking-a"],
+        outcome: "cancelled",
+        remainingAllocationCount: 0,
+        targetId: "staff-a",
+      }),
+    ).toThrow("deactivation result");
+  });
+
   it("parses a customer-safe bilingual catalog item", () => {
     const [item] = parsePublicCatalogV1([
       {
@@ -168,5 +195,175 @@ describe("tenant isolation DTOs", () => {
         },
       ]),
     ).toHaveLength(1);
+  });
+
+  it("parses the minimal staff and resource management workspace", () => {
+    expect(
+      parseStaffResourceWorkspaceV1({
+        tenantId: "tenant-a",
+        locations: [{ id: "location-a", name: "Downtown" }],
+        resourceTypes: [
+          { exclusive: true, id: "type-a", key: "room", name: "Room", revision: 2 },
+        ],
+        services: [{ id: "service-a", name: "Consultation" }],
+        items: [
+          {
+            futureAllocationCount: 2,
+            id: "staff-a",
+            internalNotes: "Morning shifts",
+            key: null,
+            kind: "staff",
+            locationIds: ["location-a"],
+            membershipId: "membership-a",
+            name: "Layla Hassan",
+            offeredHoursPerWeek: 32.5,
+            publicBio: "Booking specialist",
+            resourceTypeId: null,
+            resourceTypeName: null,
+            revision: 3,
+            serviceIds: ["service-a"],
+            status: "deactivation_pending",
+          },
+          {
+            futureAllocationCount: 0,
+            id: "resource-a",
+            internalNotes: "Door code stored elsewhere",
+            key: "room-one",
+            kind: "resource",
+            locationIds: ["location-a"],
+            membershipId: null,
+            name: "Room 1",
+            offeredHoursPerWeek: null,
+            publicBio: null,
+            resourceTypeId: "type-a",
+            resourceTypeName: "Room",
+            revision: 4,
+            serviceIds: ["service-a"],
+            status: "maintenance",
+          },
+        ],
+      }),
+    ).toEqual({
+      tenantId: "tenant-a",
+      locations: [{ id: "location-a", name: "Downtown" }],
+      resourceTypes: [
+        { exclusive: true, id: "type-a", key: "room", name: "Room", revision: 2 },
+      ],
+      services: [{ id: "service-a", name: "Consultation" }],
+      items: [
+        {
+          futureAllocationCount: 2,
+          id: "staff-a",
+          internalNotes: "Morning shifts",
+          key: null,
+          kind: "staff",
+          locationIds: ["location-a"],
+          membershipId: "membership-a",
+          name: "Layla Hassan",
+          offeredHoursPerWeek: 32.5,
+          publicBio: "Booking specialist",
+          resourceTypeId: null,
+          resourceTypeName: null,
+          revision: 3,
+          serviceIds: ["service-a"],
+          status: "deactivation_pending",
+        },
+        {
+          futureAllocationCount: 0,
+          id: "resource-a",
+          internalNotes: "Door code stored elsewhere",
+          key: "room-one",
+          kind: "resource",
+          locationIds: ["location-a"],
+          membershipId: null,
+          name: "Room 1",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: "type-a",
+          resourceTypeName: "Room",
+          revision: 4,
+          serviceIds: ["service-a"],
+          status: "maintenance",
+        },
+      ],
+    });
+  });
+
+  it("rejects undeclared sensitive fields from the management workspace DTO", () => {
+    expect(() =>
+      parseStaffResourceWorkspaceV1({
+        tenantId: "tenant-a",
+        locations: [],
+        resourceTypes: [],
+        services: [],
+        items: [
+          {
+            futureAllocationCount: 0,
+            id: "staff-a",
+            internalNotes: "manager-visible",
+            kind: "staff",
+            key: null,
+            locationIds: [],
+            membershipId: null,
+            name: "Layla Hassan",
+            offeredHoursPerWeek: 40,
+            payrollNumber: "must not escape",
+            publicBio: "",
+            resourceTypeId: null,
+            resourceTypeName: null,
+            revision: 1,
+            serviceIds: [],
+            status: "active",
+          },
+        ],
+      }),
+    ).toThrow("Staff/resource workspace");
+  });
+
+  it("accepts a location-scoped workspace with tenant-only edit values redacted", () => {
+    const workspace = {
+      tenantId: "tenant-a",
+      locations: [{ id: "location-a", name: "Downtown" }],
+      resourceTypes: [],
+      services: [{ id: "service-a", name: "Consultation" }],
+      items: [
+        {
+          futureAllocationCount: 2,
+          id: "staff-a",
+          internalNotes: null,
+          key: null,
+          kind: "staff",
+          locationIds: ["location-a"],
+          membershipId: null,
+          name: "Layla Hassan",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: null,
+          resourceTypeName: null,
+          revision: null,
+          serviceIds: ["service-a"],
+          status: "active",
+        },
+        {
+          futureAllocationCount: 0,
+          id: "resource-a",
+          internalNotes: null,
+          key: null,
+          kind: "resource",
+          locationIds: ["location-a"],
+          membershipId: null,
+          name: "Room 1",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: null,
+          resourceTypeName: "Room",
+          revision: null,
+          serviceIds: ["service-a"],
+          status: "active",
+        },
+      ],
+    } as const;
+
+    expect(parseStaffResourceWorkspaceV1(workspace)).toEqual(workspace);
   });
 });
