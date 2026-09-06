@@ -78,14 +78,35 @@ select ok(
 
 select is(
   (
-    select count(*)::integer
+    select array_agg(procedure.oid::regprocedure::text order by procedure.oid::regprocedure::text)
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'private'
       and procedure.prosecdef
   ),
-  19,
-  'exactly nineteen narrow private policy, projection, and transaction helpers use SECURITY DEFINER'
+  array[
+    'private.can_access_location(uuid,uuid)',
+    'private.can_manage_catalog(uuid,uuid)',
+    'private.can_manage_policy_scope(uuid,uuid,uuid,uuid)',
+    'private.can_manage_schedule_scope(uuid,uuid,uuid,uuid)',
+    'private.can_manage_staff(uuid,uuid)',
+    'private.current_membership_id(uuid)',
+    'private.deactivate_resource_v1(uuid,uuid,text,uuid,uuid,text)',
+    'private.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text)',
+    'private.get_assignment_candidates_v1(uuid,uuid)',
+    'private.get_staff_resource_choices_v1(uuid,text)',
+    'private.has_direct_capability(uuid,text)',
+    'private.is_active_tenant_member(uuid)',
+    'private.is_public_tenant_context(uuid,uuid,uuid,uuid)',
+    'private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text)',
+    'private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text)',
+    'private.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)',
+    'private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text)',
+    'private.set_resource_location_eligibility_v1(uuid,uuid,uuid,boolean,uuid,text)',
+    'private.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text)',
+    'private.set_staff_service_location_eligibility_v1(uuid,uuid,uuid,uuid,boolean,uuid,text)'
+  ]::text[],
+  'private SECURITY DEFINER helper identities exactly match the approved inventory'
 );
 
 select ok(
