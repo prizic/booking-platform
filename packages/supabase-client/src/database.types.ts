@@ -51,6 +51,38 @@ export type Database = {
           staff_name: string;
         }[];
       };
+      get_availability_v1: {
+        Args: {
+          p_application: string;
+          p_customer_time_zone?: string;
+          p_hostname: string;
+          p_location_id: string;
+          p_party_size?: number;
+          p_service_id: string;
+          p_staff_preference_id?: string;
+          p_window_end?: string;
+          p_window_start?: string;
+        };
+        Returns: {
+          advisory_as_of: string;
+          advisory_until: string;
+          allocation_kind: string;
+          cache_tag: string;
+          candidate_rank: number;
+          contract_version: number;
+          customer_time_zone: string;
+          fold: number;
+          local_start: string;
+          location_time_zone: string;
+          no_slot_code: string;
+          provider_health_code: string;
+          result_kind: string;
+          slot_end: string;
+          slot_start: string;
+          staff_id: string;
+          utc_offset_seconds: number;
+        }[];
+      };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };
         Returns: {
