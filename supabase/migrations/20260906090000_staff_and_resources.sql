@@ -367,7 +367,7 @@ language sql stable security definer set search_path='' as $$
             then sl.assignment_count::numeric/sl.offered_hours_per_week
             else 0::numeric end,
           case when sl.assignment_mode='round_robin' then sl.last_assignment_at end asc nulls first,
-          sl.public_name,
+          case when sl.assignment_mode<>'round_robin' then sl.public_name end,
           sl.id
       )::integer as candidate_rank,
       sl.id as staff_id,sl.public_name as staff_name,

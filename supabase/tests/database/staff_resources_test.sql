@@ -140,6 +140,42 @@ select results_eq(
   'round_robin ranks 2/40 ahead of 1/10 instead of comparing raw counts'
 );
 
+insert into app.staff_profiles (
+  id, tenant_id, public_name, offered_hours_per_week
+) values
+  ('a8000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000001', 'Zed Staff', 40),
+  ('a8000000-0000-0000-0000-000000000011', 'a0000000-0000-0000-0000-000000000001', 'Aaron Staff', 40);
+insert into app.staff_services (tenant_id, staff_id, service_id) values
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000010', 'a7200000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000011', 'a7200000-0000-0000-0000-000000000001');
+insert into app.staff_locations (tenant_id, staff_id, location_id) values
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000010', 'a5000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000011', 'a5000000-0000-0000-0000-000000000001');
+insert into app.staff_service_locations (
+  tenant_id, staff_id, service_id, location_id
+) values
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000010', 'a7200000-0000-0000-0000-000000000001', 'a5000000-0000-0000-0000-000000000001'),
+  ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000011', 'a7200000-0000-0000-0000-000000000001', 'a5000000-0000-0000-0000-000000000001');
+select results_eq(
+  $$
+    select staff_id, candidate_rank
+    from api_v1.get_assignment_candidates_v1(
+      'a7200000-0000-0000-0000-000000000001',
+      'a5000000-0000-0000-0000-000000000001'
+    )
+    where staff_id in (
+      'a8000000-0000-0000-0000-000000000010',
+      'a8000000-0000-0000-0000-000000000011'
+    )
+    order by candidate_rank
+  $$,
+  $$ values
+    ('a8000000-0000-0000-0000-000000000010'::uuid, 1),
+    ('a8000000-0000-0000-0000-000000000011'::uuid, 2)
+  $$,
+  'round_robin breaks equal normalized load and assignment age by staff UUID'
+);
+
 update app.catalog_services
 set assignment_mode = 'fixed_staff',
     fixed_staff_id = 'a8000000-0000-0000-0000-000000000001'
