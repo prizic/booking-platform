@@ -23,6 +23,10 @@ select ok(
     where namespace.nspname = 'api_v1'
       and procedure.proname in (
         'get_assignment_candidates_v1',
+        'save_staff_profile_v1',
+        'save_resource_type_v1',
+        'save_resource_v1',
+        'set_resource_requirement_v1',
         'set_staff_service_location_eligibility_v1',
         'set_resource_location_eligibility_v1',
         'deactivate_staff_v1',
@@ -55,7 +59,8 @@ insert into app.staff_service_locations (
   ('a0000000-0000-0000-0000-000000000001', 'a8000000-0000-0000-0000-000000000002', 'a7200000-0000-0000-0000-000000000001', 'a5000000-0000-0000-0000-000000000001');
 
 insert into app.resource_types (id, tenant_id, key, name) values
-  ('a8100000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'room', 'Room');
+  ('a8100000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'room', 'Room'),
+  ('b8100000-0000-0000-0000-000000000001', 'b0000000-0000-0000-0000-000000000001', 'room', 'Room');
 insert into app.resources (
   id, tenant_id, resource_type_id, key, public_name, status
 ) values
@@ -304,6 +309,26 @@ select throws_like(
   'location manager cannot invoke tenant-wide staff deactivation'
 );
 select throws_like(
+  $$
+    select * from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',null,null,'Scoped bypass','','',40,
+      null,'a8400000-0000-0000-0000-000000000010','Out of scope'
+    )
+  $$,
+  '%staff_authorization_required%',
+  'location manager cannot create a tenant-wide staff profile'
+);
+select throws_like(
+  $$
+    select * from api_v1.save_resource_type_v1(
+      'a0000000-0000-0000-0000-000000000001',null,'scoped-bypass','Scoped bypass',true,
+      null,'a8400000-0000-0000-0000-000000000011','Out of scope'
+    )
+  $$,
+  '%catalog_authorization_required%',
+  'location manager cannot create a tenant-wide resource type'
+);
+select throws_like(
   $$ insert into app.staff_profiles(id, tenant_id, public_name) values
      ('a8000000-0000-0000-0000-000000000099', 'a0000000-0000-0000-0000-000000000001', 'Bypass') $$,
   '%permission denied%',
@@ -312,6 +337,145 @@ select throws_like(
 
 -- Administrator deactivation checks exact service/location eligibility, uses
 -- lock-safe payload-aware idempotency, and records complete redacted evidence.
+reset role;
+select set_config(
+  'request.jwt.claims',
+  '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',
+  true
+);
+set local role authenticated;
+select is(
+  (
+    select revision
+    from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8f00000-0000-0000-0000-000000000001',null,'Dana Staff','Public bio','private note',32,
+      null,'a8400000-0000-0000-0000-000000000012','Create staff profile'
+    )
+  ),
+  1::bigint,
+  'tenant administrator creates a staff profile through the versioned RPC'
+);
+select is(
+  (
+    select revision
+    from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8f00000-0000-0000-0000-000000000001',null,'Dana Staff','Public bio','private note',32,
+      null,'a8400000-0000-0000-0000-000000000012','Create staff profile'
+    )
+  ),
+  1::bigint,
+  'staff profile create is idempotent for the same request and payload'
+);
+select is(
+  (
+    select revision
+    from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8f00000-0000-0000-0000-000000000001',null,'Dana Updated','Public bio','new private note',36,
+      1,'a8400000-0000-0000-0000-000000000013','Update staff profile'
+    )
+  ),
+  2::bigint,
+  'tenant administrator edits a staff profile with optimistic revision'
+);
+select throws_like(
+  $$
+    select * from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8f00000-0000-0000-0000-000000000001',null,'Stale edit','','',40,
+      1,'a8400000-0000-0000-0000-000000000014','Stale staff edit'
+    )
+  $$,
+  '%revision_conflict%',
+  'stale staff profile edits fail closed'
+);
+select throws_like(
+  $$
+    select * from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a8f00000-0000-0000-0000-000000000002',
+      'b3000000-0000-0000-0000-000000000001','Cross tenant membership','','',40,
+      null,'a8400000-0000-0000-0000-000000000019','Cross tenant membership'
+    )
+  $$,
+  '%violates foreign key constraint%',
+  'staff profile save rejects a cross-tenant membership structurally'
+);
+select is(
+  (
+    select revision
+    from api_v1.save_resource_type_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a81f0000-0000-0000-0000-000000000001','vehicle','Vehicle',true,
+      null,'a8400000-0000-0000-0000-000000000015','Create resource type'
+    )
+  ),
+  1::bigint,
+  'tenant administrator creates an exclusive resource type through the RPC'
+);
+select is(
+  (
+    select revision
+    from api_v1.save_resource_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a82f0000-0000-0000-0000-000000000001',
+      'a81f0000-0000-0000-0000-000000000001','vehicle-one','Vehicle One','private note','active',
+      null,'a8400000-0000-0000-0000-000000000016','Create resource'
+    )
+  ),
+  1::bigint,
+  'tenant administrator creates an exclusive resource through the RPC'
+);
+select throws_like(
+  $$
+    select * from api_v1.save_resource_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a82f0000-0000-0000-0000-000000000002',
+      'b8100000-0000-0000-0000-000000000001','cross-tenant-type','Cross tenant type','','active',
+      null,'a8400000-0000-0000-0000-000000000020','Cross tenant type'
+    )
+  $$,
+  '%violates foreign key constraint%',
+  'resource save rejects a cross-tenant resource type structurally'
+);
+select is(
+  (
+    select required
+    from api_v1.set_resource_requirement_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a7200000-0000-0000-0000-000000000001',
+      'a81f0000-0000-0000-0000-000000000001',true,
+      'a8400000-0000-0000-0000-000000000017','Change service requirement'
+    )
+  ),
+  true,
+  'tenant administrator changes a service resource requirement through the RPC'
+);
+select is(
+  (
+    select resource_type_id
+    from api_v1.set_resource_requirement_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'a7200000-0000-0000-0000-000000000001',
+      'a8100000-0000-0000-0000-000000000001',true,
+      'a8400000-0000-0000-0000-000000000018','Restore room requirement'
+    )
+  ),
+  'a8100000-0000-0000-0000-000000000001'::uuid,
+  'resource requirement updates preserve the exact tenant-owned type identity'
+);
+select ok(
+  (
+    select redacted_diff ?& array['before','after']
+      and not (redacted_diff::text ilike '%private note%')
+    from app.staff_resource_audit_events
+    where request_id='a8400000-0000-0000-0000-000000000013'
+  ),
+  'profile audit keeps a complete redacted diff without private note contents'
+);
+
 reset role;
 insert into app.assignment_allocations (
   id, tenant_id, service_id, location_id, staff_id, starts_at, ends_at, state

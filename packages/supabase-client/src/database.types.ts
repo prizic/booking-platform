@@ -154,6 +154,58 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      save_resource_type_v1: {
+        Args: {
+          p_exclusive: boolean;
+          p_expected_revision: number;
+          p_key: string;
+          p_name: string;
+          p_reason: string;
+          p_request_id: string;
+          p_resource_type_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          resource_type_id: string;
+          revision: number;
+        }[];
+      };
+      save_resource_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_internal_notes: string;
+          p_key: string;
+          p_public_name: string;
+          p_reason: string;
+          p_request_id: string;
+          p_resource_id: string;
+          p_resource_type_id: string;
+          p_status: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          resource_id: string;
+          revision: number;
+        }[];
+      };
+      save_staff_profile_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_internal_notes: string;
+          p_membership_id: string;
+          p_offered_hours_per_week: number;
+          p_public_bio: string;
+          p_public_name: string;
+          p_reason: string;
+          p_request_id: string;
+          p_staff_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          revision: number;
+          staff_id: string;
+        }[];
+      };
       set_resource_location_eligibility_v1: {
         Args: {
           p_eligible: boolean;
@@ -167,6 +219,21 @@ export type Database = {
           eligible: boolean;
           location_id: string;
           resource_id: string;
+        }[];
+      };
+      set_resource_requirement_v1: {
+        Args: {
+          p_reason: string;
+          p_request_id: string;
+          p_required: boolean;
+          p_resource_type_id: string;
+          p_service_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          required: boolean;
+          resource_type_id: string;
+          service_id: string;
         }[];
       };
       set_staff_service_location_eligibility_v1: {

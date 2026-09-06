@@ -41,8 +41,13 @@ explicit live authorization check or a public-safe projection.
 Administrative changes use live capability and exact location authorization.
 A location manager may change only staff/service/location or resource/location
 eligibility inside an assigned location; tenant-wide profile changes and
-deactivation remain tenant-administrator actions. Direct table mutations are
-not an application API.
+deactivation remain tenant-administrator actions. Tenant-scoped staff-profile,
+resource-type, resource, and service-requirement writes use versioned save RPCs
+with optimistic revisions; create uses a null expected revision, while edit
+must match the current revision or returns `revision_conflict`. Resource status
+edits permit only `active` and `maintenance`; `inactive` and
+`deactivation_pending` remain exclusive to the safe deactivation workflow.
+Direct table mutations are not an application API.
 
 Deactivation locks the target, checks future held or confirmed allocations, and
 requires reassignment, cancellation, or deferral. Staff replacements must be
@@ -54,7 +59,8 @@ the original result, while a changed payload fails with
 `idempotency_conflict`. Every administrative action writes actor, effective
 actor, request, reason, target, outcome, and a redacted before/after diff that
 includes the affected allocation count and replacement ID but never internal
-notes.
+notes. Save and eligibility mutations use the same request lock, normalized
+payload hash, replay, and conflicting-payload rules as deactivation.
 
 ## Consequences
 

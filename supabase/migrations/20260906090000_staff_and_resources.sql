@@ -64,7 +64,8 @@ create table app.resource_types (
   id uuid not null, tenant_id uuid not null references app.tenants(id) on delete restrict,
   key text not null check (key = lower(key) and key ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'),
   name text not null check (name = btrim(name) and char_length(name) between 1 and 160),
-  exclusive boolean not null default true,
+  exclusive boolean not null default true check (exclusive),
+  revision bigint not null default 1 check (revision > 0),
   created_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id), unique (tenant_id,key)
 );
@@ -76,6 +77,7 @@ create table app.resources (
   internal_notes text not null default '',
   status text not null default 'active' check (status in ('active','maintenance','inactive','deactivation_pending')),
   capacity integer not null default 1 check (capacity = 1),
+  revision bigint not null default 1 check (revision > 0),
   created_at timestamptz not null default statement_timestamp(), updated_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id), unique (tenant_id,key),
   unique (tenant_id,id,resource_type_id),
@@ -147,10 +149,17 @@ create table app.staff_resource_audit_events (
   id uuid not null, tenant_id uuid not null references app.tenants(id) on delete restrict,
   actor_membership_id uuid, effective_actor_id uuid, request_id uuid not null,
   request_hash text not null check (request_hash ~ '^[0-9a-f]{64}$'),
-  action text not null check (action in ('staff_deactivated','resource_deactivated','staff_eligibility_changed','resource_location_changed')),
+  action text not null check (action in (
+    'staff_deactivated','resource_deactivated','staff_eligibility_changed',
+    'resource_location_changed','staff_profile_saved','resource_type_saved',
+    'resource_saved','resource_requirement_changed'
+  )),
   target_id uuid not null, reason text not null check (char_length(btrim(reason)) between 1 and 500),
   location_id uuid,
-  outcome text not null check (outcome in ('deactivated','reassigned','cancelled','deferred','enabled','disabled','unchanged')),
+  outcome text not null check (outcome in (
+    'created','updated','removed','deactivated','reassigned','cancelled',
+    'deferred','enabled','disabled','unchanged'
+  )),
   redacted_diff jsonb not null default '{}'::jsonb check (jsonb_typeof(redacted_diff)='object'),
   created_at timestamptz not null default statement_timestamp(),
   primary key (id), unique (tenant_id,id), unique (tenant_id,request_id),
@@ -285,13 +294,16 @@ create policy assignment_allocations_select_scoped on app.assignment_allocations
 );
 create policy staff_resource_audit_events_select_scoped on app.staff_resource_audit_events for select to authenticated using (
   (
-    action in ('staff_deactivated','staff_eligibility_changed') and (
+    action in ('staff_deactivated','staff_eligibility_changed','staff_profile_saved') and (
       (select private.can_manage_staff(tenant_id,null))
       or (location_id is not null and (select private.can_manage_staff(tenant_id,location_id)))
     )
   )
   or (
-    action in ('resource_deactivated','resource_location_changed') and (
+    action in (
+      'resource_deactivated','resource_location_changed','resource_type_saved',
+      'resource_saved','resource_requirement_changed'
+    ) and (
       (select private.can_manage_catalog(tenant_id,null))
       or (location_id is not null and (select private.can_manage_catalog(tenant_id,location_id)))
     )
@@ -418,6 +430,493 @@ revoke all on function api_v1.get_assignment_candidates_v1(uuid,uuid) from publi
 grant execute on function api_v1.get_assignment_candidates_v1(uuid,uuid) to anon,authenticated;
 comment on function api_v1.get_assignment_candidates_v1(uuid,uuid) is
   'Current-publication customer-safe assignment candidates; excludes operational fairness inputs and internal notes.';
+
+create or replace function private.save_staff_profile_v1(
+  p_tenant_id uuid,p_staff_id uuid,p_membership_id uuid,p_public_name text,
+  p_public_bio text,p_internal_notes text,p_offered_hours_per_week numeric,
+  p_expected_revision bigint,p_request_id uuid,p_reason text
+)
+returns table(staff_id uuid,revision bigint)
+language plpgsql security definer set search_path='' as $$
+declare
+  v_actor uuid;
+  v_current app.staff_profiles%rowtype;
+  v_existing app.staff_resource_audit_events%rowtype;
+  v_hash text;
+  v_id uuid;
+  v_membership uuid;
+  v_outcome text;
+  v_revision bigint;
+begin
+  if not coalesce((select private.can_manage_staff(p_tenant_id,null)),false) then
+    raise exception using errcode='42501',message='staff_authorization_required';
+  end if;
+  if p_request_id is null then
+    raise exception using errcode='22023',message='request_id_required';
+  end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then
+    raise exception using errcode='22023',message='reason_required';
+  end if;
+  if p_public_name is null or char_length(btrim(p_public_name)) not between 1 and 160
+    or p_public_bio is null or p_internal_notes is null
+    or p_offered_hours_per_week is null
+    or p_offered_hours_per_week<=0 or p_offered_hours_per_week>168 then
+    raise exception using errcode='22023',message='staff_profile_invalid';
+  end if;
+
+  v_hash := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+    pg_catalog.jsonb_build_object(
+      'operation','save_staff_profile_v1','staff_id',p_staff_id,
+      'membership_id',p_membership_id,'public_name',btrim(p_public_name),
+      'public_bio',p_public_bio,'internal_notes',p_internal_notes,
+      'offered_hours_per_week',p_offered_hours_per_week,
+      'expected_revision',p_expected_revision,'reason',btrim(p_reason)
+    )::text,'UTF8'),'sha256'),'hex');
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_tenant_id::text||':'||p_request_id::text,0)
+  );
+  select * into v_existing from app.staff_resource_audit_events e
+    where e.tenant_id=p_tenant_id and e.request_id=p_request_id;
+  if found then
+    if v_existing.request_hash<>v_hash then
+      raise exception using errcode='22023',message='idempotency_conflict';
+    end if;
+    return query select v_existing.target_id,
+      (v_existing.redacted_diff#>>'{after,revision}')::bigint;
+    return;
+  end if;
+
+  v_id := coalesce(p_staff_id,pg_catalog.gen_random_uuid());
+  select * into v_current from app.staff_profiles s
+    where s.tenant_id=p_tenant_id and s.id=v_id for update;
+  if found then
+    if p_expected_revision is null or p_expected_revision<>v_current.revision then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    v_revision := v_current.revision+1;
+    update app.staff_profiles set
+      membership_id=p_membership_id,public_name=btrim(p_public_name),
+      public_bio=p_public_bio,internal_notes=p_internal_notes,
+      offered_hours_per_week=p_offered_hours_per_week,revision=v_revision,
+      updated_at=statement_timestamp()
+    where tenant_id=p_tenant_id and id=v_id;
+    v_outcome := 'updated';
+  else
+    if p_expected_revision is not null then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    insert into app.staff_profiles(
+      id,tenant_id,membership_id,public_name,public_bio,internal_notes,
+      offered_hours_per_week
+    ) values (
+      v_id,p_tenant_id,p_membership_id,btrim(p_public_name),p_public_bio,
+      p_internal_notes,p_offered_hours_per_week
+    );
+    v_revision := 1;
+    v_outcome := 'created';
+  end if;
+
+  v_actor := (select private.current_auth_user_id());
+  v_membership := (select private.current_membership_id(p_tenant_id));
+  insert into app.staff_resource_audit_events(
+    id,tenant_id,actor_membership_id,effective_actor_id,request_id,request_hash,
+    action,target_id,reason,outcome,redacted_diff
+  ) values (
+    pg_catalog.gen_random_uuid(),p_tenant_id,v_membership,v_actor,p_request_id,v_hash,
+    'staff_profile_saved',v_id,btrim(p_reason),v_outcome,
+    pg_catalog.jsonb_build_object(
+      'before',case when v_current.id is null then null else pg_catalog.jsonb_build_object(
+        'membership_id',v_current.membership_id,'public_name',v_current.public_name,
+        'offered_hours_per_week',v_current.offered_hours_per_week,'revision',v_current.revision
+      ) end,
+      'after',pg_catalog.jsonb_build_object(
+        'membership_id',p_membership_id,'public_name',btrim(p_public_name),
+        'offered_hours_per_week',p_offered_hours_per_week,'revision',v_revision
+      ),
+      'public_bio_changed',coalesce(v_current.public_bio,'')<>p_public_bio,
+      'internal_notes_changed',coalesce(v_current.internal_notes,'')<>p_internal_notes
+    )
+  );
+  return query select v_id,v_revision;
+end;
+$$;
+revoke all on function private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text) from public;
+grant execute on function private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text) to authenticated;
+
+create or replace function api_v1.save_staff_profile_v1(
+  p_tenant_id uuid,p_staff_id uuid,p_membership_id uuid,p_public_name text,
+  p_public_bio text,p_internal_notes text,p_offered_hours_per_week numeric,
+  p_expected_revision bigint,p_request_id uuid,p_reason text
+)
+returns table(staff_id uuid,revision bigint)
+language sql security invoker set search_path='' as $$
+  select * from private.save_staff_profile_v1(
+    p_tenant_id,p_staff_id,p_membership_id,p_public_name,p_public_bio,
+    p_internal_notes,p_offered_hours_per_week,p_expected_revision,p_request_id,p_reason
+  );
+$$;
+revoke all on function api_v1.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text) from public;
+grant execute on function api_v1.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text) to authenticated;
+
+create or replace function private.save_resource_type_v1(
+  p_tenant_id uuid,p_resource_type_id uuid,p_key text,p_name text,p_exclusive boolean,
+  p_expected_revision bigint,p_request_id uuid,p_reason text
+)
+returns table(resource_type_id uuid,revision bigint)
+language plpgsql security definer set search_path='' as $$
+declare
+  v_actor uuid;
+  v_current app.resource_types%rowtype;
+  v_existing app.staff_resource_audit_events%rowtype;
+  v_hash text;
+  v_id uuid;
+  v_membership uuid;
+  v_outcome text;
+  v_revision bigint;
+begin
+  if not coalesce((select private.can_manage_catalog(p_tenant_id,null)),false) then
+    raise exception using errcode='42501',message='catalog_authorization_required';
+  end if;
+  if p_request_id is null then
+    raise exception using errcode='22023',message='request_id_required';
+  end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then
+    raise exception using errcode='22023',message='reason_required';
+  end if;
+  if p_key is null or btrim(p_key)<>lower(btrim(p_key))
+    or btrim(p_key)!~'^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    or p_name is null or char_length(btrim(p_name)) not between 1 and 160
+    or p_exclusive is distinct from true then
+    raise exception using errcode='22023',message='resource_type_invalid';
+  end if;
+
+  v_hash := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+    pg_catalog.jsonb_build_object(
+      'operation','save_resource_type_v1','resource_type_id',p_resource_type_id,
+      'key',btrim(p_key),'name',btrim(p_name),'exclusive',p_exclusive,
+      'expected_revision',p_expected_revision,'reason',btrim(p_reason)
+    )::text,'UTF8'),'sha256'),'hex');
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_tenant_id::text||':'||p_request_id::text,0)
+  );
+  select * into v_existing from app.staff_resource_audit_events e
+    where e.tenant_id=p_tenant_id and e.request_id=p_request_id;
+  if found then
+    if v_existing.request_hash<>v_hash then
+      raise exception using errcode='22023',message='idempotency_conflict';
+    end if;
+    return query select v_existing.target_id,
+      (v_existing.redacted_diff#>>'{after,revision}')::bigint;
+    return;
+  end if;
+
+  v_id := coalesce(p_resource_type_id,pg_catalog.gen_random_uuid());
+  select * into v_current from app.resource_types rt
+    where rt.tenant_id=p_tenant_id and rt.id=v_id for update;
+  if found then
+    if p_expected_revision is null or p_expected_revision<>v_current.revision then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    v_revision := v_current.revision+1;
+    update app.resource_types set key=btrim(p_key),name=btrim(p_name),
+      exclusive=true,revision=v_revision
+    where tenant_id=p_tenant_id and id=v_id;
+    v_outcome := 'updated';
+  else
+    if p_expected_revision is not null then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    insert into app.resource_types(id,tenant_id,key,name,exclusive)
+      values(v_id,p_tenant_id,btrim(p_key),btrim(p_name),true);
+    v_revision := 1;
+    v_outcome := 'created';
+  end if;
+
+  v_actor := (select private.current_auth_user_id());
+  v_membership := (select private.current_membership_id(p_tenant_id));
+  insert into app.staff_resource_audit_events(
+    id,tenant_id,actor_membership_id,effective_actor_id,request_id,request_hash,
+    action,target_id,reason,outcome,redacted_diff
+  ) values (
+    pg_catalog.gen_random_uuid(),p_tenant_id,v_membership,v_actor,p_request_id,v_hash,
+    'resource_type_saved',v_id,btrim(p_reason),v_outcome,
+    pg_catalog.jsonb_build_object(
+      'before',case when v_current.id is null then null else pg_catalog.jsonb_build_object(
+        'key',v_current.key,'name',v_current.name,'exclusive',v_current.exclusive,
+        'revision',v_current.revision
+      ) end,
+      'after',pg_catalog.jsonb_build_object(
+        'key',btrim(p_key),'name',btrim(p_name),'exclusive',true,'revision',v_revision
+      )
+    )
+  );
+  return query select v_id,v_revision;
+end;
+$$;
+revoke all on function private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text) from public;
+grant execute on function private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text) to authenticated;
+
+create or replace function api_v1.save_resource_type_v1(
+  p_tenant_id uuid,p_resource_type_id uuid,p_key text,p_name text,p_exclusive boolean,
+  p_expected_revision bigint,p_request_id uuid,p_reason text
+)
+returns table(resource_type_id uuid,revision bigint)
+language sql security invoker set search_path='' as $$
+  select * from private.save_resource_type_v1(
+    p_tenant_id,p_resource_type_id,p_key,p_name,p_exclusive,p_expected_revision,
+    p_request_id,p_reason
+  );
+$$;
+revoke all on function api_v1.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text) from public;
+grant execute on function api_v1.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text) to authenticated;
+
+create or replace function private.save_resource_v1(
+  p_tenant_id uuid,p_resource_id uuid,p_resource_type_id uuid,p_key text,
+  p_public_name text,p_internal_notes text,p_status text,p_expected_revision bigint,
+  p_request_id uuid,p_reason text
+)
+returns table(resource_id uuid,revision bigint)
+language plpgsql security definer set search_path='' as $$
+declare
+  v_actor uuid;
+  v_current app.resources%rowtype;
+  v_existing app.staff_resource_audit_events%rowtype;
+  v_hash text;
+  v_id uuid;
+  v_membership uuid;
+  v_outcome text;
+  v_revision bigint;
+begin
+  if not coalesce((select private.can_manage_catalog(p_tenant_id,null)),false) then
+    raise exception using errcode='42501',message='catalog_authorization_required';
+  end if;
+  if p_request_id is null then
+    raise exception using errcode='22023',message='request_id_required';
+  end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then
+    raise exception using errcode='22023',message='reason_required';
+  end if;
+  if p_resource_type_id is null or p_key is null or btrim(p_key)<>lower(btrim(p_key))
+    or btrim(p_key)!~'^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    or p_public_name is null or char_length(btrim(p_public_name)) not between 1 and 160
+    or p_internal_notes is null or p_status not in ('active','maintenance') then
+    raise exception using errcode='22023',message='resource_invalid';
+  end if;
+
+  v_hash := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+    pg_catalog.jsonb_build_object(
+      'operation','save_resource_v1','resource_id',p_resource_id,
+      'resource_type_id',p_resource_type_id,'key',btrim(p_key),
+      'public_name',btrim(p_public_name),'internal_notes',p_internal_notes,
+      'status',p_status,'expected_revision',p_expected_revision,'reason',btrim(p_reason)
+    )::text,'UTF8'),'sha256'),'hex');
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_tenant_id::text||':'||p_request_id::text,0)
+  );
+  select * into v_existing from app.staff_resource_audit_events e
+    where e.tenant_id=p_tenant_id and e.request_id=p_request_id;
+  if found then
+    if v_existing.request_hash<>v_hash then
+      raise exception using errcode='22023',message='idempotency_conflict';
+    end if;
+    return query select v_existing.target_id,
+      (v_existing.redacted_diff#>>'{after,revision}')::bigint;
+    return;
+  end if;
+
+  v_id := coalesce(p_resource_id,pg_catalog.gen_random_uuid());
+  select * into v_current from app.resources r
+    where r.tenant_id=p_tenant_id and r.id=v_id for update;
+  if found then
+    if p_expected_revision is null or p_expected_revision<>v_current.revision then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    if v_current.status in ('inactive','deactivation_pending') then
+      raise exception using errcode='23514',message='resource_inactive';
+    end if;
+    v_revision := v_current.revision+1;
+    update app.resources set resource_type_id=p_resource_type_id,key=btrim(p_key),
+      public_name=btrim(p_public_name),internal_notes=p_internal_notes,status=p_status,
+      revision=v_revision,updated_at=statement_timestamp()
+    where tenant_id=p_tenant_id and id=v_id;
+    v_outcome := 'updated';
+  else
+    if p_expected_revision is not null then
+      raise exception using errcode='40001',message='revision_conflict';
+    end if;
+    insert into app.resources(
+      id,tenant_id,resource_type_id,key,public_name,internal_notes,status
+    ) values (
+      v_id,p_tenant_id,p_resource_type_id,btrim(p_key),btrim(p_public_name),
+      p_internal_notes,p_status
+    );
+    v_revision := 1;
+    v_outcome := 'created';
+  end if;
+
+  v_actor := (select private.current_auth_user_id());
+  v_membership := (select private.current_membership_id(p_tenant_id));
+  insert into app.staff_resource_audit_events(
+    id,tenant_id,actor_membership_id,effective_actor_id,request_id,request_hash,
+    action,target_id,reason,outcome,redacted_diff
+  ) values (
+    pg_catalog.gen_random_uuid(),p_tenant_id,v_membership,v_actor,p_request_id,v_hash,
+    'resource_saved',v_id,btrim(p_reason),v_outcome,
+    pg_catalog.jsonb_build_object(
+      'before',case when v_current.id is null then null else pg_catalog.jsonb_build_object(
+        'resource_type_id',v_current.resource_type_id,'key',v_current.key,
+        'public_name',v_current.public_name,'status',v_current.status,'revision',v_current.revision
+      ) end,
+      'after',pg_catalog.jsonb_build_object(
+        'resource_type_id',p_resource_type_id,'key',btrim(p_key),
+        'public_name',btrim(p_public_name),'status',p_status,'revision',v_revision
+      ),
+      'internal_notes_changed',coalesce(v_current.internal_notes,'')<>p_internal_notes
+    )
+  );
+  return query select v_id,v_revision;
+end;
+$$;
+revoke all on function private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text) from public;
+grant execute on function private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text) to authenticated;
+
+create or replace function api_v1.save_resource_v1(
+  p_tenant_id uuid,p_resource_id uuid,p_resource_type_id uuid,p_key text,
+  p_public_name text,p_internal_notes text,p_status text,p_expected_revision bigint,
+  p_request_id uuid,p_reason text
+)
+returns table(resource_id uuid,revision bigint)
+language sql security invoker set search_path='' as $$
+  select * from private.save_resource_v1(
+    p_tenant_id,p_resource_id,p_resource_type_id,p_key,p_public_name,
+    p_internal_notes,p_status,p_expected_revision,p_request_id,p_reason
+  );
+$$;
+revoke all on function api_v1.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text) from public;
+grant execute on function api_v1.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text) to authenticated;
+
+create or replace function private.set_resource_requirement_v1(
+  p_tenant_id uuid,p_service_id uuid,p_resource_type_id uuid,p_required boolean,
+  p_request_id uuid,p_reason text
+)
+returns table(service_id uuid,resource_type_id uuid,required boolean)
+language plpgsql security definer set search_path='' as $$
+declare
+  v_actor uuid;
+  v_before uuid;
+  v_existing app.staff_resource_audit_events%rowtype;
+  v_hash text;
+  v_membership uuid;
+  v_outcome text;
+begin
+  if not coalesce((select private.can_manage_catalog(p_tenant_id,null)),false) then
+    raise exception using errcode='42501',message='catalog_authorization_required';
+  end if;
+  if p_request_id is null then
+    raise exception using errcode='22023',message='request_id_required';
+  end if;
+  if p_reason is null or char_length(btrim(p_reason)) not between 1 and 500 then
+    raise exception using errcode='22023',message='reason_required';
+  end if;
+  if p_required is null or (p_required and p_resource_type_id is null) then
+    raise exception using errcode='22023',message='resource_requirement_invalid';
+  end if;
+
+  v_hash := pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+    pg_catalog.jsonb_build_object(
+      'operation','set_resource_requirement_v1','service_id',p_service_id,
+      'resource_type_id',p_resource_type_id,'required',p_required,'reason',btrim(p_reason)
+    )::text,'UTF8'),'sha256'),'hex');
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_tenant_id::text||':'||p_request_id::text,0)
+  );
+  select * into v_existing from app.staff_resource_audit_events e
+    where e.tenant_id=p_tenant_id and e.request_id=p_request_id;
+  if found then
+    if v_existing.request_hash<>v_hash then
+      raise exception using errcode='22023',message='idempotency_conflict';
+    end if;
+    return query select p_service_id,
+      nullif(v_existing.redacted_diff#>>'{after,resource_type_id}','')::uuid,
+      (v_existing.redacted_diff#>>'{after,required}')::boolean;
+    return;
+  end if;
+
+  if not exists (
+    select 1 from app.catalog_services s
+    where s.tenant_id=p_tenant_id and s.id=p_service_id and s.status='active'
+  ) then
+    raise exception using errcode='22023',message='service_not_active';
+  end if;
+  if p_required and not exists (
+    select 1 from app.resource_types rt
+    where rt.tenant_id=p_tenant_id and rt.id=p_resource_type_id and rt.exclusive
+  ) then
+    raise exception using errcode='22023',message='resource_type_not_found';
+  end if;
+
+  select rr.resource_type_id into v_before from app.resource_requirements rr
+    where rr.tenant_id=p_tenant_id and rr.service_id=p_service_id for update;
+  if p_required then
+    insert into app.resource_requirements(tenant_id,service_id,resource_type_id)
+      values(p_tenant_id,p_service_id,p_resource_type_id)
+      on conflict on constraint resource_requirements_tenant_id_service_id_key do update
+        set resource_type_id=excluded.resource_type_id;
+    v_outcome := case when v_before is null then 'created'
+      when v_before=p_resource_type_id then 'unchanged' else 'updated' end;
+  elsif v_before is not null then
+    if exists (
+      select 1 from app.assignment_allocations a
+      where a.tenant_id=p_tenant_id and a.service_id=p_service_id
+        and a.resource_id is not null and a.state in ('held','confirmed')
+        and a.starts_at>statement_timestamp()
+    ) then
+      raise exception using errcode='23514',message='resource_requirement_has_future_allocations';
+    end if;
+    delete from app.resource_requirements rr
+      where rr.tenant_id=p_tenant_id and rr.service_id=p_service_id;
+    v_outcome := 'removed';
+  else
+    v_outcome := 'unchanged';
+  end if;
+
+  v_actor := (select private.current_auth_user_id());
+  v_membership := (select private.current_membership_id(p_tenant_id));
+  insert into app.staff_resource_audit_events(
+    id,tenant_id,actor_membership_id,effective_actor_id,request_id,request_hash,
+    action,target_id,reason,outcome,redacted_diff
+  ) values (
+    pg_catalog.gen_random_uuid(),p_tenant_id,v_membership,v_actor,p_request_id,v_hash,
+    'resource_requirement_changed',p_service_id,btrim(p_reason),v_outcome,
+    pg_catalog.jsonb_build_object(
+      'before',pg_catalog.jsonb_build_object(
+        'resource_type_id',v_before,'required',v_before is not null
+      ),
+      'after',pg_catalog.jsonb_build_object(
+        'resource_type_id',case when p_required then p_resource_type_id else null end,
+        'required',p_required
+      )
+    )
+  );
+  return query select p_service_id,
+    case when p_required then p_resource_type_id else null end,p_required;
+end;
+$$;
+revoke all on function private.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text) from public;
+grant execute on function private.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text) to authenticated;
+
+create or replace function api_v1.set_resource_requirement_v1(
+  p_tenant_id uuid,p_service_id uuid,p_resource_type_id uuid,p_required boolean,
+  p_request_id uuid,p_reason text
+)
+returns table(service_id uuid,resource_type_id uuid,required boolean)
+language sql security invoker set search_path='' as $$
+  select * from private.set_resource_requirement_v1(
+    p_tenant_id,p_service_id,p_resource_type_id,p_required,p_request_id,p_reason
+  );
+$$;
+revoke all on function api_v1.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text) from public;
+grant execute on function api_v1.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text) to authenticated;
 
 create or replace function private.set_staff_service_location_eligibility_v1(
   p_tenant_id uuid,p_staff_id uuid,p_service_id uuid,p_location_id uuid,
