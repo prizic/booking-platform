@@ -394,6 +394,16 @@ select throws_like(
 select throws_like(
   $$
     select * from api_v1.save_staff_profile_v1(
+      'a0000000-0000-0000-0000-000000000001',null,null,'Oversized notes','',repeat('x',2001),40,
+      null,'a8400000-0000-0000-0000-000000000021','Oversized notes'
+    )
+  $$,
+  '%staff_profile_invalid%',
+  'RPC validation enforces the durable staff note size bound'
+);
+select throws_like(
+  $$
+    select * from api_v1.save_staff_profile_v1(
       'a0000000-0000-0000-0000-000000000001',
       'a8f00000-0000-0000-0000-000000000002',
       'b3000000-0000-0000-0000-000000000001','Cross tenant membership','','',40,
