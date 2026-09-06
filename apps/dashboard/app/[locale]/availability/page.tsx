@@ -79,13 +79,64 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
           <form action={saveSchedule} className="schedule-editor">
             <input name="locale" type="hidden" value={locale} />
             <input name="tenantId" type="hidden" value={tenant} />
-            <input name="scopeId" type="hidden" value={scope?.id ?? ""} />
-            <input name="operation" type="hidden" value="weekly" />
+            <label>
+              {message("scheduleOperationLabel")}
+              <select defaultValue="weekly" name="operation">
+                <option value="scope">{message("scheduleScopeOption")}</option>
+                <option value="weekly">{message("scheduleWeeklyOption")}</option>
+                <option value="break">{message("scheduleBreakOption")}</option>
+                <option value="exception">{message("scheduleExceptionOption")}</option>
+                <option value="time_off">{message("scheduleTimeOffOption")}</option>
+                <option value="holiday">{message("scheduleHolidayOption")}</option>
+                <option value="blackout">{message("scheduleBlackoutOption")}</option>
+                <option value="maintenance">
+                  {message("scheduleMaintenanceOption")}
+                </option>
+                <option value="policy">{message("schedulePolicyOption")}</option>
+              </select>
+            </label>
+            <label>
+              {message("scheduleScopeLabel")}
+              <select name="scopeId" defaultValue={scope?.id ?? ""}>
+                <option value="">{message("scheduleNewScopeOption")}</option>
+                {rows
+                  .filter((row) => row.kind === "scope")
+                  .map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {row.id} · {row.timeZone}
+                    </option>
+                  ))}
+              </select>
+            </label>
             <input
               name="expectedRevision"
               type="hidden"
               value={scope?.revision ?? ""}
             />
+            <label>
+              {message("scheduleScopeKindLabel")}
+              <select defaultValue="location" name="scopeKind">
+                <option value="location">{message("scheduleLocationOption")}</option>
+                <option value="staff">{message("scheduleStaffOption")}</option>
+                <option value="resource">{message("scheduleResourceOption")}</option>
+              </select>
+            </label>
+            <label>
+              {message("scheduleLocationIdLabel")}
+              <input name="locationId" />
+            </label>
+            <label>
+              {message("scheduleStaffIdLabel")}
+              <input name="staffId" />
+            </label>
+            <label>
+              {message("scheduleResourceIdLabel")}
+              <input name="resourceId" />
+            </label>
+            <label>
+              {message("scheduleServiceIdLabel")}
+              <input name="serviceId" />
+            </label>
             <label>
               {message("scheduleDayLabel")}
               <input min="0" max="6" name="dayOfWeek" required type="number" />
@@ -101,6 +152,41 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
             <label>
               {message("timeZoneLabel")}
               <input defaultValue={scope?.timeZone ?? "UTC"} name="timeZone" required />
+            </label>
+            <label>
+              {message("scheduleDateLabel")}
+              <input name="localDate" type="date" />
+            </label>
+            <label>
+              {message("scheduleExceptionKindLabel")}
+              <select defaultValue="closed" name="exceptionKind">
+                <option value="closed">{message("scheduleClosedOption")}</option>
+                <option value="override">{message("scheduleOverrideOption")}</option>
+              </select>
+            </label>
+            <label>
+              {message("scheduleStartsAtLabel")}
+              <input name="startsAt" type="datetime-local" />
+            </label>
+            <label>
+              {message("scheduleEndsAtLabel")}
+              <input name="endsAt" type="datetime-local" />
+            </label>
+            <label>
+              {message("scheduleNameLabel")}
+              <input name="name" />
+            </label>
+            <label>
+              {message("scheduleReasonLabel")}
+              <input name="reason" />
+            </label>
+            <label>
+              {message("schedulePolicyKeyLabel")}
+              <input name="policyKey" />
+            </label>
+            <label>
+              {message("schedulePolicyValueLabel")}
+              <input name="value" type="number" />
             </label>
             <button className="wlbp-button" type="submit">
               {message("scheduleSave")}

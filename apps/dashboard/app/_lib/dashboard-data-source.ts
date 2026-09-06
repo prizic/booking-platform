@@ -498,6 +498,7 @@ export function createDashboardDataSource(
             p_operation: request.operation,
             p_payload: request.payload,
             p_expected_revision: request.expectedRevision,
+            p_request_id: crypto.randomUUID(),
           }),
         ),
       );

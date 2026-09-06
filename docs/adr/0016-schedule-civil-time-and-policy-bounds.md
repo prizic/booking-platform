@@ -46,6 +46,11 @@ and anonymous callers receive no schedule tables, time-off rows, reasons, or
 provider/internal details. Public derived availability is a later contract
 (issue #10).
 
+Every mutation appends an internal `schedule_audit_events` record containing
+the authenticated actor, tenant, target, operation, outcome, bounded reason,
+request key, and a redacted diff. The audit table is append-only and is never
+exposed to application roles.
+
 ## Consequences
 
 - Schedule correctness remains testable without a framework and can be reused

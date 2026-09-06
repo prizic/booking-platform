@@ -150,6 +150,19 @@ export interface WeeklyScheduleInput {
   readonly timeZone: string;
 }
 
+export interface ScheduleException {
+  readonly localDate: string;
+  readonly kind: "closed" | "override";
+  readonly intervals: readonly CivilInterval[];
+  readonly fold: 0 | 1 | null;
+}
+
+export type ScheduleCivilTimeResolution =
+  | { readonly kind: "gap"; readonly instants: readonly [] }
+  | { readonly kind: "exact"; readonly instants: readonly [string]; readonly fold: 0 }
+  | { readonly kind: "ambiguous"; readonly instants: readonly [string, string] }
+  | { readonly kind: "exact"; readonly instants: readonly [string]; readonly fold: 1 };
+
 export type SchedulePolicy = {
   readonly minimumNoticeMinutes: number;
   readonly horizonDays: number;
@@ -294,6 +307,130 @@ export function applyScheduleConstraints(
       }
       return remaining;
     }),
+  );
+}
+
+export function applyScheduleException(
+  schedule: WeeklySchedule,
+  exception: ScheduleException,
+): readonly CivilInterval[] {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(exception.localDate)) {
+    throw new BookingDomainError("invalid_time_range", "exception date is invalid");
+  }
+  if (exception.kind === "closed") {
+    if (exception.intervals.length > 0)
+      throw new BookingDomainError(
+        "invalid_time_range",
+        "closed exception cannot contain intervals",
+      );
+    return Object.freeze([]);
+  }
+  if (exception.intervals.length === 0)
+    throw new BookingDomainError(
+      "invalid_time_range",
+      "override exception needs intervals",
+    );
+  return applyScheduleConstraints(
+    {
+      ...schedule,
+      intervals: validateNonOverlappingIntervals(
+        exception.intervals,
+        "exception interval",
+      ),
+    },
+    [],
+  );
+}
+
+function zonedParts(instant: number, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(instant));
+  return Object.fromEntries(
+    parts
+      .filter(({ type }) => type !== "literal")
+      .map(({ type, value }) => [type, Number(value)]),
+  );
+}
+
+export function resolveScheduleCivilTime(
+  localDateTime: string,
+  timeZone: string,
+  fold?: 0 | 1,
+): ScheduleCivilTimeResolution {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(localDateTime))
+    throw new BookingDomainError("invalid_time_range", "local time is invalid");
+  const [date, clock] = localDateTime.split("T");
+  const [year, month, day] = date!.split("-").map(Number);
+  const [hour, minute] = clock!.split(":").map(Number);
+  const localMilliseconds = Date.UTC(year!, month! - 1, day!, hour!, minute!);
+  const instants: number[] = [];
+  for (let offsetMinutes = -14 * 60; offsetMinutes <= 14 * 60; offsetMinutes += 1) {
+    const instant = localMilliseconds - offsetMinutes * 60_000;
+    const parts = zonedParts(instant, timeZone);
+    if (
+      parts.year === year &&
+      parts.month === month &&
+      parts.day === day &&
+      parts.hour === hour &&
+      parts.minute === minute &&
+      !instants.includes(instant)
+    )
+      instants.push(instant);
+  }
+  instants.sort((left, right) => left - right);
+  if (instants.length === 0) return { kind: "gap", instants: [] };
+  if (instants.length > 2)
+    throw new BookingDomainError(
+      "invalid_time_range",
+      "local time has too many instants",
+    );
+  if (instants.length === 2 && fold === undefined)
+    return {
+      kind: "ambiguous",
+      instants: [
+        new Date(instants[0]!).toISOString(),
+        new Date(instants[1]!).toISOString(),
+      ],
+    };
+  const selected = instants.length === 2 ? instants[fold!]! : instants[0]!;
+  return {
+    kind: "exact",
+    instants: [new Date(selected).toISOString()],
+    fold: instants.length === 2 ? fold! : 0,
+  };
+}
+
+export interface SchedulePolicyEvaluationInput {
+  readonly now: string;
+  readonly start: string;
+  readonly staffBookingsToday: number;
+}
+
+export function evaluateSchedulePolicy(
+  input: SchedulePolicyEvaluationInput,
+  policy: SchedulePolicy,
+): boolean {
+  const now = Date.parse(input.now);
+  const start = Date.parse(input.start);
+  if (
+    !Number.isFinite(now) ||
+    !Number.isFinite(start) ||
+    !Number.isSafeInteger(input.staffBookingsToday) ||
+    input.staffBookingsToday < 0
+  )
+    return false;
+  return (
+    start - now >= policy.minimumNoticeMinutes * 60_000 &&
+    start - now <= policy.horizonDays * 86_400_000 &&
+    (policy.dailyLimitPerStaff === null ||
+      input.staffBookingsToday < policy.dailyLimitPerStaff)
   );
 }
 

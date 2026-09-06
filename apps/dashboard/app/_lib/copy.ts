@@ -63,7 +63,37 @@ export type DashboardMessageKey =
   | "scheduleSave"
   | "scheduleSaved"
   | "scheduleSaveError"
-  | "scheduleUnavailable";
+  | "scheduleUnavailable"
+  | "scheduleOperationLabel"
+  | "scheduleScopeOption"
+  | "scheduleWeeklyOption"
+  | "scheduleBreakOption"
+  | "scheduleExceptionOption"
+  | "scheduleTimeOffOption"
+  | "scheduleHolidayOption"
+  | "scheduleBlackoutOption"
+  | "scheduleMaintenanceOption"
+  | "schedulePolicyOption"
+  | "scheduleScopeLabel"
+  | "scheduleNewScopeOption"
+  | "scheduleScopeKindLabel"
+  | "scheduleLocationOption"
+  | "scheduleStaffOption"
+  | "scheduleResourceOption"
+  | "scheduleLocationIdLabel"
+  | "scheduleStaffIdLabel"
+  | "scheduleResourceIdLabel"
+  | "scheduleServiceIdLabel"
+  | "scheduleDateLabel"
+  | "scheduleExceptionKindLabel"
+  | "scheduleClosedOption"
+  | "scheduleOverrideOption"
+  | "scheduleStartsAtLabel"
+  | "scheduleEndsAtLabel"
+  | "scheduleNameLabel"
+  | "scheduleReasonLabel"
+  | "schedulePolicyKeyLabel"
+  | "schedulePolicyValueLabel";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
@@ -137,6 +167,36 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
       "The schedule could not be saved. Check the values or reload for a newer revision.",
     scheduleUnavailable:
       "Schedule editing is unavailable until a verified tenant workspace is selected.",
+    scheduleOperationLabel: "Configuration type",
+    scheduleScopeOption: "Schedule scope",
+    scheduleWeeklyOption: "Weekly hours",
+    scheduleBreakOption: "Break",
+    scheduleExceptionOption: "Date exception",
+    scheduleTimeOffOption: "Staff or resource time off",
+    scheduleHolidayOption: "Holiday",
+    scheduleBlackoutOption: "Location blackout",
+    scheduleMaintenanceOption: "Resource maintenance",
+    schedulePolicyOption: "Policy override",
+    scheduleScopeLabel: "Existing scope",
+    scheduleNewScopeOption: "New scope",
+    scheduleScopeKindLabel: "Scope kind",
+    scheduleLocationOption: "Location",
+    scheduleStaffOption: "Staff",
+    scheduleResourceOption: "Resource",
+    scheduleLocationIdLabel: "Location ID",
+    scheduleStaffIdLabel: "Staff ID",
+    scheduleResourceIdLabel: "Resource ID",
+    scheduleServiceIdLabel: "Service ID",
+    scheduleDateLabel: "Local date",
+    scheduleExceptionKindLabel: "Exception kind",
+    scheduleClosedOption: "Closed",
+    scheduleOverrideOption: "Override hours",
+    scheduleStartsAtLabel: "Starts at (UTC instant)",
+    scheduleEndsAtLabel: "Ends at (UTC instant)",
+    scheduleNameLabel: "Holiday name",
+    scheduleReasonLabel: "Internal reason",
+    schedulePolicyKeyLabel: "Policy key",
+    schedulePolicyValueLabel: "Policy value",
   },
   ar: {
     eyebrow: "مساحة عمل فريق المستأجر",
@@ -206,6 +266,36 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     scheduleSaveError:
       "تعذر حفظ الجدول. تحقق من القيم أو أعد التحميل للحصول على إصدار أحدث.",
     scheduleUnavailable: "تحرير الجدول غير متاح حتى يتم اختيار مساحة مستأجر موثقة.",
+    scheduleOperationLabel: "نوع الإعداد",
+    scheduleScopeOption: "نطاق الجدول",
+    scheduleWeeklyOption: "ساعات أسبوعية",
+    scheduleBreakOption: "استراحة",
+    scheduleExceptionOption: "استثناء بتاريخ",
+    scheduleTimeOffOption: "إجازة موظف أو مورد",
+    scheduleHolidayOption: "عطلة",
+    scheduleBlackoutOption: "إغلاق الموقع",
+    scheduleMaintenanceOption: "صيانة المورد",
+    schedulePolicyOption: "تجاوز سياسة",
+    scheduleScopeLabel: "النطاق الحالي",
+    scheduleNewScopeOption: "نطاق جديد",
+    scheduleScopeKindLabel: "نوع النطاق",
+    scheduleLocationOption: "موقع",
+    scheduleStaffOption: "موظف",
+    scheduleResourceOption: "مورد",
+    scheduleLocationIdLabel: "معرّف الموقع",
+    scheduleStaffIdLabel: "معرّف الموظف",
+    scheduleResourceIdLabel: "معرّف المورد",
+    scheduleServiceIdLabel: "معرّف الخدمة",
+    scheduleDateLabel: "التاريخ المحلي",
+    scheduleExceptionKindLabel: "نوع الاستثناء",
+    scheduleClosedOption: "مغلق",
+    scheduleOverrideOption: "ساعات بديلة",
+    scheduleStartsAtLabel: "وقت البداية (لحظة UTC)",
+    scheduleEndsAtLabel: "وقت النهاية (لحظة UTC)",
+    scheduleNameLabel: "اسم العطلة",
+    scheduleReasonLabel: "السبب الداخلي",
+    schedulePolicyKeyLabel: "مفتاح السياسة",
+    schedulePolicyValueLabel: "قيمة السياسة",
   },
 };
 

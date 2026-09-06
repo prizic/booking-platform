@@ -8,7 +8,10 @@ import {
   createTimeRange,
   rangesOverlap,
   applyScheduleConstraints,
+  applyScheduleException,
   createWeeklySchedule,
+  evaluateSchedulePolicy,
+  resolveScheduleCivilTime,
   resolveSchedulePolicy,
   type SchedulePolicyOverrides,
   withBuffers,
@@ -103,5 +106,78 @@ describe("civil-time schedule rules", () => {
       horizonDays: 90,
       slotIntervalMinutes: 30,
     });
+  });
+
+  it("applies a closed exception and rejects a conflicting override", () => {
+    const schedule = createWeeklySchedule({
+      dayOfWeek: 0,
+      intervals: [{ startMinute: 540, endMinute: 1020 }],
+      breaks: [],
+      timeZone: "America/New_York",
+    });
+    expect(
+      applyScheduleException(schedule, {
+        localDate: "2026-11-01",
+        kind: "closed",
+        intervals: [],
+        fold: null,
+      }),
+    ).toEqual([]);
+    expect(() =>
+      applyScheduleException(schedule, {
+        localDate: "2026-11-01",
+        kind: "override",
+        intervals: [{ startMinute: 600, endMinute: 700 }],
+        fold: 0,
+      }),
+    ).not.toThrow();
+  });
+
+  it("deterministically identifies DST gaps and folds in named zones", () => {
+    expect(
+      resolveScheduleCivilTime("2026-03-08T02:30", "America/New_York"),
+    ).toMatchObject({ kind: "gap" });
+    expect(
+      resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York"),
+    ).toMatchObject({ kind: "ambiguous" });
+    expect(
+      resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York", 1),
+    ).toMatchObject({ kind: "exact", fold: 1 });
+  });
+
+  it("enforces notice, horizon, and daily staff limits", () => {
+    const policy = resolveSchedulePolicy({
+      tenant: { minimumNoticeMinutes: 60, horizonDays: 10, dailyLimitPerStaff: 2 },
+    });
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-01T10:30:00Z",
+          staffBookingsToday: 0,
+        },
+        policy,
+      ),
+    ).toBe(false);
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-05T10:00:00Z",
+          staffBookingsToday: 2,
+        },
+        policy,
+      ),
+    ).toBe(false);
+    expect(
+      evaluateSchedulePolicy(
+        {
+          now: "2026-09-01T10:00:00Z",
+          start: "2026-09-05T10:00:00Z",
+          staffBookingsToday: 1,
+        },
+        policy,
+      ),
+    ).toBe(true);
   });
 });
