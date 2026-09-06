@@ -396,4 +396,26 @@ describe("Team and resource management commands", () => {
       ),
     ).resolves.toEqual({ ok: false, code: "revision_conflict" });
   });
+
+  it("rejects a missing stable form idempotency key before calling the API", async () => {
+    const dataSource = source();
+
+    await expect(
+      executeSaveStaffProfile(
+        {
+          bio: "",
+          internalNotes: "",
+          membershipId: "",
+          offeredHoursPerWeek: "40",
+          publicName: "Layla Hassan",
+          reason: "New starter",
+          staffId: "",
+        },
+        context,
+        dataSource,
+        "",
+      ),
+    ).resolves.toEqual({ ok: false, code: "invalid_request" });
+    expect(dataSource.saveStaffProfile).not.toHaveBeenCalled();
+  });
 });

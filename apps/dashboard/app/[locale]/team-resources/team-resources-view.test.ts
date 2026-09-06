@@ -145,6 +145,17 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain('name="replacementStaffId"');
     expect(html).toContain('name="replacementResourceId"');
     expect(html).toContain("Apply safe resolution");
+    expect(html).toContain("Enter a valid value for this field, then submit again.");
+    const requestIds = [
+      ...html.matchAll(/type="hidden" name="requestId" value="([^"]+)"/gu),
+    ]
+      .map(([, requestId]) => requestId)
+      .filter((requestId): requestId is string => requestId !== undefined);
+    expect(requestIds).toHaveLength(html.match(/<form/gu)?.length ?? 0);
+    expect(new Set(requestIds).size).toBe(requestIds.length);
+    expect(requestIds.every((requestId) => /^[0-9a-f-]{36}$/u.test(requestId))).toBe(
+      true,
+    );
   });
 
   it("keeps tenant-wide editors hidden for a location-scoped operator", () => {
@@ -253,6 +264,7 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain("إنشاء عضو فريق");
     expect(html).toContain("تحديث الأهلية الدقيقة");
     expect(html).toContain("أُعيد تعيين");
+    expect(html).toContain("أدخل قيمة صالحة لهذا الحقل ثم أرسل النموذج مرة أخرى.");
     expect(html).toContain('aria-live="polite"');
   });
 });

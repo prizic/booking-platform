@@ -13,6 +13,7 @@ import {
   type TeamResourcesMessageKey,
 } from "../../_lib/team-resources-copy";
 import type { TeamResourcesWorkspaceState } from "../../_lib/team-resources-workspace";
+import { ValidatedForm } from "./validated-form";
 
 type ManagementAction = (formData: FormData) => Promise<void>;
 
@@ -157,7 +158,12 @@ function ItemFacts({
 }
 
 function HiddenContext({ locale }: { readonly locale: Locale }) {
-  return <input name="locale" type="hidden" value={locale} />;
+  return (
+    <>
+      <input name="locale" type="hidden" value={locale} />
+      <input name="requestId" type="hidden" value={crypto.randomUUID()} />
+    </>
+  );
 }
 
 function UuidField({
@@ -262,7 +268,7 @@ function StaffForm({
       <summary>
         {item === undefined ? message("addStaff") : message("editStaff")}
       </summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <input name="staffId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
@@ -322,7 +328,7 @@ function StaffForm({
         <button className="wlbp-button" type="submit">
           {message(item === undefined ? "submitStaff" : "saveStaff")}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }
@@ -345,7 +351,7 @@ function ResourceTypeForm({
           ? message("addResourceType")
           : message("editResourceType")}
       </summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <input name="resourceTypeId" type="hidden" value={resourceType?.id ?? ""} />
         <input
@@ -390,7 +396,7 @@ function ResourceTypeForm({
             resourceType === undefined ? "submitResourceType" : "saveResourceType",
           )}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }
@@ -414,7 +420,7 @@ function ResourceForm({
       <summary>
         {item === undefined ? message("addResource") : message("editResource")}
       </summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <input name="resourceId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
@@ -475,7 +481,7 @@ function ResourceForm({
         <button className="wlbp-button" type="submit">
           {message(item === undefined ? "submitResource" : "saveResource")}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }
@@ -496,7 +502,7 @@ function RequirementForm({
   return (
     <details className="team-resource-editor">
       <summary>{message("resourceRequirement")}</summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <ChoiceField
           choices={services}
@@ -509,7 +515,6 @@ function RequirementForm({
           id="requirement-type"
           label={message("resourceTypeId")}
           name="resourceTypeId"
-          required={false}
         />
         <label className="team-resource-field" htmlFor="requirement-state">
           <span>{message("resourceRequired")}</span>
@@ -527,7 +532,7 @@ function RequirementForm({
         <button className="wlbp-button" type="submit">
           {message("updateRequirement")}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }
@@ -555,7 +560,7 @@ function EligibilityForm({
           ? message("updateEligibility")
           : message("resourceLocationEligibility")}
       </summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <input
           name={item.kind === "staff" ? "staffId" : "resourceId"}
@@ -592,7 +597,7 @@ function EligibilityForm({
         <button className="wlbp-button wlbp-button--secondary" type="submit">
           {message("updateEligibility")}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }
@@ -616,7 +621,7 @@ function DeactivationForm({
   return (
     <details className="team-resource-editor team-resource-editor--danger">
       <summary>{message("deactivate")}</summary>
-      <form action={action}>
+      <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext locale={locale} />
         <input
           name={item.kind === "staff" ? "staffId" : "resourceId"}
@@ -646,10 +651,11 @@ function DeactivationForm({
           </span>
           <select
             className="wlbp-field__input"
-            defaultValue=""
+            defaultValue={replacements.at(0)?.id ?? ""}
             disabled={replacements.length === 0}
             id={`${prefix}-replacement`}
             name={replacementName}
+            required={replacements.length > 0}
           >
             <option value="">—</option>
             {replacements.map((replacement) => (
@@ -663,7 +669,7 @@ function DeactivationForm({
         <button className="wlbp-button wlbp-button--danger" type="submit">
           {message("submitDeactivation")}
         </button>
-      </form>
+      </ValidatedForm>
     </details>
   );
 }

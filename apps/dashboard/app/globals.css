@@ -897,12 +897,18 @@ summary:focus-visible {
   inline-size: fit-content;
 }
 
+.team-resource-validation-error {
+  margin: 0;
+  color: var(--brand-color-danger);
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
 .team-resource-editor--danger {
   border-block-start-color: var(--dashboard-danger);
 }
 
 .wlbp-button--danger {
-  color: #fff;
+  color: var(--brand-color-on-danger);
   background: var(--dashboard-danger);
   border-color: var(--dashboard-danger);
 }

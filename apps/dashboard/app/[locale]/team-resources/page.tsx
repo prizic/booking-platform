@@ -8,6 +8,7 @@ import { dashboardBrand } from "../../_lib/brand";
 import { getDashboardMessage } from "../../_lib/copy";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { getTeamResourcesMessage } from "../../_lib/team-resources-copy";
+import { getTeamResourcesMetadata } from "../../_lib/team-resources-metadata";
 import {
   loadTeamResourcesWorkspace,
   type TeamResourcesWorkspaceState,
@@ -32,6 +33,11 @@ type TeamResourcesPageProps = {
   readonly params: Promise<{ locale: Locale }>;
   readonly searchParams: Promise<{ result?: string }>;
 };
+
+export async function generateMetadata({ params }: TeamResourcesPageProps) {
+  const { locale } = await params;
+  return getTeamResourcesMetadata(locale);
+}
 
 async function loadPageState(locale: Locale): Promise<TeamResourcesWorkspaceState> {
   const request = await loadDashboardRequestAccess(locale);

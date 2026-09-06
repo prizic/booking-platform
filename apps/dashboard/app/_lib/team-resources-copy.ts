@@ -23,6 +23,7 @@ export type TeamResourcesMessageKey =
   | "deactivationSucceeded"
   | "deferDeactivation"
   | "futureAllocations"
+  | "fieldError"
   | "identifierHint"
   | "internalNotes"
   | "invalidRequest"
@@ -107,6 +108,7 @@ export const teamResourcesCopy: Record<
     deactivationSucceeded: "The item was deactivated.",
     deferDeactivation: "Keep active and defer deactivation",
     futureAllocations: "Future allocations",
+    fieldError: "Enter a valid value for this field, then submit again.",
     identifierHint: "Enter the UUID from the catalog workspace.",
     internalNotes: "Internal notes",
     invalidRequest: "Review the form fields and submit again.",
@@ -188,6 +190,7 @@ export const teamResourcesCopy: Record<
     deactivationSucceeded: "أُلغي تنشيط العنصر.",
     deferDeactivation: "الإبقاء نشطًا وتأجيل إلغاء التنشيط",
     futureAllocations: "التخصيصات المستقبلية",
+    fieldError: "أدخل قيمة صالحة لهذا الحقل ثم أرسل النموذج مرة أخرى.",
     identifierHint: "أدخل معرّف UUID من مساحة عمل الكتالوج.",
     internalNotes: "ملاحظات داخلية",
     invalidRequest: "راجع حقول النموذج ثم أرسل الطلب مرة أخرى.",

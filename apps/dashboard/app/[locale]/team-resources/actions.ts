@@ -22,6 +22,11 @@ function localeFrom(formData: FormData): Locale {
   return formData.get("locale") === "ar" ? "ar" : "en";
 }
 
+function requestIdFrom(formData: FormData): string {
+  const requestId = formData.get("requestId");
+  return typeof requestId === "string" ? requestId : "";
+}
+
 export async function deactivateStaffAction(formData: FormData): Promise<never> {
   const locale = localeFrom(formData);
   const request = await loadDashboardRequestAccess(locale);
@@ -38,7 +43,7 @@ export async function deactivateStaffAction(formData: FormData): Promise<never> 
     },
     request.state.context,
     request.source,
-    crypto.randomUUID(),
+    requestIdFrom(formData),
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
   redirect(
@@ -62,7 +67,7 @@ export async function deactivateResourceAction(formData: FormData): Promise<neve
     },
     request.state.context,
     request.source,
-    crypto.randomUUID(),
+    requestIdFrom(formData),
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
   redirect(
@@ -94,7 +99,7 @@ async function withVerifiedContext(
 
   const result = await command(
     { source: request.source, state: request.state },
-    crypto.randomUUID(),
+    requestIdFrom(formData),
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
   redirect(resultUrl(locale, result.ok ? "saved" : result.code.replaceAll("_", "-")));

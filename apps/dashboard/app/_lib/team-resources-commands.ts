@@ -194,6 +194,7 @@ export async function executeSaveStaffProfile(
       ? Number(request.offeredHoursPerWeek)
       : Number.NaN;
   if (
+    !uuidPattern.test(requestId) ||
     bio === undefined ||
     expectedRevision === undefined ||
     internalNotes === undefined ||
@@ -241,6 +242,7 @@ export async function executeSaveResourceType(
   const reason = requiredText(request.reason, 500);
   const resourceTypeId = optionalUuid(request.resourceTypeId);
   if (
+    !uuidPattern.test(requestId) ||
     exclusive === null ||
     expectedRevision === undefined ||
     key === null ||
@@ -284,6 +286,7 @@ export async function executeSaveResource(
   const resourceTypeId = requiredUuid(request.resourceTypeId);
   const status = request.status;
   if (
+    !uuidPattern.test(requestId) ||
     internalNotes === undefined ||
     expectedRevision === undefined ||
     key === null ||
@@ -325,6 +328,7 @@ export async function executeStaffEligibility(
   const serviceId = requiredUuid(request.serviceId);
   const staffId = requiredUuid(request.staffId);
   if (
+    !uuidPattern.test(requestId) ||
     eligible === null ||
     locationId === null ||
     reason === null ||
@@ -360,6 +364,7 @@ export async function executeResourceLocationEligibility(
   const reason = requiredText(request.reason, 500);
   const resourceId = requiredUuid(request.resourceId);
   if (
+    !uuidPattern.test(requestId) ||
     eligible === null ||
     locationId === null ||
     reason === null ||
@@ -396,6 +401,7 @@ export async function executeResourceRequirement(
   const resourceTypeId = optionalUuid(request.resourceTypeId);
   const serviceId = requiredUuid(request.serviceId);
   if (
+    !uuidPattern.test(requestId) ||
     reason === null ||
     required === null ||
     resourceTypeId === undefined ||
