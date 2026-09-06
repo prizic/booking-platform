@@ -1,3 +1,31 @@
+/*
+ * Reproducible typography: these faces are checked into every distributed
+ * Dashboard build. Do not add a remote font URL or a `local()` source here.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/Inter-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Sans Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("/fonts/NotoSansArabic-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Noto Naskh Arabic";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url("/fonts/NotoNaskhArabic-Variable.woff2") format("woff2");
+}
+
 :root {
   color-scheme: light;
   --dashboard-ink: #18201e;
@@ -70,7 +98,7 @@ input:focus-visible {
   border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
   border-radius: 999px;
   font-size: 0.7rem;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .wlbp-badge--positive {
@@ -111,7 +139,7 @@ input:focus-visible {
   border: 1px solid var(--dashboard-ink);
   border-radius: 0.65rem;
   font-size: 0.78rem;
-  font-weight: 750;
+  font-weight: 700;
   text-decoration: none;
 }
 
@@ -194,6 +222,8 @@ input:focus-visible {
 }
 
 .wlbp-field__input {
+  inline-size: 100%;
+  min-inline-size: 0;
   min-block-size: 3rem;
   padding-block: 0.65rem;
   padding-inline: 0.8rem;
@@ -372,7 +402,7 @@ input:focus-visible {
   margin: 0;
   color: var(--dashboard-muted);
   font-size: 0.73rem;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -391,7 +421,7 @@ input:focus-visible {
   padding-block: 0.4rem;
   padding-inline: 0.65rem;
   font-size: 0.72rem;
-  font-weight: 750;
+  font-weight: 700;
   text-align: center;
   text-decoration: none;
   border-radius: 999px;
@@ -410,7 +440,7 @@ input:focus-visible {
   max-inline-size: 18ch;
   margin: 0;
   font-size: clamp(2.5rem, 5vw, 5rem);
-  font-weight: 560;
+  font-weight: 500;
   letter-spacing: -0.055em;
   line-height: 1.02;
 }
@@ -467,7 +497,7 @@ input:focus-visible {
   text-align: center;
   background: #e0f4ca;
   border-radius: 999px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .metric-card-alert small {
@@ -495,7 +525,7 @@ input:focus-visible {
   margin-block: 0 0.35rem;
   color: var(--dashboard-muted);
   font-size: 0.7rem;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -611,6 +641,8 @@ input:focus-visible {
 }
 
 .brand-preview-shell > .wlbp-surface {
+  inline-size: 100%;
+  min-inline-size: 0;
   max-inline-size: var(--brand-content-width-wide);
   margin-inline: auto;
 }
@@ -626,7 +658,10 @@ input:focus-visible {
 }
 
 .brand-preview-header strong {
-  max-inline-size: 36ch;
+  inline-size: min(100%, 36ch);
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  overflow-wrap: anywhere;
   text-align: end;
 }
 

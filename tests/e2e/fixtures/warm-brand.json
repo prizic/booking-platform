@@ -25,10 +25,10 @@
       "focus": "#0047bb"
     },
     "typography": {
-      "bodyFamily": "system-ui, \"Noto Sans Arabic\", sans-serif",
-      "displayFamily": "Georgia, \"Noto Naskh Arabic\", serif",
-      "arabicBodyFamily": "\"Noto Sans Arabic\", Tahoma, sans-serif",
-      "arabicDisplayFamily": "\"Noto Naskh Arabic\", Tahoma, serif",
+      "bodyFamily": "Inter, \"Noto Sans Arabic\", sans-serif",
+      "displayFamily": "Inter, \"Noto Sans Arabic\", sans-serif",
+      "arabicBodyFamily": "\"Noto Sans Arabic\", sans-serif",
+      "arabicDisplayFamily": "\"Noto Naskh Arabic\", serif",
       "size": {
         "caption": "0.75rem",
         "body": "1rem",

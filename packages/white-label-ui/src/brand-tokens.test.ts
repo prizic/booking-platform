@@ -116,6 +116,31 @@ describe("semantic brand tokens", () => {
     expect(() => parseBrandTokens(withSelector)).toThrow(BrandTokenValidationError);
   });
 
+  it("rejects unshipped font families and weights outside a face's range", () => {
+    const unshipped = {
+      ...validTokens,
+      typography: {
+        ...validTokens.typography,
+        displayFamily: 'Georgia, "Noto Naskh Arabic", serif',
+      },
+    };
+    const unsupportedWeight = {
+      ...validTokens,
+      typography: {
+        ...validTokens.typography,
+        arabicDisplayFamily: '"Noto Naskh Arabic", sans-serif',
+        weight: { ...validTokens.typography.weight, bold: "800" },
+      },
+    };
+
+    expect(validateBrandTokens(unshipped).join("\n")).toContain(
+      "typography.displayFamily contains undeclared font family fallback(s): Georgia",
+    );
+    expect(validateBrandTokens(unsupportedWeight).join("\n")).toContain(
+      "typography.arabicDisplayFamily does not provide the requested 800 weight",
+    );
+  });
+
   it("rejects unreadable text and non-text contrast pairs deterministically", () => {
     const inaccessible = {
       ...validTokens,

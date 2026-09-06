@@ -14,6 +14,7 @@ for (const profile of responsiveProfiles) {
           page.on("pageerror", (error) => runtimeErrors.push(error.message));
 
           const response = await page.goto(`${application.origin}/${language.locale}`);
+          await page.evaluate(() => document.fonts.ready);
 
           expect(response?.ok()).toBe(true);
           await expect(page.locator("html")).toHaveAttribute("lang", language.locale);
@@ -70,6 +71,7 @@ for (const application of tenantApplications) {
     }) => {
       await page.setViewportSize({ height: 900, width: 640 });
       await page.goto(`${application.origin}/${language.locale}`);
+      await page.evaluate(() => document.fonts.ready);
 
       await expect(page.getByRole("main")).toBeVisible();
       expect(
@@ -85,6 +87,7 @@ for (const application of tenantApplications) {
     }) => {
       await page.setViewportSize({ height: 844, width: 390 });
       await page.goto(`${application.origin}/${language.locale}`);
+      await page.evaluate(() => document.fonts.ready);
 
       const longCopy =
         language.locale === "ar"

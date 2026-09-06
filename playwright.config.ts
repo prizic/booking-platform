@@ -20,13 +20,13 @@ const servers = [
   },
   {
     command:
-      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm pnpm --filter @wlbp/client exec next dev --port 41733",
+      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm-client pnpm --filter @wlbp/client exec next dev --port 41733",
     port: 41733,
     reuseExistingServer: reuseDevServersInCi,
   },
   {
     command:
-      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm pnpm --filter @wlbp/dashboard exec next dev --port 41734",
+      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-warm-dashboard pnpm --filter @wlbp/dashboard exec next dev --port 41734",
     port: 41734,
     // In CI, the warm Next dev server can outlive a prior Playwright project.
     // Reusing the healthy server avoids a race where a replacement fails with
