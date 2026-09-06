@@ -143,13 +143,15 @@ create table app.schedule_audit_events (
   tenant_id uuid not null references app.tenants(id) on delete restrict,
   actor_auth_user_id uuid,
   target_id uuid not null,
+  revision bigint,
   operation text not null,
   outcome text not null check (outcome in ('succeeded','rejected')),
   reason text not null default '' check (char_length(reason) <= 500),
   request_id uuid,
   redacted_diff jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default statement_timestamp(),
-  primary key (id), unique (tenant_id,id)
+  primary key (id), unique (tenant_id,id),
+  check ((outcome='succeeded' and revision is not null and revision>0) or (outcome='rejected' and revision is null))
 );
 create unique index schedule_audit_request_idx on app.schedule_audit_events(tenant_id,request_id) where request_id is not null;
 create or replace function app.prevent_schedule_audit_mutation() returns trigger language plpgsql set search_path='' as $$
@@ -265,8 +267,8 @@ begin
     raise exception using errcode='22023', message='schedule_request_invalid';
   end if;
   if p_request_id is not null then
-    select target_id, revision into v_target, v_revision from app.schedule_audit_events
-      where tenant_id=p_tenant_id and request_id=p_request_id and outcome='succeeded';
+    select e.target_id, e.revision into v_target, v_revision from app.schedule_audit_events e
+      where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.outcome='succeeded';
     if found then return query select v_target,v_revision; return; end if;
   end if;
   v_location := nullif(p_payload->>'location_id','')::uuid;
@@ -300,11 +302,11 @@ begin
       if not exists (select 1 from pg_catalog.pg_timezone_names where name=p_payload->>'time_zone') then
         raise exception using errcode='22023', message='invalid_time_zone';
       end if;
-      update app.schedule_scopes set time_zone=p_payload->>'time_zone',revision=revision+1,updated_at=statement_timestamp()
-        where tenant_id=p_tenant_id and id=v_scope_id;
+      update app.schedule_scopes as s set time_zone=p_payload->>'time_zone',revision=s.revision+1,updated_at=statement_timestamp()
+        where s.tenant_id=p_tenant_id and s.id=v_scope_id;
     end if;
-    v_revision := (select revision from app.schedule_scopes where tenant_id=p_tenant_id and id=v_scope_id);
-    insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_scope_id,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('time_zone',p_payload->>'time_zone'));
+    v_revision := (select s.revision from app.schedule_scopes s where s.tenant_id=p_tenant_id and s.id=v_scope_id);
+    insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_scope_id,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('time_zone',p_payload->>'time_zone'));
     return query select v_scope_id,v_revision;
     return;
   end if;
@@ -321,7 +323,7 @@ begin
       end if;
       if not exists (select 1 from pg_catalog.pg_timezone_names where name=p_payload->>'time_zone') then raise exception using errcode='22023',message='invalid_time_zone'; end if;
       if v_target is not null then
-        select revision into v_existing_revision from app.time_off where tenant_id=p_tenant_id and id=v_target for update;
+        select t.revision into v_existing_revision from app.time_off t where t.tenant_id=p_tenant_id and t.id=v_target for update;
         if not found or p_expected_revision is null or p_expected_revision<>v_existing_revision then raise exception using errcode='40001',message='revision_conflict'; end if;
       end if;
       v_target := coalesce(v_target,pg_catalog.gen_random_uuid());
@@ -329,21 +331,21 @@ begin
       insert into app.time_off(id,tenant_id,staff_id,resource_id,location_id,starts_at,ends_at,time_zone,reason)
         values(v_target,p_tenant_id,v_staff,v_resource,v_location,(p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,p_payload->>'time_zone',coalesce(p_payload->>'reason',''))
         on conflict (id) do update set staff_id=excluded.staff_id,resource_id=excluded.resource_id,location_id=excluded.location_id,starts_at=excluded.starts_at,ends_at=excluded.ends_at,time_zone=excluded.time_zone,reason=excluded.reason,revision=time_off.revision+1,updated_at=statement_timestamp();
-      v_revision := (select revision from app.time_off where tenant_id=p_tenant_id and id=v_target);
-      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
+      v_revision := (select t.revision from app.time_off t where t.tenant_id=p_tenant_id and t.id=v_target);
+      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
       return query select v_target,v_revision; return;
     elsif p_operation='holiday' then
       if v_location is null or nullif(p_payload->>'local_date','') is null or btrim(coalesce(p_payload->>'name',''))='' then raise exception using errcode='22023',message='schedule_holiday_invalid'; end if;
       if v_target is not null then
-        select revision into v_existing_revision from app.holidays where tenant_id=p_tenant_id and id=v_target for update;
+        select h.revision into v_existing_revision from app.holidays h where h.tenant_id=p_tenant_id and h.id=v_target for update;
         if not found or p_expected_revision is null or p_expected_revision<>v_existing_revision then raise exception using errcode='40001',message='revision_conflict'; end if;
       end if;
       v_target := coalesce(v_target,pg_catalog.gen_random_uuid());
       if exists (select 1 from app.holidays where id=v_target and tenant_id<>p_tenant_id) then raise exception using errcode='42501',message='schedule_cross_tenant_target'; end if;
       insert into app.holidays(id,tenant_id,location_id,local_date,name) values(v_target,p_tenant_id,v_location,(p_payload->>'local_date')::date,btrim(p_payload->>'name'))
         on conflict (id) do update set location_id=excluded.location_id,local_date=excluded.local_date,name=excluded.name,revision=holidays.revision+1,updated_at=statement_timestamp();
-      v_revision := (select revision from app.holidays where tenant_id=p_tenant_id and id=v_target);
-      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('local_date',p_payload->>'local_date'));
+      v_revision := (select h.revision from app.holidays h where h.tenant_id=p_tenant_id and h.id=v_target);
+      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('local_date',p_payload->>'local_date'));
       return query select v_target,v_revision; return;
     elsif p_operation in ('blackout','maintenance') then
       if v_location is null or nullif(p_payload->>'starts_at','') is null or nullif(p_payload->>'ends_at','') is null
@@ -351,8 +353,8 @@ begin
       if p_operation='maintenance' and v_resource is null then raise exception using errcode='22023',message='schedule_maintenance_invalid'; end if;
       if not exists (select 1 from pg_catalog.pg_timezone_names where name=p_payload->>'time_zone') then raise exception using errcode='22023',message='invalid_time_zone'; end if;
       if v_target is not null then
-        if p_operation='blackout' then select revision into v_existing_revision from app.blackouts where tenant_id=p_tenant_id and id=v_target for update;
-        else select revision into v_existing_revision from app.resource_maintenance_blocks where tenant_id=p_tenant_id and id=v_target for update; end if;
+        if p_operation='blackout' then select b.revision into v_existing_revision from app.blackouts b where b.tenant_id=p_tenant_id and b.id=v_target for update;
+        else select m.revision into v_existing_revision from app.resource_maintenance_blocks m where m.tenant_id=p_tenant_id and m.id=v_target for update; end if;
         if not found or p_expected_revision is null or p_expected_revision<>v_existing_revision then raise exception using errcode='40001',message='revision_conflict'; end if;
       end if;
       v_target := coalesce(v_target,pg_catalog.gen_random_uuid());
@@ -360,14 +362,14 @@ begin
       if p_operation='blackout' then
         insert into app.blackouts(id,tenant_id,location_id,starts_at,ends_at,time_zone,reason) values(v_target,p_tenant_id,v_location,(p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,p_payload->>'time_zone',coalesce(p_payload->>'reason',''))
           on conflict (id) do update set location_id=excluded.location_id,starts_at=excluded.starts_at,ends_at=excluded.ends_at,time_zone=excluded.time_zone,reason=excluded.reason,revision=blackouts.revision+1,updated_at=statement_timestamp();
-        v_revision := (select revision from app.blackouts where tenant_id=p_tenant_id and id=v_target);
-        insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
+        v_revision := (select b.revision from app.blackouts b where b.tenant_id=p_tenant_id and b.id=v_target);
+        insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
         return query select v_target,v_revision;
       else
         insert into app.resource_maintenance_blocks(id,tenant_id,resource_id,location_id,starts_at,ends_at,time_zone,reason) values(v_target,p_tenant_id,v_resource,v_location,(p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,p_payload->>'time_zone',coalesce(p_payload->>'reason',''))
           on conflict (id) do update set resource_id=excluded.resource_id,location_id=excluded.location_id,starts_at=excluded.starts_at,ends_at=excluded.ends_at,time_zone=excluded.time_zone,reason=excluded.reason,revision=resource_maintenance_blocks.revision+1,updated_at=statement_timestamp();
-        v_revision := (select revision from app.resource_maintenance_blocks where tenant_id=p_tenant_id and id=v_target);
-        insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
+        v_revision := (select m.revision from app.resource_maintenance_blocks m where m.tenant_id=p_tenant_id and m.id=v_target);
+        insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('starts_at',p_payload->>'starts_at','ends_at',p_payload->>'ends_at'));
         return query select v_target,v_revision;
       end if;
     else
@@ -377,14 +379,14 @@ begin
       if jsonb_typeof(v_value)<>'number' and jsonb_typeof(v_value)<>'null' then raise exception using errcode='22023',message='schedule_policy_invalid'; end if;
       if v_value='null'::jsonb and p_payload->>'policy_key'<>'daily_limit_per_staff' then raise exception using errcode='22023',message='schedule_policy_out_of_bounds'; end if;
       if v_value is not null and v_value<>'null'::jsonb and ((p_payload->>'policy_key')='minimum_notice_minutes' and (v_value#>>'{}')::numeric not between 0 and 43200 or (p_payload->>'policy_key')='horizon_days' and (v_value#>>'{}')::numeric not between 1 and 365 or (p_payload->>'policy_key')='slot_interval_minutes' and (v_value#>>'{}')::numeric not in (5,10,15,20,30,60) or (p_payload->>'policy_key')='daily_limit_per_staff' and (v_value#>>'{}')::numeric not between 1 and 50 or (p_payload->>'policy_key') in ('buffer_before_minutes','buffer_after_minutes') and (v_value#>>'{}')::numeric not between 0 and 120 or (p_payload->>'policy_key') in ('turnover_minutes','travel_minutes') and (v_value#>>'{}')::numeric not between 0 and 1440) then raise exception using errcode='22023',message='schedule_policy_out_of_bounds'; end if;
-      if v_target is not null then select revision into v_existing_revision from app.schedule_policy_overrides where tenant_id=p_tenant_id and id=v_target for update; if not found or p_expected_revision is null or p_expected_revision<>v_existing_revision then raise exception using errcode='40001',message='revision_conflict'; end if; end if;
+      if v_target is not null then select p.revision into v_existing_revision from app.schedule_policy_overrides p where p.tenant_id=p_tenant_id and p.id=v_target for update; if not found or p_expected_revision is null or p_expected_revision<>v_existing_revision then raise exception using errcode='40001',message='revision_conflict'; end if; end if;
       v_target := coalesce(v_target,pg_catalog.gen_random_uuid());
       if exists (select 1 from app.schedule_policy_overrides where id=v_target and tenant_id<>p_tenant_id) then raise exception using errcode='42501',message='schedule_cross_tenant_target'; end if;
       insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,location_id,service_id,staff_id,resource_id,policy_key,value) values(v_target,p_tenant_id,p_payload->>'scope_kind',v_location,v_service,v_staff,v_resource,p_payload->>'policy_key',v_value)
         on conflict (id) do update set value=excluded.value,revision=schedule_policy_overrides.revision+1,updated_at=statement_timestamp();
-      v_revision := (select revision from app.schedule_policy_overrides where tenant_id=p_tenant_id and id=v_target);
-      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff)
-        values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('policy_key',p_payload->>'policy_key','value',v_value));
+      v_revision := (select p.revision from app.schedule_policy_overrides p where p.tenant_id=p_tenant_id and p.id=v_target);
+      insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff)
+        values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('policy_key',p_payload->>'policy_key','value',v_value));
       return query select v_target,v_revision; return;
     end if;
   end if;
@@ -454,8 +456,8 @@ begin
   else
     raise exception using errcode='22023',message='schedule_operation_invalid';
   end if;
-  update app.schedule_scopes set revision=revision+1,updated_at=statement_timestamp() where tenant_id=p_tenant_id and id=v_scope_id returning revision into v_revision;
-  insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('day_of_week',v_day,'start_minute',v_start,'end_minute',v_end));
+  update app.schedule_scopes as s set revision=s.revision+1,updated_at=statement_timestamp() where s.tenant_id=p_tenant_id and s.id=v_scope_id returning s.revision into v_revision;
+  insert into app.schedule_audit_events(tenant_id,actor_auth_user_id,target_id,revision,operation,outcome,reason,request_id,redacted_diff) values(p_tenant_id,(select private.current_auth_user_id()),v_target,v_revision,p_operation,'succeeded',coalesce(p_payload->>'reason',''),p_request_id,jsonb_build_object('day_of_week',v_day,'start_minute',v_start,'end_minute',v_end));
   return query select v_target,v_revision;
 exception when others then
   if p_tenant_id is not null then

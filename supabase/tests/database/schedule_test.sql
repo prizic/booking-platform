@@ -44,11 +44,24 @@ select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-0000000
 set local role authenticated;
 select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where kind='weekly'), 5, 'tenant A scheduler can read the complete schedule workspace');
 select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('b0000000-0000-0000-0000-000000000001',null)), 0, 'tenant A scheduler cannot read tenant B schedule rows');
-select lives_ok($$select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','day_of_week',6,'start_minute',600,'end_minute',700),1,'a5900000-0000-0000-0000-000000000001')$$, 'authorized scheduler can add a non-overlapping weekly interval');
+create temp table schedule_first_result as
+  select null::uuid as target_id, null::bigint as revision
+  where false;
+select lives_ok($$insert into schedule_first_result select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','day_of_week',6,'start_minute',600,'end_minute',700),1,'a5900000-0000-0000-0000-000000000001')$$, 'authorized scheduler can add a non-overlapping weekly interval');
+select results_eq(
+  $$select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','day_of_week',6,'start_minute',600,'end_minute',700),1,'a5900000-0000-0000-0000-000000000001')$$,
+  $$select target_id,revision from schedule_first_result$$,
+  'repeating a successful request returns the identical target and revision');
+reset role;
+set local role postgres;
 select is((select count(*)::integer from app.schedule_audit_events where request_id='a5900000-0000-0000-0000-000000000001'), 1, 'successful mutation records actor, target, request, and redacted diff');
+select is((select count(*)::integer from app.weekly_schedules where tenant_id='a0000000-0000-0000-0000-000000000001' and day_of_week=6 and start_minute=600 and end_minute=700), 1, 'repeating a successful request creates no second schedule mutation');
+reset role;
+set local role authenticated;
 select throws_ok($$select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','day_of_week',1,'start_minute',600,'end_minute',700),2,'a5900000-0000-0000-0000-000000000002')$$, '22023', 'schedule_interval_overlap', 'overlapping weekly intervals are rejected');
 select throws_ok($$select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','id','b5700000-0000-0000-0000-000000000001','day_of_week',6,'start_minute',700,'end_minute',800),2,'a5900000-0000-0000-0000-000000000003')$$, '42501', 'schedule_cross_tenant_target', 'foreign tenant row identifiers cannot be upserted');
 select throws_ok($$select * from api_v1.save_schedule_config_v1('a0000000-0000-0000-0000-000000000001','weekly',jsonb_build_object('scope_id','a5600000-0000-0000-0000-000000000001','day_of_week',6,'start_minute',700,'end_minute',800),1,'a5900000-0000-0000-0000-000000000004')$$, '40001', 'revision_conflict', 'stale scope revisions are rejected');
 reset role;
 
+select * from finish();
 rollback;
