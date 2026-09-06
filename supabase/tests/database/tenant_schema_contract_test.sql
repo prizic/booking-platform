@@ -85,6 +85,7 @@ select is(
       and procedure.prosecdef
   ),
   array[
+    'private.bump_availability_revision()',
     'private.can_access_location(uuid,uuid)',
     'private.can_manage_catalog(uuid,uuid)',
     'private.can_manage_policy_scope(uuid,uuid,uuid,uuid)',
@@ -94,10 +95,13 @@ select is(
     'private.deactivate_resource_v1(uuid,uuid,text,uuid,uuid,text)',
     'private.deactivate_staff_v1(uuid,uuid,text,uuid,uuid,text)',
     'private.get_assignment_candidates_v1(uuid,uuid)',
+    'private.get_availability_v1(text,text,uuid,uuid,uuid,timestamp with time zone,timestamp with time zone,integer,text)',
     'private.get_staff_resource_choices_v1(uuid,text)',
     'private.has_direct_capability(uuid,text)',
+    'private.initialize_availability_revision()',
     'private.is_active_tenant_member(uuid)',
     'private.is_public_tenant_context(uuid,uuid,uuid,uuid)',
+    'private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)',
     'private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text)',
     'private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text)',
     'private.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)',

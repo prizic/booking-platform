@@ -67,6 +67,9 @@ contract without widening the backend contract range in `platform-contract.json`
    when any required discriminator is unavailable. Results are advisory even on
    a cache hit. Issue #11 owns the atomic hold and transactional revalidation that
    can reject a stale slot safely.
+   Availability revision rows remain private: application roles have neither
+   CRUD grants nor permitting RLS policies. Explicit deny policies cover every
+   operation, while approved private triggers initialize and advance revisions.
 6. Because ADR-0010 defers two-way calendar connections to issues #46 and #47,
    v1 reports provider health as `not_applicable` and reads no external busy
    state. It does not claim that a disconnected calendar has been checked.

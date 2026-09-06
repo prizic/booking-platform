@@ -7,6 +7,16 @@ create table app.availability_revisions (
   updated_at timestamptz not null default statement_timestamp()
 );
 alter table app.availability_revisions enable row level security;
+-- Revision state is maintained only by private triggers. Keep explicit CRUD
+-- denial beneath the absent grants, including if a grant is added by mistake.
+create policy availability_revisions_select_denied on app.availability_revisions
+  for select to anon,authenticated using (false);
+create policy availability_revisions_insert_denied on app.availability_revisions
+  for insert to anon,authenticated with check (false);
+create policy availability_revisions_update_denied on app.availability_revisions
+  for update to anon,authenticated using (false) with check (false);
+create policy availability_revisions_delete_denied on app.availability_revisions
+  for delete to anon,authenticated using (false);
 revoke all on app.availability_revisions from public, anon, authenticated;
 insert into app.availability_revisions(tenant_id)
 select id from app.tenants

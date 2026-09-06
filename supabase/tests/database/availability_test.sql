@@ -45,6 +45,40 @@ select has_table('app'::name, 'availability_revisions'::name);
 select is((select count(*)::integer from app.availability_revisions), (select count(*)::integer from app.tenants), 'existing tenants receive availability revision rows during migration');
 select ok((select relrowsecurity from pg_class where oid='app.availability_revisions'::regclass), 'availability revisions require RLS');
 select ok(not has_table_privilege('anon','app.availability_revisions','select'), 'anonymous callers cannot read availability revisions');
+select ok(not exists(
+  select 1 from (values ('anon'),('authenticated')) principals(role_name)
+  cross join (values ('SELECT'),('INSERT'),('UPDATE'),('DELETE')) commands(privilege)
+  where has_table_privilege(principals.role_name,'app.availability_revisions',commands.privilege)
+), 'application roles have no direct availability revision CRUD grants');
+select ok(not exists(
+  select 1 from (values ('anon'),('authenticated')) principals(role_name)
+  cross join (values ('private.bump_availability_revision()'),('private.initialize_availability_revision()')) helpers(signature)
+  where has_function_privilege(principals.role_name,helpers.signature,'EXECUTE')
+), 'application roles cannot directly execute revision trigger helpers');
+
+savepoint revision_rls;
+insert into app.tenants(id,name) values ('a8860000-0000-0000-0000-000000000001','Synthetic revision tenant');
+select is((select revision from app.availability_revisions where tenant_id='a8860000-0000-0000-0000-000000000001'),1::bigint,
+  'the private tenant trigger initializes revision state despite application deny policies');
+-- Grant only inside this rolled-back fixture to prove RLS independently of
+-- the production privilege denial. Neither principal may read or mutate rows.
+grant select,insert,update,delete on app.availability_revisions to anon,authenticated;
+set local role anon;
+select is((select count(*)::integer from app.availability_revisions),0,'anonymous RLS hides all tenant revisions');
+with changed as (update app.availability_revisions set revision=revision+1 returning 1) select is((select count(*)::integer from changed),0,'anonymous RLS denies revision updates');
+with changed as (delete from app.availability_revisions returning 1) select is((select count(*)::integer from changed),0,'anonymous RLS denies revision deletion');
+select throws_ok($$insert into app.availability_revisions(tenant_id) values ('a8860000-0000-0000-0000-000000000001')$$,
+  '42501','new row violates row-level security policy for table "availability_revisions"','anonymous RLS denies revision insertion');
+reset role;
+select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
+set local role authenticated;
+select is((select count(*)::integer from app.availability_revisions),0,'tenant admin RLS hides same-tenant and other-tenant revisions');
+with changed as (update app.availability_revisions set revision=revision+1 returning 1) select is((select count(*)::integer from changed),0,'tenant admin RLS denies revision updates');
+with changed as (delete from app.availability_revisions returning 1) select is((select count(*)::integer from changed),0,'tenant admin RLS denies revision deletion');
+select throws_ok($$insert into app.availability_revisions(tenant_id) values ('a0000000-0000-0000-0000-000000000001')$$,
+  '42501','new row violates row-level security policy for table "availability_revisions"','tenant admin RLS denies even same-tenant revision insertion');
+reset role;
+rollback to savepoint revision_rls;
 select has_function('api_v1'::name, 'get_availability_v1'::name, array['text','text','uuid','uuid','uuid','timestamp with time zone','timestamp with time zone','integer','text']);
 select ok(has_function_privilege('anon','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'anonymous Client callers can request availability');
 select ok(has_function_privilege('authenticated','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'authenticated Dashboard callers can request availability');
