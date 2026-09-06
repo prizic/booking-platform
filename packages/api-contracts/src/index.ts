@@ -286,7 +286,7 @@ export function parseAssignmentCandidatesV1(
 export interface StaffResourceWorkspaceItemV1 {
   readonly futureAllocationCount: number;
   readonly id: string;
-  readonly internalNotes: string;
+  readonly internalNotes: string | null;
   readonly key: string | null;
   readonly kind: "resource" | "staff";
   readonly locationIds: readonly LocationId[];
@@ -296,7 +296,7 @@ export interface StaffResourceWorkspaceItemV1 {
   readonly publicBio: string | null;
   readonly resourceTypeId: string | null;
   readonly resourceTypeName: string | null;
-  readonly revision: number;
+  readonly revision: number | null;
   readonly serviceIds: readonly string[];
   readonly status: "active" | "deactivation_pending" | "inactive" | "maintenance";
 }
@@ -400,29 +400,28 @@ export function parseStaffResourceWorkspaceV1(
       !Array.isArray(item.serviceIds) ||
       !Number.isSafeInteger(item.futureAllocationCount) ||
       (item.futureAllocationCount as number) < 0 ||
-      typeof item.internalNotes !== "string" ||
+      (item.internalNotes !== null && typeof item.internalNotes !== "string") ||
       (item.key !== null && typeof item.key !== "string") ||
       (item.membershipId !== null && typeof item.membershipId !== "string") ||
       (item.offeredHoursPerWeek !== null &&
-        typeof item.offeredHoursPerWeek !== "number") ||
+        (typeof item.offeredHoursPerWeek !== "number" ||
+          !Number.isFinite(item.offeredHoursPerWeek) ||
+          item.offeredHoursPerWeek <= 0 ||
+          item.offeredHoursPerWeek > 168)) ||
       (item.publicBio !== null && typeof item.publicBio !== "string") ||
       (item.resourceTypeId !== null && typeof item.resourceTypeId !== "string") ||
       (item.resourceTypeName !== null && typeof item.resourceTypeName !== "string") ||
-      !Number.isSafeInteger(item.revision) ||
-      (item.revision as number) < 1 ||
+      (item.revision !== null &&
+        (!Number.isSafeInteger(item.revision) || (item.revision as number) < 1)) ||
       (item.kind === "staff" &&
         (item.key !== null ||
           item.resourceTypeId !== null ||
-          item.resourceTypeName !== null ||
-          item.offeredHoursPerWeek === null ||
-          item.publicBio === null)) ||
+          item.resourceTypeName !== null)) ||
       (item.kind === "staff" && item.resourceTypeName !== null) ||
       (item.kind === "resource" &&
-        (item.key === null ||
-          item.membershipId !== null ||
+        (item.membershipId !== null ||
           item.offeredHoursPerWeek !== null ||
           item.publicBio !== null ||
-          item.resourceTypeId === null ||
           item.resourceTypeName === null))
     ) {
       throw new Error("Staff/resource workspace item is invalid");
@@ -448,7 +447,7 @@ export function parseStaffResourceWorkspaceV1(
         item.resourceTypeName === null
           ? null
           : requireNonEmptyString(item.resourceTypeName),
-      revision: item.revision as number,
+      revision: item.revision as number | null,
       serviceIds: Object.freeze(item.serviceIds.map(requireNonEmptyString)),
       status: item.status,
     });

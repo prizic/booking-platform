@@ -75,11 +75,11 @@ begin
     null::text,
     staff.public_name,
     staff.status,
-    staff.revision,
-    staff.membership_id,
-    staff.public_bio,
-    staff.internal_notes,
-    staff.offered_hours_per_week,
+    case when v_staff_tenant then staff.revision else null::bigint end,
+    case when v_staff_tenant then staff.membership_id else null::uuid end,
+    case when v_staff_tenant then staff.public_bio else null::text end,
+    case when v_staff_tenant then staff.internal_notes else null::text end,
+    case when v_staff_tenant then staff.offered_hours_per_week else null::numeric end,
     null::uuid,
     null::text,
     coalesce(locations.ids, '{}'::uuid[]),
@@ -153,15 +153,18 @@ begin
     resource.tenant_id,
     'resource'::text,
     resource.id,
-    resource.key,
+    case when v_catalog_tenant then resource.key else null::text end,
     resource.public_name,
     resource.status,
-    resource.revision,
+    case when v_catalog_tenant then resource.revision else null::bigint end,
     null::uuid,
     null::text,
-    resource.internal_notes,
+    case when v_catalog_tenant then resource.internal_notes else null::text end,
     null::numeric,
-    resource.resource_type_id,
+    case
+      when v_catalog_tenant or v_staff_tenant then resource.resource_type_id
+      else null::uuid
+    end,
     resource_type.name,
     coalesce(locations.ids, '{}'::uuid[]),
     coalesce(services.ids, '{}'::uuid[]),
@@ -326,27 +329,7 @@ begin
     resource_type.revision
   from app.resource_types as resource_type
   where resource_type.tenant_id = p_tenant_id
-    and (
-      coalesce((select private.can_manage_catalog(p_tenant_id, null)), false)
-      or exists (
-        select 1
-        from app.resources as resource
-        join app.resource_locations as resource_location
-          on resource_location.tenant_id = resource.tenant_id
-          and resource_location.resource_id = resource.id
-        where resource.tenant_id = resource_type.tenant_id
-          and resource.resource_type_id = resource_type.id
-          and coalesce(
-            (
-              select private.can_manage_catalog(
-                p_tenant_id,
-                resource_location.location_id
-              )
-            ),
-            false
-          )
-      )
-    )
+    and coalesce((select private.can_manage_catalog(p_tenant_id, null)), false)
   order by 1, 4, 2;
 end;
 $$;

@@ -319,4 +319,51 @@ describe("tenant isolation DTOs", () => {
       }),
     ).toThrow("Staff/resource workspace");
   });
+
+  it("accepts a location-scoped workspace with tenant-only edit values redacted", () => {
+    const workspace = {
+      tenantId: "tenant-a",
+      locations: [{ id: "location-a", name: "Downtown" }],
+      resourceTypes: [],
+      services: [{ id: "service-a", name: "Consultation" }],
+      items: [
+        {
+          futureAllocationCount: 2,
+          id: "staff-a",
+          internalNotes: null,
+          key: null,
+          kind: "staff",
+          locationIds: ["location-a"],
+          membershipId: null,
+          name: "Layla Hassan",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: null,
+          resourceTypeName: null,
+          revision: null,
+          serviceIds: ["service-a"],
+          status: "active",
+        },
+        {
+          futureAllocationCount: 0,
+          id: "resource-a",
+          internalNotes: null,
+          key: null,
+          kind: "resource",
+          locationIds: ["location-a"],
+          membershipId: null,
+          name: "Room 1",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: null,
+          resourceTypeName: "Room",
+          revision: null,
+          serviceIds: ["service-a"],
+          status: "active",
+        },
+      ],
+    } as const;
+
+    expect(parseStaffResourceWorkspaceV1(workspace)).toEqual(workspace);
+  });
 });

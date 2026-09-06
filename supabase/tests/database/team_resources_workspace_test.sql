@@ -228,6 +228,19 @@ select ok(
   ),
   'tenant editors receive current revision and editable values'
 );
+select ok(
+  (
+    select revision = 1
+      and item_key = 'workspace-room-one'
+      and internal_notes = 'editable tenant note'
+      and resource_type_id = 'a8100000-0000-0000-0000-000000000011'
+    from api_v1.get_staff_resource_workspace_v1(
+      'a0000000-0000-0000-0000-000000000001'
+    )
+    where item_id = 'a8200000-0000-0000-0000-000000000011'
+  ),
+  'tenant catalog editors receive current resource edit values'
+);
 select is(
   (
     select choice_name
@@ -310,6 +323,51 @@ select ok(
     )
   ),
   'location manager cannot read rows linked only to another location'
+);
+select ok(
+  not exists (
+    select 1
+    from api_v1.get_staff_resource_workspace_v1(
+      'a0000000-0000-0000-0000-000000000001'
+    )
+    where item_kind = 'staff'
+      and (
+        revision is not null
+        or membership_id is not null
+        or public_bio is not null
+        or internal_notes is not null
+        or offered_hours_per_week is not null
+      )
+  ),
+  'location manager receives no tenant-only staff edit values'
+);
+select ok(
+  not exists (
+    select 1
+    from api_v1.get_staff_resource_workspace_v1(
+      'a0000000-0000-0000-0000-000000000001'
+    )
+    where item_kind = 'resource'
+      and (
+        revision is not null
+        or item_key is not null
+        or internal_notes is not null
+        or resource_type_id is not null
+      )
+  ),
+  'location manager receives no tenant-only resource edit values'
+);
+select is(
+  (
+    select count(*)::integer
+    from private.get_staff_resource_choices_v1(
+      'a0000000-0000-0000-0000-000000000001',
+      'en'
+    )
+    where choice_kind = 'resource_type'
+  ),
+  0,
+  'location manager receives no tenant-only resource type edit choices'
 );
 select results_eq(
   $$
