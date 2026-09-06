@@ -12,6 +12,14 @@ import {
   loadTeamResourcesWorkspace,
   type TeamResourcesWorkspaceState,
 } from "../../_lib/team-resources-workspace";
+import {
+  saveResourceAction,
+  saveResourceTypeAction,
+  saveStaffProfileAction,
+  setResourceLocationEligibilityAction,
+  setResourceRequirementAction,
+  setStaffEligibilityAction,
+} from "./actions";
 import { TeamResourcesView } from "./team-resources-view";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +28,7 @@ export const fetchCache = "force-no-store";
 
 type TeamResourcesPageProps = {
   readonly params: Promise<{ locale: Locale }>;
+  readonly searchParams: Promise<{ result?: string }>;
 };
 
 async function loadPageState(locale: Locale): Promise<TeamResourcesWorkspaceState> {
@@ -29,11 +38,15 @@ async function loadPageState(locale: Locale): Promise<TeamResourcesWorkspaceStat
       ? { kind: "backend-unavailable" }
       : { kind: "access-unavailable", reason: "denied" };
   }
-  return loadTeamResourcesWorkspace(request.state, request.source);
+  return loadTeamResourcesWorkspace(request.state, request.source, locale);
 }
 
-export default async function TeamResourcesPage({ params }: TeamResourcesPageProps) {
+export default async function TeamResourcesPage({
+  params,
+  searchParams,
+}: TeamResourcesPageProps) {
   const { locale } = await params;
+  const query = await searchParams;
   const state = await loadPageState(locale);
   const dashboardMessage = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
@@ -94,7 +107,25 @@ export default async function TeamResourcesPage({ params }: TeamResourcesPagePro
             </Link>
           </nav>
         </header>
-        <TeamResourcesView locale={locale} state={state} />
+        <TeamResourcesView
+          actions={{
+            saveResource: saveResourceAction,
+            saveResourceType: saveResourceTypeAction,
+            saveStaffProfile: saveStaffProfileAction,
+            setResourceLocationEligibility: setResourceLocationEligibilityAction,
+            setResourceRequirement: setResourceRequirementAction,
+            setStaffEligibility: setStaffEligibilityAction,
+          }}
+          locale={locale}
+          {...(query.result === "saved" ||
+          query.result === "invalid-request" ||
+          query.result === "not-authorized" ||
+          query.result === "revision-conflict" ||
+          query.result === "backend-unavailable"
+            ? { result: query.result }
+            : {})}
+          state={state}
+        />
       </div>
     </BrandShell>
   );

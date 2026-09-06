@@ -30,7 +30,19 @@ const context: DashboardContextV1 = {
 
 function source(tenantId = "tenant-a"): TeamResourcesDataSource {
   return {
-    getStaffResourceWorkspace: vi.fn(async () => ({ items: [], tenantId })),
+    getStaffResourceWorkspace: vi.fn(async () => ({
+      items: [],
+      locations: [],
+      resourceTypes: [],
+      services: [],
+      tenantId,
+    })),
+    saveResource: vi.fn(async () => undefined),
+    saveResourceType: vi.fn(async () => undefined),
+    saveStaffProfile: vi.fn(async () => undefined),
+    setResourceLocationEligibility: vi.fn(async () => undefined),
+    setResourceRequirement: vi.fn(async () => undefined),
+    setStaffServiceLocationEligibility: vi.fn(async () => undefined),
   };
 }
 
@@ -41,7 +53,13 @@ describe("Team and resources workspace loader", () => {
     ).resolves.toEqual({
       kind: "ready",
       context,
-      workspace: { items: [], tenantId: "tenant-a" },
+      workspace: {
+        items: [],
+        locations: [],
+        resourceTypes: [],
+        services: [],
+        tenantId: "tenant-a",
+      },
     });
   });
 
@@ -56,7 +74,7 @@ describe("Team and resources workspace loader", () => {
     expect(dataSource.getStaffResourceWorkspace).not.toHaveBeenCalled();
   });
 
-  it("does not fetch tenant-wide data for a location-scoped grant", async () => {
+  it("loads the server-scoped projection for a location grant", async () => {
     const dataSource = source();
     await expect(
       loadTeamResourcesWorkspace(
@@ -64,6 +82,8 @@ describe("Team and resources workspace loader", () => {
           kind: "ready",
           context: {
             ...context,
+            locationIds: ["location-a"],
+            locationScope: { kind: "restricted", locationIds: ["location-a"] },
             grants: [
               {
                 capability: "staff.manage",
@@ -75,11 +95,8 @@ describe("Team and resources workspace loader", () => {
         } as never,
         dataSource,
       ),
-    ).resolves.toEqual({
-      kind: "access-unavailable",
-      reason: "location-scope-unavailable",
-    });
-    expect(dataSource.getStaffResourceWorkspace).not.toHaveBeenCalled();
+    ).resolves.toMatchObject({ kind: "ready" });
+    expect(dataSource.getStaffResourceWorkspace).toHaveBeenCalledWith("tenant-a", "en");
   });
 
   it("fails closed when the data source returns another tenant", async () => {

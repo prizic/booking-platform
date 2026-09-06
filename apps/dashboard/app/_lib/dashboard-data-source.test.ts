@@ -141,15 +141,53 @@ describe("Dashboard Supabase adapter", () => {
       schema: () => ({
         rpc: async (name: string, args?: Readonly<Record<string, unknown>>) => {
           calls.push({ name, ...(args === undefined ? {} : { args }) });
+          if (name === "get_staff_resource_choices_v1") {
+            return {
+              data: [
+                {
+                  choice_id: "location-a",
+                  choice_key: "downtown",
+                  choice_kind: "location",
+                  choice_name: "Downtown",
+                  exclusive: null,
+                  revision: null,
+                },
+                {
+                  choice_id: "service-a",
+                  choice_key: "consultation",
+                  choice_kind: "service",
+                  choice_name: "Consultation",
+                  exclusive: null,
+                  revision: null,
+                },
+                {
+                  choice_id: "type-a",
+                  choice_key: "room",
+                  choice_kind: "resource_type",
+                  choice_name: "Room",
+                  exclusive: true,
+                  revision: 1,
+                },
+              ],
+              error: null,
+            };
+          }
           return {
             data: [
               {
                 future_allocation_count: 2,
                 item_id: "staff-a",
+                internal_notes: "Morning shifts",
+                item_key: null,
                 item_kind: "staff",
                 location_ids: ["location-a"],
+                membership_id: "membership-a",
                 name: "Layla Hassan",
+                offered_hours_per_week: 40,
+                public_bio: "Booking specialist",
+                resource_type_id: null,
                 resource_type_name: null,
+                revision: 2,
                 service_ids: ["service-a"],
                 status: "active",
                 tenant_id: "tenant-a",
@@ -157,10 +195,17 @@ describe("Dashboard Supabase adapter", () => {
               {
                 future_allocation_count: 0,
                 item_id: "resource-a",
+                internal_notes: "",
+                item_key: "room-one",
                 item_kind: "resource",
                 location_ids: ["location-a"],
+                membership_id: null,
                 name: "Room 1",
+                offered_hours_per_week: null,
+                public_bio: null,
+                resource_type_id: "type-a",
                 resource_type_name: "Room",
+                revision: 3,
                 service_ids: ["service-a"],
                 status: "maintenance",
                 tenant_id: "tenant-a",
@@ -173,26 +218,45 @@ describe("Dashboard Supabase adapter", () => {
     } as unknown as RequestScopedSupabaseClient;
 
     const source = createDashboardDataSource(client);
-    await expect(source.getStaffResourceWorkspace("tenant-a")).resolves.toEqual({
+    await expect(source.getStaffResourceWorkspace("tenant-a", "en")).resolves.toEqual({
       tenantId: "tenant-a",
+      locations: [{ id: "location-a", name: "Downtown" }],
+      resourceTypes: [
+        { exclusive: true, id: "type-a", key: "room", name: "Room", revision: 1 },
+      ],
+      services: [{ id: "service-a", name: "Consultation" }],
       items: [
         {
           futureAllocationCount: 2,
           id: "staff-a",
+          internalNotes: "Morning shifts",
+          key: null,
           kind: "staff",
           locationIds: ["location-a"],
+          membershipId: "membership-a",
           name: "Layla Hassan",
+          offeredHoursPerWeek: 40,
+          publicBio: "Booking specialist",
+          resourceTypeId: null,
           resourceTypeName: null,
+          revision: 2,
           serviceIds: ["service-a"],
           status: "active",
         },
         {
           futureAllocationCount: 0,
           id: "resource-a",
+          internalNotes: "",
+          key: "room-one",
           kind: "resource",
           locationIds: ["location-a"],
+          membershipId: null,
           name: "Room 1",
+          offeredHoursPerWeek: null,
+          publicBio: null,
+          resourceTypeId: "type-a",
           resourceTypeName: "Room",
+          revision: 3,
           serviceIds: ["service-a"],
           status: "maintenance",
         },
@@ -202,6 +266,95 @@ describe("Dashboard Supabase adapter", () => {
       {
         args: { p_tenant_id: "tenant-a" },
         name: "get_staff_resource_workspace_v1",
+      },
+      {
+        args: { p_locale: "en", p_tenant_id: "tenant-a" },
+        name: "get_staff_resource_choices_v1",
+      },
+    ]);
+  });
+
+  it("maps management writes only to their versioned RPC arguments", async () => {
+    const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async (name: string, args?: Readonly<Record<string, unknown>>) => {
+          calls.push({ name, ...(args === undefined ? {} : { args }) });
+          return { data: null, error: null };
+        },
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+    const source = createDashboardDataSource(client);
+
+    await source.saveStaffProfile({
+      bio: "Booking specialist",
+      expectedRevision: null,
+      internalNotes: "Morning shifts",
+      membershipId: null,
+      offeredHoursPerWeek: 32.5,
+      publicName: "Layla Hassan",
+      reason: "New starter",
+      requestId: "request-a",
+      staffId: null,
+      tenantId: "tenant-a",
+    });
+    await source.setStaffServiceLocationEligibility({
+      eligible: true,
+      locationId: "location-a",
+      reason: "Coverage",
+      requestId: "request-b",
+      serviceId: "service-a",
+      staffId: "staff-a",
+      tenantId: "tenant-a",
+    });
+    await source.setResourceRequirement({
+      reason: "Room required",
+      requestId: "request-c",
+      required: true,
+      resourceTypeId: "type-a",
+      serviceId: "service-a",
+      tenantId: "tenant-a",
+    });
+
+    expect(calls).toEqual([
+      {
+        name: "save_staff_profile_v1",
+        args: {
+          p_public_bio: "Booking specialist",
+          p_expected_revision: null,
+          p_internal_notes: "Morning shifts",
+          p_membership_id: null,
+          p_offered_hours_per_week: 32.5,
+          p_public_name: "Layla Hassan",
+          p_reason: "New starter",
+          p_request_id: "request-a",
+          p_staff_id: null,
+          p_tenant_id: "tenant-a",
+        },
+      },
+      {
+        name: "set_staff_service_location_eligibility_v1",
+        args: {
+          p_eligible: true,
+          p_location_id: "location-a",
+          p_reason: "Coverage",
+          p_request_id: "request-b",
+          p_service_id: "service-a",
+          p_staff_id: "staff-a",
+          p_tenant_id: "tenant-a",
+        },
+      },
+      {
+        name: "set_resource_requirement_v1",
+        args: {
+          p_reason: "Room required",
+          p_request_id: "request-c",
+          p_required: true,
+          p_resource_type_id: "type-a",
+          p_service_id: "service-a",
+          p_tenant_id: "tenant-a",
+        },
       },
     ]);
   });

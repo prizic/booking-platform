@@ -224,16 +224,37 @@ export interface AssignmentCandidateV1 {
 export interface StaffResourceWorkspaceItemV1 {
   readonly futureAllocationCount: number;
   readonly id: string;
+  readonly internalNotes: string;
+  readonly key: string | null;
   readonly kind: "resource" | "staff";
   readonly locationIds: readonly LocationId[];
+  readonly membershipId: string | null;
   readonly name: string;
+  readonly offeredHoursPerWeek: number | null;
+  readonly publicBio: string | null;
+  readonly resourceTypeId: string | null;
   readonly resourceTypeName: string | null;
+  readonly revision: number;
   readonly serviceIds: readonly string[];
   readonly status: "active" | "deactivation_pending" | "inactive" | "maintenance";
 }
 
+export interface StaffResourceChoiceV1 {
+  readonly id: string;
+  readonly name: string;
+}
+
+export interface ResourceTypeChoiceV1 extends StaffResourceChoiceV1 {
+  readonly exclusive: boolean;
+  readonly key: string;
+  readonly revision: number;
+}
+
 export interface StaffResourceWorkspaceV1 {
   readonly items: readonly StaffResourceWorkspaceItemV1[];
+  readonly locations: readonly StaffResourceChoiceV1[];
+  readonly resourceTypes: readonly ResourceTypeChoiceV1[];
+  readonly services: readonly StaffResourceChoiceV1[];
   readonly tenantId: TenantId;
 }
 
@@ -242,8 +263,17 @@ export function parseStaffResourceWorkspaceV1(
 ): StaffResourceWorkspaceV1 {
   if (
     !isRecord(value) ||
-    !hasExactKeys(value, ["items", "tenantId"]) ||
-    !Array.isArray(value.items)
+    !hasExactKeys(value, [
+      "items",
+      "locations",
+      "resourceTypes",
+      "services",
+      "tenantId",
+    ]) ||
+    !Array.isArray(value.items) ||
+    !Array.isArray(value.locations) ||
+    !Array.isArray(value.resourceTypes) ||
+    !Array.isArray(value.services)
   ) {
     throw new Error("Staff/resource workspace has an unexpected shape");
   }
@@ -252,10 +282,17 @@ export function parseStaffResourceWorkspaceV1(
     const keys = [
       "futureAllocationCount",
       "id",
+      "internalNotes",
+      "key",
       "kind",
       "locationIds",
+      "membershipId",
       "name",
+      "offeredHoursPerWeek",
+      "publicBio",
+      "resourceTypeId",
       "resourceTypeName",
+      "revision",
       "serviceIds",
       "status",
     ] as const;
@@ -272,9 +309,30 @@ export function parseStaffResourceWorkspaceV1(
       !Array.isArray(item.serviceIds) ||
       !Number.isSafeInteger(item.futureAllocationCount) ||
       (item.futureAllocationCount as number) < 0 ||
+      typeof item.internalNotes !== "string" ||
+      (item.key !== null && typeof item.key !== "string") ||
+      (item.membershipId !== null && typeof item.membershipId !== "string") ||
+      (item.offeredHoursPerWeek !== null &&
+        typeof item.offeredHoursPerWeek !== "number") ||
+      (item.publicBio !== null && typeof item.publicBio !== "string") ||
+      (item.resourceTypeId !== null && typeof item.resourceTypeId !== "string") ||
       (item.resourceTypeName !== null && typeof item.resourceTypeName !== "string") ||
+      !Number.isSafeInteger(item.revision) ||
+      (item.revision as number) < 1 ||
+      (item.kind === "staff" &&
+        (item.key !== null ||
+          item.resourceTypeId !== null ||
+          item.resourceTypeName !== null ||
+          item.offeredHoursPerWeek === null ||
+          item.publicBio === null)) ||
       (item.kind === "staff" && item.resourceTypeName !== null) ||
-      (item.kind === "resource" && item.resourceTypeName === null)
+      (item.kind === "resource" &&
+        (item.key === null ||
+          item.membershipId !== null ||
+          item.offeredHoursPerWeek !== null ||
+          item.publicBio !== null ||
+          item.resourceTypeId === null ||
+          item.resourceTypeName === null))
     ) {
       throw new Error("Staff/resource workspace item is invalid");
     }
@@ -282,20 +340,70 @@ export function parseStaffResourceWorkspaceV1(
     return Object.freeze({
       futureAllocationCount: item.futureAllocationCount as number,
       id: requireNonEmptyString(item.id),
+      internalNotes: item.internalNotes,
+      key: item.key === null ? null : requireNonEmptyString(item.key),
       kind: item.kind,
       locationIds: Object.freeze(item.locationIds.map(requireNonEmptyString)),
+      membershipId:
+        item.membershipId === null ? null : requireNonEmptyString(item.membershipId),
       name: requireNonEmptyString(item.name),
+      offeredHoursPerWeek: item.offeredHoursPerWeek as number | null,
+      publicBio: item.publicBio,
+      resourceTypeId:
+        item.resourceTypeId === null
+          ? null
+          : requireNonEmptyString(item.resourceTypeId),
       resourceTypeName:
         item.resourceTypeName === null
           ? null
           : requireNonEmptyString(item.resourceTypeName),
+      revision: item.revision as number,
       serviceIds: Object.freeze(item.serviceIds.map(requireNonEmptyString)),
       status: item.status,
     });
   });
 
+  const parseChoices = (
+    choices: readonly unknown[],
+  ): readonly StaffResourceChoiceV1[] =>
+    Object.freeze(
+      choices.map((choice) => {
+        if (!isRecord(choice) || !hasExactKeys(choice, ["id", "name"])) {
+          throw new Error("Staff/resource workspace choice is invalid");
+        }
+        return Object.freeze({
+          id: requireNonEmptyString(choice.id),
+          name: requireNonEmptyString(choice.name),
+        });
+      }),
+    );
+
+  const resourceTypes = Object.freeze(
+    value.resourceTypes.map((choice) => {
+      if (
+        !isRecord(choice) ||
+        !hasExactKeys(choice, ["exclusive", "id", "key", "name", "revision"]) ||
+        typeof choice.exclusive !== "boolean" ||
+        !Number.isSafeInteger(choice.revision) ||
+        (choice.revision as number) < 1
+      ) {
+        throw new Error("Staff/resource workspace resource type is invalid");
+      }
+      return Object.freeze({
+        exclusive: choice.exclusive,
+        id: requireNonEmptyString(choice.id),
+        key: requireNonEmptyString(choice.key),
+        name: requireNonEmptyString(choice.name),
+        revision: choice.revision as number,
+      });
+    }),
+  );
+
   return Object.freeze({
     items: Object.freeze(items),
+    locations: parseChoices(value.locations),
+    resourceTypes,
+    services: parseChoices(value.services),
     tenantId: requireNonEmptyString(value.tenantId),
   });
 }

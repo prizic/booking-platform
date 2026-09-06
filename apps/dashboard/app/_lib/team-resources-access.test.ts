@@ -53,7 +53,7 @@ describe("Team and resources workspace access", () => {
     expect(getTeamResourcesAccess({ ...context, aal2: true })).toBe("ready");
   });
 
-  it("does not widen a location-scoped grant into tenant authority", () => {
+  it("allows a location-scoped grant only with explicit assigned locations", () => {
     expect(
       getTeamResourcesAccess({
         ...baseContext,
@@ -67,7 +67,7 @@ describe("Team and resources workspace access", () => {
           },
         ],
       }),
-    ).toBe("location-scope-unavailable");
+    ).toBe("ready");
   });
 
   it("denies a context without staff.manage", () => {

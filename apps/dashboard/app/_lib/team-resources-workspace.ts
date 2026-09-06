@@ -1,4 +1,5 @@
 import type { DashboardContextV1, StaffResourceWorkspaceV1 } from "@wlbp/api-contracts";
+import type { Locale } from "@wlbp/i18n";
 
 import type { TeamResourcesDataSource } from "./dashboard-data-source";
 import {
@@ -21,6 +22,7 @@ export type TeamResourcesWorkspaceState =
 export async function loadTeamResourcesWorkspace(
   access: { readonly context: DashboardContextV1; readonly kind: "ready" },
   source: TeamResourcesDataSource,
+  locale: Locale = access.context.defaultLocale,
 ): Promise<TeamResourcesWorkspaceState> {
   const authorization = getTeamResourcesAccess(access.context);
   if (authorization !== "ready") {
@@ -28,7 +30,10 @@ export async function loadTeamResourcesWorkspace(
   }
 
   try {
-    const workspace = await source.getStaffResourceWorkspace(access.context.tenantId);
+    const workspace = await source.getStaffResourceWorkspace(
+      access.context.tenantId,
+      locale,
+    );
     if (workspace.tenantId !== access.context.tenantId) {
       return { kind: "backend-unavailable" };
     }

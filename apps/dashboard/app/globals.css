@@ -833,6 +833,69 @@ summary:focus-visible {
   gap: var(--brand-space-sm, 0.75rem);
 }
 
+.team-resources-management > h2 {
+  margin: 0;
+}
+
+.team-resource-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--brand-space-md, 1rem) var(--brand-space-lg, 1.5rem);
+}
+
+.team-resource-editor {
+  min-inline-size: 0;
+  border-block-start: var(--brand-border-width-default, 1px) solid
+    var(--dashboard-border);
+}
+
+.team-resource-editor summary {
+  min-block-size: 2.75rem;
+  padding-block: var(--brand-space-sm, 0.75rem);
+  align-content: center;
+  cursor: pointer;
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
+.team-resource-editor summary:focus-visible {
+  outline: var(--brand-border-width-strong, 0.2rem) solid var(--brand-color-focus);
+  outline-offset: 0.2rem;
+}
+
+.team-resource-editor form {
+  display: grid;
+  gap: var(--brand-space-sm, 0.75rem);
+  padding-block-end: var(--brand-space-md, 1rem);
+}
+
+.team-resource-field {
+  display: grid;
+  gap: 0.35rem;
+  min-inline-size: 0;
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
+.team-resource-field :where(input, select, textarea) {
+  inline-size: 100%;
+  min-inline-size: 0;
+  font: inherit;
+  font-weight: var(--brand-font-weight-regular, 400);
+}
+
+.team-resource-field textarea {
+  min-block-size: 6rem;
+  padding: var(--brand-space-sm, 0.75rem);
+  color: var(--brand-color-text);
+  resize: block;
+  background: var(--brand-color-background);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-control, 0.75rem);
+}
+
+.team-resource-editor .wlbp-button {
+  inline-size: fit-content;
+}
+
 .team-resources-management > p,
 .team-resources-notice > :where(h2, p),
 .team-resources-result {
@@ -975,6 +1038,10 @@ summary:focus-visible {
   }
 
   .team-resources-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .team-resource-form-grid {
     grid-template-columns: 1fr;
   }
 
