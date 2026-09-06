@@ -9,6 +9,8 @@ select has_function('api_v1'::name, 'get_availability_v1'::name, array['text','t
 select ok(has_function_privilege('anon','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'anonymous Client callers can request availability');
 select ok(has_function_privilege('authenticated','api_v1.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text)','execute'), 'authenticated Dashboard callers can request availability');
 select ok(not (select p.prosecdef from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='api_v1' and p.proname='get_availability_v1'), 'public availability wrapper is security invoker');
+select ok(not has_function_privilege('anon','private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)','execute'), 'anonymous callers cannot execute the private policy resolver');
+select ok(not has_function_privilege('authenticated','private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)','execute'), 'authenticated callers cannot execute the private policy resolver');
 
 select throws_ok(
   $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 12:00+00','2026-10-09 12:00+00',1,'America/New_York')$$,
@@ -48,6 +50,19 @@ select is(
   30,
   'duration, opening hours, staff schedule, and 15-minute interval produce bounded slots'
 );
+update app.schedule_scopes set time_zone='America/Chicago'
+where id='a5600000-0000-0000-0000-000000000001';
+update app.weekly_schedules set start_minute=480,end_minute=540
+where schedule_scope_id='a5600000-0000-0000-0000-000000000001' and day_of_week=1;
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 14:00+00',1,'America/New_York') where result_kind='slot' and location_time_zone='America/Chicago'),
+  2,
+  'location civil hours and returned zone use the authoritative location schedule scope timezone'
+);
+update app.schedule_scopes set time_zone='America/New_York'
+where id='a5600000-0000-0000-0000-000000000001';
+update app.weekly_schedules set start_minute=540,end_minute=1020
+where schedule_scope_id='a5600000-0000-0000-0000-000000000001' and day_of_week=1;
 update app.schedule_scopes set time_zone='America/Chicago'
 where id='a8100000-0000-0000-0000-000000000001';
 update app.weekly_schedules set start_minute=480,end_minute=960
@@ -148,6 +163,34 @@ values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-00000000
 select throws_ok(
   $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')$$,
   '22023','availability_selection_unavailable','deferred group capacity fails closed even for party size one'
+);
+
+-- More than 128 eligible subjects must not silently discard the only subject
+-- whose schedule can satisfy the requested window.
+insert into app.catalog_services(id,tenant_id,key,category_id)
+values ('a7200000-0000-0000-0000-000000000004','a0000000-0000-0000-0000-000000000001','large-candidate-set','a7100000-0000-0000-0000-000000000001');
+insert into app.catalog_service_revisions(id,tenant_id,service_id,revision,locale,state,name,canonical_path,duration_minutes,price_minor,currency,publication_id,published_at)
+values ('a7210000-0000-0000-0000-000000000005','a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000004',1,'en','published','Large candidate set','/services/large-candidate-set',45,1000,'SAR','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00+00');
+insert into app.catalog_service_locations(tenant_id,service_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001');
+insert into app.staff_profiles(id,tenant_id,public_name)
+select ('10000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'Unavailable '||i from generate_series(1,128) i
+union all select 'f9000000-0000-0000-0000-000000000001'::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'Only available';
+insert into app.staff_services(tenant_id,staff_id,service_id)
+select 'a0000000-0000-0000-0000-000000000001',id,'a7200000-0000-0000-0000-000000000004' from app.staff_profiles where id::text like '10000000-%' or id='f9000000-0000-0000-0000-000000000001';
+insert into app.staff_locations(tenant_id,staff_id,location_id)
+select 'a0000000-0000-0000-0000-000000000001',id,'a5000000-0000-0000-0000-000000000001' from app.staff_profiles where id::text like '10000000-%' or id='f9000000-0000-0000-0000-000000000001';
+insert into app.staff_service_locations(tenant_id,staff_id,service_id,location_id)
+select 'a0000000-0000-0000-0000-000000000001',id,'a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001' from app.staff_profiles where id::text like '10000000-%' or id='f9000000-0000-0000-0000-000000000001';
+insert into app.schedule_scopes(id,tenant_id,scope_kind,location_id,staff_id,time_zone)
+select ('20000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'staff','a5000000-0000-0000-0000-000000000001'::uuid,('10000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'America/New_York' from generate_series(1,128) i
+union all select 'f9100000-0000-0000-0000-000000000001'::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'staff','a5000000-0000-0000-0000-000000000001'::uuid,'f9000000-0000-0000-0000-000000000001'::uuid,'America/New_York';
+insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute)
+select ('30000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,('20000000-0000-0000-0000-'||lpad(i::text,12,'0'))::uuid,2,540,1020 from generate_series(1,128) i
+union all select 'f9200000-0000-0000-0000-000000000001'::uuid,'a0000000-0000-0000-0000-000000000001'::uuid,'f9100000-0000-0000-0000-000000000001'::uuid,1,540,1020;
+select ok(
+  exists(select 1 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 15:00+00',1,'America/New_York') where result_kind='slot' and staff_id='f9000000-0000-0000-0000-000000000001'),
+  'availability evaluates the valid later subject beyond the former 128-candidate truncation'
 );
 select is(
   (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') limit 1),

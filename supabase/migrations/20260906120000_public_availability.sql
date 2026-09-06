@@ -104,8 +104,7 @@ returns integer language sql stable security definer set search_path='' as $$
     p_default
   );
 $$;
-revoke all on function private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer) from public;
-grant execute on function private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer) to anon,authenticated;
+revoke all on function private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer) from public,anon,authenticated;
 
 create or replace function private.get_availability_v1(
   p_hostname text,
@@ -180,7 +179,7 @@ begin
   end if;
 
   select d.tenant_id,p.id,p.revision,ts.config_version,ts.feature_version,
-         coalesce(ar.revision,1),l.time_zone,s.assignment_mode
+         coalesce(ar.revision,1),location_scope.time_zone,s.assignment_mode
   into v_tenant_id,v_publication_id,v_publication_revision,v_config_version,
        v_feature_version,v_availability_revision,v_location_time_zone,v_assignment_mode
   from app.tenant_domains d
@@ -193,6 +192,8 @@ begin
   join app.catalog_services s on s.tenant_id=t.id and s.id=p_service_id and s.status='active'
   join app.catalog_service_locations sl on sl.tenant_id=s.tenant_id and sl.service_id=s.id and sl.location_id=p_location_id
   join app.locations l on l.tenant_id=sl.tenant_id and l.id=sl.location_id and l.status='active'
+  join app.schedule_scopes location_scope on location_scope.tenant_id=l.tenant_id
+    and location_scope.scope_kind='location' and location_scope.location_id=l.id
   left join app.availability_revisions ar on ar.tenant_id=t.id
   where d.hostname=p_hostname and d.application=p_application and d.kind='production'
     and d.verification_status='verified' and d.verified_at is not null and d.active
@@ -276,8 +277,6 @@ begin
     join app.schedule_scopes subject_scope on subject_scope.tenant_id=r.tenant_id and subject_scope.scope_kind='resource'
       and subject_scope.location_id=p_location_id and subject_scope.resource_id=r.id
     where sr.allocation_kind='exclusive_resource' and p_staff_preference_id is null
-  ), selected_candidates as (
-    select c.* from candidates c order by coalesce(c.staff_id,c.resource_id) limit 128
   ), generated_raw as (
     select c.*,g as starts_at,g+make_interval(mins=>c.duration_minutes) as ends_at,
       g at time zone v_location_time_zone as location_start,
@@ -290,7 +289,7 @@ begin
       (g+make_interval(mins=>c.duration_minutes+c.after_minutes+c.turnover_minutes)) at time zone c.subject_time_zone as occupied_subject_end,
       tsrange((g at time zone 'UTC')-make_interval(mins=>c.before_minutes+c.travel_minutes),
               ((g+make_interval(mins=>c.duration_minutes)) at time zone 'UTC')+make_interval(mins=>c.after_minutes+c.turnover_minutes),'[)') as occupied
-    from selected_candidates c cross join lateral pg_catalog.generate_series(p_window_start,p_window_end,interval '5 minutes') g
+    from candidates c cross join lateral pg_catalog.generate_series(p_window_start,p_window_end,interval '5 minutes') g
     where g+make_interval(mins=>c.duration_minutes)<=p_window_end
       and g>=v_now+make_interval(mins=>c.notice_minutes)
       and g<v_now+make_interval(days=>c.horizon_days)
@@ -394,7 +393,7 @@ begin
   union all
   select 1,'summary',(select service_rule.allocation_kind from service_rule),null,null,null,null,v_location_time_zone,v_customer_time_zone,null,null,null,
     v_now,v_now+interval '30 seconds',case
-      when not exists(select 1 from selected_candidates) then 'no_matching_availability'
+      when not exists(select 1 from candidates) then 'no_matching_availability'
       when not exists(select 1 from generated) then 'outside_booking_window'
       when exists(select 1 from generated g where g.daily_limit is not null and g.daily_limit<=(
         select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id
