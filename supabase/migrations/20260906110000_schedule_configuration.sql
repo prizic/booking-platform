@@ -265,8 +265,8 @@ begin
     raise exception using errcode='22023', message='schedule_request_invalid';
   end if;
   if p_request_id is not null then
-    select target_id, revision into v_target, v_revision from app.schedule_audit_events
-      where tenant_id=p_tenant_id and request_id=p_request_id and outcome='succeeded';
+    select e.target_id, e.revision into v_target, v_revision from app.schedule_audit_events e
+      where e.tenant_id=p_tenant_id and e.request_id=p_request_id and e.outcome='succeeded';
     if found then return query select v_target,v_revision; return; end if;
   end if;
   v_location := nullif(p_payload->>'location_id','')::uuid;
