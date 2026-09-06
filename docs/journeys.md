@@ -26,7 +26,7 @@ Values are locked in [adr/0005-booking-policy-defaults.md](./adr/0005-booking-po
 | Key | Read at |
 | --- | --- |
 | `service.duration_minutes`, `service.buffer_before_minutes`, `service.buffer_after_minutes` | Availability computation; range construction on hold and on reschedule |
-| `service.assignment_mode` (`any_available` / `customer_choice` / `round_robin`) | Availability computation; staff resolution at hold |
+| `service.assignment_mode` (`fixed_staff` / `any_available` / `customer_choice` / `round_robin`) | Availability computation; staff resolution at hold. `round_robin` uses deterministic offered-hours-normalized rank; every mode is revalidated atomically |
 | `service.approval_required` (boolean) | `held → confirmed` vs `held → requested` |
 | `service.payment_mode` (`none` / `deposit` / `full`) + `service.deposit_rule` (percent or fixed) | `held → pending_payment` vs direct confirm |
 | `hold.ttl_seconds` (within platform min/max bounds) | Hold creation; expiry job; **and the payment window — the time to complete payment is the remaining TTL on the hold, and no separate payment-window key exists** |
