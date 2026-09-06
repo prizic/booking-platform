@@ -486,19 +486,46 @@ returns table(kind text, id uuid, scope_id uuid, location_id uuid, staff_id uuid
   local_date text, day_of_week smallint, start_minute smallint, end_minute smallint, starts_at timestamptz, ends_at timestamptz,
   exception_kind text, time_zone text, reason text, policy_key text, value numeric, revision bigint)
 language sql security invoker set search_path='' as $$
-  select 'scope', s.id, s.id, s.location_id, s.staff_id, s.resource_id, null, null, null, null, null, null, null, s.time_zone, null, null, null, s.revision
+  select 'scope'::text as kind, s.id::uuid as id, s.id::uuid as scope_id,
+    s.location_id::uuid as location_id, s.staff_id::uuid as staff_id, s.resource_id::uuid as resource_id,
+    null::text as local_date, null::smallint as day_of_week, null::smallint as start_minute,
+    null::smallint as end_minute, null::timestamptz as starts_at, null::timestamptz as ends_at,
+    null::text as exception_kind, s.time_zone::text as time_zone, null::text as reason,
+    null::text as policy_key, null::numeric as value, s.revision::bigint as revision
     from app.schedule_scopes s where s.tenant_id=p_tenant_id and (p_location_id is null or s.location_id=p_location_id)
-  union all select 'weekly', w.id, w.schedule_scope_id, s.location_id, s.staff_id, s.resource_id, null, w.day_of_week, w.start_minute, w.end_minute, null, null, null, s.time_zone, null, null, null, w.revision
+  union all select 'weekly'::text, w.id::uuid, w.schedule_scope_id::uuid, s.location_id::uuid, s.staff_id::uuid, s.resource_id::uuid,
+    null::text, w.day_of_week::smallint, w.start_minute::smallint, w.end_minute::smallint, null::timestamptz, null::timestamptz,
+    null::text, s.time_zone::text, null::text, null::text, null::numeric, w.revision::bigint
     from app.weekly_schedules w join app.schedule_scopes s on s.tenant_id=w.tenant_id and s.id=w.schedule_scope_id where w.tenant_id=p_tenant_id and (p_location_id is null or s.location_id=p_location_id)
-  union all select 'break', b.id, b.schedule_scope_id, s.location_id, s.staff_id, s.resource_id, null, b.day_of_week, b.start_minute, b.end_minute, null, null, null, s.time_zone, null, null, null, b.revision
+  union all select 'break'::text, b.id::uuid, b.schedule_scope_id::uuid, s.location_id::uuid, s.staff_id::uuid, s.resource_id::uuid,
+    null::text, b.day_of_week::smallint, b.start_minute::smallint, b.end_minute::smallint, null::timestamptz, null::timestamptz,
+    null::text, s.time_zone::text, null::text, null::text, null::numeric, b.revision::bigint
     from app.schedule_breaks b join app.schedule_scopes s on s.tenant_id=b.tenant_id and s.id=b.schedule_scope_id where b.tenant_id=p_tenant_id and (p_location_id is null or s.location_id=p_location_id)
-  union all select 'exception', e.id, e.schedule_scope_id, s.location_id, s.staff_id, s.resource_id, e.local_date::text, null, e.start_minute, e.end_minute, null, null, e.exception_kind, s.time_zone, null, null, null, e.revision
+  union all select 'exception'::text, e.id::uuid, e.schedule_scope_id::uuid, s.location_id::uuid, s.staff_id::uuid, s.resource_id::uuid,
+    e.local_date::text, null::smallint, e.start_minute::smallint, e.end_minute::smallint, null::timestamptz, null::timestamptz,
+    e.exception_kind::text, s.time_zone::text, null::text, null::text, null::numeric, e.revision::bigint
     from app.schedule_exceptions e join app.schedule_scopes s on s.tenant_id=e.tenant_id and s.id=e.schedule_scope_id where e.tenant_id=p_tenant_id and (p_location_id is null or s.location_id=p_location_id)
-  union all select 'time_off', t.id, null, t.location_id, t.staff_id, t.resource_id, null, null, null, null, t.starts_at, t.ends_at, null, t.time_zone, t.reason, null, null, t.revision from app.time_off t where t.tenant_id=p_tenant_id and (p_location_id is null or t.location_id=p_location_id)
-  union all select 'holiday', h.id, null, h.location_id, null, null, h.local_date::text, null, null, null, null, null, null, null, h.name, null, null, h.revision from app.holidays h where h.tenant_id=p_tenant_id and (p_location_id is null or h.location_id=p_location_id)
-  union all select 'blackout', b.id, null, b.location_id, null, null, null, null, null, null, b.starts_at, b.ends_at, null, b.time_zone, b.reason, null, null, b.revision from app.blackouts b where b.tenant_id=p_tenant_id and (p_location_id is null or b.location_id=p_location_id)
-  union all select 'maintenance', m.id, null, m.location_id, null, m.resource_id, null, null, null, null, m.starts_at, m.ends_at, null, m.time_zone, m.reason, null, null, m.revision from app.resource_maintenance_blocks m where m.tenant_id=p_tenant_id and (p_location_id is null or m.location_id=p_location_id)
-  union all select 'policy', p.id, null, p.location_id, p.staff_id, p.resource_id, null, null, null, null, null, null, null, null, null, p.policy_key, case when p.value='null'::jsonb then null else (p.value#>>'{}')::numeric end, p.revision from app.schedule_policy_overrides p where p.tenant_id=p_tenant_id and (p_location_id is null or p.location_id=p_location_id)
+  union all select 'time_off'::text, t.id::uuid, null::uuid, t.location_id::uuid, t.staff_id::uuid, t.resource_id::uuid,
+    null::text, null::smallint, null::smallint, null::smallint, t.starts_at::timestamptz, t.ends_at::timestamptz,
+    null::text, t.time_zone::text, t.reason::text, null::text, null::numeric, t.revision::bigint
+    from app.time_off t where t.tenant_id=p_tenant_id and (p_location_id is null or t.location_id=p_location_id)
+  union all select 'holiday'::text, h.id::uuid, null::uuid, h.location_id::uuid, null::uuid, null::uuid,
+    h.local_date::text, null::smallint, null::smallint, null::smallint, null::timestamptz, null::timestamptz,
+    null::text, null::text, h.name::text, null::text, null::numeric, h.revision::bigint
+    from app.holidays h where h.tenant_id=p_tenant_id and (p_location_id is null or h.location_id=p_location_id)
+  union all select 'blackout'::text, b.id::uuid, null::uuid, b.location_id::uuid, null::uuid, null::uuid,
+    null::text, null::smallint, null::smallint, null::smallint, b.starts_at::timestamptz, b.ends_at::timestamptz,
+    null::text, b.time_zone::text, b.reason::text, null::text, null::numeric, b.revision::bigint
+    from app.blackouts b where b.tenant_id=p_tenant_id and (p_location_id is null or b.location_id=p_location_id)
+  union all select 'maintenance'::text, m.id::uuid, null::uuid, m.location_id::uuid, null::uuid, m.resource_id::uuid,
+    null::text, null::smallint, null::smallint, null::smallint, m.starts_at::timestamptz, m.ends_at::timestamptz,
+    null::text, m.time_zone::text, m.reason::text, null::text, null::numeric, m.revision::bigint
+    from app.resource_maintenance_blocks m where m.tenant_id=p_tenant_id and (p_location_id is null or m.location_id=p_location_id)
+  union all select 'policy'::text, p.id::uuid, null::uuid, p.location_id::uuid, p.staff_id::uuid, p.resource_id::uuid,
+    null::text, null::smallint, null::smallint, null::smallint, null::timestamptz, null::timestamptz,
+    null::text, null::text, null::text, p.policy_key::text,
+    case when p.value='null'::jsonb then null::numeric else (p.value#>>'{}')::numeric end, p.revision::bigint
+    from app.schedule_policy_overrides p where p.tenant_id=p_tenant_id and (p_location_id is null or p.location_id=p_location_id)
   order by revision, kind, id;
 $$;
 revoke all on function api_v1.get_schedule_workspace_v1(uuid,uuid) from public;

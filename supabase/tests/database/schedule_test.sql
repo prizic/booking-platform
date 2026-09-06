@@ -22,6 +22,11 @@ select ok(has_function_privilege('authenticated','api_v1.save_schedule_config_v1
 select ok(not has_function_privilege('anon','api_v1.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)','execute'), 'anonymous cannot use the authoring RPC');
 select ok(has_function_privilege('authenticated','api_v1.get_schedule_workspace_v1(uuid,uuid)','execute'), 'authenticated Dashboard can read scoped workspace rows');
 select ok(not has_function_privilege('anon','api_v1.get_schedule_workspace_v1(uuid,uuid)','execute'), 'anonymous cannot read schedule workspace rows');
+select is(
+  pg_get_function_result('api_v1.get_schedule_workspace_v1(uuid,uuid)'::regprocedure),
+  'TABLE(kind text, id uuid, scope_id uuid, location_id uuid, staff_id uuid, resource_id uuid, local_date text, day_of_week smallint, start_minute smallint, end_minute smallint, starts_at timestamp with time zone, ends_at timestamp with time zone, exception_kind text, time_zone text, reason text, policy_key text, value numeric, revision bigint)',
+  'schedule workspace preserves its published return-column order and types'
+);
 select ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='api_v1' and p.proname in ('save_schedule_config_v1','get_schedule_workspace_v1') and p.prosecdef), 'schedule API functions are invoker functions');
 select ok((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='can_manage_schedule_scope')=1, 'schedule scope authorization is a single narrow helper');
 
