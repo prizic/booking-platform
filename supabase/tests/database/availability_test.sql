@@ -2,6 +2,7 @@ begin;
 select no_plan();
 
 select has_table('app'::name, 'availability_revisions'::name);
+select is((select count(*)::integer from app.availability_revisions), (select count(*)::integer from app.tenants), 'existing tenants receive availability revision rows during migration');
 select ok((select relrowsecurity from pg_class where oid='app.availability_revisions'::regclass), 'availability revisions require RLS');
 select ok(not has_table_privilege('anon','app.availability_revisions','select'), 'anonymous callers cannot read availability revisions');
 select has_function('api_v1'::name, 'get_availability_v1'::name, array['text','text','uuid','uuid','uuid','timestamp with time zone','timestamp with time zone','integer','text']);
@@ -47,6 +48,59 @@ select is(
   30,
   'duration, opening hours, staff schedule, and 15-minute interval produce bounded slots'
 );
+update app.schedule_scopes set time_zone='America/Chicago'
+where id='a8100000-0000-0000-0000-000000000001';
+update app.weekly_schedules set start_minute=480,end_minute=960
+where id='a8200000-0000-0000-0000-000000000001';
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  30,
+  'subject working hours are interpreted in the subject schedule timezone'
+);
+update app.schedule_scopes set time_zone='America/New_York'
+where id='a8100000-0000-0000-0000-000000000001';
+update app.weekly_schedules set start_minute=540,end_minute=1020
+where id='a8200000-0000-0000-0000-000000000001';
+insert into app.schedule_exceptions(id,tenant_id,schedule_scope_id,local_date,exception_kind,start_minute,end_minute,fold) values
+ ('a8900000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001','2026-11-01','override',60,120,1),
+ ('a8900000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001','2026-11-01','override',60,120,1);
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-11-01 05:00+00','2026-11-01 07:00+00',1,'America/New_York') where result_kind='slot' and fold=1),
+  2,
+  'an explicit exception fold exposes only the selected repeated civil-time occurrence'
+);
+select is(
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-08 13:00+00','2026-09-08 14:00+00',1,'America/New_York') where result_kind='summary'),
+  'no_matching_availability',
+  'missing subject schedule is minimized to no matching availability'
+);
+select is(
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2027-01-04 14:00+00','2027-01-04 15:00+00',1,'America/New_York') where result_kind='summary'),
+  'outside_booking_window',
+  'notice and horizon rejection use the coarse outside-window code'
+);
+
+-- Every policy dimension uses tenant -> location -> service -> subject
+-- precedence. Travel expands the leading occupied range and turnover expands
+-- the trailing range, both of which must remain inside schedules and breaks.
+insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,location_id,service_id,staff_id,policy_key,value) values
+ ('a8800000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'slot_interval_minutes','60'),
+ ('a8800000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'slot_interval_minutes','30'),
+ ('a8800000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'slot_interval_minutes','20'),
+ ('a8800000-0000-0000-0000-000000000004','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','slot_interval_minutes','15'),
+ ('a8800000-0000-0000-0000-000000000005','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'travel_minutes','5'),
+ ('a8800000-0000-0000-0000-000000000006','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'travel_minutes','10'),
+ ('a8800000-0000-0000-0000-000000000007','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'travel_minutes','15'),
+ ('a8800000-0000-0000-0000-000000000008','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','travel_minutes','20'),
+ ('a8800000-0000-0000-0000-000000000009','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'turnover_minutes','5'),
+ ('a8800000-0000-0000-0000-000000000010','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'turnover_minutes','10'),
+ ('a8800000-0000-0000-0000-000000000011','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'turnover_minutes','20'),
+ ('a8800000-0000-0000-0000-000000000012','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','turnover_minutes','30');
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
+  26,
+  'subject policy precedence drives interval and occupied travel/turnover containment'
+);
 
 insert into app.catalog_services(id,tenant_id,key,category_id)
 values ('a7200000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','room-booking','a7100000-0000-0000-0000-000000000001');
@@ -75,8 +129,25 @@ insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,star
 values ('a8700000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a8600000-0000-0000-0000-000000000001',1,540,1020);
 select is(
   (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
-  30,
+  14,
   'exclusive-resource slots expose their kind while resource identity remains private'
+);
+insert into app.catalog_services(id,tenant_id,key,category_id)
+values ('a7200000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','group-session','a7100000-0000-0000-0000-000000000001');
+insert into app.catalog_service_revisions(
+  id,tenant_id,service_id,revision,locale,state,name,canonical_path,duration_minutes,
+  price_minor,currency,capacity_mode,booking_mode,publication_id,published_at
+) values (
+  'a7210000-0000-0000-0000-000000000004','a0000000-0000-0000-0000-000000000001',
+  'a7200000-0000-0000-0000-000000000003',1,'en','published','Group session',
+  '/services/group-session',45,1000,'SAR','group','appointment',
+  'a7000000-0000-0000-0000-000000000001','2026-09-05 00:00+00'
+);
+insert into app.catalog_service_locations(tenant_id,service_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001');
+select throws_ok(
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000003','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York')$$,
+  '22023','availability_selection_unavailable','deferred group capacity fails closed even for party size one'
 );
 select is(
   (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') limit 1),
@@ -102,8 +173,54 @@ select cmp_ok(
 );
 select is(
   (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot'),
-  27,
+  23,
   'active allocation occupied ranges remove overlapping advisory slots'
+);
+select is(
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 13:45+00',1,'America/New_York') where result_kind='summary'),
+  'capacity_unavailable',
+  'allocation conflicts use a coarse capacity code without conflict details'
+);
+insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,staff_id,policy_key,value)
+values ('a8800000-0000-0000-0000-000000000013','a0000000-0000-0000-0000-000000000001','staff','a8000000-0000-0000-0000-000000000001','daily_limit_per_staff','1');
+select is(
+  (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 18:00+00','2026-09-07 19:00+00',1,'America/New_York') where result_kind='summary'),
+  'policy_restricted',
+  'daily limits use a coarse policy code'
+);
+insert into app.schedule_policy_overrides(id,tenant_id,scope_kind,location_id,service_id,staff_id,policy_key,value) values
+ ('a8810000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'buffer_before_minutes','1'),
+ ('a8810000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'buffer_before_minutes','2'),
+ ('a8810000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'buffer_before_minutes','3'),
+ ('a8810000-0000-0000-0000-000000000004','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','buffer_before_minutes','4'),
+ ('a8810000-0000-0000-0000-000000000005','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'buffer_after_minutes','5'),
+ ('a8810000-0000-0000-0000-000000000006','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'buffer_after_minutes','6'),
+ ('a8810000-0000-0000-0000-000000000007','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'buffer_after_minutes','7'),
+ ('a8810000-0000-0000-0000-000000000008','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','buffer_after_minutes','8'),
+ ('a8810000-0000-0000-0000-000000000009','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'minimum_notice_minutes','60'),
+ ('a8810000-0000-0000-0000-000000000010','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'minimum_notice_minutes','90'),
+ ('a8810000-0000-0000-0000-000000000011','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'minimum_notice_minutes','120'),
+ ('a8810000-0000-0000-0000-000000000012','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','minimum_notice_minutes','150'),
+ ('a8810000-0000-0000-0000-000000000013','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'horizon_days','30'),
+ ('a8810000-0000-0000-0000-000000000014','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'horizon_days','40'),
+ ('a8810000-0000-0000-0000-000000000015','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'horizon_days','50'),
+ ('a8810000-0000-0000-0000-000000000016','a0000000-0000-0000-0000-000000000001','staff',null,null,'a8000000-0000-0000-0000-000000000001','horizon_days','55'),
+ ('a8810000-0000-0000-0000-000000000017','a0000000-0000-0000-0000-000000000001','tenant',null,null,null,'daily_limit_per_staff','4'),
+ ('a8810000-0000-0000-0000-000000000018','a0000000-0000-0000-0000-000000000001','location','a5000000-0000-0000-0000-000000000001',null,null,'daily_limit_per_staff','3'),
+ ('a8810000-0000-0000-0000-000000000019','a0000000-0000-0000-0000-000000000001','service',null,'a7200000-0000-0000-0000-000000000001',null,'daily_limit_per_staff','2');
+select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'buffer_before_minutes',0),4,'buffer-before uses subject precedence');
+select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'buffer_after_minutes',0),8,'buffer-after uses subject precedence');
+select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'minimum_notice_minutes',0),150,'notice uses subject precedence');
+select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'horizon_days',1),55,'horizon uses subject precedence');
+select is(private.resolve_availability_policy_v1('a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000001',null,'daily_limit_per_staff',null),1,'daily limit uses subject precedence');
+
+select ok(
+  (select count(*) <= 500 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')),
+  'a maximum-size request cannot return more than 500 rows'
+);
+select lives_ok(
+  $$explain (analyze,buffers,format json) select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
+  'representative maximum-window plan completes within the RPC statement timeout'
 );
 
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);

@@ -8,6 +8,9 @@ create table app.availability_revisions (
 );
 alter table app.availability_revisions enable row level security;
 revoke all on app.availability_revisions from public, anon, authenticated;
+insert into app.availability_revisions(tenant_id)
+select id from app.tenants
+on conflict (tenant_id) do nothing;
 
 create or replace function private.bump_availability_revision()
 returns trigger
@@ -82,6 +85,28 @@ create index assignment_allocations_staff_daily_idx
   on app.assignment_allocations(tenant_id,staff_id,starts_at)
   where staff_id is not null and state in ('confirmed','completed');
 
+create or replace function private.resolve_availability_policy_v1(
+  p_tenant_id uuid,p_location_id uuid,p_service_id uuid,p_staff_id uuid,
+  p_resource_id uuid,p_policy_key text,p_default integer
+)
+returns integer language sql stable security definer set search_path='' as $$
+  select coalesce(
+    (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o
+      where o.tenant_id=p_tenant_id and o.scope_kind='staff' and o.staff_id=p_staff_id and o.policy_key=p_policy_key),
+    (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o
+      where o.tenant_id=p_tenant_id and o.scope_kind='resource' and o.resource_id=p_resource_id and o.policy_key=p_policy_key),
+    (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o
+      where o.tenant_id=p_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key=p_policy_key),
+    (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o
+      where o.tenant_id=p_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key=p_policy_key),
+    (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o
+      where o.tenant_id=p_tenant_id and o.scope_kind='tenant' and o.policy_key=p_policy_key),
+    p_default
+  );
+$$;
+revoke all on function private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer) from public;
+grant execute on function private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer) to anon,authenticated;
+
 create or replace function private.get_availability_v1(
   p_hostname text,
   p_application text,
@@ -129,6 +154,7 @@ declare
   v_location_time_zone text;
   v_customer_time_zone text;
   v_assignment_mode text;
+  v_capacity_mode text;
 begin
   if p_hostname is null or p_hostname<>lower(btrim(p_hostname))
      or char_length(p_hostname) not between 4 and 253
@@ -183,6 +209,13 @@ begin
     raise exception using errcode='42501',message='availability_context_required';
   end if;
   v_customer_time_zone := coalesce(p_customer_time_zone,v_location_time_zone);
+  select sr.capacity_mode into v_capacity_mode from app.catalog_service_revisions sr
+    where sr.tenant_id=v_tenant_id and sr.service_id=p_service_id
+      and sr.publication_id=v_publication_id and sr.state='published'
+    order by (sr.locale='en') desc,sr.locale limit 1;
+  if v_capacity_mode<>'exclusive' then
+    raise exception using errcode='22023',message='availability_selection_unavailable';
+  end if;
 
   if v_assignment_mode='customer_choice' and p_staff_preference_id is null then
     raise exception using errcode='22023',message='availability_staff_preference_required';
@@ -207,74 +240,76 @@ begin
     where s.tenant_id=v_tenant_id and s.id=p_service_id
     order by (sr.locale='en') desc,sr.locale limit 1
   ), candidates as (
-    select sp.id as staff_id,null::uuid as resource_id,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='staff' and o.staff_id=sp.id and o.policy_key='buffer_before_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='buffer_before_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='buffer_before_minutes'),
-               sr.published_before) as before_minutes,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='staff' and o.staff_id=sp.id and o.policy_key='buffer_after_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='buffer_after_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='buffer_after_minutes'),
-               sr.published_after) as after_minutes,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='slot_interval_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='slot_interval_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='tenant' and o.policy_key='slot_interval_minutes'),15) as interval_minutes,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='minimum_notice_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='minimum_notice_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='tenant' and o.policy_key='minimum_notice_minutes'),120) as notice_minutes,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='horizon_days'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='horizon_days'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='tenant' and o.policy_key='horizon_days'),60) as horizon_days,
-      (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='staff' and o.staff_id=sp.id and o.policy_key='daily_limit_per_staff') as daily_limit,
+    select sp.id as staff_id,null::uuid as resource_id,subject_scope.id as subject_scope_id,subject_scope.time_zone as subject_time_zone,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'buffer_before_minutes',sr.published_before) as before_minutes,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'buffer_after_minutes',sr.published_after) as after_minutes,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'slot_interval_minutes',15) as interval_minutes,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'minimum_notice_minutes',120) as notice_minutes,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'horizon_days',60) as horizon_days,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'daily_limit_per_staff',null) as daily_limit,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'turnover_minutes',0) as turnover_minutes,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,sp.id,null,'travel_minutes',0) as travel_minutes,
       sr.duration_minutes
     from service_rule sr
     join app.staff_service_locations ssl on ssl.tenant_id=v_tenant_id and ssl.service_id=p_service_id and ssl.location_id=p_location_id
     join app.staff_profiles sp on sp.tenant_id=ssl.tenant_id and sp.id=ssl.staff_id and sp.status='active'
+    join app.schedule_scopes subject_scope on subject_scope.tenant_id=sp.tenant_id and subject_scope.scope_kind='staff'
+      and subject_scope.location_id=p_location_id and subject_scope.staff_id=sp.id
     where (p_staff_preference_id is null or sp.id=p_staff_preference_id)
       and (sr.assignment_mode<>'fixed_staff' or sp.id=sr.fixed_staff_id)
       and sr.allocation_kind='appointment'
     union all
-    select null::uuid,r.id,
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='resource' and o.resource_id=r.id and o.policy_key='buffer_before_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='buffer_before_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='buffer_before_minutes'),sr.published_before),
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='resource' and o.resource_id=r.id and o.policy_key='buffer_after_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='buffer_after_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='buffer_after_minutes'),sr.published_after),
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='slot_interval_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='slot_interval_minutes'),15),
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='minimum_notice_minutes'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='minimum_notice_minutes'),120),
-      coalesce((select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='service' and o.service_id=p_service_id and o.policy_key='horizon_days'),
-               (select (o.value#>>'{}')::integer from app.schedule_policy_overrides o where o.tenant_id=v_tenant_id and o.scope_kind='location' and o.location_id=p_location_id and o.policy_key='horizon_days'),60),
-      null::integer,sr.duration_minutes
+    select null::uuid,r.id,subject_scope.id,subject_scope.time_zone,
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'buffer_before_minutes',sr.published_before),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'buffer_after_minutes',sr.published_after),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'slot_interval_minutes',15),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'minimum_notice_minutes',120),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'horizon_days',60),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'daily_limit_per_staff',null),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'turnover_minutes',0),
+      private.resolve_availability_policy_v1(v_tenant_id,p_location_id,p_service_id,null,r.id,'travel_minutes',0),
+      sr.duration_minutes
     from service_rule sr
     join app.resource_requirements rr on rr.tenant_id=v_tenant_id and rr.service_id=p_service_id
     join app.resources r on r.tenant_id=rr.tenant_id and r.resource_type_id=rr.resource_type_id and r.status='active'
     join app.resource_locations rl on rl.tenant_id=r.tenant_id and rl.resource_id=r.id and rl.location_id=p_location_id
+    join app.schedule_scopes subject_scope on subject_scope.tenant_id=r.tenant_id and subject_scope.scope_kind='resource'
+      and subject_scope.location_id=p_location_id and subject_scope.resource_id=r.id
     where sr.allocation_kind='exclusive_resource' and p_staff_preference_id is null
-  ), generated as (
+  ), selected_candidates as (
+    select c.* from candidates c order by coalesce(c.staff_id,c.resource_id) limit 128
+  ), generated_raw as (
     select c.*,g as starts_at,g+make_interval(mins=>c.duration_minutes) as ends_at,
       g at time zone v_location_time_zone as location_start,
       (g+make_interval(mins=>c.duration_minutes)) at time zone v_location_time_zone as location_end,
-      tsrange((g at time zone 'UTC')-make_interval(mins=>c.before_minutes),
-              ((g+make_interval(mins=>c.duration_minutes)) at time zone 'UTC')+make_interval(mins=>c.after_minutes),'[)') as occupied
-    from candidates c cross join lateral pg_catalog.generate_series(p_window_start,p_window_end,interval '5 minutes') g
+      g-make_interval(mins=>c.before_minutes+c.travel_minutes) as occupied_starts_at,
+      g+make_interval(mins=>c.duration_minutes+c.after_minutes+c.turnover_minutes) as occupied_ends_at,
+      (g-make_interval(mins=>c.before_minutes+c.travel_minutes)) at time zone v_location_time_zone as occupied_location_start,
+      (g+make_interval(mins=>c.duration_minutes+c.after_minutes+c.turnover_minutes)) at time zone v_location_time_zone as occupied_location_end,
+      (g-make_interval(mins=>c.before_minutes+c.travel_minutes)) at time zone c.subject_time_zone as occupied_subject_start,
+      (g+make_interval(mins=>c.duration_minutes+c.after_minutes+c.turnover_minutes)) at time zone c.subject_time_zone as occupied_subject_end,
+      tsrange((g at time zone 'UTC')-make_interval(mins=>c.before_minutes+c.travel_minutes),
+              ((g+make_interval(mins=>c.duration_minutes)) at time zone 'UTC')+make_interval(mins=>c.after_minutes+c.turnover_minutes),'[)') as occupied
+    from selected_candidates c cross join lateral pg_catalog.generate_series(p_window_start,p_window_end,interval '5 minutes') g
     where g+make_interval(mins=>c.duration_minutes)<=p_window_end
       and g>=v_now+make_interval(mins=>c.notice_minutes)
       and g<v_now+make_interval(days=>c.horizon_days)
       and mod((extract(hour from g at time zone v_location_time_zone)::integer*60+
                extract(minute from g at time zone v_location_time_zone)::integer),c.interval_minutes)=0
+  ), generated as (
+    select r.*,
+      (row_number() over(partition by coalesce(r.staff_id,r.resource_id),r.occupied_location_start order by r.occupied_starts_at)-1)::smallint as location_fold,
+      (row_number() over(partition by coalesce(r.staff_id,r.resource_id),r.occupied_subject_start order by r.occupied_starts_at)-1)::smallint as subject_fold
+    from generated_raw r
   ), valid as (
     select g.*
     from generated g
     join app.schedule_scopes ls on ls.tenant_id=v_tenant_id and ls.scope_kind='location'
       and ls.location_id=p_location_id
-    left join app.schedule_scopes ss on ss.tenant_id=v_tenant_id and ss.scope_kind='staff'
-      and ss.location_id=p_location_id and ss.staff_id=g.staff_id
-    left join app.schedule_scopes rs on rs.tenant_id=v_tenant_id and rs.scope_kind='resource'
-      and rs.location_id=p_location_id and rs.resource_id=g.resource_id
-    where (g.location_start::date=g.location_end::date)
+    left join app.schedule_scopes ss on ss.id=g.subject_scope_id and g.staff_id is not null
+    left join app.schedule_scopes rs on rs.id=g.subject_scope_id and g.resource_id is not null
+    where g.occupied_location_start::date=g.occupied_location_end::date
+      and g.occupied_subject_start::date=g.occupied_subject_end::date
       and ((g.staff_id is not null and ss.id is not null) or (g.resource_id is not null and rs.id is not null))
       and not exists(select 1 from app.holidays h where h.tenant_id=v_tenant_id and h.location_id=p_location_id and h.local_date=g.location_start::date)
       and not exists(select 1 from app.blackouts b where b.tenant_id=v_tenant_id and b.location_id=p_location_id
@@ -293,48 +328,55 @@ begin
         where a.tenant_id=v_tenant_id and a.staff_id=g.staff_id and a.state in ('confirmed','completed')
           and (a.starts_at at time zone v_location_time_zone)::date=g.location_start::date))
       and (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ls.id and e.local_date=g.location_start::date)
+        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ls.id and e.local_date=g.occupied_location_start::date)
           and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=ls.id
-            and w.day_of_week=extract(dow from g.location_start)::integer
-            and w.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-            and w.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer))
+            and w.day_of_week=extract(dow from g.occupied_location_start)::integer
+            and w.start_minute<=extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer
+            and w.end_minute>=extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer))
         or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ls.id
-          and e.local_date=g.location_start::date and e.exception_kind='override'
-          and e.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-          and e.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer)
+          and e.local_date=g.occupied_location_start::date and e.exception_kind='override'
+          and (e.fold is null or e.fold=g.location_fold)
+          and e.start_minute<=extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer
+          and e.end_minute>=extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer)
       )
       and (g.staff_id is null or (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ss.id and e.local_date=g.location_start::date)
+        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ss.id and e.local_date=g.occupied_subject_start::date)
           and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=ss.id
-            and w.day_of_week=extract(dow from g.location_start)::integer
-            and w.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-            and w.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer))
+            and w.day_of_week=extract(dow from g.occupied_subject_start)::integer
+            and w.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
+            and w.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer))
         or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ss.id
-          and e.local_date=g.location_start::date and e.exception_kind='override'
-          and e.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-          and e.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer)
+          and e.local_date=g.occupied_subject_start::date and e.exception_kind='override'
+          and (e.fold is null or e.fold=g.subject_fold)
+          and e.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
+          and e.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer)
       ))
       and (g.resource_id is null or (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=rs.id and e.local_date=g.location_start::date)
+        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=rs.id and e.local_date=g.occupied_subject_start::date)
           and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=rs.id
-            and w.day_of_week=extract(dow from g.location_start)::integer
-            and w.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-            and w.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer))
+            and w.day_of_week=extract(dow from g.occupied_subject_start)::integer
+            and w.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
+            and w.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer))
         or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=rs.id
-          and e.local_date=g.location_start::date and e.exception_kind='override'
-          and e.start_minute<=extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer
-          and e.end_minute>=extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer)
+          and e.local_date=g.occupied_subject_start::date and e.exception_kind='override'
+          and (e.fold is null or e.fold=g.subject_fold)
+          and e.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
+          and e.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer)
       ))
       and not exists(select 1 from app.schedule_breaks b where b.tenant_id=v_tenant_id
-        and b.schedule_scope_id in (ls.id,coalesce(ss.id,rs.id)) and b.day_of_week=extract(dow from g.location_start)::integer
-        and int4range(b.start_minute,b.end_minute,'[)') && int4range(
-          extract(hour from g.location_start)::integer*60+extract(minute from g.location_start)::integer,
-          extract(hour from g.location_end)::integer*60+extract(minute from g.location_end)::integer,'[)'))
+        and ((b.schedule_scope_id=ls.id and b.day_of_week=extract(dow from g.occupied_location_start)::integer
+          and int4range(b.start_minute,b.end_minute,'[)') && int4range(
+            extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer,
+            extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer,'[)'))
+          or (b.schedule_scope_id=coalesce(ss.id,rs.id) and b.day_of_week=extract(dow from g.occupied_subject_start)::integer
+          and int4range(b.start_minute,b.end_minute,'[)') && int4range(
+            extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer,
+            extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer,'[)'))))
   ), ranked as (
     select v.*,row_number() over(partition by v.starts_at order by
       (select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id and a.staff_id=v.staff_id and a.state in ('confirmed','completed')),
       coalesce(v.staff_id,v.resource_id))::integer as slot_rank,
-      (row_number() over(partition by v.location_start order by v.starts_at)-1)::smallint as slot_fold
+      v.location_fold as slot_fold
     from valid v
   ), bounded as (
     select * from ranked order by starts_at,slot_rank,staff_id limit 500
@@ -351,7 +393,20 @@ begin
   select * from rows
   union all
   select 1,'summary',(select service_rule.allocation_kind from service_rule),null,null,null,null,v_location_time_zone,v_customer_time_zone,null,null,null,
-    v_now,v_now+interval '30 seconds','no_matching_availability','not_applicable',
+    v_now,v_now+interval '30 seconds',case
+      when not exists(select 1 from selected_candidates) then 'no_matching_availability'
+      when not exists(select 1 from generated) then 'outside_booking_window'
+      when exists(select 1 from generated g where g.daily_limit is not null and g.daily_limit<=(
+        select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id
+          and a.staff_id=g.staff_id and a.state in ('confirmed','completed')
+          and (a.starts_at at time zone v_location_time_zone)::date=g.location_start::date
+      )) then 'policy_restricted'
+      when exists(select 1 from generated g join app.assignment_allocations a
+        on a.tenant_id=v_tenant_id and a.state in ('held','confirmed') and a.occupied_at&&g.occupied
+        and ((g.staff_id is not null and a.staff_id=g.staff_id) or (g.resource_id is not null and a.resource_id=g.resource_id)))
+        then 'capacity_unavailable'
+      else 'no_matching_availability'
+    end,'not_applicable',
     concat('availability:',v_tenant_id,':',v_publication_revision,':',v_config_version,':',v_feature_version,':',v_availability_revision)
   where not exists(select 1 from rows);
 end;
