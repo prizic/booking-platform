@@ -117,6 +117,28 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_schedule_workspace_v1: {
+        Args: { p_location_id?: string; p_tenant_id: string };
+        Returns: {
+          day_of_week: number;
+          ends_at: string;
+          exception_kind: string;
+          id: string;
+          kind: string;
+          local_date: string;
+          location_id: string;
+          policy_key: string;
+          reason: string;
+          resource_id: string;
+          revision: number;
+          scope_id: string;
+          staff_id: string;
+          start_minute: number;
+          starts_at: string;
+          time_zone: string;
+          value: number;
+        }[];
+      };
       get_staff_resource_choices_v1: {
         Args: { p_locale: string; p_tenant_id: string };
         Returns: {
@@ -218,6 +240,19 @@ export type Database = {
         Returns: {
           resource_id: string;
           revision: number;
+        }[];
+      };
+      save_schedule_config_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_operation: string;
+          p_payload: Json;
+          p_request_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          revision: number;
+          target_id: string;
         }[];
       };
       save_staff_profile_v1: {
