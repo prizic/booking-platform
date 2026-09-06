@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseAvailabilityV1Request,
+  parseAvailabilityV1Response,
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
+  normalizeAvailabilityV1TransportRow,
   parsePublicCatalogV1,
   parseSaveScheduleConfigV1,
   parseScheduleWorkspaceV1,
@@ -10,6 +13,92 @@ import {
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
+
+describe("public availability v1", () => {
+  it("normalizes PostgreSQL timestamptz fields at the response transport boundary", () => {
+    expect(
+      normalizeAvailabilityV1TransportRow({
+        advisory_as_of: "2026-11-01T05:00:00.123456+03:30",
+        advisory_until: "2026-11-01T05:00:30+00:00",
+        slot_end: "2026-11-01T06:30:00+00:00",
+        slot_start: "2026-11-01T05:30:00+00:00",
+      }),
+    ).toEqual({
+      advisory_as_of: "2026-11-01T01:30:00.123Z",
+      advisory_until: "2026-11-01T05:00:30.000Z",
+      slot_end: "2026-11-01T06:30:00.000Z",
+      slot_start: "2026-11-01T05:30:00.000Z",
+    });
+  });
+
+  it("rejects impossible PostgreSQL timestamptz calendar components", () => {
+    expect(() =>
+      normalizeAvailabilityV1TransportRow({
+        slot_start: "2026-02-30T05:30:00+00:00",
+      }),
+    ).toThrow("PostgreSQL timestamptz");
+  });
+
+  it("accepts only a bounded, exact request shape", () => {
+    expect(
+      parseAvailabilityV1Request({
+        endBefore: "2026-09-08T00:00:00.000Z",
+        locale: "en",
+        locationId: "location-a",
+        partySize: 1,
+        serviceId: "service-a",
+        staffPreferenceId: null,
+        startAfter: "2026-09-07T00:00:00.000Z",
+        timeZone: "Europe/Istanbul",
+      }),
+    ).toMatchObject({ partySize: 1, staffPreferenceId: null });
+
+    expect(() =>
+      parseAvailabilityV1Request({
+        endBefore: "2026-11-08T00:00:00.000Z",
+        locale: "en",
+        locationId: "location-a",
+        partySize: 1,
+        serviceId: "service-a",
+        staffPreferenceId: null,
+        startAfter: "2026-09-07T00:00:00.000Z",
+        timeZone: "Europe/Istanbul",
+      }),
+    ).toThrow("31 days");
+  });
+
+  it("parses a privacy-safe advisory response with coarse recovery state", () => {
+    expect(
+      parseAvailabilityV1Response({
+        advisory: true,
+        displayTimeZone: "Europe/Istanbul",
+        locationTimeZone: "Asia/Riyadh",
+        noSlotReason: null,
+        providerHealth: "not_applicable",
+        slots: [
+          {
+            allocationKind: "appointment",
+            endAt: "2026-09-07T09:30:00.000Z",
+            staffId: "staff-public-a",
+            startAt: "2026-09-07T09:00:00.000Z",
+          },
+        ],
+      }),
+    ).toMatchObject({ advisory: true, providerHealth: "not_applicable" });
+
+    expect(() =>
+      parseAvailabilityV1Response({
+        advisory: true,
+        conflictBookingId: "private-booking",
+        displayTimeZone: "Europe/Istanbul",
+        locationTimeZone: "Asia/Riyadh",
+        noSlotReason: "no_matching_availability",
+        providerHealth: "not_applicable",
+        slots: [],
+      }),
+    ).toThrow("unexpected shape");
+  });
+});
 
 describe("assignment candidate DTO", () => {
   it.each(["fixed_staff", "customer_choice", "any_available", "round_robin"])(

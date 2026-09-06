@@ -15,7 +15,74 @@ import {
   resolveSchedulePolicy,
   type SchedulePolicyOverrides,
   withBuffers,
+  computeAdvisorySlots,
+  classifyNoSlotReason,
 } from "./index.js";
+
+describe("advisory availability", () => {
+  it("generates aligned half-open slots and removes buffered conflicts", () => {
+    expect(
+      computeAdvisorySlots({
+        blockedRanges: [
+          createTimeRange("2026-09-07T09:39:00Z", "2026-09-07T10:00:00Z"),
+        ],
+        bufferAfterMinutes: 10,
+        bufferBeforeMinutes: 0,
+        durationMinutes: 30,
+        intervalMinutes: 30,
+        maxResults: 10,
+        openRanges: [createTimeRange("2026-09-07T09:00:00Z", "2026-09-07T11:00:00Z")],
+        window: createTimeRange("2026-09-07T09:00:00Z", "2026-09-07T11:00:00Z"),
+      }),
+    ).toEqual([
+      createTimeRange("2026-09-07T10:00:00Z", "2026-09-07T10:30:00Z"),
+      createTimeRange("2026-09-07T10:30:00Z", "2026-09-07T11:00:00Z"),
+    ]);
+  });
+
+  it("fails closed for invalid or abusive generation bounds", () => {
+    expect(() =>
+      computeAdvisorySlots({
+        blockedRanges: [],
+        bufferAfterMinutes: 0,
+        bufferBeforeMinutes: 0,
+        durationMinutes: 30,
+        intervalMinutes: 5,
+        maxResults: 501,
+        openRanges: [],
+        window: createTimeRange("2026-09-07T09:00:00Z", "2026-09-07T10:00:00Z"),
+      }),
+    ).toThrow("result bound");
+  });
+
+  it("keeps slot interval alignment when the requested window starts mid-grid", () => {
+    expect(
+      computeAdvisorySlots({
+        blockedRanges: [],
+        bufferAfterMinutes: 0,
+        bufferBeforeMinutes: 0,
+        durationMinutes: 30,
+        intervalMinutes: 30,
+        maxResults: 10,
+        openRanges: [createTimeRange("2026-09-07T09:00:00Z", "2026-09-07T11:00:00Z")],
+        window: createTimeRange("2026-09-07T09:10:00Z", "2026-09-07T11:00:00Z"),
+      }),
+    ).toEqual([
+      createTimeRange("2026-09-07T09:30:00Z", "2026-09-07T10:00:00Z"),
+      createTimeRange("2026-09-07T10:00:00Z", "2026-09-07T10:30:00Z"),
+      createTimeRange("2026-09-07T10:30:00Z", "2026-09-07T11:00:00Z"),
+    ]);
+  });
+
+  it("uses coarse public no-slot reasons", () => {
+    expect(classifyNoSlotReason({ eligibleCandidateCount: 0 })).toBe(
+      "no_matching_availability",
+    );
+    expect(classifyNoSlotReason({ eligibleCandidateCount: 2 })).toBe(
+      "capacity_unavailable",
+    );
+  });
+});
 
 describe("money", () => {
   it("represents money as safe integer minor units plus ISO currency", () => {

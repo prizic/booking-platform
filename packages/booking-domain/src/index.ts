@@ -12,7 +12,8 @@ export class BookingDomainError extends Error {
       | "invalid_money"
       | "invalid_percentage"
       | "invalid_time_range"
-      | "invalid_buffer",
+      | "invalid_buffer"
+      | "invalid_availability",
     message: string,
   ) {
     super(message);
@@ -129,6 +130,99 @@ export function withBuffers(
     new Date(range.startEpochMilliseconds - beforeMinutes * 60_000),
     new Date(range.endEpochMilliseconds + afterMinutes * 60_000),
   );
+}
+
+export interface ComputeAdvisorySlotsInput {
+  readonly blockedRanges: readonly TimeRange[];
+  readonly bufferAfterMinutes: number;
+  readonly bufferBeforeMinutes: number;
+  readonly durationMinutes: number;
+  readonly intervalMinutes: number;
+  readonly maxResults: number;
+  readonly openRanges: readonly TimeRange[];
+  readonly window: TimeRange;
+}
+
+export type PublicNoSlotReason = "capacity_unavailable" | "no_matching_availability";
+
+export function computeAdvisorySlots(
+  input: ComputeAdvisorySlotsInput,
+): readonly TimeRange[] {
+  if (
+    !Number.isSafeInteger(input.durationMinutes) ||
+    input.durationMinutes < 1 ||
+    input.durationMinutes > 24 * 60 ||
+    !Number.isSafeInteger(input.intervalMinutes) ||
+    input.intervalMinutes < 1 ||
+    input.intervalMinutes > 60 ||
+    !Number.isSafeInteger(input.maxResults) ||
+    input.maxResults < 1 ||
+    input.maxResults > 500
+  ) {
+    throw new BookingDomainError(
+      "invalid_availability",
+      "Availability duration, interval, or result bound is invalid",
+    );
+  }
+
+  const durationMilliseconds = input.durationMinutes * 60_000;
+  const intervalMilliseconds = input.intervalMinutes * 60_000;
+  const results: TimeRange[] = [];
+
+  for (const openRange of input.openRanges) {
+    const requestedStart = Math.max(
+      openRange.startEpochMilliseconds,
+      input.window.startEpochMilliseconds,
+    );
+    const firstStart =
+      openRange.startEpochMilliseconds +
+      Math.ceil(
+        (requestedStart - openRange.startEpochMilliseconds) / intervalMilliseconds,
+      ) *
+        intervalMilliseconds;
+    const openEnd = Math.min(
+      openRange.endEpochMilliseconds,
+      input.window.endEpochMilliseconds,
+    );
+    for (
+      let start = firstStart;
+      start + durationMilliseconds <= openEnd && results.length < input.maxResults;
+      start += intervalMilliseconds
+    ) {
+      const candidate = createTimeRange(
+        new Date(start),
+        new Date(start + durationMilliseconds),
+      );
+      const occupied = withBuffers(
+        candidate,
+        input.bufferBeforeMinutes,
+        input.bufferAfterMinutes,
+      );
+      if (!input.blockedRanges.some((blocked) => rangesOverlap(occupied, blocked))) {
+        results.push(candidate);
+      }
+    }
+    if (results.length === input.maxResults) break;
+  }
+
+  return Object.freeze(results);
+}
+
+export function classifyNoSlotReason(input: {
+  readonly eligibleCandidateCount: number;
+}): PublicNoSlotReason {
+  if (
+    !Number.isSafeInteger(input.eligibleCandidateCount) ||
+    input.eligibleCandidateCount < 0
+  ) {
+    throw new BookingDomainError(
+      "invalid_availability",
+      "Eligible candidate count is invalid",
+    );
+  }
+  return input.eligibleCandidateCount === 0
+    ? "no_matching_availability"
+    : "capacity_unavailable";
 }
 
 export interface CivilInterval {

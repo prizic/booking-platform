@@ -76,6 +76,7 @@ export type ContractErrorCode =
   | "membership_inactive"
   | "location_scope_denied"
   | "mfa_required"
+  | "availability_unavailable"
   | "invalid_request";
 
 export interface ContractError {
@@ -619,18 +620,244 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
 }
 
 export interface AvailabilityV1Request {
+  readonly endBefore: string;
   readonly locale: ContractLocale;
   readonly locationId: LocationId;
   readonly partySize: number;
   readonly serviceId: string;
+  readonly staffPreferenceId: string | null;
   readonly startAfter: string;
   readonly timeZone: string;
 }
 export interface AvailabilitySlotV1 {
+  readonly allocationKind: "appointment" | "exclusive_resource";
   readonly endAt: string;
-  readonly resourceIds: readonly string[];
+  readonly staffId: string | null;
   readonly startAt: string;
-  readonly timeZone: string;
+}
+export type AvailabilityNoSlotReasonV1 =
+  | "capacity_unavailable"
+  | "no_matching_availability"
+  | "outside_booking_window"
+  | "policy_restricted";
+export interface AvailabilityV1Response {
+  readonly advisory: true;
+  readonly displayTimeZone: string;
+  readonly locationTimeZone: string;
+  readonly noSlotReason: AvailabilityNoSlotReasonV1 | null;
+  readonly providerHealth: "not_applicable";
+  readonly slots: readonly AvailabilitySlotV1[];
+}
+
+const availabilityNoSlotReasons = [
+  "capacity_unavailable",
+  "no_matching_availability",
+  "outside_booking_window",
+  "policy_restricted",
+] as const;
+
+const availabilityTransportTimestampFields = [
+  "advisory_as_of",
+  "advisory_until",
+  "slot_end",
+  "slot_start",
+] as const;
+
+const postgrestTimestamptzPattern =
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))$/u;
+
+function requireUtcInstant(value: unknown): string {
+  const instant = requireNonEmptyString(value);
+  const epoch = Date.parse(instant);
+  if (!Number.isFinite(epoch) || new Date(epoch).toISOString() !== instant) {
+    throw new Error("Expected a canonical UTC instant");
+  }
+  return instant;
+}
+
+function normalizePostgrestTimestamptz(value: unknown): string {
+  const instant = requireNonEmptyString(value);
+  const match = postgrestTimestamptzPattern.exec(instant);
+  const epoch = Date.parse(instant);
+  if (
+    match === null ||
+    !hasValidPostgrestTimestamptzComponents(match) ||
+    !Number.isFinite(epoch)
+  ) {
+    throw new Error("Expected a PostgreSQL timestamptz value");
+  }
+  return new Date(epoch).toISOString();
+}
+
+function hasValidPostgrestTimestamptzComponents(match: RegExpExecArray): boolean {
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] = match
+    .slice(1)
+    .map((value) => (value === undefined ? undefined : Number(value)));
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined ||
+    year < 1 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth(year, month) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
+    return false;
+  }
+  return (
+    (offsetHour === undefined && offsetMinute === undefined) ||
+    (offsetHour !== undefined &&
+      offsetMinute !== undefined &&
+      offsetHour <= 23 &&
+      offsetMinute <= 59)
+  );
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
+}
+
+/**
+ * Normalizes only the timestamptz columns returned by get_availability_v1.
+ * Request DTOs stay subject to canonical-UTC validation in
+ * parseAvailabilityV1Request.
+ */
+export function normalizeAvailabilityV1TransportRow(
+  row: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const normalized = { ...row };
+  for (const field of availabilityTransportTimestampFields) {
+    const value = row[field];
+    if (value !== null && value !== undefined) {
+      normalized[field] = normalizePostgrestTimestamptz(value);
+    }
+  }
+  return Object.freeze(normalized);
+}
+
+function requireTimeZone(value: unknown): string {
+  const timeZone = requireNonEmptyString(value);
+  try {
+    new Intl.DateTimeFormat("en", { timeZone }).format(0);
+  } catch {
+    throw new Error("Expected a valid IANA timezone");
+  }
+  return timeZone;
+}
+
+export function parseAvailabilityV1Request(value: unknown): AvailabilityV1Request {
+  const keys = [
+    "endBefore",
+    "locale",
+    "locationId",
+    "partySize",
+    "serviceId",
+    "staffPreferenceId",
+    "startAfter",
+    "timeZone",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Availability request has an unexpected shape");
+  }
+  if (value.locale !== "en" && value.locale !== "ar") {
+    throw new Error("Availability locale is unsupported");
+  }
+  if (
+    !Number.isSafeInteger(value.partySize) ||
+    (value.partySize as number) < 1 ||
+    (value.partySize as number) > 50
+  ) {
+    throw new Error("Availability party size is out of bounds");
+  }
+  const startAfter = requireUtcInstant(value.startAfter);
+  const endBefore = requireUtcInstant(value.endBefore);
+  const windowMilliseconds = Date.parse(endBefore) - Date.parse(startAfter);
+  if (windowMilliseconds <= 0 || windowMilliseconds > 31 * 24 * 60 * 60 * 1_000) {
+    throw new Error("Availability window must be positive and at most 31 days");
+  }
+  return Object.freeze({
+    endBefore,
+    locale: value.locale,
+    locationId: requireNonEmptyString(value.locationId) as LocationId,
+    partySize: value.partySize as number,
+    serviceId: requireNonEmptyString(value.serviceId),
+    staffPreferenceId:
+      value.staffPreferenceId === null
+        ? null
+        : requireNonEmptyString(value.staffPreferenceId),
+    startAfter,
+    timeZone: requireTimeZone(value.timeZone),
+  });
+}
+
+export function parseAvailabilityV1Response(value: unknown): AvailabilityV1Response {
+  const keys = [
+    "advisory",
+    "displayTimeZone",
+    "locationTimeZone",
+    "noSlotReason",
+    "providerHealth",
+    "slots",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Availability response has an unexpected shape");
+  }
+  if (value.advisory !== true || value.providerHealth !== "not_applicable") {
+    throw new Error("Availability response is not advisory v1");
+  }
+  if (
+    value.noSlotReason !== null &&
+    !availabilityNoSlotReasons.includes(
+      value.noSlotReason as AvailabilityNoSlotReasonV1,
+    )
+  ) {
+    throw new Error("Availability no-slot reason is invalid");
+  }
+  if (!Array.isArray(value.slots) || value.slots.length > 500) {
+    throw new Error("Availability slots exceed the result bound");
+  }
+  const slots = value.slots.map((slot) => {
+    const slotKeys = ["allocationKind", "endAt", "staffId", "startAt"] as const;
+    if (!isRecord(slot) || !hasExactKeys(slot, slotKeys)) {
+      throw new Error("Availability slot has an unexpected shape");
+    }
+    const startAt = requireUtcInstant(slot.startAt);
+    const endAt = requireUtcInstant(slot.endAt);
+    if (
+      Date.parse(startAt) >= Date.parse(endAt) ||
+      (slot.allocationKind !== "appointment" &&
+        slot.allocationKind !== "exclusive_resource")
+    ) {
+      throw new Error("Availability slot range is invalid");
+    }
+    return Object.freeze({
+      allocationKind: slot.allocationKind,
+      endAt,
+      staffId: slot.staffId === null ? null : requireNonEmptyString(slot.staffId),
+      startAt,
+    });
+  });
+  if ((slots.length === 0) !== (value.noSlotReason !== null)) {
+    throw new Error("Availability no-slot reason does not match slots");
+  }
+  return Object.freeze({
+    advisory: true,
+    displayTimeZone: requireTimeZone(value.displayTimeZone),
+    locationTimeZone: requireTimeZone(value.locationTimeZone),
+    noSlotReason: value.noSlotReason as AvailabilityNoSlotReasonV1 | null,
+    providerHealth: "not_applicable",
+    slots: Object.freeze(slots),
+  });
 }
 export interface CreateHoldV1Request {
   readonly idempotencyKey: IdempotencyKey;

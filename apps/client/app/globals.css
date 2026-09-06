@@ -435,6 +435,100 @@ input:focus-visible {
   justify-self: start;
 }
 
+.availability-picker {
+  grid-column: 1 / -1;
+  min-inline-size: 0;
+  padding: clamp(1.3rem, 3vw, 2rem);
+  background: var(--brand-color-surface);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.catalog-section {
+  grid-column: 1 / -1;
+}
+
+.availability-picker__heading h2,
+.availability-results__heading h3 {
+  margin-block: 0 0.45rem;
+}
+
+.availability-picker__heading p,
+.availability-empty,
+.availability-results__heading span {
+  color: var(--brand-color-muted);
+}
+
+.availability-picker form,
+.availability-filters {
+  display: grid;
+  gap: 1rem;
+}
+
+.availability-picker form {
+  margin-block-start: 1.4rem;
+}
+
+.availability-filters {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.availability-filters label {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.4rem;
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
+.availability-filters input {
+  min-block-size: 2.75rem;
+  min-inline-size: 0;
+  padding-block: 0.65rem;
+  padding-inline: 0.75rem;
+  color: var(--brand-color-text);
+  background: var(--brand-color-background);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-control, 0.65rem);
+}
+
+.availability-results__heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-block-start: 2rem;
+}
+
+.availability-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.availability-slots li {
+  display: grid;
+  gap: 0.4rem;
+  padding: 1rem;
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-control, 0.65rem);
+}
+
+.availability-slots time {
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
+.availability-slots small {
+  color: var(--brand-color-muted);
+}
+
+.availability-slots .wlbp-button {
+  min-block-size: 2.75rem;
+  margin-block-start: 0.4rem;
+}
+
 @keyframes booking-preview-arrive {
   from {
     opacity: 0.92;
@@ -473,9 +567,14 @@ input:focus-visible {
   }
 
   .client-main > .client-intro,
-  .client-main > .booking-preview {
+  .client-main > .booking-preview,
+  .client-main > .availability-picker {
     inline-size: 100%;
     max-inline-size: 100%;
+  }
+
+  .availability-filters {
+    grid-template-columns: 1fr;
   }
 }
 
