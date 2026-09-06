@@ -1,10 +1,72 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
   parseTenantChoicesV1,
 } from "./index.js";
+
+describe("assignment candidate DTO", () => {
+  it.each(["fixed_staff", "customer_choice", "any_available", "round_robin"])(
+    "parses the customer-safe %s assignment mode",
+    (assignmentMode) => {
+      expect(
+        parseAssignmentCandidatesV1([
+          {
+            assignmentMode,
+            candidateRank: 1,
+            resourceId: null,
+            resourceName: null,
+            staffId: "staff-a",
+            staffName: "Alex",
+          },
+        ]),
+      ).toEqual([
+        {
+          assignmentMode,
+          candidateRank: 1,
+          resourceId: null,
+          resourceName: null,
+          staffId: "staff-a",
+          staffName: "Alex",
+        },
+      ]);
+    },
+  );
+
+  it("rejects internal fairness inputs and notes from the public projection", () => {
+    expect(() =>
+      parseAssignmentCandidatesV1([
+        {
+          assignmentMode: "round_robin",
+          candidateRank: 1,
+          internalNotes: "must-not-pass",
+          offeredHoursPerWeek: 40,
+          resourceId: null,
+          resourceName: null,
+          staffId: "staff-a",
+          staffName: "Alex",
+        },
+      ]),
+    ).toThrow("Assignment candidate");
+  });
+
+  it("requires exactly one staff or resource identity", () => {
+    expect(() =>
+      parseAssignmentCandidatesV1([
+        {
+          assignmentMode: "customer_choice",
+          candidateRank: 1,
+          resourceId: "resource-a",
+          resourceName: "Room A",
+          staffId: "staff-a",
+          staffName: "Alex",
+        },
+      ]),
+    ).toThrow("Assignment candidate");
+  });
+});
 
 describe("tenant isolation DTOs", () => {
   it("parses a customer-safe bilingual catalog item", () => {

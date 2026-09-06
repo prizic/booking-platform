@@ -10,6 +10,47 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      deactivate_resource_v1: {
+        Args: {
+          p_reason: string;
+          p_replacement_resource_id: string;
+          p_request_id: string;
+          p_resolution: string;
+          p_resource_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          outcome: string;
+          remaining_allocations: number;
+          resource_id: string;
+        }[];
+      };
+      deactivate_staff_v1: {
+        Args: {
+          p_reason: string;
+          p_replacement_staff_id: string;
+          p_request_id: string;
+          p_resolution: string;
+          p_staff_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          outcome: string;
+          remaining_allocations: number;
+          staff_id: string;
+        }[];
+      };
+      get_assignment_candidates_v1: {
+        Args: { p_location_id: string; p_service_id: string };
+        Returns: {
+          assignment_mode: string;
+          candidate_rank: number;
+          resource_id: string;
+          resource_name: string;
+          staff_id: string;
+          staff_name: string;
+        }[];
+      };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -76,41 +117,6 @@ export type Database = {
           tenant_id: string;
         }[];
       };
-      get_assignment_candidates_v1: {
-        Args: { p_location_id: string; p_service_id: string };
-        Returns: {
-          assignment_mode: string;
-          resource_id: string | null;
-          resource_name: string | null;
-          staff_id: string | null;
-          staff_name: string | null;
-        }[];
-      };
-      deactivate_staff_v1: {
-        Args: {
-          p_reason: string;
-          p_replacement_staff_id: string | null;
-          p_request_id: string;
-          p_resolution: string;
-          p_staff_id: string;
-          p_tenant_id: string;
-        };
-        Returns: { outcome: string; remaining_allocations: number; staff_id: string }[];
-      };
-      deactivate_resource_v1: {
-        Args: {
-          p_reason: string;
-          p_request_id: string;
-          p_resolution: string;
-          p_resource_id: string;
-          p_tenant_id: string;
-        };
-        Returns: {
-          outcome: string;
-          remaining_allocations: number;
-          resource_id: string;
-        }[];
-      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {
@@ -146,6 +152,38 @@ export type Database = {
           instance_id: string;
           published_brand_revision: number;
           tenant_id: string;
+        }[];
+      };
+      set_resource_location_eligibility_v1: {
+        Args: {
+          p_eligible: boolean;
+          p_location_id: string;
+          p_reason: string;
+          p_request_id: string;
+          p_resource_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          eligible: boolean;
+          location_id: string;
+          resource_id: string;
+        }[];
+      };
+      set_staff_service_location_eligibility_v1: {
+        Args: {
+          p_eligible: boolean;
+          p_location_id: string;
+          p_reason: string;
+          p_request_id: string;
+          p_service_id: string;
+          p_staff_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          eligible: boolean;
+          location_id: string;
+          service_id: string;
+          staff_id: string;
         }[];
       };
     };
