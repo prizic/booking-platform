@@ -13,6 +13,7 @@ import {
   type TeamResourcesMessageKey,
 } from "../../_lib/team-resources-copy";
 import type { TeamResourcesWorkspaceState } from "../../_lib/team-resources-workspace";
+import type { TeamResourcesRetry } from "../../_lib/team-resources-retry";
 import { ValidatedForm } from "./validated-form";
 
 type ManagementAction = (formData: FormData) => Promise<void>;
@@ -31,6 +32,7 @@ export interface TeamResourcesActions {
 interface TeamResourcesViewProps {
   readonly actions: TeamResourcesActions;
   readonly locale: Locale;
+  readonly retry?: TeamResourcesRetry;
   readonly result?:
     | "backend-unavailable"
     | "cancelled"
@@ -157,11 +159,24 @@ function ItemFacts({
   );
 }
 
-function HiddenContext({ locale }: { readonly locale: Locale }) {
+function HiddenContext({
+  formId,
+  locale,
+  retry,
+}: {
+  readonly formId: string;
+  readonly locale: Locale;
+  readonly retry: TeamResourcesRetry | undefined;
+}) {
   return (
     <>
       <input name="locale" type="hidden" value={locale} />
-      <input name="requestId" type="hidden" value={crypto.randomUUID()} />
+      <input name="formId" type="hidden" value={formId} />
+      <input
+        name="requestId"
+        type="hidden"
+        value={retry?.formId === formId ? retry.requestId : crypto.randomUUID()}
+      />
     </>
   );
 }
@@ -255,10 +270,12 @@ function StaffForm({
   action,
   item,
   locale,
+  retry,
 }: {
   readonly action: ManagementAction;
   readonly item?: StaffResourceWorkspaceItemV1;
   readonly locale: Locale;
+  readonly retry: TeamResourcesRetry | undefined;
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
@@ -269,7 +286,7 @@ function StaffForm({
         {item === undefined ? message("addStaff") : message("editStaff")}
       </summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="staffId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
         <label className="team-resource-field" htmlFor={`${prefix}-name`}>
@@ -337,13 +354,16 @@ function ResourceTypeForm({
   action,
   locale,
   resourceType,
+  retry,
 }: {
   readonly action: ManagementAction;
   readonly locale: Locale;
   readonly resourceType?: ResourceTypeChoiceV1;
+  readonly retry: TeamResourcesRetry | undefined;
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
+  const prefix = `resource-type-${resourceType?.id ?? "new"}`;
   return (
     <details className="team-resource-editor">
       <summary>
@@ -352,7 +372,7 @@ function ResourceTypeForm({
           : message("editResourceType")}
       </summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="resourceTypeId" type="hidden" value={resourceType?.id ?? ""} />
         <input
           name="expectedRevision"
@@ -406,11 +426,13 @@ function ResourceForm({
   item,
   locale,
   resourceTypes,
+  retry,
 }: {
   readonly action: ManagementAction;
   readonly item?: StaffResourceWorkspaceItemV1;
   readonly locale: Locale;
   readonly resourceTypes: readonly ResourceTypeChoiceV1[];
+  readonly retry: TeamResourcesRetry | undefined;
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
@@ -421,7 +443,7 @@ function ResourceForm({
         {item === undefined ? message("addResource") : message("editResource")}
       </summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="resourceId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
         <ChoiceField
@@ -490,11 +512,13 @@ function RequirementForm({
   action,
   locale,
   resourceTypes,
+  retry,
   services,
 }: {
   readonly action: ManagementAction;
   readonly locale: Locale;
   readonly resourceTypes: readonly ResourceTypeChoiceV1[];
+  readonly retry: TeamResourcesRetry | undefined;
   readonly services: readonly StaffResourceChoiceV1[];
 }) {
   const message = (key: TeamResourcesMessageKey) =>
@@ -503,7 +527,7 @@ function RequirementForm({
     <details className="team-resource-editor">
       <summary>{message("resourceRequirement")}</summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId="resource-requirement" locale={locale} retry={retry} />
         <ChoiceField
           choices={services}
           id="requirement-service"
@@ -542,12 +566,14 @@ function EligibilityForm({
   item,
   locale,
   locations,
+  retry,
   services,
 }: {
   readonly action: ManagementAction;
   readonly item: StaffResourceWorkspaceItemV1;
   readonly locale: Locale;
   readonly locations: readonly StaffResourceChoiceV1[];
+  readonly retry: TeamResourcesRetry | undefined;
   readonly services: readonly StaffResourceChoiceV1[];
 }) {
   const message = (key: TeamResourcesMessageKey) =>
@@ -561,7 +587,7 @@ function EligibilityForm({
           : message("resourceLocationEligibility")}
       </summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input
           name={item.kind === "staff" ? "staffId" : "resourceId"}
           type="hidden"
@@ -607,11 +633,13 @@ function DeactivationForm({
   item,
   locale,
   replacements,
+  retry,
 }: {
   readonly action: ManagementAction;
   readonly item: StaffResourceWorkspaceItemV1;
   readonly locale: Locale;
   readonly replacements: readonly StaffResourceWorkspaceItemV1[];
+  readonly retry: TeamResourcesRetry | undefined;
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
@@ -622,7 +650,7 @@ function DeactivationForm({
     <details className="team-resource-editor team-resource-editor--danger">
       <summary>{message("deactivate")}</summary>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
-        <HiddenContext locale={locale} />
+        <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input
           name={item.kind === "staff" ? "staffId" : "resourceId"}
           type="hidden"
@@ -686,6 +714,7 @@ function ItemList({
   locale,
   locations,
   resourceTypes,
+  retry,
   services,
 }: {
   readonly action: ManagementAction;
@@ -699,6 +728,7 @@ function ItemList({
   readonly locale: Locale;
   readonly locations: readonly StaffResourceChoiceV1[];
   readonly resourceTypes: readonly ResourceTypeChoiceV1[];
+  readonly retry: TeamResourcesRetry | undefined;
   readonly services: readonly StaffResourceChoiceV1[];
 }) {
   const message = (key: TeamResourcesMessageKey) =>
@@ -727,13 +757,19 @@ function ItemList({
             <ItemFacts item={item} locale={locale} />
             {canEdit ? (
               item.kind === "staff" ? (
-                <StaffForm action={editAction} item={item} locale={locale} />
+                <StaffForm
+                  action={editAction}
+                  item={item}
+                  locale={locale}
+                  retry={retry}
+                />
               ) : (
                 <ResourceForm
                   action={editAction}
                   item={item}
                   locale={locale}
                   resourceTypes={resourceTypes}
+                  retry={retry}
                 />
               )
             ) : null}
@@ -743,6 +779,7 @@ function ItemList({
                 item={item}
                 locale={locale}
                 locations={locations}
+                retry={retry}
                 services={services}
               />
             ) : null}
@@ -759,6 +796,7 @@ function ItemList({
                     (item.kind === "staff" ||
                       candidate.resourceTypeId === item.resourceTypeId),
                 )}
+                retry={retry}
               />
             ) : null}
           </article>
@@ -786,6 +824,7 @@ export function TeamResourcesView({
   actions,
   locale,
   result,
+  retry,
   state,
 }: TeamResourcesViewProps) {
   const message = (key: TeamResourcesMessageKey) =>
@@ -824,28 +863,39 @@ export function TeamResourcesView({
         <p>{message("createEditUnavailable")}</p>
         <div className="team-resource-form-grid">
           {canManageStaff ? (
-            <StaffForm action={actions.saveStaffProfile} locale={locale} />
+            <StaffForm
+              action={actions.saveStaffProfile}
+              locale={locale}
+              retry={retry}
+            />
           ) : null}
           {canManageCatalog ? (
             <>
-              <ResourceTypeForm action={actions.saveResourceType} locale={locale} />
+              <ResourceTypeForm
+                action={actions.saveResourceType}
+                locale={locale}
+                retry={retry}
+              />
               {state.workspace.resourceTypes.map((resourceType) => (
                 <ResourceTypeForm
                   action={actions.saveResourceType}
                   key={resourceType.id}
                   locale={locale}
                   resourceType={resourceType}
+                  retry={retry}
                 />
               ))}
               <ResourceForm
                 action={actions.saveResource}
                 locale={locale}
                 resourceTypes={state.workspace.resourceTypes}
+                retry={retry}
               />
               <RequirementForm
                 action={actions.setResourceRequirement}
                 locale={locale}
                 resourceTypes={state.workspace.resourceTypes}
+                retry={retry}
                 services={state.workspace.services}
               />
             </>
@@ -871,6 +921,7 @@ export function TeamResourcesView({
             locale={locale}
             locations={state.workspace.locations}
             resourceTypes={state.workspace.resourceTypes}
+            retry={retry}
             services={state.workspace.services}
           />
         </Surface>
@@ -892,6 +943,7 @@ export function TeamResourcesView({
             locale={locale}
             locations={state.workspace.locations}
             resourceTypes={state.workspace.resourceTypes}
+            retry={retry}
             services={state.workspace.services}
           />
         </Surface>

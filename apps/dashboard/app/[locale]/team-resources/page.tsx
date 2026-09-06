@@ -9,6 +9,7 @@ import { getDashboardMessage } from "../../_lib/copy";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { getTeamResourcesMessage } from "../../_lib/team-resources-copy";
 import { getTeamResourcesMetadata } from "../../_lib/team-resources-metadata";
+import { parseTeamResourcesRetry } from "../../_lib/team-resources-retry";
 import {
   loadTeamResourcesWorkspace,
   type TeamResourcesWorkspaceState,
@@ -31,7 +32,11 @@ export const fetchCache = "force-no-store";
 
 type TeamResourcesPageProps = {
   readonly params: Promise<{ locale: Locale }>;
-  readonly searchParams: Promise<{ result?: string }>;
+  readonly searchParams: Promise<{
+    result?: string;
+    retryForm?: string;
+    retryId?: string;
+  }>;
 };
 
 export async function generateMetadata({ params }: TeamResourcesPageProps) {
@@ -55,6 +60,7 @@ export default async function TeamResourcesPage({
 }: TeamResourcesPageProps) {
   const { locale } = await params;
   const query = await searchParams;
+  const retry = parseTeamResourcesRetry(query.retryForm, query.retryId);
   const state = await loadPageState(locale);
   const dashboardMessage = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
@@ -127,6 +133,7 @@ export default async function TeamResourcesPage({
             setStaffEligibility: setStaffEligibilityAction,
           }}
           locale={locale}
+          {...(retry === undefined ? {} : { retry })}
           {...(query.result === "saved" ||
           query.result === "cancelled" ||
           query.result === "deactivated" ||

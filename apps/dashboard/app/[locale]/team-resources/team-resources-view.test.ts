@@ -88,9 +88,11 @@ const workspace: StaffResourceWorkspaceV1 = {
 
 describe("Team and resources workspace view", () => {
   it("renders labelled creation, revision-safe edit, and eligibility forms", () => {
+    const retryRequestId = "a9000000-0000-4000-8000-000000000001";
     const html = renderToStaticMarkup(
       createElement(TeamResourcesView, {
         locale: "en",
+        retry: { formId: "new-staff", requestId: retryRequestId },
         state: {
           context: {
             aal2: true,
@@ -153,6 +155,10 @@ describe("Team and resources workspace view", () => {
       .filter((requestId): requestId is string => requestId !== undefined);
     expect(requestIds).toHaveLength(html.match(/<form/gu)?.length ?? 0);
     expect(new Set(requestIds).size).toBe(requestIds.length);
+    expect(requestIds.filter((requestId) => requestId === retryRequestId)).toEqual([
+      retryRequestId,
+    ]);
+    expect(html).toContain('type="hidden" name="formId" value="new-staff"');
     expect(requestIds.every((requestId) => /^[0-9a-f-]{36}$/u.test(requestId))).toBe(
       true,
     );

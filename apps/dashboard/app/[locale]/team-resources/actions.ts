@@ -7,6 +7,10 @@ import { redirect } from "next/navigation";
 
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import {
+  getTeamResourcesResultUrl,
+  parseTeamResourcesRetry,
+} from "../../_lib/team-resources-retry";
+import {
   executeResourceDeactivation,
   executeResourceLocationEligibility,
   executeResourceRequirement,
@@ -27,11 +31,15 @@ function requestIdFrom(formData: FormData): string {
   return typeof requestId === "string" ? requestId : "";
 }
 
+function retryFrom(formData: FormData) {
+  return parseTeamResourcesRetry(formData.get("formId"), formData.get("requestId"));
+}
+
 export async function deactivateStaffAction(formData: FormData): Promise<never> {
   const locale = localeFrom(formData);
   const request = await loadDashboardRequestAccess(locale);
   if (request.source === null || request.state.kind !== "ready") {
-    redirect(resultUrl(locale, "not-authorized"));
+    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
   }
 
   const result = await executeStaffDeactivation(
@@ -47,7 +55,11 @@ export async function deactivateStaffAction(formData: FormData): Promise<never> 
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
   redirect(
-    resultUrl(locale, result.ok ? result.outcome : result.code.replaceAll("_", "-")),
+    getTeamResourcesResultUrl(
+      locale,
+      result.ok ? result.outcome : result.code.replaceAll("_", "-"),
+      retryFrom(formData),
+    ),
   );
 }
 
@@ -55,7 +67,7 @@ export async function deactivateResourceAction(formData: FormData): Promise<neve
   const locale = localeFrom(formData);
   const request = await loadDashboardRequestAccess(locale);
   if (request.source === null || request.state.kind !== "ready") {
-    redirect(resultUrl(locale, "not-authorized"));
+    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
   }
 
   const result = await executeResourceDeactivation(
@@ -71,12 +83,12 @@ export async function deactivateResourceAction(formData: FormData): Promise<neve
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
   redirect(
-    resultUrl(locale, result.ok ? result.outcome : result.code.replaceAll("_", "-")),
+    getTeamResourcesResultUrl(
+      locale,
+      result.ok ? result.outcome : result.code.replaceAll("_", "-"),
+      retryFrom(formData),
+    ),
   );
-}
-
-function resultUrl(locale: Locale, result: string): string {
-  return `/${locale}/team-resources?result=${result}`;
 }
 
 async function withVerifiedContext(
@@ -94,7 +106,7 @@ async function withVerifiedContext(
   const locale = localeFrom(formData);
   const request = await loadDashboardRequestAccess(locale);
   if (request.source === null || request.state.kind !== "ready") {
-    redirect(resultUrl(locale, "not-authorized"));
+    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
   }
 
   const result = await command(
@@ -102,7 +114,13 @@ async function withVerifiedContext(
     requestIdFrom(formData),
   );
   if (result.ok) revalidatePath(`/${locale}/team-resources`);
-  redirect(resultUrl(locale, result.ok ? "saved" : result.code.replaceAll("_", "-")));
+  redirect(
+    getTeamResourcesResultUrl(
+      locale,
+      result.ok ? "saved" : result.code.replaceAll("_", "-"),
+      retryFrom(formData),
+    ),
+  );
 }
 
 export async function saveStaffProfileAction(formData: FormData): Promise<never> {
