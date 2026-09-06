@@ -117,6 +117,38 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_staff_resource_choices_v1: {
+        Args: { p_locale: string; p_tenant_id: string };
+        Returns: {
+          choice_id: string;
+          choice_key: string;
+          choice_kind: string;
+          choice_name: string;
+          exclusive: boolean;
+          revision: number;
+        }[];
+      };
+      get_staff_resource_workspace_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          future_allocation_count: number;
+          internal_notes: string;
+          item_id: string;
+          item_key: string;
+          item_kind: string;
+          location_ids: string[];
+          membership_id: string;
+          name: string;
+          offered_hours_per_week: number;
+          public_bio: string;
+          resource_type_id: string;
+          resource_type_name: string;
+          revision: number;
+          service_ids: string[];
+          status: string;
+          tenant_id: string;
+        }[];
+      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {
