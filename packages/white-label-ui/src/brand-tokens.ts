@@ -145,6 +145,77 @@ const safeEasingPattern =
 const fontFamilyPartPattern =
   /^(?:[\p{L}\p{N}][\p{L}\p{N} -]*|"[\p{L}\p{N}][\p{L}\p{N} -]*"|'[\p{L}\p{N}][\p{L}\p{N} -]*')$/u;
 
+/**
+ * Fonts shipped by the Client and Dashboard. Generic families remain valid
+ * only as the final fallback; a tenant cannot make rendering depend on an
+ * operating-system-installed face or a remote font host.
+ */
+export const shippedFontFamilies = Object.freeze({
+  Inter: Object.freeze({ minWeight: 100, maxWeight: 900 }),
+  "Noto Sans Arabic": Object.freeze({ minWeight: 100, maxWeight: 900 }),
+  "Noto Naskh Arabic": Object.freeze({ minWeight: 400, maxWeight: 700 }),
+});
+
+const genericFontFamilies = new Set([
+  "cursive",
+  "fantasy",
+  "monospace",
+  "sans-serif",
+  "serif",
+  "system-ui",
+]);
+
+function unquoteFontFamily(value: string): string {
+  return value.replace(/^(?:"([\s\S]*)"|'([\s\S]*)')$/u, "$1$2");
+}
+
+function fontFamilyNames(value: string): string[] {
+  return value
+    .split(",")
+    .map((part) => unquoteFontFamily(part.trim()))
+    .filter((part) => !genericFontFamilies.has(part));
+}
+
+function validateShippedFontFamily(
+  value: unknown,
+  label: string,
+  weights: readonly unknown[],
+  issues: string[],
+): void {
+  if (typeof value !== "string" || !isFontFamily(value)) return;
+  const parts = value.split(",").map((part) => part.trim());
+  const genericIndex = parts.findIndex((part) =>
+    genericFontFamilies.has(unquoteFontFamily(part)),
+  );
+  if (genericIndex !== -1 && genericIndex !== parts.length - 1) {
+    issues.push(`${label} must place generic fallbacks last`);
+    return;
+  }
+  const names = fontFamilyNames(value);
+  const primary = names[0];
+  const undeclared = names.filter((name) => !(name in shippedFontFamilies));
+  if (undeclared.length > 0) {
+    issues.push(
+      `${label} contains undeclared font family fallback(s): ${undeclared.join(", ")}`,
+    );
+    return;
+  }
+  if (!primary || !(primary in shippedFontFamilies)) {
+    issues.push(`${label} must begin with a shipped font family`);
+    return;
+  }
+  const range = shippedFontFamilies[primary as keyof typeof shippedFontFamilies];
+  for (const weight of weights) {
+    if (typeof weight !== "string" || !/^[1-9]00$/u.test(weight)) continue;
+    const numericWeight = Number(weight);
+    if (numericWeight < range.minWeight || numericWeight > range.maxWeight) {
+      issues.push(
+        `${label} does not provide the requested ${weight} weight for ${primary}`,
+      );
+    }
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -354,6 +425,22 @@ export function validateBrandTokens(value: unknown): readonly string[] {
         issues,
       );
     }
+    if (isRecord(typography.weight)) {
+      const weights = Object.values(typography.weight);
+      for (const familyKey of [
+        "bodyFamily",
+        "displayFamily",
+        "arabicBodyFamily",
+        "arabicDisplayFamily",
+      ] as const) {
+        validateShippedFontFamily(
+          typography[familyKey],
+          `typography.${familyKey}`,
+          weights,
+          issues,
+        );
+      }
+    }
   }
 
   for (const [recordValue, keys, label, pattern, expected] of [
@@ -480,8 +567,8 @@ export const neutralBrandTokens: BrandTokens = parseBrandTokens({
     focus: "#0b57d0",
   },
   typography: {
-    bodyFamily: 'system-ui, "Noto Sans Arabic", sans-serif',
-    displayFamily: 'system-ui, "Noto Sans Arabic", sans-serif',
+    bodyFamily: 'Inter, "Noto Sans Arabic", sans-serif',
+    displayFamily: 'Inter, "Noto Sans Arabic", sans-serif',
     arabicBodyFamily: '"Noto Sans Arabic", sans-serif',
     arabicDisplayFamily: '"Noto Sans Arabic", sans-serif',
     size: {

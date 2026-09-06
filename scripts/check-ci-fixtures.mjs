@@ -19,6 +19,8 @@ try {
   const ignoredNames = new Set([
     ".next",
     ".next-warm",
+    ".next-warm-client",
+    ".next-warm-dashboard",
     ".turbo",
     "coverage",
     "dist",
