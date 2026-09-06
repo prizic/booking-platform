@@ -145,6 +145,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
     "navBookings",
     "navCustomers",
     "navTeamResources",
+    "navAvailability",
     "navBrand",
   ] as const;
 
@@ -178,6 +179,8 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                   ? `/${locale}/brand-preview`
                   : key === "navTeamResources"
                     ? `/${locale}/team-resources`
+                    : key === "navAvailability"
+                      ? `/${locale}/availability`
                     : `/${locale}#${key}`
               }
               aria-current={index === 0 ? "page" : undefined}

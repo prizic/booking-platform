@@ -52,7 +52,18 @@ export type DashboardMessageKey =
   | "locationsLabel"
   | "capabilitiesLabel"
   | "mfaVerified"
-  | "mfaNotVerified";
+  | "mfaNotVerified"
+  | "navAvailability"
+  | "availabilityTitle"
+  | "availabilitySummary"
+  | "scheduleEditorTitle"
+  | "scheduleDayLabel"
+  | "scheduleStartLabel"
+  | "scheduleEndLabel"
+  | "scheduleSave"
+  | "scheduleSaved"
+  | "scheduleSaveError"
+  | "scheduleUnavailable";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
@@ -112,6 +123,20 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     capabilitiesLabel: "Current capabilities",
     mfaVerified: "MFA assurance verified",
     mfaNotVerified: "MFA step-up not active",
+    navAvailability: "Availability",
+    availabilityTitle: "Working schedules",
+    availabilitySummary:
+      "Configure weekly hours, breaks, closures, and bounded booking rules in your location timezone.",
+    scheduleEditorTitle: "Add a weekly working interval",
+    scheduleDayLabel: "Day of week (0 Sunday – 6 Saturday)",
+    scheduleStartLabel: "Start minute",
+    scheduleEndLabel: "End minute",
+    scheduleSave: "Save schedule",
+    scheduleSaved: "Schedule saved.",
+    scheduleSaveError:
+      "The schedule could not be saved. Check the values or reload for a newer revision.",
+    scheduleUnavailable:
+      "Schedule editing is unavailable until a verified tenant workspace is selected.",
   },
   ar: {
     eyebrow: "مساحة عمل فريق المستأجر",
@@ -168,6 +193,19 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     capabilitiesLabel: "الصلاحيات الحالية",
     mfaVerified: "تم التحقق من ضمان المصادقة متعددة العوامل",
     mfaNotVerified: "التحقق الإضافي متعدد العوامل غير نشط",
+    navAvailability: "التوافر",
+    availabilityTitle: "جداول العمل",
+    availabilitySummary:
+      "اضبط ساعات العمل الأسبوعية والاستراحات والإغلاقات وقواعد الحجز ضمن المنطقة الزمنية للموقع.",
+    scheduleEditorTitle: "إضافة فترة عمل أسبوعية",
+    scheduleDayLabel: "يوم الأسبوع (0 الأحد – 6 السبت)",
+    scheduleStartLabel: "دقيقة البداية",
+    scheduleEndLabel: "دقيقة النهاية",
+    scheduleSave: "حفظ الجدول",
+    scheduleSaved: "تم حفظ الجدول.",
+    scheduleSaveError:
+      "تعذر حفظ الجدول. تحقق من القيم أو أعد التحميل للحصول على إصدار أحدث.",
+    scheduleUnavailable: "تحرير الجدول غير متاح حتى يتم اختيار مساحة مستأجر موثقة.",
   },
 };
 

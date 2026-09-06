@@ -216,6 +216,16 @@ One project per environment, shared row-based tenancy, explicit schemas:
 
 Data domains: tenancy · white label · catalog · staff/resources · availability · customers · booking · commerce · messaging · calendar · API/integrations · control plane · governance. Sensitive intake answers, staff notes, and booking notes live in separately permissioned domains so ordinary calendar views do not expose them.
 
+Schedule configuration is normalized under `app.schedule_scopes`,
+`weekly_schedules`, `schedule_breaks`, `schedule_exceptions`, `time_off`,
+`holidays`, `blackouts`, `resource_maintenance_blocks`, and
+`schedule_policy_overrides`. Recurring rules use local civil minutes plus an
+IANA timezone; UTC instants and the original timezone are retained on committed
+allocations. The Dashboard writes through the invoker
+`api_v1.save_schedule_config_v1` with compare-and-swap revisions and reads a
+scoped workspace projection. Anonymous Client callers never receive these raw
+rows; issue #10 owns the derived availability projection.
+
 Key relationships: a tenant has memberships, instances, services, resources, and customers; a booking references a service and a customer, allocates reservations against resources, and records immutable booking events.
 
 **Every tenant-owned row — including joins, events, audit rows, outbox rows, and idempotency records — has `tenant_id NOT NULL`.** `tenant_id` participates in unique constraints, and composite foreign keys `(tenant_id, parent_id) → parent(tenant_id, id)` prevent cross-tenant relationships even from privileged code.

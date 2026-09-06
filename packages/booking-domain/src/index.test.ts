@@ -7,6 +7,10 @@ import {
   createMoney,
   createTimeRange,
   rangesOverlap,
+  applyScheduleConstraints,
+  createWeeklySchedule,
+  resolveSchedulePolicy,
+  type SchedulePolicyOverrides,
   withBuffers,
 } from "./index.js";
 
@@ -55,5 +59,49 @@ describe("booking state transitions", () => {
     expect(canTransitionBooking("completed", "confirmed")).toBe(true);
     expect(canTransitionBooking("no_show", "checked_in")).toBe(true);
     expect(canTransitionBooking("no_show", "completed")).toBe(true);
+  });
+});
+
+describe("civil-time schedule rules", () => {
+  it("subtracts breaks and keeps adjacent working intervals valid", () => {
+    const schedule = createWeeklySchedule({
+      dayOfWeek: 1,
+      intervals: [{ startMinute: 9 * 60, endMinute: 17 * 60 }],
+      breaks: [{ startMinute: 12 * 60, endMinute: 13 * 60 }],
+      timeZone: "America/New_York",
+    });
+
+    expect(applyScheduleConstraints(schedule, [])).toEqual([
+      { startMinute: 540, endMinute: 720 },
+      { startMinute: 780, endMinute: 1020 },
+    ]);
+  });
+
+  it("rejects overlapping intervals instead of normalizing them", () => {
+    expect(() =>
+      createWeeklySchedule({
+        dayOfWeek: 1,
+        intervals: [
+          { startMinute: 9 * 60, endMinute: 12 * 60 },
+          { startMinute: 11 * 60, endMinute: 13 * 60 },
+        ],
+        breaks: [],
+        timeZone: "America/New_York",
+      }),
+    ).toThrow("overlap");
+  });
+
+  it("resolves policy overrides from least to most specific scope", () => {
+    const overrides: SchedulePolicyOverrides = {
+      tenant: { minimumNoticeMinutes: 60, horizonDays: 90 },
+      location: { minimumNoticeMinutes: 240 },
+      service: { minimumNoticeMinutes: 120, slotIntervalMinutes: 30 },
+    };
+
+    expect(resolveSchedulePolicy(overrides)).toMatchObject({
+      minimumNoticeMinutes: 120,
+      horizonDays: 90,
+      slotIntervalMinutes: 30,
+    });
   });
 });

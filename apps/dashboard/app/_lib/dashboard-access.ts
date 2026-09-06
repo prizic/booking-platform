@@ -13,6 +13,13 @@ export interface DashboardDataSource {
   getVerifiedIdentity(): Promise<VerifiedIdentity | null>;
   listTenantChoices(): Promise<unknown>;
   resolveTenant(hostname: string): Promise<ResolvePublicTenantV1Response | null>;
+  getScheduleWorkspace?: (tenantId: string, locationId?: string) => Promise<unknown>;
+  saveScheduleConfig?: (request: {
+    tenantId: string;
+    operation: string;
+    payload: Readonly<Record<string, unknown>>;
+    expectedRevision: number | null;
+  }) => Promise<unknown>;
 }
 
 export type DashboardAccessState =
