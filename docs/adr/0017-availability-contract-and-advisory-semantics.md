@@ -34,6 +34,10 @@ contract without widening the backend contract range in `platform-contract.json`
    private. Empty results require one of
    `outside_booking_window`, `policy_restricted`, `no_matching_availability`, or
    `capacity_unavailable`; non-empty results carry no reason.
+   Interchangeable exclusive resources yield one public offer per start/end
+   pair with rank 1. Appointments retain separate offers for each public staff
+   ID. Issue #11 selects the actual resource during atomic booking revalidation;
+   an availability offer never identifies or reserves that resource.
 3. Public responses never identify a conflicting booking or customer and never
    reveal private schedule, time-off, maintenance, fairness, or provider detail.
    Operator diagnostics use a separately authorized surface rather than widening

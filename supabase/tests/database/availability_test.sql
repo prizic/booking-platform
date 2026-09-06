@@ -50,6 +50,27 @@ select is(
   30,
   'duration, opening hours, staff schedule, and 15-minute interval produce bounded slots'
 );
+savepoint staff_choices;
+insert into app.staff_profiles(id,tenant_id,public_name)
+values ('a8000000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','Second available staff');
+insert into app.staff_services(tenant_id,staff_id,service_id)
+values ('a0000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000002','a7200000-0000-0000-0000-000000000001');
+insert into app.staff_locations(tenant_id,staff_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001');
+insert into app.staff_service_locations(tenant_id,staff_id,service_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000002','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001');
+insert into app.schedule_scopes(id,tenant_id,scope_kind,location_id,staff_id,time_zone)
+values ('a8100000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','staff','a5000000-0000-0000-0000-000000000001','a8000000-0000-0000-0000-000000000002','America/New_York');
+insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute)
+values ('a8200000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000002',1,540,1020);
+select is(
+  (select array[count(*)::integer,count(distinct staff_id)::integer,max(candidate_rank)]
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 13:45+00',1,'America/New_York')
+    where result_kind='slot' and allocation_kind='appointment'),
+  array[2,2,2],
+  'appointment offers preserve distinct public staff choices at the same time'
+);
+rollback to savepoint staff_choices;
 select is(
   (select array_agg(a.slot_start order by requested.window_start,a.slot_start)
     from (values ('2026-09-07 13:01+00'::timestamptz),('2026-09-07 13:00:30+00'::timestamptz)) requested(window_start)
@@ -174,6 +195,21 @@ select is(
   (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
   14,
   'exclusive-resource slots expose their kind while resource identity remains private'
+);
+insert into app.resources(id,tenant_id,resource_type_id,key,public_name)
+values ('a8500000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8400000-0000-0000-0000-000000000001','room-two','Room two');
+insert into app.resource_locations(tenant_id,resource_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a8500000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001');
+insert into app.schedule_scopes(id,tenant_id,scope_kind,location_id,resource_id,time_zone)
+values ('a8600000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','resource','a5000000-0000-0000-0000-000000000001','a8500000-0000-0000-0000-000000000002','America/New_York');
+insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute)
+values ('a8700000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8600000-0000-0000-0000-000000000002',1,540,1020);
+select is(
+  (select array[count(*)::integer,count(distinct (slot_start,slot_end,allocation_kind))::integer,max(candidate_rank)]
+    from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000002','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 14:00+00','2026-09-07 14:45+00',1,'America/New_York')
+    where result_kind='slot' and allocation_kind='exclusive_resource' and staff_id is null),
+  array[1,1,1],
+  'two interchangeable resources produce one private-identity public slot with deterministic rank'
 );
 insert into app.catalog_services(id,tenant_id,key,category_id)
 values ('a7200000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','group-session','a7100000-0000-0000-0000-000000000001');

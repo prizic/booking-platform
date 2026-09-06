@@ -425,12 +425,16 @@ begin
             extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer,
             extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer,'[)'))))
   ), ranked as (
-    select v.*,row_number() over(partition by v.starts_at order by
+    select v.*,row_number() over(partition by v.starts_at,v.ends_at order by
       (select count(*) from app.assignment_allocations a where a.tenant_id=v_tenant_id and a.staff_id=v.staff_id and a.state in ('confirmed','completed')),
       coalesce(v.staff_id,v.resource_id))::integer as slot_rank
     from valid v
   ), bounded as (
-    select * from ranked order by starts_at,slot_rank,staff_id limit 500
+    -- Resource identities are private: interchangeable candidates are one
+    -- public offer. Issue #11 selects the actual resource transactionally.
+    -- Appointments keep every distinct public staff choice.
+    select * from ranked where resource_id is null or slot_rank=1
+    order by starts_at,slot_rank,staff_id limit 500
   ), rows as (
     select 1::integer,'slot'::text,
       (select service_rule.allocation_kind from service_rule)::text,
