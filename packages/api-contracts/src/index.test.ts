@@ -18,17 +18,25 @@ describe("public availability v1", () => {
   it("normalizes PostgreSQL timestamptz fields at the response transport boundary", () => {
     expect(
       normalizeAvailabilityV1TransportRow({
-        advisory_as_of: "2026-11-01T05:00:00+00:00",
+        advisory_as_of: "2026-11-01T05:00:00.123456+03:30",
         advisory_until: "2026-11-01T05:00:30+00:00",
         slot_end: "2026-11-01T06:30:00+00:00",
         slot_start: "2026-11-01T05:30:00+00:00",
       }),
     ).toEqual({
-      advisory_as_of: "2026-11-01T05:00:00.000Z",
+      advisory_as_of: "2026-11-01T01:30:00.123Z",
       advisory_until: "2026-11-01T05:00:30.000Z",
       slot_end: "2026-11-01T06:30:00.000Z",
       slot_start: "2026-11-01T05:30:00.000Z",
     });
+  });
+
+  it("rejects impossible PostgreSQL timestamptz calendar components", () => {
+    expect(() =>
+      normalizeAvailabilityV1TransportRow({
+        slot_start: "2026-02-30T05:30:00+00:00",
+      }),
+    ).toThrow("PostgreSQL timestamptz");
   });
 
   it("accepts only a bounded, exact request shape", () => {

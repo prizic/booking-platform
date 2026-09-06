@@ -664,7 +664,7 @@ const availabilityTransportTimestampFields = [
 ] as const;
 
 const postgrestTimestamptzPattern =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u;
+  /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))$/u;
 
 function requireUtcInstant(value: unknown): string {
   const instant = requireNonEmptyString(value);
@@ -677,11 +677,54 @@ function requireUtcInstant(value: unknown): string {
 
 function normalizePostgrestTimestamptz(value: unknown): string {
   const instant = requireNonEmptyString(value);
+  const match = postgrestTimestamptzPattern.exec(instant);
   const epoch = Date.parse(instant);
-  if (!postgrestTimestamptzPattern.test(instant) || !Number.isFinite(epoch)) {
+  if (
+    match === null ||
+    !hasValidPostgrestTimestamptzComponents(match) ||
+    !Number.isFinite(epoch)
+  ) {
     throw new Error("Expected a PostgreSQL timestamptz value");
   }
   return new Date(epoch).toISOString();
+}
+
+function hasValidPostgrestTimestamptzComponents(match: RegExpExecArray): boolean {
+  const [year, month, day, hour, minute, second, offsetHour, offsetMinute] = match
+    .slice(1)
+    .map((value) => (value === undefined ? undefined : Number(value)));
+  if (
+    year === undefined ||
+    month === undefined ||
+    day === undefined ||
+    hour === undefined ||
+    minute === undefined ||
+    second === undefined ||
+    year < 1 ||
+    month < 1 ||
+    month > 12 ||
+    day < 1 ||
+    day > daysInMonth(year, month) ||
+    hour > 23 ||
+    minute > 59 ||
+    second > 59
+  ) {
+    return false;
+  }
+  return (
+    (offsetHour === undefined && offsetMinute === undefined) ||
+    (offsetHour !== undefined &&
+      offsetMinute !== undefined &&
+      offsetHour <= 23 &&
+      offsetMinute <= 59)
+  );
+}
+
+function daysInMonth(year: number, month: number): number {
+  if (month === 2) {
+    return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
+  }
+  return [4, 6, 9, 11].includes(month) ? 30 : 31;
 }
 
 /**
