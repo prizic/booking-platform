@@ -82,6 +82,51 @@ describe("Dashboard Supabase adapter", () => {
     });
   });
 
+  it("normalizes PostgreSQL timestamptz rows before parsing the response", async () => {
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async () => ({
+          data: [
+            {
+              advisory_as_of: "2026-09-10T13:55:00+00:00",
+              advisory_until: "2026-09-10T14:00:00+00:00",
+              allocation_kind: "appointment",
+              customer_time_zone: "Europe/Istanbul",
+              location_time_zone: "America/New_York",
+              result_kind: "slot",
+              slot_end: "2026-09-10T14:30:00+00:00",
+              slot_start: "2026-09-10T14:00:00+00:00",
+              staff_id: "staff-public-a",
+            },
+          ],
+          error: null,
+        }),
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+    const source = createDashboardDataSource(client);
+
+    await expect(
+      source.getAvailability!("dashboard.tenant.example", {
+        endBefore: "2026-09-11T00:00:00.000Z",
+        locale: "en",
+        locationId: "location-a" as never,
+        partySize: 1,
+        serviceId: "service-a",
+        staffPreferenceId: null,
+        startAfter: "2026-09-10T00:00:00.000Z",
+        timeZone: "Europe/Istanbul",
+      }),
+    ).resolves.toMatchObject({
+      slots: [
+        {
+          endAt: "2026-09-10T14:30:00.000Z",
+          startAt: "2026-09-10T14:00:00.000Z",
+        },
+      ],
+    });
+  });
+
   it("resolves only the Dashboard application surface", async () => {
     const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
     const client = {

@@ -1,4 +1,5 @@
 import {
+  normalizeAvailabilityV1TransportRow,
   parseAvailabilityV1Request,
   parseAvailabilityV1Response,
   type AvailabilityV1Request,
@@ -53,14 +54,15 @@ function mapRows(value: unknown): AvailabilityV1Response {
   ) {
     throw new ClientAvailabilityError("availability_unavailable");
   }
-  const rows = value as readonly Record<string, unknown>[];
-  const first = rows[0]!;
-  const slotRows = rows.filter((row) => row.result_kind === "slot");
-  const rawNoSlotReason = first.no_slot_code;
-  const noSlotReason =
-    rawNoSlotReason === "none_available" ? "no_matching_availability" : rawNoSlotReason;
-
   try {
+    const rows = (value as readonly Record<string, unknown>[]).map(
+      normalizeAvailabilityV1TransportRow,
+    );
+    const first = rows[0]!;
+    const slotRows = rows.filter((row) => row.result_kind === "slot");
+    const rawNoSlotReason = first.no_slot_code;
+    const noSlotReason =
+      rawNoSlotReason === "none_available" ? "no_matching_availability" : rawNoSlotReason;
     return parseAvailabilityV1Response({
       advisory: true,
       displayTimeZone: first.customer_time_zone,

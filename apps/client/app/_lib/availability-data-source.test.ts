@@ -57,6 +57,35 @@ describe("Client availability data source", () => {
     });
   });
 
+  it("normalizes PostgreSQL timestamptz rows before parsing the response", async () => {
+    const source = createClientAvailabilityDataSource(
+      {
+        rpc: async () => ({
+          data: [
+            {
+              ...slotRow,
+              advisory_as_of: "2026-10-01T10:00:00+00:00",
+              advisory_until: "2026-10-01T10:00:30+00:00",
+              slot_end: "2026-11-01T06:30:00+00:00",
+              slot_start: "2026-11-01T05:30:00+00:00",
+            },
+          ],
+          error: null,
+        }),
+      },
+      "book.tenant.example",
+    );
+
+    await expect(source.getAvailability(request)).resolves.toMatchObject({
+      slots: [
+        {
+          endAt: "2026-11-01T06:30:00.000Z",
+          startAt: "2026-11-01T05:30:00.000Z",
+        },
+      ],
+    });
+  });
+
   it("maps failures to a non-disclosing client error", async () => {
     const source = createClientAvailabilityDataSource(
       { rpc: async () => ({ data: null, error: { code: "XX000" } }) },

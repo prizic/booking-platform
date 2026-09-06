@@ -5,6 +5,7 @@ import {
   parseAvailabilityV1Response,
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
+  normalizeAvailabilityV1TransportRow,
   parsePublicCatalogV1,
   parseSaveScheduleConfigV1,
   parseScheduleWorkspaceV1,
@@ -14,6 +15,22 @@ import {
 } from "./index.js";
 
 describe("public availability v1", () => {
+  it("normalizes PostgreSQL timestamptz fields at the response transport boundary", () => {
+    expect(
+      normalizeAvailabilityV1TransportRow({
+        advisory_as_of: "2026-11-01T05:00:00+00:00",
+        advisory_until: "2026-11-01T05:00:30+00:00",
+        slot_end: "2026-11-01T06:30:00+00:00",
+        slot_start: "2026-11-01T05:30:00+00:00",
+      }),
+    ).toEqual({
+      advisory_as_of: "2026-11-01T05:00:00.000Z",
+      advisory_until: "2026-11-01T05:00:30.000Z",
+      slot_end: "2026-11-01T06:30:00.000Z",
+      slot_start: "2026-11-01T05:30:00.000Z",
+    });
+  });
+
   it("accepts only a bounded, exact request shape", () => {
     expect(
       parseAvailabilityV1Request({

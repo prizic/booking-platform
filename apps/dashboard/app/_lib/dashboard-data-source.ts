@@ -1,5 +1,6 @@
 import {
   capabilityNames,
+  normalizeAvailabilityV1TransportRow,
   parseAvailabilityV1Response,
   parseDashboardContextV1,
   parseResolvePublicTenantV1,
@@ -65,7 +66,7 @@ function mapAvailabilityRows(rows: unknown, request: AvailabilityV1Request) {
   const mapped = rows.map((value) => {
     const row = firstRow(value);
     if (row === null) throw new Error("Availability returned an invalid row");
-    return row;
+    return normalizeAvailabilityV1TransportRow(row);
   });
   const first = mapped[0]!;
   const slotRows = mapped.filter((row) => row.result_kind === "slot");

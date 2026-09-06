@@ -656,6 +656,16 @@ const availabilityNoSlotReasons = [
   "policy_restricted",
 ] as const;
 
+const availabilityTransportTimestampFields = [
+  "advisory_as_of",
+  "advisory_until",
+  "slot_end",
+  "slot_start",
+] as const;
+
+const postgrestTimestamptzPattern =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u;
+
 function requireUtcInstant(value: unknown): string {
   const instant = requireNonEmptyString(value);
   const epoch = Date.parse(instant);
@@ -663,6 +673,33 @@ function requireUtcInstant(value: unknown): string {
     throw new Error("Expected a canonical UTC instant");
   }
   return instant;
+}
+
+function normalizePostgrestTimestamptz(value: unknown): string {
+  const instant = requireNonEmptyString(value);
+  const epoch = Date.parse(instant);
+  if (!postgrestTimestamptzPattern.test(instant) || !Number.isFinite(epoch)) {
+    throw new Error("Expected a PostgreSQL timestamptz value");
+  }
+  return new Date(epoch).toISOString();
+}
+
+/**
+ * Normalizes only the timestamptz columns returned by get_availability_v1.
+ * Request DTOs stay subject to canonical-UTC validation in
+ * parseAvailabilityV1Request.
+ */
+export function normalizeAvailabilityV1TransportRow(
+  row: Readonly<Record<string, unknown>>,
+): Readonly<Record<string, unknown>> {
+  const normalized = { ...row };
+  for (const field of availabilityTransportTimestampFields) {
+    const value = row[field];
+    if (value !== null && value !== undefined) {
+      normalized[field] = normalizePostgrestTimestamptz(value);
+    }
+  }
+  return Object.freeze(normalized);
 }
 
 function requireTimeZone(value: unknown): string {
