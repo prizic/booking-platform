@@ -3,16 +3,20 @@
 import {
   parseAvailabilityV1Response,
   type AvailabilitySlotV1,
-  type AvailabilityV1Response,
 } from "@wlbp/api-contracts";
 import { formatDateTime, resolveZonedLocalDateTime, type Locale } from "@wlbp/i18n";
 import { Button, ErrorSummary, StatusMessage, Surface } from "@wlbp/ui-foundation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useReducer, useRef, type FormEvent } from "react";
 
 import {
   AvailabilityResults,
   type AvailabilityResultsCopy,
 } from "./availability-results";
+import {
+  availabilityPickerReducer,
+  initialAvailabilityPickerState,
+  type AvailabilityPickerAction,
+} from "./availability-picker-state";
 
 export interface AvailabilityPickerCopy extends AvailabilityResultsCopy {
   readonly dateLabel: string;
@@ -64,50 +68,69 @@ export function AvailabilityPicker({
   locationTimeZone,
   serviceId,
 }: AvailabilityPickerProps) {
-  const [date, setDate] = useState("");
-  const [timeZone, setTimeZone] = useState(locationTimeZone);
-  const [partySize, setPartySize] = useState(1);
-  const [result, setResult] = useState<AvailabilityV1Response>();
-  const [selected, setSelected] = useState<AvailabilitySlotV1>();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string>();
+  const [state, dispatch] = useReducer(
+    availabilityPickerReducer,
+    locationTimeZone,
+    initialAvailabilityPickerState,
+  );
+  const requestSequence = useRef(0);
+  const activeRequest = useRef<AbortController>(null);
 
   useEffect(() => {
-    if (error) document.querySelector<HTMLElement>("#availability-error")?.focus();
-  }, [error]);
+    if (state.failed) {
+      document.querySelector<HTMLElement>("#availability-error")?.focus();
+    }
+  }, [state.failed]);
+
+  useEffect(() => () => activeRequest.current?.abort(), []);
+
+  function changeFilter(action: AvailabilityPickerAction) {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    dispatch(action);
+  }
 
   async function search(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
-    if (!serviceId || !locationId || !date) return;
-    setLoading(true);
-    setError(undefined);
-    setSelected(undefined);
+    const snapshot = Object.freeze({ ...state.filters });
+    if (!serviceId || !locationId || !snapshot.date) return;
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
+    const requestId = ++requestSequence.current;
+    dispatch({ requestId, snapshot, type: "submitted" });
     try {
       const query = new URLSearchParams({
-        endBefore: localMidnight(addCalendarDays(date, 7), timeZone),
+        endBefore: localMidnight(addCalendarDays(snapshot.date, 7), snapshot.timeZone),
         locale,
         locationId,
-        partySize: String(partySize),
+        partySize: String(snapshot.partySize),
         serviceId,
-        startAfter: localMidnight(date, timeZone),
-        timeZone,
+        startAfter: localMidnight(snapshot.date, snapshot.timeZone),
+        timeZone: snapshot.timeZone,
       });
       const response = await fetch(`/api/availability?${query}`, {
         credentials: "omit",
         headers: { Accept: "application/json" },
+        signal: controller.signal,
       });
       if (!response.ok) throw new Error("Availability request failed");
-      setResult(parseAvailabilityV1Response(await response.json()));
-    } catch {
-      setResult(undefined);
-      setError(copy.error);
+      dispatch({
+        requestId,
+        response: parseAvailabilityV1Response(await response.json()),
+        type: "resolved",
+      });
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        dispatch({ requestId, type: "rejected" });
+      }
     } finally {
-      setLoading(false);
+      if (activeRequest.current === controller) activeRequest.current = null;
     }
   }
 
   function selectSlot(slot: AvailabilitySlotV1) {
-    setSelected(slot);
+    dispatch({ slot, type: "selected" });
   }
 
   const unavailable = serviceId === null || locationId === null;
@@ -124,10 +147,10 @@ export function AvailabilityPicker({
       {unavailable ? (
         <p>{copy.unavailable}</p>
       ) : (
-        <form aria-busy={loading || undefined} onSubmit={search}>
-          {error ? (
+        <form aria-busy={state.loading || undefined} onSubmit={search}>
+          {state.failed ? (
             <ErrorSummary focusTarget id="availability-error" title={copy.errorTitle}>
-              <p>{error}</p>
+              <p>{copy.error}</p>
               <Button onClick={() => void search()} variant="secondary">
                 {copy.retry}
               </Button>
@@ -138,10 +161,16 @@ export function AvailabilityPicker({
               <span>{copy.dateLabel}</span>
               <input
                 name="date"
-                onChange={(event) => setDate(event.currentTarget.value)}
+                onChange={(event) =>
+                  changeFilter({
+                    field: "date",
+                    type: "filterChanged",
+                    value: event.currentTarget.value,
+                  })
+                }
                 required
                 type="date"
-                value={date}
+                value={state.filters.date}
               />
             </label>
             <label>
@@ -150,9 +179,15 @@ export function AvailabilityPicker({
                 autoComplete="off"
                 dir="ltr"
                 name="timeZone"
-                onChange={(event) => setTimeZone(event.currentTarget.value)}
+                onChange={(event) =>
+                  changeFilter({
+                    field: "timeZone",
+                    type: "filterChanged",
+                    value: event.currentTarget.value,
+                  })
+                }
                 required
-                value={timeZone}
+                value={state.filters.timeZone}
               />
             </label>
             <label>
@@ -162,35 +197,45 @@ export function AvailabilityPicker({
                 max={50}
                 min={1}
                 name="partySize"
-                onChange={(event) => setPartySize(event.currentTarget.valueAsNumber)}
+                onChange={(event) =>
+                  changeFilter({
+                    field: "partySize",
+                    type: "filterChanged",
+                    value: event.currentTarget.valueAsNumber,
+                  })
+                }
                 required
                 type="number"
-                value={partySize}
+                value={state.filters.partySize}
               />
             </label>
           </div>
-          <Button loading={loading} loadingLabel={copy.searching} type="submit">
+          <Button loading={state.loading} loadingLabel={copy.searching} type="submit">
             {copy.search}
           </Button>
         </form>
       )}
-      {result ? (
+      {state.result ? (
         <AvailabilityResults
           copy={copy}
-          displayTimeZone={result.displayTimeZone}
+          displayTimeZone={state.result.response.displayTimeZone}
           locale={locale}
-          noSlotReason={result.noSlotReason}
+          noSlotReason={state.result.response.noSlotReason}
           onSelect={selectSlot}
-          selectedStartAt={selected?.startAt ?? null}
-          serviceTimeZone={result.locationTimeZone}
-          slots={result.slots}
+          selectedStartAt={state.selected?.startAt ?? null}
+          serviceTimeZone={state.result.response.locationTimeZone}
+          slots={state.result.response.slots}
         />
       ) : null}
-      {selected ? (
+      {state.selected && state.result ? (
         <StatusMessage tone="positive">
           {copy.selectedAnnouncement.replace(
             "{time}",
-            formatDateTime(selected.startAt, locale, timeZone),
+            formatDateTime(
+              state.selected.startAt,
+              locale,
+              state.result.snapshot.timeZone,
+            ),
           )}
         </StatusMessage>
       ) : null}
