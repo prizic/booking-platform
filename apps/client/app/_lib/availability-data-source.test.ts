@@ -70,6 +70,16 @@ describe("Client availability data source", () => {
     );
   });
 
+  it("maps an excessive query workload to a safe invalid request", async () => {
+    const source = createClientAvailabilityDataSource(
+      { rpc: async () => ({ data: null, error: { code: "54000" } }) },
+      "book.tenant.example",
+    );
+    await expect(source.getAvailability(request)).rejects.toEqual(
+      expect.objectContaining({ code: "invalid_request" }),
+    );
+  });
+
   it("uses the trusted hostname and passes no tenant identity", async () => {
     let args: Readonly<Record<string, unknown>> | undefined;
     const source = createClientAvailabilityDataSource(

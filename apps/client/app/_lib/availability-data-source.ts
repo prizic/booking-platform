@@ -36,6 +36,7 @@ function mapRpcError(code: string | undefined): ClientAvailabilityErrorCode {
     case "not_authorized":
       return code;
     case "22023":
+    case "54000":
       return "invalid_request";
     case "42501":
       return "not_authorized";
