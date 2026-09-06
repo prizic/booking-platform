@@ -121,6 +121,7 @@ export type Database = {
         Args: { p_location_id?: string; p_tenant_id: string };
         Returns: {
           day_of_week: number;
+          end_minute: number;
           ends_at: string;
           exception_kind: string;
           id: string;
