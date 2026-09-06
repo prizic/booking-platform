@@ -181,7 +181,7 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
                     ? `/${locale}/team-resources`
                     : key === "navAvailability"
                       ? `/${locale}/availability`
-                    : `/${locale}#${key}`
+                      : `/${locale}#${key}`
               }
               aria-current={index === 0 ? "page" : undefined}
             >
