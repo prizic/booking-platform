@@ -26,4 +26,19 @@ describe("Dashboard message catalog", () => {
       Object.values(teamResourcesCopy.ar).every((value) => value.trim().length > 0),
     ).toBe(true);
   });
+
+  it("provides distinct English and Arabic recovery messages for every no-slot reason", () => {
+    const keys = [
+      "availabilityNoSlots",
+      "availabilityNoSlotsCapacity",
+      "availabilityNoSlotsPolicy",
+      "availabilityNoSlotsWindow",
+    ] as const;
+
+    for (const locale of ["en", "ar"] as const) {
+      const messages = keys.map((key) => dashboardCopy[locale][key]);
+      expect(new Set(messages).size).toBe(keys.length);
+      expect(messages.every((message) => message.trim().length > 0)).toBe(true);
+    }
+  });
 });

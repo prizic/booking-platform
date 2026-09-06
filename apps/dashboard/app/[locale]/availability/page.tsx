@@ -96,6 +96,14 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
     }
   }
   const error = typeof query.error === "string" ? query.error : null;
+  const noSlotsMessage =
+    availability?.noSlotReason === "capacity_unavailable"
+      ? message("availabilityNoSlotsCapacity")
+      : availability?.noSlotReason === "outside_booking_window"
+        ? message("availabilityNoSlotsWindow")
+        : availability?.noSlotReason === "policy_restricted"
+          ? message("availabilityNoSlotsPolicy")
+          : message("availabilityNoSlots");
   return (
     <main className="dashboard-main" dir={locale === "ar" ? "rtl" : "ltr"}>
       <header className="dashboard-intro">
@@ -307,7 +315,7 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
             </p>
             <p>{message("availabilityAdvisory")}</p>
             {availability.slots.length === 0 ? (
-              <p>{message("availabilityNoSlots")}</p>
+              <p>{noSlotsMessage}</p>
             ) : (
               <ul className="schedule-items">
                 {availability.slots.map((slot) => (

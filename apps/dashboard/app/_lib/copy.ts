@@ -103,6 +103,9 @@ export type DashboardMessageKey =
   | "availabilityPreviewAction"
   | "availabilityAdvisory"
   | "availabilityNoSlots"
+  | "availabilityNoSlotsCapacity"
+  | "availabilityNoSlotsPolicy"
+  | "availabilityNoSlotsWindow"
   | "availabilityPreviewError"
   | "availabilityLocationTimeZone"
   | "availabilityCustomerTimeZone";
@@ -220,6 +223,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityAdvisory:
       "These times are advisory. Booking confirmation always checks availability again.",
     availabilityNoSlots: "No bookable times match this window. Try other dates.",
+    availabilityNoSlotsCapacity:
+      "Capacity is unavailable in this window. Try another time or location.",
+    availabilityNoSlotsPolicy:
+      "Booking rules restrict this window. Try different dates or staff.",
+    availabilityNoSlotsWindow:
+      "This window is outside the booking notice or horizon. Choose later dates.",
     availabilityPreviewError:
       "Availability could not be checked. Verify the filters and try again.",
     availabilityLocationTimeZone: "Location timezone",
@@ -334,6 +343,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityAdvisory:
       "هذه الأوقات استشارية. يعاد التحقق من التوافر دائمًا عند تأكيد الحجز.",
     availabilityNoSlots: "لا توجد أوقات قابلة للحجز ضمن هذا النطاق. جرّب تواريخ أخرى.",
+    availabilityNoSlotsCapacity:
+      "السعة غير متاحة ضمن هذا النطاق. جرّب وقتًا أو موقعًا آخر.",
+    availabilityNoSlotsPolicy:
+      "تقيد قواعد الحجز هذا النطاق. جرّب تواريخ أو موظفًا آخر.",
+    availabilityNoSlotsWindow:
+      "يقع هذا النطاق خارج مهلة أو أفق الحجز. اختر تواريخ لاحقة.",
     availabilityPreviewError:
       "تعذر التحقق من التوافر. تحقق من عوامل التصفية وحاول مجددًا.",
     availabilityLocationTimeZone: "المنطقة الزمنية للموقع",

@@ -77,9 +77,10 @@ export async function GET(request: Request): Promise<Response> {
 
     return Response.json(data, {
       headers: {
-        // The host and complete bounded query are part of the CDN key. This endpoint
-        // deliberately creates an anonymous client, so no session data enters it.
-        "Cache-Control": "public, max-age=0, s-maxage=15, stale-while-revalidate=15",
+        // Revision-aware cache invalidation is not yet available to this route.
+        // Keep advisory reads uncached until the database cache discriminator can
+        // participate in the cache key/tag contract from ADR-0017.
+        "Cache-Control": "no-store",
         "X-Availability-Advisory": "true",
         "X-Content-Type-Options": "nosniff",
       },
