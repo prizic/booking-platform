@@ -268,9 +268,10 @@ bounds. Fold numbering precedes window, notice, and interval filtering, using
 250,000 candidate/grid work limit; it never widens the returned window. Schedule
 exceptions use the buffered occupied start's fold in each scope's timezone, while
 the public slot fold identifies the unbuffered start.
-Break overlap is checked against each occupied UTC minute mapped into the
+Opening containment and break overlap are checked against each occupied UTC minute mapped into the
 schedule's timezone, including both repeated hours and excluding the interval's
-end. The exposed availability RPC declares its two-second statement timeout for
+end. Every occupied minute must be open in both scopes, with date exceptions
+replacing weekly openings. The exposed availability RPC declares its two-second statement timeout for
 PostgREST transaction enforcement.
 
 Interchangeable exclusive resources produce one public offer per start/end pair

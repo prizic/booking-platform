@@ -380,42 +380,32 @@ begin
       and (g.daily_limit is null or g.daily_limit>(select count(*) from app.assignment_allocations a
         where a.tenant_id=v_tenant_id and a.staff_id=g.staff_id and a.state in ('confirmed','completed')
           and (a.starts_at at time zone v_location_time_zone)::date=g.location_start::date))
-      and (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ls.id and e.local_date=g.occupied_location_start::date)
-          and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=ls.id
-            and w.day_of_week=extract(dow from g.occupied_location_start)::integer
-            and w.start_minute<=extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer
-            and w.end_minute>=extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer))
-        or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ls.id
-          and e.local_date=g.occupied_location_start::date and e.exception_kind='override'
-          and (e.fold is null or e.fold=g.location_fold)
-          and e.start_minute<=extract(hour from g.occupied_location_start)::integer*60+extract(minute from g.occupied_location_start)::integer
-          and e.end_minute>=extract(hour from g.occupied_location_end)::integer*60+extract(minute from g.occupied_location_end)::integer)
+      -- Each scope must cover every occupied minute, not just local endpoints:
+      -- a fold can move those endpoints backwards through a closed period.
+      and not exists(
+        select 1 from (values
+          (ls.id,v_location_time_zone,g.location_fold),
+          (g.subject_scope_id,g.subject_time_zone,g.subject_fold)
+        ) scope(scope_id,time_zone,occupied_fold)
+        cross join lateral pg_catalog.generate_series(g.occupied_starts_at,
+          least(g.occupied_ends_at,g.occupied_starts_at+interval '7200 minutes')-interval '1 minute',interval '1 minute') minute_start
+        cross join lateral (select minute_start at time zone scope.time_zone as local_minute) civil
+        where not (
+          (not exists(select 1 from app.schedule_exceptions e
+              where e.tenant_id=v_tenant_id and e.schedule_scope_id=scope.scope_id and e.local_date=civil.local_minute::date)
+            and exists(select 1 from app.weekly_schedules w
+              where w.tenant_id=v_tenant_id and w.schedule_scope_id=scope.scope_id
+                and w.day_of_week=extract(dow from civil.local_minute)::integer
+                and w.start_minute<=extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer
+                and w.end_minute>extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer))
+          or exists(select 1 from app.schedule_exceptions e
+            where e.tenant_id=v_tenant_id and e.schedule_scope_id=scope.scope_id
+              and e.local_date=civil.local_minute::date and e.exception_kind='override'
+              and (e.fold is null or e.fold=scope.occupied_fold)
+              and e.start_minute<=extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer
+              and e.end_minute>extract(hour from civil.local_minute)::integer*60+extract(minute from civil.local_minute)::integer)
+        )
       )
-      and (g.staff_id is null or (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ss.id and e.local_date=g.occupied_subject_start::date)
-          and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=ss.id
-            and w.day_of_week=extract(dow from g.occupied_subject_start)::integer
-            and w.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
-            and w.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer))
-        or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=ss.id
-          and e.local_date=g.occupied_subject_start::date and e.exception_kind='override'
-          and (e.fold is null or e.fold=g.subject_fold)
-          and e.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
-          and e.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer)
-      ))
-      and (g.resource_id is null or (
-        (not exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=rs.id and e.local_date=g.occupied_subject_start::date)
-          and exists(select 1 from app.weekly_schedules w where w.tenant_id=v_tenant_id and w.schedule_scope_id=rs.id
-            and w.day_of_week=extract(dow from g.occupied_subject_start)::integer
-            and w.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
-            and w.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer))
-        or exists(select 1 from app.schedule_exceptions e where e.tenant_id=v_tenant_id and e.schedule_scope_id=rs.id
-          and e.local_date=g.occupied_subject_start::date and e.exception_kind='override'
-          and (e.fold is null or e.fold=g.subject_fold)
-          and e.start_minute<=extract(hour from g.occupied_subject_start)::integer*60+extract(minute from g.occupied_subject_start)::integer
-          and e.end_minute>=extract(hour from g.occupied_subject_end)::integer*60+extract(minute from g.occupied_subject_end)::integer)
-      ))
       -- Grid starts and all occupied offsets are whole minutes. Walking the
       -- half-open UTC interval tests every occupied civil minute, including
       -- both sides of a fold, without constructing a reversed local range.

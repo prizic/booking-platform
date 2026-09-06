@@ -214,6 +214,41 @@ select is(
   'a subject break blocks both occurrences of the same local minutes'
 );
 rollback to savepoint fold_breaks;
+savepoint fold_openings;
+delete from app.schedule_exceptions
+where id in ('a8900000-0000-0000-0000-000000000001','a8900000-0000-0000-0000-000000000002');
+insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute) values
+ ('a8850000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001',0,current_setting('test.fold_minute')::integer+20,current_setting('test.fold_minute')::integer+40),
+ ('a8850000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a8100000-0000-0000-0000-000000000001',0,current_setting('test.fold_minute')::integer,current_setting('test.fold_minute')::integer+60);
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  0,
+  'a fold-crossing slot is rejected when occupied minutes leave the narrow location opening'
+);
+update app.weekly_schedules set start_minute=current_setting('test.fold_minute')::integer,end_minute=current_setting('test.fold_minute')::integer+60
+where id='a8850000-0000-0000-0000-000000000001';
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  1,
+  'full repeated-hour openings cover every occupied minute of a fold-crossing slot'
+);
+update app.weekly_schedules set start_minute=current_setting('test.fold_minute')::integer+20,end_minute=current_setting('test.fold_minute')::integer+40
+where id='a8850000-0000-0000-0000-000000000002';
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  0,
+  'subject openings must also cover every occupied minute across the fold'
+);
+update app.weekly_schedules set start_minute=current_setting('test.fold_minute')::integer,end_minute=current_setting('test.fold_minute')::integer+60
+where id='a8850000-0000-0000-0000-000000000002';
+insert into app.schedule_exceptions(id,tenant_id,schedule_scope_id,local_date,exception_kind,start_minute,end_minute,fold)
+values ('a8900000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','a5600000-0000-0000-0000-000000000001',current_setting('test.fold_date')::date,'override',current_setting('test.fold_minute')::integer+20,current_setting('test.fold_minute')::integer+40,0);
+select is(
+  (select count(*)::integer from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.fold_time(-30),pg_temp.fold_time(15),1,current_setting('test.fold_zone')) where result_kind='slot'),
+  0,
+  'date overrides also require complete occupied-minute coverage and replace broader weekly hours'
+);
+rollback to savepoint fold_openings;
 rollback to savepoint dst_fixtures;
 select is(
   (select no_slot_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,pg_temp.availability_time(1,'09:00'),pg_temp.availability_time(1,'10:00'),1,'America/New_York') where result_kind='summary'),

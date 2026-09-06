@@ -53,9 +53,11 @@ contract without widening the backend contract range in `platform-contract.json`
    limit, and only candidates inside the requested bounds reach schedule checks.
    A slot's fold describes its start; buffered location and subject starts have
    their own folds for matching schedule exceptions.
-   Break overlap checks walk the occupied UTC minutes and map each to the
+   Opening containment and break overlap checks walk the occupied UTC minutes and map each to the
    relevant scope's local weekday/minute, preserving half-open boundaries across
-   repeated hours. Existing duration and offset constraints bound that walk.
+   repeated hours. Every minute must be open in both the location and subject
+   scopes; date exceptions replace that date's weekly openings and retain their
+   occupied-start fold selection. Existing duration and offset constraints bound that walk.
    The exposed RPC declares the two-second statement timeout so PostgREST can
    hoist it to the request transaction; a private-helper setting alone is not
    sufficient for that enforcement.
