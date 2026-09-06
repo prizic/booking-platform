@@ -317,6 +317,13 @@ export function applyScheduleException(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(exception.localDate)) {
     throw new BookingDomainError("invalid_time_range", "exception date is invalid");
   }
+  const [year, month, day] = exception.localDate.split("-").map(Number);
+  if (new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay() !== schedule.dayOfWeek) {
+    throw new BookingDomainError(
+      "invalid_time_range",
+      "exception date does not match schedule day",
+    );
+  }
   if (exception.kind === "closed") {
     if (exception.intervals.length > 0)
       throw new BookingDomainError(
