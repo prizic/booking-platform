@@ -154,6 +154,13 @@ declare
   v_customer_time_zone text;
   v_assignment_mode text;
   v_capacity_mode text;
+  v_allocation_kind text;
+  v_fixed_staff_id uuid;
+  v_candidate_count bigint;
+  v_grid_point_count bigint;
+  -- Bounds the candidate/grid cross product before generate_series. This is a
+  -- correctness-preserving rejection limit: eligible subjects are never truncated.
+  v_max_candidate_grid_work constant bigint := 250000;
 begin
   if p_hostname is null or p_hostname<>lower(btrim(p_hostname))
      or char_length(p_hostname) not between 4 and 253
@@ -210,7 +217,10 @@ begin
     raise exception using errcode='42501',message='availability_context_required';
   end if;
   v_customer_time_zone := coalesce(p_customer_time_zone,v_location_time_zone);
-  select sr.capacity_mode into v_capacity_mode from app.catalog_service_revisions sr
+  select sr.capacity_mode,sr.booking_mode,s.fixed_staff_id
+    into v_capacity_mode,v_allocation_kind,v_fixed_staff_id
+    from app.catalog_service_revisions sr
+    join app.catalog_services s on s.tenant_id=sr.tenant_id and s.id=sr.service_id
     where sr.tenant_id=v_tenant_id and sr.service_id=p_service_id
       and sr.publication_id=v_publication_id and sr.state='published'
     order by (sr.locale='en') desc,sr.locale limit 1;
@@ -228,6 +238,33 @@ begin
       and ssl.location_id=p_location_id and ssl.staff_id=p_staff_preference_id
   ) then
     raise exception using errcode='22023',message='availability_selection_unavailable';
+  end if;
+
+  select count(*) into v_candidate_count from (
+    select sp.id
+    from app.staff_service_locations ssl
+    join app.staff_profiles sp on sp.tenant_id=ssl.tenant_id and sp.id=ssl.staff_id and sp.status='active'
+    join app.schedule_scopes subject_scope on subject_scope.tenant_id=sp.tenant_id
+      and subject_scope.scope_kind='staff' and subject_scope.location_id=p_location_id
+      and subject_scope.staff_id=sp.id
+    where ssl.tenant_id=v_tenant_id and ssl.service_id=p_service_id and ssl.location_id=p_location_id
+      and v_allocation_kind='appointment'
+      and (p_staff_preference_id is null or sp.id=p_staff_preference_id)
+      and (v_assignment_mode<>'fixed_staff' or sp.id=v_fixed_staff_id)
+    union all
+    select r.id
+    from app.resource_requirements rr
+    join app.resources r on r.tenant_id=rr.tenant_id and r.resource_type_id=rr.resource_type_id and r.status='active'
+    join app.resource_locations rl on rl.tenant_id=r.tenant_id and rl.resource_id=r.id and rl.location_id=p_location_id
+    join app.schedule_scopes subject_scope on subject_scope.tenant_id=r.tenant_id
+      and subject_scope.scope_kind='resource' and subject_scope.location_id=p_location_id
+      and subject_scope.resource_id=r.id
+    where rr.tenant_id=v_tenant_id and rr.service_id=p_service_id
+      and v_allocation_kind='exclusive_resource' and p_staff_preference_id is null
+  ) eligible_candidates;
+  v_grid_point_count := floor(extract(epoch from (p_window_end-p_window_start))/300)::bigint+1;
+  if v_candidate_count>v_max_candidate_grid_work/v_grid_point_count then
+    raise exception using errcode='54000',message='availability_query_too_complex';
   end if;
 
   return query
@@ -410,6 +447,8 @@ begin
   where not exists(select 1 from rows);
 end;
 $function$;
+comment on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) is
+  'Availability v1 engine. Before generating slots it rejects candidate count x inclusive five-minute grid points above 250000 with availability_query_too_complex; it never truncates eligible candidates.';
 revoke all on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) from public;
 grant execute on function private.get_availability_v1(text,text,uuid,uuid,uuid,timestamptz,timestamptz,integer,text) to anon,authenticated;
 

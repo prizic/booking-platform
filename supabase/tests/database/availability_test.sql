@@ -192,6 +192,11 @@ select ok(
   exists(select 1 from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 15:00+00',1,'America/New_York') where result_kind='slot' and staff_id='f9000000-0000-0000-0000-000000000001'),
   'availability evaluates the valid later subject beyond the former 128-candidate truncation'
 );
+select throws_ok(
+  $$select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000004','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
+  '54000','availability_query_too_complex',
+  'high candidate cardinality combined with the maximum window is rejected before slot generation'
+);
 select is(
   (select provider_health_code from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 13:00+00','2026-09-07 22:00+00',1,'America/New_York') limit 1),
   'not_applicable',
@@ -263,7 +268,7 @@ select ok(
 );
 select lives_ok(
   $$explain (analyze,buffers,format json) select * from api_v1.get_availability_v1('client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',null,'2026-09-07 00:00+00','2026-10-08 00:00+00',1,'America/New_York')$$,
-  'representative maximum-window plan completes within the RPC statement timeout'
+  'representative accepted-bound maximum-window plan completes within the RPC statement timeout'
 );
 
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
