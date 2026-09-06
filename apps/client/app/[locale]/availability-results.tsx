@@ -6,6 +6,8 @@ import type {
   AvailabilitySlotV1,
 } from "@wlbp/api-contracts";
 
+import { availabilitySlotIdentity } from "./availability-picker-state";
+
 export interface AvailabilityResultsCopy {
   readonly advisory: string;
   readonly empty: string;
@@ -23,7 +25,7 @@ interface AvailabilityResultsProps {
   readonly locale: Locale;
   readonly noSlotReason: AvailabilityNoSlotReasonV1 | null;
   readonly onSelect: (slot: AvailabilitySlotV1) => void;
-  readonly selectedStartAt: string | null;
+  readonly selectedSlot: AvailabilitySlotV1 | null;
   readonly serviceTimeZone: string;
   readonly slots: readonly AvailabilitySlotV1[];
 }
@@ -34,7 +36,7 @@ export function AvailabilityResults({
   locale,
   noSlotReason,
   onSelect,
-  selectedStartAt,
+  selectedSlot,
   serviceTimeZone,
   slots,
 }: AvailabilityResultsProps) {
@@ -60,9 +62,11 @@ export function AvailabilityResults({
       </StatusMessage>
       <ol className="availability-slots">
         {slots.map((slot) => {
-          const selected = slot.startAt === selectedStartAt;
+          const selected =
+            selectedSlot !== null &&
+            availabilitySlotIdentity(slot) === availabilitySlotIdentity(selectedSlot);
           return (
-            <li key={`${slot.startAt}:${slot.endAt}`}>
+            <li key={availabilitySlotIdentity(slot)}>
               <time dateTime={slot.startAt}>
                 {formatDateTime(slot.startAt, locale, displayTimeZone)}
               </time>

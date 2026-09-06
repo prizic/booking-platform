@@ -6,6 +6,10 @@ export interface AvailabilityQuerySnapshot {
   readonly timeZone: string;
 }
 
+export function availabilitySlotIdentity(slot: AvailabilitySlotV1): string {
+  return JSON.stringify([slot.startAt, slot.endAt, slot.allocationKind, slot.staffId]);
+}
+
 export interface AvailabilityPickerState {
   readonly activeRequestId: number | null;
   readonly activeSnapshot: AvailabilityQuerySnapshot | null;

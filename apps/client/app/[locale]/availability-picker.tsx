@@ -222,7 +222,7 @@ export function AvailabilityPicker({
           locale={locale}
           noSlotReason={state.result.response.noSlotReason}
           onSelect={selectSlot}
-          selectedStartAt={state.selected?.startAt ?? null}
+          selectedSlot={state.selected ?? null}
           serviceTimeZone={state.result.response.locationTimeZone}
           slots={state.result.response.slots}
         />
