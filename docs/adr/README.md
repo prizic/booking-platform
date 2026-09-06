@@ -69,6 +69,7 @@ Files are named `NNNN-kebab-title.md`: a zero-padded four-digit sequence number,
 
 | 0015 | [Staff and resource assignment boundary](./0015-staff-and-resource-assignment-boundary.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Multi-resource services, custom roles, group capacity, or non-exclusive inventory changes the MVP model |
 | 0016 | [Civil-time schedules and policy bounds](./0016-schedule-civil-time-and-policy-bounds.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | A new schedule kind, policy bound, or DST interpretation is required |
+| 0017 | [Availability contract and advisory semantics](./0017-availability-contract-and-advisory-semantics.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Query/result bounds change, atomic holds need a new slot identity, or a deferred availability dimension activates |
 
 Dates are `—` while status is `Proposed` and undated; set the date when the status changes.
 

@@ -253,6 +253,15 @@ Database function policy — data-intensive and transactional behavior (availabi
 
 **Correctness lives in the database, never in the browser.** The displayed availability is advisory; only the atomic write is authoritative.
 
+The public v1 request is exact and bounded to 31 days; responses contain at
+most 500 slots and expose only coarse no-slot reasons. They distinguish the
+customer-selected display timezone from the service/location timezone. Under
+[ADR-0017](./adr/0017-availability-contract-and-advisory-semantics.md), calendar
+provider health is `not_applicable` until ADR-0010's two-way calendar scope is
+activated, and availability must remain uncached unless every tenant,
+publication, configuration, entitlement, schedule, and allocation revision is
+available for the cache key.
+
 Availability is composed from orthogonal dimensions — shape, assignment, confirmation, payment, location, occurrence, queue — rather than hard-coded "booking types". A slot survives only if it clears published service rules and duration, location hours and closures, staff/resource schedules, date overrides and time off, eligibility and resource requirements, before/after buffers and turnover, active holds and confirmed allocations, external-calendar busy periods, minimum notice / horizon / interval / daily limits / capacity, and customer-plan and approval/payment restrictions. Staff assignment modes are fixed staff, customer choice, any eligible candidate, or deterministic round-robin normalized by offered hours; inactive and maintenance resources never enter a public candidate set.
 
 | Concern | Mechanism |

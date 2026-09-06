@@ -1,6 +1,8 @@
 import {
   parseDashboardContextV1,
   parseTenantChoicesV1,
+  type AvailabilityV1Request,
+  type AvailabilityV1Response,
   type DashboardContextV1,
   type ResolvePublicTenantV1Response,
   type TenantChoiceV1,
@@ -14,6 +16,10 @@ export interface DashboardDataSource {
   listTenantChoices(): Promise<unknown>;
   resolveTenant(hostname: string): Promise<ResolvePublicTenantV1Response | null>;
   getScheduleWorkspace?: (tenantId: string, locationId?: string) => Promise<unknown>;
+  getAvailability?: (
+    hostname: string,
+    request: AvailabilityV1Request,
+  ) => Promise<AvailabilityV1Response>;
   saveScheduleConfig?: (request: {
     tenantId: string;
     operation: string;

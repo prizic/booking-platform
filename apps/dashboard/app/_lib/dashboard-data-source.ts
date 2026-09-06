@@ -1,5 +1,6 @@
 import {
   capabilityNames,
+  parseAvailabilityV1Response,
   parseDashboardContextV1,
   parseResolvePublicTenantV1,
   parseStaffResourceDeactivationV1,
@@ -8,6 +9,7 @@ import {
   parseScheduleWorkspaceV1,
   parseSaveScheduleConfigV1,
   type CapabilityName,
+  type AvailabilityV1Request,
   type StaffResourceDeactivationV1,
   type StaffResourceWorkspaceV1,
 } from "@wlbp/api-contracts";
@@ -54,6 +56,37 @@ export interface TeamResourcesDataSource {
   ): Promise<void>;
   setResourceRequirement(input: ResourceRequirementInput): Promise<void>;
   setStaffServiceLocationEligibility(input: StaffEligibilityInput): Promise<void>;
+}
+
+function mapAvailabilityRows(rows: unknown, request: AvailabilityV1Request) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("Availability returned no summary");
+  }
+  const mapped = rows.map((value) => {
+    const row = firstRow(value);
+    if (row === null) throw new Error("Availability returned an invalid row");
+    return row;
+  });
+  const first = mapped[0]!;
+  const slotRows = mapped.filter((row) => row.result_kind === "slot");
+  return parseAvailabilityV1Response({
+    advisory: true,
+    displayTimeZone: first.customer_time_zone ?? request.timeZone,
+    locationTimeZone: first.location_time_zone,
+    noSlotReason:
+      slotRows.length === 0
+        ? first.no_slot_code === "none_available"
+          ? "no_matching_availability"
+          : first.no_slot_code
+        : null,
+    providerHealth: "not_applicable",
+    slots: slotRows.map((row) => ({
+      allocationKind: row.allocation_kind,
+      endAt: row.slot_end,
+      staffId: row.staff_id,
+      startAt: row.slot_start,
+    })),
+  });
 }
 
 export interface DeactivateStaffInput {
@@ -208,6 +241,22 @@ export function createDashboardDataSource(
   const api = client.schema("api_v1") as unknown as RpcSchema;
 
   return {
+    getAvailability: async (hostname, request) => {
+      const rows = assertRpc(
+        await api.rpc("get_availability_v1", {
+          p_application: "dashboard",
+          p_customer_time_zone: request.timeZone,
+          p_hostname: hostname,
+          p_location_id: request.locationId,
+          p_party_size: request.partySize,
+          p_service_id: request.serviceId,
+          p_staff_preference_id: request.staffPreferenceId,
+          p_window_end: request.endBefore,
+          p_window_start: request.startAfter,
+        }),
+      );
+      return mapAvailabilityRows(rows, request);
+    },
     deactivateResource: async (input) => {
       const row = firstRow(
         assertRpc(

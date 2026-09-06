@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  parseAvailabilityV1Request,
+  parseAvailabilityV1Response,
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   parsePublicCatalogV1,
@@ -10,6 +12,68 @@ import {
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
 } from "./index.js";
+
+describe("public availability v1", () => {
+  it("accepts only a bounded, exact request shape", () => {
+    expect(
+      parseAvailabilityV1Request({
+        endBefore: "2026-09-08T00:00:00.000Z",
+        locale: "en",
+        locationId: "location-a",
+        partySize: 1,
+        serviceId: "service-a",
+        staffPreferenceId: null,
+        startAfter: "2026-09-07T00:00:00.000Z",
+        timeZone: "Europe/Istanbul",
+      }),
+    ).toMatchObject({ partySize: 1, staffPreferenceId: null });
+
+    expect(() =>
+      parseAvailabilityV1Request({
+        endBefore: "2026-11-08T00:00:00.000Z",
+        locale: "en",
+        locationId: "location-a",
+        partySize: 1,
+        serviceId: "service-a",
+        staffPreferenceId: null,
+        startAfter: "2026-09-07T00:00:00.000Z",
+        timeZone: "Europe/Istanbul",
+      }),
+    ).toThrow("31 days");
+  });
+
+  it("parses a privacy-safe advisory response with coarse recovery state", () => {
+    expect(
+      parseAvailabilityV1Response({
+        advisory: true,
+        displayTimeZone: "Europe/Istanbul",
+        locationTimeZone: "Asia/Riyadh",
+        noSlotReason: null,
+        providerHealth: "not_applicable",
+        slots: [
+          {
+            allocationKind: "appointment",
+            endAt: "2026-09-07T09:30:00.000Z",
+            staffId: "staff-public-a",
+            startAt: "2026-09-07T09:00:00.000Z",
+          },
+        ],
+      }),
+    ).toMatchObject({ advisory: true, providerHealth: "not_applicable" });
+
+    expect(() =>
+      parseAvailabilityV1Response({
+        advisory: true,
+        conflictBookingId: "private-booking",
+        displayTimeZone: "Europe/Istanbul",
+        locationTimeZone: "Asia/Riyadh",
+        noSlotReason: "no_matching_availability",
+        providerHealth: "not_applicable",
+        slots: [],
+      }),
+    ).toThrow("unexpected shape");
+  });
+});
 
 describe("assignment candidate DTO", () => {
   it.each(["fixed_staff", "customer_choice", "any_available", "round_robin"])(

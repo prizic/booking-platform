@@ -1,5 +1,9 @@
-import type { Locale } from "@wlbp/i18n";
-import { parseScheduleWorkspaceV1 } from "@wlbp/api-contracts";
+import { formatDateTime, type Locale } from "@wlbp/i18n";
+import {
+  parseAvailabilityV1Request,
+  parseScheduleWorkspaceV1,
+  type AvailabilityV1Response,
+} from "@wlbp/api-contracts";
 import {
   extractRequestHostname,
   type RuntimeEnvironment,
@@ -36,6 +40,7 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
         ? "production"
         : "development";
   let tenant: string | null = null;
+  let requestHostname: string | null = null;
   try {
     const hostname = extractRequestHostname(await headers(), {
       runtimeEnvironment,
@@ -43,6 +48,7 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
         ? { localFallback: process.env.LOCAL_TENANT_HOST }
         : {}),
     });
+    requestHostname = hostname;
     const access = await loadDashboardAccess({ hostname, locale }, source!);
     if (access.kind === "ready") tenant = access.context.tenantId;
   } catch {
@@ -57,6 +63,38 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
         )
       : [];
   const scope = rows.find((row) => row.kind === "scope");
+  let availability: AvailabilityV1Response | null = null;
+  let availabilityError = false;
+  const queryValue = (key: string) =>
+    typeof query[key] === "string" ? query[key] : undefined;
+  if (
+    source?.getAvailability &&
+    tenant &&
+    identity &&
+    requestHostname &&
+    queryValue("serviceId") &&
+    queryValue("locationId") &&
+    queryValue("startAfter") &&
+    queryValue("endBefore")
+  ) {
+    try {
+      availability = await source.getAvailability(
+        requestHostname,
+        parseAvailabilityV1Request({
+          endBefore: queryValue("endBefore"),
+          locale,
+          locationId: queryValue("locationId"),
+          partySize: Number(queryValue("partySize") ?? "1"),
+          serviceId: queryValue("serviceId"),
+          staffPreferenceId: queryValue("staffPreferenceId") || null,
+          startAfter: queryValue("startAfter"),
+          timeZone: queryValue("timeZone") ?? "UTC",
+        }),
+      );
+    } catch {
+      availabilityError = true;
+    }
+  }
   const error = typeof query.error === "string" ? query.error : null;
   return (
     <main className="dashboard-main" dir={locale === "ar" ? "rtl" : "ltr"}>
@@ -193,6 +231,100 @@ export default async function AvailabilityPage({ params, searchParams }: Props) 
             </button>
           </form>
         )}
+      </Surface>
+      <Surface
+        as="section"
+        className="access-panel"
+        aria-labelledby="availability-preview-title"
+      >
+        <h2 id="availability-preview-title">{message("availabilityPreviewTitle")}</h2>
+        <p>{message("availabilityPreviewSummary")}</p>
+        <form className="schedule-editor" method="get">
+          <label>
+            {message("scheduleServiceIdLabel")}
+            <input defaultValue={queryValue("serviceId")} name="serviceId" required />
+          </label>
+          <label>
+            {message("scheduleLocationIdLabel")}
+            <input defaultValue={queryValue("locationId")} name="locationId" required />
+          </label>
+          <label>
+            {message("availabilityStaffPreferenceLabel")}
+            <input
+              defaultValue={queryValue("staffPreferenceId")}
+              name="staffPreferenceId"
+            />
+          </label>
+          <label>
+            {message("availabilityWindowStartLabel")}
+            <input
+              defaultValue={queryValue("startAfter")}
+              name="startAfter"
+              required
+              type="text"
+            />
+          </label>
+          <label>
+            {message("availabilityWindowEndLabel")}
+            <input
+              defaultValue={queryValue("endBefore")}
+              name="endBefore"
+              required
+              type="text"
+            />
+          </label>
+          <label>
+            {message("availabilityPartySizeLabel")}
+            <input
+              defaultValue={queryValue("partySize") ?? "1"}
+              min="1"
+              name="partySize"
+              required
+              type="number"
+            />
+          </label>
+          <label>
+            {message("availabilityCustomerTimeZone")}
+            <input
+              defaultValue={queryValue("timeZone") ?? "UTC"}
+              name="timeZone"
+              required
+            />
+          </label>
+          <button className="wlbp-button" type="submit">
+            {message("availabilityPreviewAction")}
+          </button>
+        </form>
+        {availabilityError ? (
+          <p role="alert">{message("availabilityPreviewError")}</p>
+        ) : null}
+        {availability ? (
+          <div aria-live="polite">
+            <p>
+              {message("availabilityCustomerTimeZone")}: {availability.displayTimeZone}{" "}
+              · {message("availabilityLocationTimeZone")}:{" "}
+              {availability.locationTimeZone}
+            </p>
+            <p>{message("availabilityAdvisory")}</p>
+            {availability.slots.length === 0 ? (
+              <p>{message("availabilityNoSlots")}</p>
+            ) : (
+              <ul className="schedule-items">
+                {availability.slots.map((slot) => (
+                  <li key={`${slot.startAt}:${slot.staffId ?? "automatic"}`}>
+                    <time dateTime={slot.startAt}>
+                      {formatDateTime(
+                        slot.startAt,
+                        locale,
+                        availability.displayTimeZone,
+                      )}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : null}
       </Surface>
     </main>
   );

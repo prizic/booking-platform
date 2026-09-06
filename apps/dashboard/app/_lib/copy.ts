@@ -93,7 +93,19 @@ export type DashboardMessageKey =
   | "scheduleNameLabel"
   | "scheduleReasonLabel"
   | "schedulePolicyKeyLabel"
-  | "schedulePolicyValueLabel";
+  | "schedulePolicyValueLabel"
+  | "availabilityPreviewTitle"
+  | "availabilityPreviewSummary"
+  | "availabilityWindowStartLabel"
+  | "availabilityWindowEndLabel"
+  | "availabilityPartySizeLabel"
+  | "availabilityStaffPreferenceLabel"
+  | "availabilityPreviewAction"
+  | "availabilityAdvisory"
+  | "availabilityNoSlots"
+  | "availabilityPreviewError"
+  | "availabilityLocationTimeZone"
+  | "availabilityCustomerTimeZone";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
@@ -197,6 +209,21 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     scheduleReasonLabel: "Internal reason",
     schedulePolicyKeyLabel: "Policy key",
     schedulePolicyValueLabel: "Policy value",
+    availabilityPreviewTitle: "Preview bookable times",
+    availabilityPreviewSummary:
+      "Use the same advisory slot rules as the public booking site.",
+    availabilityWindowStartLabel: "Window starts (UTC)",
+    availabilityWindowEndLabel: "Window ends (UTC)",
+    availabilityPartySizeLabel: "Party size",
+    availabilityStaffPreferenceLabel: "Preferred staff ID (optional)",
+    availabilityPreviewAction: "Check availability",
+    availabilityAdvisory:
+      "These times are advisory. Booking confirmation always checks availability again.",
+    availabilityNoSlots: "No bookable times match this window. Try other dates.",
+    availabilityPreviewError:
+      "Availability could not be checked. Verify the filters and try again.",
+    availabilityLocationTimeZone: "Location timezone",
+    availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
     eyebrow: "مساحة عمل فريق المستأجر",
@@ -296,6 +323,21 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     scheduleReasonLabel: "السبب الداخلي",
     schedulePolicyKeyLabel: "مفتاح السياسة",
     schedulePolicyValueLabel: "قيمة السياسة",
+    availabilityPreviewTitle: "معاينة الأوقات القابلة للحجز",
+    availabilityPreviewSummary:
+      "استخدم قواعد الأوقات الاستشارية نفسها المستخدمة في موقع الحجز العام.",
+    availabilityWindowStartLabel: "بداية النطاق (UTC)",
+    availabilityWindowEndLabel: "نهاية النطاق (UTC)",
+    availabilityPartySizeLabel: "عدد الأشخاص",
+    availabilityStaffPreferenceLabel: "معرّف الموظف المفضل (اختياري)",
+    availabilityPreviewAction: "التحقق من التوافر",
+    availabilityAdvisory:
+      "هذه الأوقات استشارية. يعاد التحقق من التوافر دائمًا عند تأكيد الحجز.",
+    availabilityNoSlots: "لا توجد أوقات قابلة للحجز ضمن هذا النطاق. جرّب تواريخ أخرى.",
+    availabilityPreviewError:
+      "تعذر التحقق من التوافر. تحقق من عوامل التصفية وحاول مجددًا.",
+    availabilityLocationTimeZone: "المنطقة الزمنية للموقع",
+    availabilityCustomerTimeZone: "المنطقة الزمنية للعميل",
   },
 };
 

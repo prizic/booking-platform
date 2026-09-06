@@ -103,6 +103,10 @@ The token model must survive the whole booking path, not just marketing pages: h
 Client-specific design obligations:
 
 - Show availability in the customer's selected timezone while clearly displaying the service/location timezone near every bookable time.
+- Empty availability uses a privacy-safe recovery state (`outside booking window`,
+  `policy restricted`, `no matching availability`, or `capacity unavailable`)
+  in both languages. Copy must never expose another customer, a private schedule
+  reason, staff fairness inputs, or provider details.
 - Make price, taxes, deposits, cancellation terms, and approval status legible before confirmation — legibility here is a design requirement, not copy alone.
 - Preserve in-progress checkout with a visible expiring hold; the countdown must be perceivable non-visually too.
 - Guest checkout must be a first-class path; account creation is never a visual dead end.
