@@ -96,6 +96,9 @@ jobs:
       - name: Run the tenant-isolation pgTAP and RLS matrix
         run: pnpm test:db
 
+      - name: Run the booking concurrency matrix
+        run: pnpm test:concurrency
+
       - name: Verify generated api_v1 database types are current
         run: |
           checked=0

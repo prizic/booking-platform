@@ -18,6 +18,7 @@ release.
 
 The other reserved platform-only suites remain explicit rather than simulated:
 
-- `concurrency/` is implemented with the booking RPCs in issue #11.
+- `concurrency/` runs the issue #11 hold contention matrix through real parallel
+  `psql` sessions against the local stack; extend it as later booking RPCs land.
 - `provisioning/` is implemented with control-plane automation in issue #28.
 - `upgrade-fixtures/` is implemented with the distribution pipeline in issue #29.

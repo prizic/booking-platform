@@ -860,17 +860,151 @@ export function parseAvailabilityV1Response(value: unknown): AvailabilityV1Respo
   });
 }
 export interface CreateHoldV1Request {
+  readonly expectedCacheTag: string | null;
   readonly idempotencyKey: IdempotencyKey;
   readonly locale: ContractLocale;
   readonly locationId: LocationId;
   readonly partySize: number;
   readonly serviceId: string;
+  /** Opaque caller-generated session identity. Rate limiting only, never authorization. */
+  readonly sessionToken: string;
+  readonly staffPreferenceId: string | null;
   readonly startAt: string;
 }
 export interface CreateHoldV1Response {
+  readonly allocationKind: "appointment" | "exclusive_resource";
   readonly expiresAt: string;
   readonly holdId: string;
   readonly price: MoneyDto;
+  /** True when an identical retry replayed the original hold. */
+  readonly replayed: boolean;
+  readonly slotEnd: string;
+  readonly slotStart: string;
+  /** Null for exclusive-resource holds: the allocated resource stays private. */
+  readonly staffId: string | null;
+  readonly state: "active" | "expired" | "released";
+}
+
+const holdStates = ["active", "expired", "released"] as const;
+
+export function parseCreateHoldV1Request(value: unknown): CreateHoldV1Request {
+  const keys = [
+    "expectedCacheTag",
+    "idempotencyKey",
+    "locale",
+    "locationId",
+    "partySize",
+    "serviceId",
+    "sessionToken",
+    "staffPreferenceId",
+    "startAt",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Hold request has an unexpected shape");
+  }
+  if (value.locale !== "en" && value.locale !== "ar") {
+    throw new Error("Hold locale is unsupported");
+  }
+  if (value.partySize !== 1) {
+    throw new Error("Hold party size is out of bounds");
+  }
+  const sessionToken = requireNonEmptyString(value.sessionToken);
+  const idempotencyKey = requireNonEmptyString(value.idempotencyKey);
+  if (
+    sessionToken.length < 16 ||
+    sessionToken.length > 200 ||
+    idempotencyKey.length < 16 ||
+    idempotencyKey.length > 200 ||
+    idempotencyKey.trim() !== idempotencyKey
+  ) {
+    throw new Error("Hold session token or idempotency key is out of bounds");
+  }
+  const startAt = requireUtcInstant(value.startAt);
+  if (Date.parse(startAt) % 60_000 !== 0) {
+    throw new Error("Hold slot must start on a whole minute");
+  }
+  return Object.freeze({
+    expectedCacheTag:
+      value.expectedCacheTag === null
+        ? null
+        : requireNonEmptyString(value.expectedCacheTag),
+    idempotencyKey,
+    locale: value.locale,
+    locationId: requireNonEmptyString(value.locationId) as LocationId,
+    partySize: 1,
+    serviceId: requireNonEmptyString(value.serviceId),
+    sessionToken,
+    staffPreferenceId:
+      value.staffPreferenceId === null
+        ? null
+        : requireNonEmptyString(value.staffPreferenceId),
+    startAt,
+  });
+}
+
+export function parseCreateHoldV1Response(value: unknown): CreateHoldV1Response {
+  const keys = [
+    "allocationKind",
+    "expiresAt",
+    "holdId",
+    "price",
+    "replayed",
+    "slotEnd",
+    "slotStart",
+    "staffId",
+    "state",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Hold response has an unexpected shape");
+  }
+  if (
+    (value.allocationKind !== "appointment" &&
+      value.allocationKind !== "exclusive_resource") ||
+    typeof value.replayed !== "boolean" ||
+    !holdStates.includes(value.state as (typeof holdStates)[number])
+  ) {
+    throw new Error("Hold response is invalid");
+  }
+  if (value.allocationKind === "exclusive_resource" && value.staffId !== null) {
+    throw new Error("Exclusive-resource holds must not disclose a subject");
+  }
+  if (
+    !isRecord(value.price) ||
+    !hasExactKeys(value.price, ["currency", "minorUnits"])
+  ) {
+    throw new Error("Hold price has an unexpected shape");
+  }
+  const currency = requireNonEmptyString(value.price.currency);
+  if (
+    !/^[A-Z]{3}$/u.test(currency) ||
+    typeof value.price.minorUnits !== "number" ||
+    !Number.isSafeInteger(value.price.minorUnits) ||
+    value.price.minorUnits < 0
+  ) {
+    throw new Error("Hold price is invalid");
+  }
+  const slotStart = requireUtcInstant(value.slotStart);
+  const slotEnd = requireUtcInstant(value.slotEnd);
+  const expiresAt = requireUtcInstant(value.expiresAt);
+  if (Date.parse(slotStart) >= Date.parse(slotEnd)) {
+    throw new Error("Hold slot range is invalid");
+  }
+  // A hold that outlives the slot it protects would let a caller confirm a slot
+  // that has already started.
+  if (Date.parse(expiresAt) > Date.parse(slotStart)) {
+    throw new Error("Hold cannot expire after the slot it protects");
+  }
+  return Object.freeze({
+    allocationKind: value.allocationKind,
+    expiresAt,
+    holdId: requireNonEmptyString(value.holdId),
+    price: Object.freeze({ currency, minorUnits: value.price.minorUnits }),
+    replayed: value.replayed,
+    slotEnd,
+    slotStart,
+    staffId: value.staffId === null ? null : requireNonEmptyString(value.staffId),
+    state: value.state as CreateHoldV1Response["state"],
+  });
 }
 export interface BookingSummaryV1 {
   readonly bookingId: BookingId;
