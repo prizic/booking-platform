@@ -293,6 +293,10 @@ select throws_ok(
   '23P01','slot_unavailable','once every interchangeable resource is held the instant is refused');
 rollback to savepoint resource_holds;
 
+-- Savepoint rollbacks revert pgTAP's counter, which lives in a temporary table,
+-- but not the test numbering, which comes from a temporary sequence. Re-sync the
+-- count so the emitted plan matches the tests that actually ran.
+select _set('curr_test',(select last_value::integer from __tresults___numb_seq));
 select * from finish();
 
 rollback;
