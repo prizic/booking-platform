@@ -266,7 +266,11 @@ export type Database = {
           p_hostname: string;
           p_session_token: string;
         };
-        Returns: { contract_version: number; hold_id: string; state: string }[];
+        Returns: {
+          contract_version: number;
+          hold_id: string;
+          state: string;
+        }[];
       };
       resolve_public_tenant_v1: {
         Args: { p_application: string; p_hostname: string };
