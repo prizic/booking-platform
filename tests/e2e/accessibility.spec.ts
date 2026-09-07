@@ -68,7 +68,7 @@ for (const profile of responsiveProfiles) {
       test(`client booking ${language.locale} has no automated WCAG A/AA violations`, async ({
         page,
       }) => {
-        await stubBookingApi(page, { locale: language.locale });
+        await stubBookingApi(page);
         await page.goto(`${clientOrigin}/${language.locale}/book${bookingQuery}`);
         const scan = () =>
           new AxeBuilder({ page })
@@ -92,7 +92,9 @@ for (const profile of responsiveProfiles) {
           .getByRole("button", { name: /confirm booking|تأكيد الحجز/iu })
           .click();
         await expect(
-          page.getByRole("heading", { name: /your booking is confirmed|تم تأكيد حجزك/iu }),
+          page.getByRole("heading", {
+            name: /your booking is confirmed|تم تأكيد حجزك/iu,
+          }),
         ).toBeVisible();
         expect((await scan()).violations).toEqual([]);
       });

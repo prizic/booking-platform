@@ -78,10 +78,9 @@ export interface StubOptions {
     | { readonly body: unknown; readonly status: 200 }
     | { readonly code: string; readonly status: number }
   )[];
-  readonly locale: "en" | "ar";
 }
 
-export async function stubBookingApi(page: Page, options: StubOptions) {
+export async function stubBookingApi(page: Page, options: StubOptions = {}) {
   const submissions: unknown[] = [];
   const queue = [
     ...(options.confirmations ?? [{ body: confirmed, status: 200 as const }]),
@@ -90,11 +89,7 @@ export async function stubBookingApi(page: Page, options: StubOptions) {
   await page.route("**/api/availability**", (route) =>
     route.fulfill({ json: availability }),
   );
-  await page.route("**/api/holds", (route) =>
-    route.fulfill({
-      json: { ...heldSlot, hold: { ...heldSlot.hold } },
-    }),
-  );
+  await page.route("**/api/holds", (route) => route.fulfill({ json: heldSlot }));
   await page.route("**/api/bookings", (route) => {
     submissions.push(JSON.parse(route.request().postData() ?? "null"));
     const next = queue.length > 1 ? queue.shift()! : queue[0]!;
@@ -125,4 +120,3 @@ export async function fillDetails(page: Page) {
   await page.getByLabel(/reason for visit/iu).fill("First visit");
   await page.getByRole("checkbox").check();
 }
-

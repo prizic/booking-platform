@@ -17,7 +17,7 @@ for (const profile of responsiveProfiles) {
       test(`${language.locale} guest completes a no-payment booking`, async ({
         page,
       }) => {
-        await stubBookingApi(page, { locale: language.locale });
+        await stubBookingApi(page);
         await page.goto(`${clientOrigin}/${language.locale}/book${bookingQuery}`);
         await expect(page.locator("html")).toHaveAttribute("dir", language.direction);
 
@@ -43,7 +43,7 @@ for (const profile of responsiveProfiles) {
 test("an incomplete submission never reaches the booking endpoint", async ({
   page,
 }) => {
-  const submissions = await stubBookingApi(page, { locale: "en" });
+  const submissions = await stubBookingApi(page);
   await reachDetailsStep(page, "en");
   await page.getByRole("button", { name: /confirm booking/iu }).click();
 
@@ -58,7 +58,6 @@ test("a duplicate submission stays one booking", async ({ page }) => {
       { body: confirmed, status: 200 },
       { body: { ...confirmed, replayed: true }, status: 200 },
     ],
-    locale: "en",
   });
   await reachDetailsStep(page, "en");
   await fillDetails(page);
@@ -79,7 +78,6 @@ test("a duplicate submission stays one booking", async ({ page }) => {
 test("a lost slot keeps the answers the guest already typed", async ({ page }) => {
   await stubBookingApi(page, {
     confirmations: [{ code: "slot_unavailable", status: 409 }],
-    locale: "en",
   });
   await reachDetailsStep(page, "en");
   await fillDetails(page);
@@ -100,7 +98,6 @@ test("a service that needs payment is refused with a safe explanation", async ({
 }) => {
   await stubBookingApi(page, {
     confirmations: [{ code: "payment_pending", status: 402 }],
-    locale: "en",
   });
   await reachDetailsStep(page, "en");
   await fillDetails(page);
