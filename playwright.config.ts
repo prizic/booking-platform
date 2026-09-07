@@ -63,7 +63,7 @@ export default defineConfig({
   projects: [
     {
       name: "e2e",
-      testMatch: /(?:smoke|foundation)\.spec\.ts$/u,
+      testMatch: /(?:booking|smoke|foundation)\.spec\.ts$/u,
     },
     { name: "component", testMatch: /interactions\.spec\.ts$/u },
     { name: "i18n", testMatch: /localization\.spec\.ts$/u },

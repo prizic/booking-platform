@@ -290,6 +290,18 @@ Availability is composed from orthogonal dimensions — shape, assignment, confi
 
 Atomic confirmation, one transaction: resolve tenant and actor from trusted context → claim/check idempotency → lock hold/booking revision → re-read published service and required resources → validate expiry, permission, price snapshot, party size, policies, provider state → insert all allocations in deterministic resource-ID order → create/update booking plus an immutable booking event → snapshot price, tax, policy, intake schema/answers, locale, timezone → insert integration/notification outbox events → commit and return the authoritative result.
 
+As implemented for the no-payment tracer (issue #12), that transaction writes
+`app.bookings` (the immutable snapshot plus the separate booking, payment,
+notification, calendar, and approval states), `app.booking_contacts` and
+`app.booking_intake_answers` (guest data kept out of ordinary calendar reads and
+readable only with `customer.pii.view`), `app.booking_events` (append-only
+lineage), and one `app.outbox_events` row per booking and topic. Snapshot
+immutability is enforced by a trigger, not by convention: only the lifecycle
+states and the revision may move, and a committed booking can never be deleted.
+Confirmation adds no new public error string — it reuses the issue #11
+vocabulary, and refuses a service that needs payment (`payment_pending`) or
+tenant approval (`policy_denied`) until issues #22 and #13 ship those paths.
+
 **No payment, email, or calendar provider is ever called inside that transaction.** Deadlocks and serialization failures retry a bounded number of times with jitter; exclusion constraints and locked capacity remain the final guard.
 
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.

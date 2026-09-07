@@ -3,8 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   parseAvailabilityV1Request,
   parseAvailabilityV1Response,
+  parseConfirmBookingV1Request,
+  parseConfirmBookingV1Response,
   parseCreateHoldV1Request,
   parseCreateHoldV1Response,
+  parseHoldFormV1,
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   normalizeAvailabilityV1TransportRow,
@@ -585,6 +588,132 @@ describe("create hold v1", () => {
   it("rejects an exclusive-resource hold that discloses a subject", () => {
     expect(() =>
       parseCreateHoldV1Response({ ...response, allocationKind: "exclusive_resource" }),
+    ).toThrow();
+  });
+});
+
+describe("confirm booking v1", () => {
+  const request = {
+    consentVersion: "2",
+    contact: {
+      email: "guest@example.invalid",
+      fullName: "Test Guest",
+      phone: "+966 55 000 0000",
+    },
+    customerTimeZone: "Asia/Riyadh",
+    holdId: "0a3f2b64-0000-4000-8000-000000000001",
+    idempotencyKey: "confirm-0a3f2b64-0000-4000-8000-000000000001",
+    intake: { reason: "First visit" },
+    locale: "en",
+    sessionToken: "session-token-0123456789",
+  } as const;
+
+  const response = {
+    approvalStatus: "not_required",
+    bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+    bookingRevision: 1,
+    calendarStatus: "pending",
+    consentVersion: "2",
+    customerTimeZone: "Asia/Riyadh",
+    endAt: "2026-09-21T14:45:00.000Z",
+    locale: "en",
+    locationName: "Downtown",
+    locationTimeZone: "America/New_York",
+    notificationStatus: "queued",
+    paymentStatus: "not_required",
+    price: { currency: "SAR", minorUnits: 18_000 },
+    publicReference: "K3M9P2T7XY",
+    replayed: false,
+    serviceName: "Initial consultation",
+    startAt: "2026-09-21T14:00:00.000Z",
+    status: "confirmed",
+    taxRateBps: 1500,
+  } as const;
+
+  it("accepts a well formed request and response", () => {
+    expect(parseConfirmBookingV1Request(request)).toEqual(request);
+    expect(parseConfirmBookingV1Response(response)).toEqual(response);
+  });
+
+  it("normalizes and bounds guest contact details", () => {
+    expect(
+      parseConfirmBookingV1Request({
+        ...request,
+        contact: { ...request.contact, email: "  GUEST@example.invalid " },
+      }).contact.email,
+    ).toBe("guest@example.invalid");
+    expect(() =>
+      parseConfirmBookingV1Request({
+        ...request,
+        contact: { ...request.contact, email: "not-an-email" },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseConfirmBookingV1Request({
+        ...request,
+        contact: { ...request.contact, fullName: "x".repeat(161) },
+      }),
+    ).toThrow();
+  });
+
+  it("refuses contact fields the booking purpose never declared", () => {
+    expect(() =>
+      parseConfirmBookingV1Request({
+        ...request,
+        contact: { ...request.contact, marketingOptIn: true },
+      }),
+    ).toThrow();
+  });
+
+  it("bounds intake answers", () => {
+    expect(() =>
+      parseConfirmBookingV1Request({
+        ...request,
+        intake: { reason: "x".repeat(2001) },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseConfirmBookingV1Request({ ...request, intake: { reason: 7 } }),
+    ).toThrow();
+  });
+
+  it("keeps booking state independent of provider state", () => {
+    expect(
+      parseConfirmBookingV1Response({ ...response, notificationStatus: "failed" })
+        .status,
+    ).toBe("confirmed");
+    expect(() =>
+      parseConfirmBookingV1Response({ ...response, status: "held" }),
+    ).toThrow();
+    expect(() =>
+      parseConfirmBookingV1Response({ ...response, notificationStatus: "unknown" }),
+    ).toThrow();
+  });
+
+  it("rejects a reference outside the confusable-free alphabet", () => {
+    expect(() =>
+      parseConfirmBookingV1Response({ ...response, publicReference: "K3M9P2T7XI" }),
+    ).toThrow();
+  });
+
+  it("accepts only a declared hold form shape", () => {
+    expect(
+      parseHoldFormV1({
+        consentText: "Cancellations are free up to 24 hours before.",
+        consentVersion: "2",
+        fields: [{ key: "reason", label: "Reason", maxLength: 500, required: true }],
+        locationName: "Downtown",
+        serviceName: "Initial consultation",
+      }).fields[0]?.key,
+    ).toBe("reason");
+    expect(() =>
+      parseHoldFormV1({
+        consentText: "",
+        consentVersion: "2",
+        fields: [{ key: "reason", label: "Reason", maxLength: 5000, required: true }],
+        locationName: "Downtown",
+        serviceName: "Initial consultation",
+      }),
     ).toThrow();
   });
 });

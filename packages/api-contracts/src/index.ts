@@ -102,7 +102,22 @@ export type BookingStatusDto =
   | "rejected"
   | "expired";
 export type PaymentStatusDto =
-  "requires_payment" | "processing" | "succeeded" | "failed" | "cancelled" | "disputed";
+  | "not_required"
+  | "requires_payment"
+  | "processing"
+  | "succeeded"
+  | "failed"
+  | "cancelled"
+  | "disputed";
+const paymentStatuses = [
+  "not_required",
+  "requires_payment",
+  "processing",
+  "succeeded",
+  "failed",
+  "cancelled",
+  "disputed",
+] as const;
 export type PaymentProviderDto = "stripe" | (string & {});
 export type PaymentAccountStatusDto =
   | "connected"
@@ -136,7 +151,16 @@ export type RefundStatusDto =
   "eligible" | "pending" | "succeeded" | "failed" | "manual_review";
 export type NotificationStatusDto =
   "queued" | "sending" | "delivered" | "bounced" | "complained" | "failed";
+const notificationStatuses = [
+  "queued",
+  "sending",
+  "delivered",
+  "bounced",
+  "complained",
+  "failed",
+] as const;
 export type CalendarExportStatusDto = "pending" | "generated" | "stale";
+const calendarExportStatuses = ["pending", "generated", "stale"] as const;
 
 export interface ResolvePublicTenantV1Request {
   readonly application: "client" | "dashboard";
@@ -1013,6 +1037,311 @@ export interface BookingSummaryV1 {
   readonly paymentStatus: PaymentStatusDto;
   readonly publicReference: string;
   readonly status: BookingStatusDto;
+}
+
+/**
+ * The consent text and intake questions from exactly the publication the hold
+ * read. Field labels arrive already localized: catalog revisions are per locale.
+ */
+export interface HoldFormFieldV1 {
+  readonly key: string;
+  readonly label: string;
+  readonly maxLength: number;
+  readonly required: boolean;
+}
+
+export interface HoldFormV1 {
+  readonly consentText: string;
+  readonly consentVersion: string;
+  readonly fields: readonly HoldFormFieldV1[];
+  readonly locationName: string;
+  readonly serviceName: string;
+}
+
+export function parseHoldFormV1(value: unknown): HoldFormV1 {
+  const keys = [
+    "consentText",
+    "consentVersion",
+    "fields",
+    "locationName",
+    "serviceName",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Hold form has an unexpected shape");
+  }
+  const consentVersion = requireNonEmptyString(value.consentVersion);
+  if (consentVersion.length > 40 || typeof value.consentText !== "string") {
+    throw new Error("Hold form consent is invalid");
+  }
+  if (!Array.isArray(value.fields) || value.fields.length > 50) {
+    throw new Error("Hold form exceeds the field bound");
+  }
+  const fields = value.fields.map((field) => {
+    if (
+      !isRecord(field) ||
+      !hasExactKeys(field, ["key", "label", "maxLength", "required"])
+    ) {
+      throw new Error("Hold form field has an unexpected shape");
+    }
+    const key = requireNonEmptyString(field.key);
+    if (
+      key.length > 80 ||
+      typeof field.required !== "boolean" ||
+      typeof field.maxLength !== "number" ||
+      !Number.isSafeInteger(field.maxLength) ||
+      field.maxLength < 1 ||
+      field.maxLength > 2000
+    ) {
+      throw new Error("Hold form field is invalid");
+    }
+    return Object.freeze({
+      key,
+      label: requireNonEmptyString(field.label),
+      maxLength: field.maxLength,
+      required: field.required,
+    });
+  });
+  return Object.freeze({
+    consentText: value.consentText,
+    consentVersion,
+    fields: Object.freeze(fields),
+    locationName: requireNonEmptyString(value.locationName),
+    serviceName: requireNonEmptyString(value.serviceName),
+  });
+}
+
+export interface ConfirmBookingV1Request {
+  readonly consentVersion: string;
+  readonly contact: {
+    readonly email: string;
+    readonly fullName: string;
+    readonly phone: string | null;
+  };
+  readonly customerTimeZone: string;
+  readonly holdId: string;
+  readonly idempotencyKey: IdempotencyKey;
+  /** Answers to the published intake schema. Declared keys only, bounded text. */
+  readonly intake: Readonly<Record<string, string>>;
+  readonly locale: ContractLocale;
+  /** The session that created the hold. Ownership evidence, never authorization. */
+  readonly sessionToken: string;
+}
+
+export interface ConfirmBookingV1Response {
+  readonly approvalStatus: "not_required" | "pending" | "approved" | "declined";
+  readonly bookingId: BookingId;
+  /** Snapshot reference: the booking revision the confirmation describes. */
+  readonly bookingRevision: number;
+  readonly calendarStatus: CalendarExportStatusDto;
+  /** Snapshot reference: the policy version the customer consented to. */
+  readonly consentVersion: string;
+  readonly customerTimeZone: string;
+  readonly endAt: string;
+  readonly locale: ContractLocale;
+  readonly locationName: string;
+  readonly locationTimeZone: string;
+  readonly notificationStatus: NotificationStatusDto;
+  readonly paymentStatus: PaymentStatusDto;
+  readonly price: MoneyDto;
+  readonly publicReference: string;
+  /** True when a duplicate submission replayed the original booking. */
+  readonly replayed: boolean;
+  readonly serviceName: string;
+  readonly startAt: string;
+  readonly status: "confirmed";
+  readonly taxRateBps: number;
+}
+
+const bookingApprovalStatuses = [
+  "not_required",
+  "pending",
+  "approved",
+  "declined",
+] as const;
+
+export function parseConfirmBookingV1Request(value: unknown): ConfirmBookingV1Request {
+  const keys = [
+    "consentVersion",
+    "contact",
+    "customerTimeZone",
+    "holdId",
+    "idempotencyKey",
+    "intake",
+    "locale",
+    "sessionToken",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Booking request has an unexpected shape");
+  }
+  if (value.locale !== "en" && value.locale !== "ar") {
+    throw new Error("Booking locale is unsupported");
+  }
+  const sessionToken = requireNonEmptyString(value.sessionToken);
+  const idempotencyKey = requireNonEmptyString(value.idempotencyKey);
+  if (
+    sessionToken.length < 16 ||
+    sessionToken.length > 200 ||
+    idempotencyKey.length < 16 ||
+    idempotencyKey.length > 200 ||
+    idempotencyKey.trim() !== idempotencyKey
+  ) {
+    throw new Error("Booking session token or idempotency key is out of bounds");
+  }
+  const consentVersion = requireNonEmptyString(value.consentVersion);
+  if (consentVersion.length > 40) {
+    throw new Error("Booking consent version is out of bounds");
+  }
+  if (
+    !isRecord(value.contact) ||
+    !hasExactKeys(value.contact, ["email", "fullName", "phone"])
+  ) {
+    throw new Error("Booking contact has an unexpected shape");
+  }
+  // Contact data is minimized at the boundary: three declared fields, each
+  // bounded, and nothing is accepted that the booking purpose does not need.
+  const fullName = requireNonEmptyString(value.contact.fullName).trim();
+  const email = requireNonEmptyString(value.contact.email).trim().toLowerCase();
+  const phone =
+    value.contact.phone === null
+      ? null
+      : requireNonEmptyString(value.contact.phone).trim();
+  if (
+    fullName.length === 0 ||
+    fullName.length > 160 ||
+    email.length > 320 ||
+    !/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email) ||
+    (phone !== null &&
+      (phone.length < 3 || phone.length > 40 || !/^[+0-9 ()-]+$/u.test(phone)))
+  ) {
+    throw new Error("Booking contact is invalid");
+  }
+  if (!isRecord(value.intake)) {
+    throw new Error("Booking intake has an unexpected shape");
+  }
+  const intakeEntries = Object.entries(value.intake);
+  if (intakeEntries.length > 50) {
+    throw new Error("Booking intake exceeds the field bound");
+  }
+  for (const [key, answer] of intakeEntries) {
+    if (
+      key.trim().length === 0 ||
+      key.length > 80 ||
+      typeof answer !== "string" ||
+      answer.length > 2000
+    ) {
+      throw new Error("Booking intake answer is invalid");
+    }
+  }
+  return Object.freeze({
+    consentVersion,
+    contact: Object.freeze({ email, fullName, phone }),
+    customerTimeZone: requireTimeZone(value.customerTimeZone),
+    holdId: requireNonEmptyString(value.holdId),
+    idempotencyKey,
+    intake: Object.freeze({ ...(value.intake as Record<string, string>) }),
+    locale: value.locale,
+    sessionToken,
+  });
+}
+
+export function parseConfirmBookingV1Response(
+  value: unknown,
+): ConfirmBookingV1Response {
+  const keys = [
+    "approvalStatus",
+    "bookingId",
+    "bookingRevision",
+    "calendarStatus",
+    "consentVersion",
+    "customerTimeZone",
+    "endAt",
+    "locale",
+    "locationName",
+    "locationTimeZone",
+    "notificationStatus",
+    "paymentStatus",
+    "price",
+    "publicReference",
+    "replayed",
+    "serviceName",
+    "startAt",
+    "status",
+    "taxRateBps",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Booking response has an unexpected shape");
+  }
+  if (
+    value.status !== "confirmed" ||
+    typeof value.replayed !== "boolean" ||
+    (value.locale !== "en" && value.locale !== "ar") ||
+    !bookingApprovalStatuses.includes(
+      value.approvalStatus as (typeof bookingApprovalStatuses)[number],
+    )
+  ) {
+    throw new Error("Booking response is invalid");
+  }
+  // Booking, payment, notification, and calendar states stay independent: a
+  // pending email never downgrades a committed booking.
+  if (
+    !paymentStatuses.includes(value.paymentStatus as PaymentStatusDto) ||
+    !notificationStatuses.includes(value.notificationStatus as NotificationStatusDto) ||
+    !calendarExportStatuses.includes(value.calendarStatus as CalendarExportStatusDto)
+  ) {
+    throw new Error("Booking provider state is invalid");
+  }
+  if (
+    !isRecord(value.price) ||
+    !hasExactKeys(value.price, ["currency", "minorUnits"])
+  ) {
+    throw new Error("Booking price has an unexpected shape");
+  }
+  const currency = requireNonEmptyString(value.price.currency);
+  if (
+    !/^[A-Z]{3}$/u.test(currency) ||
+    typeof value.price.minorUnits !== "number" ||
+    !Number.isSafeInteger(value.price.minorUnits) ||
+    value.price.minorUnits < 0 ||
+    typeof value.taxRateBps !== "number" ||
+    !Number.isSafeInteger(value.taxRateBps) ||
+    value.taxRateBps < 0 ||
+    value.taxRateBps > 3000 ||
+    typeof value.bookingRevision !== "number" ||
+    !Number.isSafeInteger(value.bookingRevision) ||
+    value.bookingRevision < 1
+  ) {
+    throw new Error("Booking price or revision is invalid");
+  }
+  const startAt = requireUtcInstant(value.startAt);
+  const endAt = requireUtcInstant(value.endAt);
+  if (Date.parse(startAt) >= Date.parse(endAt)) {
+    throw new Error("Booking range is invalid");
+  }
+  const publicReference = requireNonEmptyString(value.publicReference);
+  if (!/^[0-9A-HJ-NP-Z]{10}$/u.test(publicReference)) {
+    throw new Error("Booking reference is invalid");
+  }
+  return Object.freeze({
+    approvalStatus: value.approvalStatus as ConfirmBookingV1Response["approvalStatus"],
+    bookingId: requireNonEmptyString(value.bookingId) as BookingId,
+    bookingRevision: value.bookingRevision,
+    calendarStatus: value.calendarStatus as CalendarExportStatusDto,
+    consentVersion: requireNonEmptyString(value.consentVersion),
+    customerTimeZone: requireTimeZone(value.customerTimeZone),
+    endAt,
+    locale: value.locale,
+    locationName: requireNonEmptyString(value.locationName),
+    locationTimeZone: requireTimeZone(value.locationTimeZone),
+    notificationStatus: value.notificationStatus as NotificationStatusDto,
+    paymentStatus: value.paymentStatus as PaymentStatusDto,
+    price: Object.freeze({ currency, minorUnits: value.price.minorUnits }),
+    publicReference,
+    replayed: value.replayed,
+    serviceName: requireNonEmptyString(value.serviceName),
+    startAt,
+    status: "confirmed",
+    taxRateBps: value.taxRateBps,
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
