@@ -1844,6 +1844,91 @@ export function parseManagementStepUpV1(value: unknown): ManagementStepUpV1 {
   return Object.freeze({ expiresAt, outcome: value.outcome });
 }
 
+export type BookingChangeActionV1 = "cancel" | "reschedule";
+
+/** What a management-link action returns. Refusals stay indistinguishable. */
+export type ManagementActionV1 =
+  | { readonly outcome: "unavailable" }
+  | {
+      readonly bookingId: BookingId;
+      readonly bookingRevision: number;
+      readonly outcome: "applied";
+      readonly refund: MoneyDto | null;
+      readonly refundPercentBps: number | null;
+      readonly startAt: string | null;
+      readonly status: "cancelled" | "confirmed";
+    };
+
+export function parseManagementActionV1(value: unknown): ManagementActionV1 {
+  if (!isRecord(value)) throw new Error("Management action has an unexpected shape");
+  if (value.outcome === "unavailable") {
+    return Object.freeze({ outcome: "unavailable" as const });
+  }
+  const keys = [
+    "bookingId",
+    "bookingRevision",
+    "outcome",
+    "refund",
+    "refundPercentBps",
+    "startAt",
+    "status",
+  ] as const;
+  if (
+    !hasExactKeys(value, keys) ||
+    value.outcome !== "applied" ||
+    (value.status !== "cancelled" && value.status !== "confirmed") ||
+    typeof value.bookingRevision !== "number" ||
+    !Number.isSafeInteger(value.bookingRevision) ||
+    value.bookingRevision < 1
+  ) {
+    throw new Error("Management action is invalid");
+  }
+  // Money and time belong to different actions: a cancellation reports refund
+  // eligibility, a move reports the new time, and neither reports the other.
+  const refundPercentBps =
+    value.refundPercentBps === null ? null : Number(value.refundPercentBps);
+  if (
+    refundPercentBps !== null &&
+    (!Number.isSafeInteger(refundPercentBps) ||
+      refundPercentBps < 0 ||
+      refundPercentBps > 10_000)
+  ) {
+    throw new Error("Management action refund percentage is invalid");
+  }
+  let refund: MoneyDto | null = null;
+  if (value.refund !== null) {
+    if (
+      !isRecord(value.refund) ||
+      !hasExactKeys(value.refund, ["currency", "minorUnits"])
+    ) {
+      throw new Error("Management action refund has an unexpected shape");
+    }
+    const currency = requireNonEmptyString(value.refund.currency);
+    if (
+      !/^[A-Z]{3}$/u.test(currency) ||
+      typeof value.refund.minorUnits !== "number" ||
+      !Number.isSafeInteger(value.refund.minorUnits) ||
+      value.refund.minorUnits < 0
+    ) {
+      throw new Error("Management action refund is invalid");
+    }
+    refund = Object.freeze({ currency, minorUnits: value.refund.minorUnits });
+  }
+  const startAt = value.startAt === null ? null : requireUtcInstant(value.startAt);
+  if ((value.status === "cancelled") !== (startAt === null)) {
+    throw new Error("Management action result does not match its status");
+  }
+  return Object.freeze({
+    bookingId: requireNonEmptyString(value.bookingId) as BookingId,
+    bookingRevision: value.bookingRevision,
+    outcome: "applied" as const,
+    refund,
+    refundPercentBps,
+    startAt,
+    status: value.status,
+  });
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

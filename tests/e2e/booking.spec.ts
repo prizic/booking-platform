@@ -1,10 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { locales, responsiveProfiles } from "./apps";
 import {
   bookingQuery,
   clientOrigin,
   confirmed,
   fillDetails,
+  managementView,
   reachDetailsStep,
   requested,
   slotEnd,
@@ -314,5 +315,59 @@ test.describe("guest management link", () => {
     await expect(
       page.getByText(/open the link from your booking email/iu),
     ).toBeVisible();
+  });
+});
+
+test.describe("guest booking changes", () => {
+  const token = "f".repeat(64);
+
+  async function stubManage(page: Page, applied: Record<string, unknown>) {
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        action?: string;
+      };
+      if (body.action === "cancel" || body.action === "reschedule") {
+        return route.fulfill({ json: applied });
+      }
+      return route.fulfill({
+        json: {
+          ...managementView,
+          intent: body.action === "reschedule" ? "reschedule" : "cancel",
+          stepUpRequired: true,
+          stepUpVerified: true,
+        },
+      });
+    });
+  }
+
+  test("a verified guest cancels and is told the refund", async ({ page }) => {
+    await stubManage(page, {
+      bookingId: managementView.booking.bookingId,
+      bookingRevision: 2,
+      outcome: "applied",
+      refund: { currency: "SAR", minorUnits: 18_000 },
+      refundPercentBps: 10_000,
+      startAt: null,
+      status: "cancelled",
+    });
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+    await page.getByRole("button", { name: /^cancel this booking$/iu }).click();
+
+    await expect(
+      page.getByRole("heading", { name: /your booking is cancelled/iu }),
+    ).toBeVisible();
+    await expect(page.getByText(/refunds/iu)).toBeVisible();
+  });
+
+  test("a change that lost a race changes nothing and says so", async ({ page }) => {
+    await stubManage(page, { outcome: "unavailable" });
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+    await page.getByRole("button", { name: /^cancel this booking$/iu }).click();
+
+    await expect(page.locator("#manage-action-error")).toContainText(
+      /your booking changed while this page was open/iu,
+    );
+    // The booking facts are still on screen: nothing was applied.
+    await expect(page.getByText(managementView.booking.publicReference)).toBeVisible();
   });
 });

@@ -10,6 +10,49 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      act_on_management_link_v1: {
+        Args: {
+          p_action: string;
+          p_application: string;
+          p_expected_revision: number;
+          p_hostname: string;
+          p_new_start?: string;
+          p_reason_public?: string;
+          p_token: string;
+        };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          currency: string;
+          ends_at: string;
+          outcome: string;
+          refund_eligible_minor: number;
+          refund_percent_bps: number;
+          starts_at: string;
+          status: string;
+        }[];
+      };
+      cancel_booking_v1: {
+        Args: {
+          p_booking_id: string;
+          p_expected_revision: number;
+          p_reason_internal?: string;
+          p_reason_public?: string;
+          p_request_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          cancelled_at: string;
+          contract_version: number;
+          refund_eligible_minor: number;
+          refund_percent_bps: number;
+          replayed: boolean;
+          status: string;
+        }[];
+      };
       confirm_booking_v1: {
         Args: {
           p_application: string;
@@ -452,6 +495,25 @@ export type Database = {
           contract_version: number;
           expires_at: string;
           outcome: string;
+        }[];
+      };
+      reschedule_booking_v1: {
+        Args: {
+          p_booking_id: string;
+          p_expected_revision: number;
+          p_new_start: string;
+          p_reason_internal?: string;
+          p_request_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          ends_at: string;
+          reschedule_count: number;
+          starts_at: string;
+          status: string;
         }[];
       };
       resolve_public_tenant_v1: {

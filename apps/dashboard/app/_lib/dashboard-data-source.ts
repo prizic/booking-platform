@@ -622,6 +622,58 @@ export function createDashboardDataSource(
       });
     },
 
+    listBookings: async (tenantId) => {
+      const rows = assertRpc(
+        await api.rpc("list_bookings_v1", {
+          p_from: new Date().toISOString(),
+          p_tenant_id: tenantId,
+          p_to: null,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map((value) => {
+        const row = value as Record<string, unknown>;
+        return {
+          bookingId: requireString(row.booking_id),
+          bookingRevision: requireNumber(row.booking_revision),
+          endAt: new Date(String(row.ends_at)).toISOString(),
+          locationName: requireString(row.location_name),
+          locationTimeZone: requireString(row.location_time_zone),
+          publicReference: requireString(row.public_reference),
+          serviceName: requireString(row.service_name),
+          startAt: new Date(String(row.starts_at)).toISOString(),
+          status: requireString(row.status),
+        };
+      });
+    },
+
+    changeBooking: async (request) => {
+      // Both transitions are the database's, not this client's: it only carries
+      // the revision the reader acted on.
+      if (request.action === "cancel") {
+        assertRpc(
+          await api.rpc("cancel_booking_v1", {
+            p_booking_id: request.bookingId,
+            p_expected_revision: request.expectedRevision,
+            p_reason_internal: request.internalReason,
+            p_reason_public: request.publicReason,
+            p_request_id: crypto.randomUUID(),
+            p_tenant_id: request.tenantId,
+          }),
+        );
+        return;
+      }
+      assertRpc(
+        await api.rpc("reschedule_booking_v1", {
+          p_booking_id: request.bookingId,
+          p_expected_revision: request.expectedRevision,
+          p_new_start: request.newStartAt,
+          p_reason_internal: request.internalReason,
+          p_request_id: crypto.randomUUID(),
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
     saveScheduleConfig: async (request) => {
       const row = firstRow(
         assertRpc(

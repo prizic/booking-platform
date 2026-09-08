@@ -328,6 +328,19 @@ rate-limited all answer identically — so the audit row and rate-limit counters
 that the refused call just wrote survive the transaction, and the surface never
 discloses whether a booking or a token exists.
 
+As implemented in issue #15, both a reschedule and a cancellation lock the
+expected booking revision first, so exactly one of two competing changes wins
+and the other gets `revision_conflict`. A move inserts the new allocation
+before releasing the old one in the same transaction, and every refused move
+therefore leaves the original booking and its allocation untouched. Capacity
+stays reachable through the booking's hold for the booking's whole life, so a
+cancellation after a move still releases exactly what the booking holds.
+Cancellation records refund eligibility and its amount from the snapshotted
+schedule and leaves the provider refund to issue #23. Every delivery intent is
+keyed by the revision it describes, so a stale duplicate cannot update the
+wrong version of a booking. The customer reaches both actions through the
+single-intent management link from issue #14, which is consumed on use.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

@@ -148,7 +148,20 @@ export type ClientMessageKey =
   | "manageStatusConfirmed"
   | "manageStatusRequested"
   | "manageStatusCancelled"
-  | "manageStatusOther";
+  | "manageStatusOther"
+  | "manageCancelAction"
+  | "manageCancelling"
+  | "manageCancelConfirmTitle"
+  | "manageCancelRefund"
+  | "manageCancelNoRefund"
+  | "manageCancelled"
+  | "manageRescheduleAction"
+  | "manageRescheduling"
+  | "manageRescheduleTimeLabel"
+  | "manageRescheduleTimeHint"
+  | "manageRescheduled"
+  | "manageActionFailed"
+  | "manageActionConflict";
 
 export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
@@ -323,6 +336,24 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStatusRequested: "Awaiting approval",
     manageStatusCancelled: "Cancelled",
     manageStatusOther: "See the latest email about this booking",
+    manageCancelAction: "Cancel this booking",
+    manageCancelling: "Cancelling your booking",
+    manageCancelConfirmTitle: "Cancelling is final",
+    manageCancelRefund:
+      "Cancelling now refunds {amount} under the policy you accepted.",
+    manageCancelNoRefund:
+      "Cancelling now does not qualify for a refund under the policy you accepted.",
+    manageCancelled:
+      "Your booking is cancelled. Any refund is processed separately and can take a few days.",
+    manageRescheduleAction: "Move this booking",
+    manageRescheduling: "Moving your booking",
+    manageRescheduleTimeLabel: "New time",
+    manageRescheduleTimeHint:
+      "Times are shown in your timezone. Only times the business still has free can be booked.",
+    manageRescheduled: "Your booking has been moved. The new time is confirmed.",
+    manageActionFailed: "That did not work. Your booking has not changed.",
+    manageActionConflict:
+      "Your booking changed while this page was open, so nothing was applied. Open the most recent email about it.",
   },
   ar: {
     eyebrow: "تجربة الحجز العامة",
@@ -489,6 +520,24 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStatusRequested: "بانتظار الموافقة",
     manageStatusCancelled: "ملغى",
     manageStatusOther: "راجع آخر رسالة عن هذا الحجز",
+    manageCancelAction: "إلغاء هذا الحجز",
+    manageCancelling: "جارٍ إلغاء حجزك",
+    manageCancelConfirmTitle: "الإلغاء نهائي",
+    manageCancelRefund:
+      "يمنحك الإلغاء الآن استردادًا بقيمة {amount} وفق السياسة التي وافقت عليها.",
+    manageCancelNoRefund:
+      "لا يمنحك الإلغاء الآن أي استرداد وفق السياسة التي وافقت عليها.",
+    manageCancelled:
+      "تم إلغاء حجزك. تتم معالجة أي استرداد بشكل منفصل وقد يستغرق بضعة أيام.",
+    manageRescheduleAction: "نقل هذا الحجز",
+    manageRescheduling: "جارٍ نقل حجزك",
+    manageRescheduleTimeLabel: "الوقت الجديد",
+    manageRescheduleTimeHint:
+      "تُعرض الأوقات بمنطقتك الزمنية. يمكن حجز الأوقات المتاحة لدى مقدّم الخدمة فقط.",
+    manageRescheduled: "تم نقل حجزك، والوقت الجديد مؤكّد.",
+    manageActionFailed: "لم تنجح العملية، ولم يتغيّر حجزك.",
+    manageActionConflict:
+      "تغيّر حجزك أثناء فتح هذه الصفحة، لذا لم يُطبَّق أي شيء. راجع آخر رسالة عنه.",
   },
 };
 

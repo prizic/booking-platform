@@ -191,7 +191,11 @@ select is((select r.outcome from api_v1.redeem_management_token_v1('client.tenan
 rollback to savepoint link_superseded;
 
 savepoint link_revocation;
-update app.bookings set status='cancelled', revision=revision+1
+-- A cancelled booking records when it was cancelled (issue #15), so the
+-- fixture writes the same shape the cancellation path does.
+update app.bookings
+set status='cancelled', cancelled_at=statement_timestamp(),
+    cancellation_actor_kind='member', revision=revision+1
 where id=current_setting('test.booking')::uuid;
 select is((select r.outcome from api_v1.redeem_management_token_v1('client.tenant-a.example.invalid','client',
     current_setting('test.view_token'),'view') r),'unavailable',
