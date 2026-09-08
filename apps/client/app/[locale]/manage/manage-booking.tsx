@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  parseManagementActionV1,
   parseManagementStepUpV1,
   parseManagementViewV1,
+  type ManagementActionV1,
   type ManagementViewV1,
 } from "@wlbp/api-contracts";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
@@ -46,8 +48,14 @@ export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
   const [view, setView] = useState<ManagementViewV1 | null>(null);
   const [stepUpSent, setStepUpSent] = useState(false);
   const [stepUpFailed, setStepUpFailed] = useState(false);
-  const [busy, setBusy] = useState<"send" | "verify" | null>(null);
+  const [busy, setBusy] = useState<"cancel" | "move" | "send" | "verify" | null>(null);
   const [code, setCode] = useState("");
+  const [newStart, setNewStart] = useState("");
+  const [applied, setApplied] = useState<Extract<
+    ManagementActionV1,
+    { outcome: "applied" }
+  > | null>(null);
+  const [actionFailed, setActionFailed] = useState<"conflict" | "failed" | null>(null);
 
   useEffect(() => {
     if (token === null) return;
@@ -108,6 +116,33 @@ export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
     }
   }
 
+  async function act(action: "cancel" | "reschedule") {
+    if (token === null || view === null || view.outcome !== "granted") return;
+    setBusy(action === "cancel" ? "cancel" : "move");
+    setActionFailed(null);
+    try {
+      const result = parseManagementActionV1(
+        await callManage({
+          action,
+          expectedRevision: view.booking.bookingRevision,
+          newStartAt:
+            action === "reschedule" && newStart !== ""
+              ? new Date(`${newStart}:00Z`).toISOString()
+              : null,
+          token,
+        }),
+      );
+      // A refusal is indistinguishable, so the page says what is true for the
+      // customer: nothing changed, and the newest email is authoritative.
+      if (result.outcome === "applied") setApplied(result);
+      else setActionFailed("conflict");
+    } catch {
+      setActionFailed("failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   if (token === null) {
     return (
       <Surface as="section" className="booking-flow" labelledBy="manage-title">
@@ -138,6 +173,37 @@ export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
   }
 
   const { booking } = view;
+  if (applied !== null) {
+    return (
+      <Surface as="section" className="booking-confirmed" labelledBy="manage-title">
+        <Badge tone="positive">{booking.publicReference}</Badge>
+        <h1 id="manage-title">
+          {applied.status === "cancelled"
+            ? message("manageCancelled")
+            : message("manageRescheduled")}
+        </h1>
+        {applied.startAt === null ? null : (
+          <StatusMessage tone="positive">
+            {formatDateTime(applied.startAt, locale, booking.customerTimeZone)}
+          </StatusMessage>
+        )}
+        {applied.refund === null ? null : (
+          <p>
+            {applied.refund.minorUnits > 0
+              ? message("manageCancelRefund").replace(
+                  "{amount}",
+                  formatCurrency(
+                    applied.refund.minorUnits,
+                    applied.refund.currency,
+                    locale,
+                  ),
+                )
+              : message("manageCancelNoRefund")}
+          </p>
+        )}
+      </Surface>
+    );
+  }
   return (
     <Surface as="section" className="booking-confirmed" labelledBy="manage-title">
       <Badge tone={booking.status === "cancelled" ? "neutral" : "positive"}>
@@ -195,6 +261,61 @@ export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
           : message("manageCancelIneligible")}
       </StatusMessage>
       <p>{message("manageActionsPending")}</p>
+
+      {actionFailed === null ? null : (
+        <ErrorSummary
+          focusTarget
+          id="manage-action-error"
+          title={message("manageActionFailed")}
+        >
+          <p>
+            {actionFailed === "conflict"
+              ? message("manageActionConflict")
+              : message("manageActionFailed")}
+          </p>
+        </ErrorSummary>
+      )}
+
+      {view.stepUpVerified && view.intent === "cancel" ? (
+        <section aria-labelledby="manage-cancel">
+          <h2 id="manage-cancel">{message("manageCancelConfirmTitle")}</h2>
+          <Button
+            loading={busy === "cancel"}
+            loadingLabel={message("manageCancelling")}
+            onClick={() => void act("cancel")}
+          >
+            {message("manageCancelAction")}
+          </Button>
+        </section>
+      ) : null}
+
+      {view.stepUpVerified && view.intent === "reschedule" ? (
+        <form
+          noValidate
+          onSubmit={(event) => {
+            event.preventDefault();
+            void act("reschedule");
+          }}
+        >
+          <TextField
+            description={message("manageRescheduleTimeHint")}
+            id="manage-new-start"
+            label={message("manageRescheduleTimeLabel")}
+            name="newStartAt"
+            onChange={(event) => setNewStart(event.currentTarget.value)}
+            required
+            type="datetime-local"
+            value={newStart}
+          />
+          <Button
+            loading={busy === "move"}
+            loadingLabel={message("manageRescheduling")}
+            type="submit"
+          >
+            {message("manageRescheduleAction")}
+          </Button>
+        </form>
+      ) : null}
 
       {view.stepUpRequired ? (
         <section aria-labelledby="manage-step-up">

@@ -1,6 +1,19 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "bookingsTitle"
+  | "bookingsSummary"
+  | "bookingsEmpty"
+  | "bookingsUnavailable"
+  | "bookingsListLabel"
+  | "bookingsWhenLabel"
+  | "bookingsStatusLabel"
+  | "bookingsCancel"
+  | "bookingsCancelling"
+  | "bookingsReschedule"
+  | "bookingsNewTimeLabel"
+  | "bookingsResultCancelled"
+  | "bookingsResultMoved"
   | "requestsTitle"
   | "requestsSummary"
   | "requestsEmpty"
@@ -145,6 +158,21 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    bookingsTitle: "Upcoming bookings",
+    bookingsSummary:
+      "Move or cancel a booking. The customer is told either way, and any refund follows the policy the booking was made under.",
+    bookingsEmpty: "No upcoming bookings.",
+    bookingsUnavailable:
+      "Bookings stay closed until the secure connection is complete.",
+    bookingsListLabel: "Upcoming bookings",
+    bookingsWhenLabel: "When",
+    bookingsStatusLabel: "Status",
+    bookingsCancel: "Cancel booking",
+    bookingsCancelling: "Cancelling",
+    bookingsReschedule: "Move booking",
+    bookingsNewTimeLabel: "New time",
+    bookingsResultCancelled: "The booking is cancelled and the customer will be told.",
+    bookingsResultMoved: "The booking has been moved and the customer will be told.",
     requestsTitle: "Booking requests",
     requestsSummary:
       "Requests wait for a decision here. Accepting books the time; the customer is told either way.",
@@ -308,6 +336,20 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    bookingsTitle: "الحجوزات القادمة",
+    bookingsSummary:
+      "انقل حجزًا أو ألغه. يُبلَّغ العميل في الحالتين، ويتبع أي استرداد السياسة التي تم الحجز وفقها.",
+    bookingsEmpty: "لا توجد حجوزات قادمة.",
+    bookingsUnavailable: "تبقى الحجوزات مغلقة حتى يكتمل الاتصال الآمن.",
+    bookingsListLabel: "الحجوزات القادمة",
+    bookingsWhenLabel: "الموعد",
+    bookingsStatusLabel: "الحالة",
+    bookingsCancel: "إلغاء الحجز",
+    bookingsCancelling: "جارٍ الإلغاء",
+    bookingsReschedule: "نقل الحجز",
+    bookingsNewTimeLabel: "الوقت الجديد",
+    bookingsResultCancelled: "تم إلغاء الحجز وسيُبلَّغ العميل.",
+    bookingsResultMoved: "تم نقل الحجز وسيُبلَّغ العميل.",
     requestsTitle: "طلبات الحجز",
     requestsSummary:
       "تنتظر الطلبات قرارًا هنا. القبول يحجز الوقت، ويُبلَّغ العميل في الحالتين.",

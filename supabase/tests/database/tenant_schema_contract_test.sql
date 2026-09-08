@@ -85,6 +85,7 @@ select is(
       and procedure.prosecdef
   ),
   array[
+    'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',
     'private.bump_availability_revision()',
     'private.can_access_location(uuid,uuid)',
     'private.can_decide_booking(uuid,uuid,text)',
@@ -92,6 +93,7 @@ select is(
     'private.can_manage_policy_scope(uuid,uuid,uuid,uuid)',
     'private.can_manage_schedule_scope(uuid,uuid,uuid,uuid)',
     'private.can_manage_staff(uuid,uuid)',
+    'private.cancel_booking_v1(uuid,uuid,bigint,text,text,text,uuid,text)',
     'private.confirm_booking_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text)',
     'private.create_hold_v1(text,text,uuid,uuid,timestamp with time zone,text,text,uuid,integer,text,text)',
     'private.current_membership_id(uuid)',
@@ -115,6 +117,7 @@ select is(
     'private.release_hold_v1(text,text,uuid,text)',
     'private.request_booking_v1(uuid,app.booking_holds,app.catalog_service_revisions,uuid,uuid,timestamp with time zone)',
     'private.request_management_otp_v1(text,text,text)',
+    'private.reschedule_booking_v1(uuid,uuid,bigint,timestamp with time zone,text,text,uuid)',
     'private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)',
     'private.respond_to_proposal_v1(text,text,text,text)',
     'private.revoke_management_tokens_on_state_change()',

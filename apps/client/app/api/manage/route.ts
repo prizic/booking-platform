@@ -23,7 +23,9 @@ const intents = new Set<ManagementIntentV1>([
 interface ManageRequestBody {
   readonly action?: unknown;
   readonly code?: unknown;
+  readonly expectedRevision?: unknown;
   readonly intent?: unknown;
+  readonly newStartAt?: unknown;
   readonly token?: unknown;
 }
 
@@ -57,6 +59,28 @@ export async function POST(request: Request): Promise<Response> {
         /^[0-9]{6}$/u.test(body.code) &&
         (await source.verifyStepUp(body.token, body.code));
       return Response.json({ verified }, { headers });
+    }
+    if (body.action === "cancel" || body.action === "reschedule") {
+      const expectedRevision = Number(body.expectedRevision);
+      const newStartAt = typeof body.newStartAt === "string" ? body.newStartAt : null;
+      // A move needs a time and a cancellation must not carry one, and the
+      // revision the caller acted on has to be a real one.
+      if (
+        !Number.isSafeInteger(expectedRevision) ||
+        expectedRevision < 1 ||
+        (body.action === "reschedule") !== (newStartAt !== null)
+      ) {
+        return Response.json({ outcome: "unavailable" }, { headers });
+      }
+      return Response.json(
+        await source.act({
+          action: body.action,
+          expectedRevision,
+          newStartAt,
+          token: body.token,
+        }),
+        { headers },
+      );
     }
     const intent =
       typeof body.intent === "string" && intents.has(body.intent as ManagementIntentV1)

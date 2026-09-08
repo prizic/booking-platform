@@ -1,6 +1,9 @@
 import {
+  parseManagementActionV1,
   parseManagementStepUpV1,
   parseManagementViewV1,
+  type BookingChangeActionV1,
+  type ManagementActionV1,
   type ManagementIntentV1,
   type ManagementStepUpV1,
   type ManagementViewV1,
@@ -81,6 +84,54 @@ export function createManagementDataSource(api: BookingRpc, trustedHostname: str
         expiresAt: new Date(String(row.expires_at)).toISOString(),
         outcome: "sent",
       });
+    },
+
+    /**
+     * The action the link authorizes. The database decides everything that
+     * matters — live link, matching intent, verified step-up, current revision,
+     * snapshotted policy — and answers a refusal exactly like an unknown link.
+     */
+    async act(input: {
+      readonly action: BookingChangeActionV1;
+      readonly expectedRevision: number;
+      readonly newStartAt: string | null;
+      readonly token: string;
+    }): Promise<ManagementActionV1> {
+      const result = await api.rpc("act_on_management_link_v1", {
+        p_action: input.action,
+        p_application: "client",
+        p_expected_revision: input.expectedRevision,
+        p_hostname: trustedHostname,
+        p_new_start: input.newStartAt,
+        p_token: input.token,
+      });
+      const row = result.error === null ? firstRow(result.data) : null;
+      if (row === null || row.outcome !== "applied") {
+        return parseManagementActionV1({ outcome: "unavailable" });
+      }
+      try {
+        const minor =
+          row.refund_eligible_minor === null || row.refund_eligible_minor === undefined
+            ? null
+            : Number(row.refund_eligible_minor);
+        return parseManagementActionV1({
+          bookingId: row.booking_id,
+          bookingRevision: Number(row.booking_revision),
+          outcome: "applied",
+          refund: minor === null ? null : { currency: row.currency, minorUnits: minor },
+          refundPercentBps:
+            row.refund_percent_bps === null || row.refund_percent_bps === undefined
+              ? null
+              : Number(row.refund_percent_bps),
+          startAt:
+            row.starts_at === null || row.starts_at === undefined
+              ? null
+              : new Date(String(row.starts_at)).toISOString(),
+          status: row.status,
+        });
+      } catch {
+        return parseManagementActionV1({ outcome: "unavailable" });
+      }
     },
 
     async verifyStepUp(token: string, code: string): Promise<boolean> {

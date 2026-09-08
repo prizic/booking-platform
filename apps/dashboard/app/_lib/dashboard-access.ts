@@ -33,6 +33,29 @@ export interface DashboardDataSource {
   decideBookingRequest?: (
     request: BookingDecisionV1Request,
   ) => Promise<BookingDecisionV1Response>;
+  listBookings?: (tenantId: string) => Promise<readonly BookingSummaryRowV1[]>;
+  changeBooking?: (request: {
+    action: "cancel" | "reschedule";
+    bookingId: string;
+    expectedRevision: number;
+    internalReason: string | null;
+    newStartAt: string | null;
+    publicReason: string | null;
+    tenantId: string;
+  }) => Promise<void>;
+}
+
+/** The minimal upcoming-booking row the staff change surface needs. */
+export interface BookingSummaryRowV1 {
+  readonly bookingId: string;
+  readonly bookingRevision: number;
+  readonly endAt: string;
+  readonly locationName: string;
+  readonly locationTimeZone: string;
+  readonly publicReference: string;
+  readonly serviceName: string;
+  readonly startAt: string;
+  readonly status: string;
 }
 
 export type DashboardAccessState =

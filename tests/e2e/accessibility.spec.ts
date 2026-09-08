@@ -143,6 +143,18 @@ for (const language of locales) {
 // connection is incomplete, and that closed state is what an unauthenticated
 // reader sees, so it is scanned too.
 for (const language of locales) {
+  test(`dashboard bookings ${language.locale} has no automated WCAG A/AA violations`, async ({
+    page,
+  }) => {
+    await page.goto(`http://localhost:41731/${language.locale}/bookings`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+
   test(`dashboard requests ${language.locale} has no automated WCAG A/AA violations`, async ({
     page,
   }) => {
