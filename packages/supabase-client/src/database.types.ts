@@ -506,11 +506,17 @@ export type Database = {
       };
       replay_booking_notification_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
-        Returns: { contract_version: number; status: string }[];
+        Returns: {
+          contract_version: number;
+          status: string;
+        }[];
       };
       replay_notification_v1: {
         Args: { p_message_id: string; p_tenant_id: string };
-        Returns: { contract_version: number; status: string }[];
+        Returns: {
+          contract_version: number;
+          status: string;
+        }[];
       };
       request_management_otp_v1: {
         Args: { p_application: string; p_hostname: string; p_token: string };
