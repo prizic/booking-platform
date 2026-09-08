@@ -93,6 +93,13 @@ Owners are placeholders until the on-call rotation exists.
 - **Mitigation:** Stop the bypass path first. Reduce capacity to safe value for the affected resource. Drain a stale-hold backlog with `select private.expire_holds_v1();` — it is batched, idempotent, and safe to run beside live hold creation. A request-to-book backlog drains the same way with `select private.expire_booking_requests_v1();`, which closes requests whose wall-clock decision deadline has passed and releases any capacity they reserved; elapsed guest management links are retired by `select private.expire_management_links_v1();`. Contact affected customers via the tenant, not directly.
 - **Escalation:** Any confirmed double booking is a correctness incident → engineering lead + affected tenant owner. Add a regression case to the concurrency suite before closing.
 
+### R-1b Booking email not arriving
+
+- **Trigger:** Delivery-state alert, tenant report, or a rising dead-letter count.
+- **First checks:** `app.notification_messages` for the booking — `queued` past its `next_attempt_at` means the worker is not running; `sending` with an elapsed `locked_until` means a worker died mid-send; `failed` with `dead_lettered_at` means the attempt ceiling was reached. `app.notification_attempts` holds the stable error code per attempt, and `app.notification_suppressions` says whether the address bounced or complained.
+- **Mitigation:** Release stuck claims with `select private.recover_stuck_notifications_v1();`. Drain due work with `select private.dispatch_notifications_v1();` and let the worker claim. Replay a dead letter with `api_v1.replay_booking_notification_v1(tenant, booking)` — it re-queues the same logical message and is refused for a suppressed address, which is deliberate.
+- **Escalation:** A suppression that looks wrong is a customer-data question, not a delivery question: it needs the tenant, not a manual delete.
+
 ### R-2 Payment succeeded but booking not confirmed
 
 - **Trigger:** Payment pending age alert, or reconciliation mismatch.

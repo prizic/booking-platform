@@ -11,7 +11,9 @@ import {
   type DecisionOutcome,
 } from "../../_lib/request-decisions";
 
-function resultUrl(locale: Locale, outcome: DecisionOutcome | "moved"): string {
+type BookingOutcome = DecisionOutcome | "moved" | "resend-unavailable" | "resent";
+
+function resultUrl(locale: Locale, outcome: BookingOutcome): string {
   return `/${locale}/bookings?result=${outcome}`;
 }
 
@@ -30,6 +32,27 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
   const bookingId = formData.get("bookingId");
   const expectedRevision = Number(formData.get("expectedRevision"));
   const timeZone = formData.get("locationTimeZone");
+  if (action === "resend") {
+    // Resending is the same authorized replay of the message that already
+    // exists, never a second logical message.
+    let resendOutcome: BookingOutcome = "resent";
+    try {
+      if (
+        typeof bookingId !== "string" ||
+        request.source.resendBookingNotification === undefined
+      ) {
+        throw new Error("invalid");
+      }
+      await request.source.resendBookingNotification({
+        bookingId,
+        tenantId: request.state.context.tenantId,
+      });
+    } catch {
+      resendOutcome = "resend-unavailable";
+    }
+    if (resendOutcome === "resent") revalidatePath(`/${locale}/bookings`);
+    redirect(resultUrl(locale, resendOutcome));
+  }
   if (
     (action !== "cancel" && action !== "reschedule") ||
     typeof bookingId !== "string" ||
@@ -55,7 +78,7 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
 
   // The redirect stays outside the try: it signals by throwing, and a change
   // that already committed must never be reported as a failure.
-  let outcome: DecisionOutcome | "moved";
+  let outcome: BookingOutcome;
   try {
     await request.source.changeBooking({
       action,

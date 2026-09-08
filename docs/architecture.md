@@ -353,6 +353,20 @@ If payment succeeds after a hold is lost, the transaction enters a visible excep
 
 Every provider side effect follows the transactional outbox: the business transaction inserts an `outbox_event` in the same commit → a dispatcher sends due events to Supabase Queues in bounded batches → a worker claims one under a visibility timeout → the provider adapter makes an idempotent call → the worker records the attempt and provider IDs and acknowledges only after durable success. Retries use bounded exponential backoff with jitter; poison events go to a dead-letter state with replay controls.
 
+As implemented in issue #19, the email edge is: the booking transaction's
+`app.outbox_events` row becomes one `app.notification_messages` row keyed by
+tenant, booking, template, revision, recipient digest, and locale — so a
+duplicate dispatch creates nothing — which a worker claims under a visibility
+timeout, renders from a platform-owned versioned template, and hands to the
+provider adapter. Only `private.record_notification_attempt_v1` ends the send
+loop: acceptance means `sent`, and only the provider's own verified callback
+means `delivered`. Retries use bounded exponential backoff with jitter and dead
+letter into an operator-visible state with an authorized replay. A hard bounce
+or complaint suppresses that address for that tenant alone, and a replay to a
+suppressed address is refused. The booking's `notification_status` mirrors its
+newest message, so a booking read carries delivery state without a second
+query, and provider truth never rewrites booking truth.
+
 Inbound webhooks are signature-verified against the **unmodified raw body**, inserted into `webhook_inbox` under a unique provider event/delivery ID, acknowledged fast, and processed asynchronously. Both the sanitized raw event and the canonical state are stored. Duplicates and out-of-order delivery are expected.
 
 Cron (Supabase Cron) covers hold expiry, reminder scheduling, stuck-outbox recovery, payment/calendar/email reconciliation, calendar subscription renewal, retention/deletion batches, usage aggregation, orphaned object checks, and partition/index maintenance when measurements justify it. Jobs stay short and batched — current guidance is at most eight concurrent jobs and no job over ten minutes (revalidate this vendor limit at implementation time; see [references](./references.md)). Long workflows are resumable state machines, not one long invocation.

@@ -1,0 +1,96 @@
+/**
+ * Resend delivers webhooks through Svix. Verification runs over the
+ * **unmodified raw body**: the signed content is `${id}.${timestamp}.${body}`,
+ * and any re-serialization of the JSON would change the bytes and fail.
+ */
+export interface WebhookVerificationInput {
+  readonly headers: Readonly<Record<string, string | null>>;
+  /** The exact bytes received, before any parsing. */
+  readonly rawBody: string;
+  /** Base64 secret, with or without the `whsec_` prefix. */
+  readonly secret: string;
+  /** Injected so replay windows are testable without waiting. */
+  readonly now?: Date;
+}
+
+export type WebhookVerification =
+  { readonly ok: false; readonly reason: "invalid" } | { readonly ok: true };
+
+const toleranceSeconds = 300;
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+function encodeBase64(bytes: ArrayBuffer): string {
+  let binary = "";
+  for (const byte of new Uint8Array(bytes)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** Constant-time comparison, so a signature cannot be discovered byte by byte. */
+function equalsConstantTime(left: string, right: string): boolean {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+export async function verifyResendWebhook(
+  input: WebhookVerificationInput,
+): Promise<WebhookVerification> {
+  const id = input.headers["svix-id"] ?? input.headers["webhook-id"] ?? null;
+  const timestamp =
+    input.headers["svix-timestamp"] ?? input.headers["webhook-timestamp"] ?? null;
+  const signatureHeader =
+    input.headers["svix-signature"] ?? input.headers["webhook-signature"] ?? null;
+  if (id === null || timestamp === null || signatureHeader === null) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const sentAt = Number(timestamp);
+  const now = Math.floor((input.now?.getTime() ?? Date.now()) / 1000);
+  // An old or future-dated delivery is refused, which bounds replay.
+  if (!Number.isFinite(sentAt) || Math.abs(now - sentAt) > toleranceSeconds) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const secret = input.secret.startsWith("whsec_")
+    ? input.secret.slice("whsec_".length)
+    : input.secret;
+  let expected: string;
+  try {
+    const key = await crypto.subtle.importKey(
+      "raw",
+      decodeBase64(secret) as unknown as ArrayBuffer,
+      { hash: "SHA-256", name: "HMAC" },
+      false,
+      ["sign"],
+    );
+    expected = encodeBase64(
+      await crypto.subtle.sign(
+        "HMAC",
+        key,
+        new TextEncoder().encode(`${id}.${timestamp}.${input.rawBody}`),
+      ),
+    );
+  } catch {
+    return { ok: false, reason: "invalid" };
+  }
+
+  // A header may carry several versioned signatures; any one valid v1 match is
+  // enough, and nothing about which one matched is ever reported back.
+  const matched = signatureHeader
+    .split(" ")
+    .map((part) => part.trim())
+    .filter((part) => part.startsWith("v1,"))
+    .some((part) => equalsConstantTime(part.slice("v1,".length), expected));
+  return matched ? { ok: true } : { ok: false, reason: "invalid" };
+}
