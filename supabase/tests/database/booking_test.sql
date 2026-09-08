@@ -124,9 +124,15 @@ rollback to savepoint payment_and_approval;
 savepoint approval_required;
 update app.catalog_service_revisions set approval_required=true
 where tenant_id='a0000000-0000-0000-0000-000000000001' and service_id='a7200000-0000-0000-0000-000000000001';
-select throws_ok(
-  format($$select * from api_v1.confirm_booking_v1('client.tenant-a.example.invalid','client',%L,'session-token-aaaa-0001','confirm-key-aaaa-0001','{"fullName":"Guest A","email":"guest@example.invalid"}'::jsonb,'2','en','{"reason":"First visit"}'::jsonb,'Asia/Riyadh')$$,current_setting('test.hold_id')),
-  '42501','policy_denied','a service the tenant approves is not silently confirmed');
+-- Request-to-book (issue #13) commits `requested`, never `confirmed`. The full
+-- decision lifecycle is covered in booking_request_test.sql.
+select is((select array[b.status,b.approval_status] from api_v1.confirm_booking_v1(
+    'client.tenant-a.example.invalid','client',current_setting('test.hold_id')::uuid,
+    'session-token-aaaa-0001','confirm-key-aaaa-0001',
+    '{"fullName":"Guest A","email":"guest@example.invalid"}'::jsonb,
+    '2','en','{"reason":"First visit"}'::jsonb,'Asia/Riyadh') b),
+  array['requested','pending'],
+  'a service the tenant approves is never silently confirmed by this path');
 rollback to savepoint approval_required;
 
 savepoint expired_hold;

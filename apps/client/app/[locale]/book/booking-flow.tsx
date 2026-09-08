@@ -219,15 +219,28 @@ export function BookingFlow({
   }
 
   if (booking !== null) {
+    // An approval-gated service commits `requested`, never `confirmed`, so the
+    // customer is told exactly that rather than being shown a booked time.
+    const pending = booking.status === "requested";
     return (
       <Surface
         as="section"
         className="booking-confirmed"
         labelledBy="booking-confirmed-title"
       >
-        <Badge tone="positive">{message("bookingStepConfirmed")}</Badge>
-        <h2 id="booking-confirmed-title">{message("bookingSuccessTitle")}</h2>
-        <p>{message("bookingSuccessSummary")}</p>
+        <Badge tone={pending ? "warning" : "positive"}>
+          {pending
+            ? message("bookingRequestedStatus")
+            : message("bookingStepConfirmed")}
+        </Badge>
+        <h2 id="booking-confirmed-title">
+          {pending ? message("bookingRequestedTitle") : message("bookingSuccessTitle")}
+        </h2>
+        <p>
+          {pending
+            ? message("bookingRequestedSummary")
+            : message("bookingSuccessSummary")}
+        </p>
         <dl className="booking-confirmed__facts">
           <div>
             <dt>{message("bookingReferenceLabel")}</dt>
@@ -256,8 +269,24 @@ export function BookingFlow({
           </div>
           <div>
             <dt>{message("bookingStatusLabel")}</dt>
-            <dd>{message("bookingStatusConfirmed")}</dd>
+            <dd>
+              {pending
+                ? message("bookingRequestedStatus")
+                : message("bookingStatusConfirmed")}
+            </dd>
           </div>
+          {booking.approvalDeadline === null ? null : (
+            <div>
+              <dt>{message("bookingDecisionDueLabel")}</dt>
+              <dd>
+                {formatDateTime(
+                  booking.approvalDeadline,
+                  locale,
+                  booking.customerTimeZone,
+                )}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>{message("bookingConsentVersionLabel")}</dt>
             <dd dir="ltr">{booking.consentVersion}</dd>
@@ -266,7 +295,9 @@ export function BookingFlow({
         <StatusMessage tone="positive">
           {message("bookingNotificationQueued")}
         </StatusMessage>
-        <p>{message("bookingNextSteps")}</p>
+        <p>
+          {pending ? message("bookingRequestedNextSteps") : message("bookingNextSteps")}
+        </p>
       </Surface>
     );
   }

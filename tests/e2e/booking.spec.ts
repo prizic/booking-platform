@@ -6,6 +6,7 @@ import {
   confirmed,
   fillDetails,
   reachDetailsStep,
+  requested,
   stubBookingApi,
 } from "./booking-fixtures";
 
@@ -107,4 +108,95 @@ test("a service that needs payment is refused with a safe explanation", async ({
   await expect(
     page.getByRole("heading", { name: /your booking is confirmed/iu }),
   ).toHaveCount(0);
+});
+
+test("an approval-gated service tells the customer the time is not booked yet", async ({
+  page,
+}) => {
+  await stubBookingApi(page, {
+    confirmations: [{ body: requested, status: 200 }],
+  });
+  await reachDetailsStep(page, "en");
+  await fillDetails(page);
+  await page.getByRole("button", { name: /confirm booking/iu }).click();
+
+  await expect(
+    page.getByRole("heading", { name: /your request has been sent/iu }),
+  ).toBeVisible();
+  await expect(page.getByText(/awaiting approval/iu).first()).toBeVisible();
+  await expect(page.getByText("R7Q2M4T9XZ")).toBeVisible();
+  // The decision deadline is shown, so "pending" is never open-ended.
+  await expect(page.getByText(/decision due by/iu)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /your booking is confirmed/iu }),
+  ).toHaveCount(0);
+});
+
+test.describe("staff proposal link", () => {
+  const token = "b".repeat(64);
+
+  test("a customer accepts a suggested time", async ({ page }) => {
+    await page.route("**/api/proposals", (route) =>
+      route.fulfill({
+        json: {
+          bookingId: requested.bookingId,
+          endAt: "2035-09-25T14:45:00.000Z",
+          proposalState: "accepted",
+          publicReference: requested.publicReference,
+          startAt: "2035-09-25T14:00:00.000Z",
+          status: "confirmed",
+        },
+      }),
+    );
+    await page.goto(`${clientOrigin}/en/proposal?token=${token}`);
+    await page.getByRole("button", { name: /accept the new time/iu }).click();
+
+    await expect(
+      page.getByRole("heading", { name: /your booking is confirmed/iu }),
+    ).toBeVisible();
+  });
+
+  test("a customer keeps the original request", async ({ page }) => {
+    await page.route("**/api/proposals", (route) =>
+      route.fulfill({
+        json: {
+          bookingId: requested.bookingId,
+          endAt: requested.endAt,
+          proposalState: "declined",
+          publicReference: requested.publicReference,
+          startAt: requested.startAt,
+          status: "requested",
+        },
+      }),
+    );
+    await page.goto(`${clientOrigin}/ar/proposal?token=${token}`);
+    await page.getByRole("button", { name: /الإبقاء على طلبي الأصلي/u }).click();
+
+    await expect(
+      page.getByRole("heading", { name: /طلبك الأصلي ما زال قائمًا/u }),
+    ).toBeVisible();
+  });
+
+  test("a spent link explains itself without disclosing anything", async ({ page }) => {
+    await page.route("**/api/proposals", (route) =>
+      route.fulfill({
+        json: { error: { code: "revision_conflict", messageKey: "booking.error" } },
+        status: 409,
+      }),
+    );
+    await page.goto(`${clientOrigin}/en/proposal?token=${token}`);
+    await page.getByRole("button", { name: /accept the new time/iu }).click();
+
+    await expect(page.locator("#proposal-error")).toContainText(
+      /no longer available/iu,
+    );
+  });
+
+  test("a page opened without a link offers no action", async ({ page }) => {
+    await page.goto(`${clientOrigin}/en/proposal`);
+    await expect(page.getByText(/open the link from your email/iu)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /accept the new time/iu }),
+    ).toHaveCount(0);
+  });
 });

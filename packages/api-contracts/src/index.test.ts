@@ -3,8 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   parseAvailabilityV1Request,
   parseAvailabilityV1Response,
+  parseBookingDecisionV1Request,
+  parseBookingDecisionV1Response,
+  parseBookingRequestsV1,
   parseConfirmBookingV1Request,
   parseConfirmBookingV1Response,
+  parseProposalResponseV1,
   parseCreateHoldV1Request,
   parseCreateHoldV1Response,
   parseHoldFormV1,
@@ -609,6 +613,7 @@ describe("confirm booking v1", () => {
   } as const;
 
   const response = {
+    approvalDeadline: null,
     approvalStatus: "not_required",
     bookingId: "0a3f2b64-0000-4000-8000-000000000002",
     bookingRevision: 1,
@@ -715,5 +720,134 @@ describe("confirm booking v1", () => {
         serviceName: "Initial consultation",
       }),
     ).toThrow();
+  });
+});
+
+describe("request to book v1", () => {
+  const requested = {
+    approvalDeadline: "2026-09-23T14:00:00.000Z",
+    approvalStatus: "pending",
+    bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+    bookingRevision: 1,
+    calendarStatus: "pending",
+    consentVersion: "2",
+    customerTimeZone: "Asia/Riyadh",
+    endAt: "2026-09-21T14:45:00.000Z",
+    locale: "en",
+    locationName: "Downtown",
+    locationTimeZone: "America/New_York",
+    notificationStatus: "queued",
+    paymentStatus: "not_required",
+    price: { currency: "SAR", minorUnits: 18_000 },
+    publicReference: "K3M9P2T7XY",
+    replayed: false,
+    serviceName: "Site visit",
+    startAt: "2026-09-21T14:00:00.000Z",
+    status: "requested",
+    taxRateBps: 1500,
+  } as const;
+
+  it("accepts a pending request with its decision deadline", () => {
+    expect(parseConfirmBookingV1Response(requested)).toEqual(requested);
+  });
+
+  it("refuses a status that disagrees with the approval state", () => {
+    expect(() =>
+      parseConfirmBookingV1Response({ ...requested, status: "confirmed" }),
+    ).toThrow();
+    expect(() =>
+      parseConfirmBookingV1Response({ ...requested, approvalDeadline: null }),
+    ).toThrow();
+  });
+
+  it("reads the pending-action queue", () => {
+    const row = {
+      approvalDeadline: "2026-09-23T14:00:00.000Z",
+      bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+      bookingRevision: 1,
+      customerDisplayName: null,
+      endAt: "2026-09-21T14:45:00.000Z",
+      hasIntake: true,
+      locale: "en",
+      locationId: "a5000000-0000-4000-8000-000000000001",
+      locationName: "Downtown",
+      locationTimeZone: "America/New_York",
+      price: { currency: "SAR", minorUnits: 18_000 },
+      proposal: null,
+      publicReference: "K3M9P2T7XY",
+      requestedAt: "2026-09-21T13:00:00.000Z",
+      serviceName: "Site visit",
+      startAt: "2026-09-21T14:00:00.000Z",
+    } as const;
+    expect(parseBookingRequestsV1([row])[0]?.customerDisplayName).toBeNull();
+    expect(() => parseBookingRequestsV1([{ ...row, hasIntake: "yes" }])).toThrow();
+  });
+
+  it("requires a proposal to carry exactly one future whole-minute time", () => {
+    const decision = {
+      action: "propose",
+      bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+      expectedRevision: 1,
+      internalReason: null,
+      proposedStartAt: "2026-09-22T14:00:00.000Z",
+      publicReason: "Would this work instead?",
+      tenantId: "a0000000-0000-4000-8000-000000000001",
+    } as const;
+    expect(parseBookingDecisionV1Request(decision).action).toBe("propose");
+    expect(() =>
+      parseBookingDecisionV1Request({ ...decision, proposedStartAt: null }),
+    ).toThrow();
+    expect(() =>
+      parseBookingDecisionV1Request({ ...decision, action: "accept" }),
+    ).toThrow();
+    expect(() =>
+      parseBookingDecisionV1Request({
+        ...decision,
+        proposedStartAt: "2026-09-22T14:00:30.000Z",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseBookingDecisionV1Request({ ...decision, publicReason: "x".repeat(501) }),
+    ).toThrow();
+  });
+
+  it("returns a proposal link only as a whole", () => {
+    const result = {
+      approvalStatus: "pending",
+      bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+      bookingRevision: 1,
+      proposalActionToken: "a".repeat(64),
+      proposalExpiresAt: "2026-09-22T14:00:00.000Z",
+      status: "requested",
+    } as const;
+    expect(parseBookingDecisionV1Response(result).proposalActionToken).toHaveLength(64);
+    expect(() =>
+      parseBookingDecisionV1Response({ ...result, proposalExpiresAt: null }),
+    ).toThrow();
+    expect(() =>
+      parseBookingDecisionV1Response({ ...result, proposalActionToken: "short" }),
+    ).toThrow();
+  });
+
+  it("ties a proposal outcome to the booking state it produced", () => {
+    const accepted = {
+      bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+      endAt: "2026-09-22T14:45:00.000Z",
+      proposalState: "accepted",
+      publicReference: "K3M9P2T7XY",
+      startAt: "2026-09-22T14:00:00.000Z",
+      status: "confirmed",
+    } as const;
+    expect(parseProposalResponseV1(accepted).proposalState).toBe("accepted");
+    expect(() =>
+      parseProposalResponseV1({ ...accepted, status: "requested" }),
+    ).toThrow();
+    expect(
+      parseProposalResponseV1({
+        ...accepted,
+        proposalState: "declined",
+        status: "requested",
+      }).status,
+    ).toBe("requested");
   });
 });

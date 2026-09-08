@@ -3,6 +3,9 @@ import {
   parseTenantChoicesV1,
   type AvailabilityV1Request,
   type AvailabilityV1Response,
+  type BookingDecisionV1Request,
+  type BookingDecisionV1Response,
+  type BookingRequestV1,
   type DashboardContextV1,
   type ResolvePublicTenantV1Response,
   type TenantChoiceV1,
@@ -26,6 +29,10 @@ export interface DashboardDataSource {
     payload: Readonly<Record<string, unknown>>;
     expectedRevision: number | null;
   }) => Promise<unknown>;
+  listBookingRequests?: (tenantId: string) => Promise<readonly BookingRequestV1[]>;
+  decideBookingRequest?: (
+    request: BookingDecisionV1Request,
+  ) => Promise<BookingDecisionV1Response>;
 }
 
 export type DashboardAccessState =

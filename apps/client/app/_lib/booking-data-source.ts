@@ -4,12 +4,14 @@ import {
   parseCreateHoldV1Request,
   parseCreateHoldV1Response,
   parseHoldFormV1,
+  parseProposalResponseV1,
   type ConfirmBookingV1Request,
   type ConfirmBookingV1Response,
   type ContractErrorCode,
   type CreateHoldV1Request,
   type CreateHoldV1Response,
   type HoldFormV1,
+  type ProposalResponseV1,
 } from "@wlbp/api-contracts";
 
 interface RpcResult {
@@ -186,6 +188,10 @@ export function createClientBookingDataSource(
         // Confirmation is read back from the committed row the database
         // returned, never from optimistic Client state.
         return parseConfirmBookingV1Response({
+          approvalDeadline:
+            row.approval_deadline === null || row.approval_deadline === undefined
+              ? null
+              : new Date(String(row.approval_deadline)).toISOString(),
           approvalStatus: row.approval_status,
           bookingId: row.booking_id,
           bookingRevision: Number(row.booking_revision),
@@ -205,6 +211,36 @@ export function createClientBookingDataSource(
           startAt: new Date(String(row.starts_at)).toISOString(),
           status: row.status,
           taxRateBps: Number(row.tax_rate_bps),
+        });
+      } catch {
+        throw new ClientBookingError("availability_unavailable");
+      }
+    },
+
+    async respondToProposal(
+      actionToken: string,
+      action: "accept" | "decline",
+    ): Promise<ProposalResponseV1> {
+      const result = await api.rpc("respond_to_proposal_v1", {
+        p_action: action,
+        p_action_token: actionToken,
+        p_application: "client",
+        p_hostname: trustedHostname,
+      });
+      if (result.error !== null) {
+        throw new ClientBookingError(
+          mapBookingRpcError(result.error.code, result.error.message),
+        );
+      }
+      const row = firstRow(result.data);
+      try {
+        return parseProposalResponseV1({
+          bookingId: row.booking_id,
+          endAt: new Date(String(row.ends_at)).toISOString(),
+          proposalState: row.proposal_state,
+          publicReference: row.public_reference,
+          startAt: new Date(String(row.starts_at)).toISOString(),
+          status: row.status,
         });
       } catch {
         throw new ClientBookingError("availability_unavailable");

@@ -1,6 +1,39 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "requestsTitle"
+  | "requestsSummary"
+  | "requestsEmpty"
+  | "requestsUnavailable"
+  | "requestsQueueLabel"
+  | "requestsRequestedAtLabel"
+  | "requestsDeadlineLabel"
+  | "requestsCustomerLabel"
+  | "requestsCustomerHidden"
+  | "requestsIntakeLabel"
+  | "requestsIntakePresent"
+  | "requestsIntakeAbsent"
+  | "requestsProposalLabel"
+  | "requestsAccept"
+  | "requestsReject"
+  | "requestsPropose"
+  | "requestsProposeTimeLabel"
+  | "requestsPublicReasonLabel"
+  | "requestsPublicReasonHint"
+  | "requestsInternalReasonLabel"
+  | "requestsInternalReasonHint"
+  | "requestsResultAccepted"
+  | "requestsResultRejected"
+  | "requestsResultProposed"
+  | "requestsResultConflict"
+  | "requestsResultUnavailable"
+  | "requestsResultInvalid"
+  | "requestsResultNotAuthorized"
+  | "requestsResultSlotUnavailable"
+  | "requestsProposalLinkLabel"
+  | "requestsProposalLinkHint"
+  | "requestsPriceLabel"
+  | "navRequests"
   | "eyebrow"
   | "title"
   | "summary"
@@ -112,6 +145,46 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    requestsTitle: "Booking requests",
+    requestsSummary:
+      "Requests wait for a decision here. Accepting books the time; the customer is told either way.",
+    requestsEmpty: "No requests are waiting for a decision.",
+    requestsUnavailable:
+      "Requests stay closed until the secure connection is complete.",
+    requestsQueueLabel: "Requests awaiting a decision",
+    requestsRequestedAtLabel: "Requested",
+    requestsDeadlineLabel: "Decide by",
+    requestsCustomerLabel: "Customer",
+    requestsCustomerHidden: "Hidden for your role",
+    requestsIntakeLabel: "Intake answers",
+    requestsIntakePresent: "Provided",
+    requestsIntakeAbsent: "None",
+    requestsProposalLabel: "Suggested time awaiting the customer",
+    requestsAccept: "Accept",
+    requestsReject: "Reject",
+    requestsPropose: "Suggest another time",
+    requestsProposeTimeLabel: "Suggested time",
+    requestsPublicReasonLabel: "Message to the customer",
+    requestsPublicReasonHint: "Shown to the customer. Keep it short and factual.",
+    requestsInternalReasonLabel: "Internal note",
+    requestsInternalReasonHint:
+      "Kept in the booking history and never shown to the customer.",
+    requestsResultAccepted: "The request is accepted and the time is booked.",
+    requestsResultRejected: "The request is rejected and the customer will be told.",
+    requestsResultProposed: "Your suggestion was sent to the customer.",
+    requestsResultConflict:
+      "Someone else decided this request first, or its deadline passed. The list has been refreshed.",
+    requestsResultUnavailable:
+      "That decision is temporarily unavailable. Nothing changed.",
+    requestsResultInvalid: "Check the highlighted fields and try again.",
+    requestsResultNotAuthorized: "Your role cannot decide this request.",
+    requestsResultSlotUnavailable:
+      "That time is no longer free, so the request was not accepted.",
+    requestsProposalLinkLabel: "Customer link",
+    requestsProposalLinkHint:
+      "Send this link to the customer. It is shown once and works only for this suggestion.",
+    requestsPriceLabel: "Total",
+    navRequests: "Requests",
     eyebrow: "Tenant staff workspace",
     title: "Today stays clear, even when the schedule is full.",
     summary:
@@ -235,6 +308,42 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    requestsTitle: "طلبات الحجز",
+    requestsSummary:
+      "تنتظر الطلبات قرارًا هنا. القبول يحجز الوقت، ويُبلَّغ العميل في الحالتين.",
+    requestsEmpty: "لا توجد طلبات تنتظر قرارًا.",
+    requestsUnavailable: "تبقى الطلبات مغلقة حتى يكتمل الاتصال الآمن.",
+    requestsQueueLabel: "طلبات تنتظر قرارًا",
+    requestsRequestedAtLabel: "تاريخ الطلب",
+    requestsDeadlineLabel: "الرد قبل",
+    requestsCustomerLabel: "العميل",
+    requestsCustomerHidden: "مخفي حسب دورك",
+    requestsIntakeLabel: "إجابات النموذج",
+    requestsIntakePresent: "متوفرة",
+    requestsIntakeAbsent: "لا توجد",
+    requestsProposalLabel: "وقت مقترح بانتظار العميل",
+    requestsAccept: "قبول",
+    requestsReject: "رفض",
+    requestsPropose: "اقتراح وقت آخر",
+    requestsProposeTimeLabel: "الوقت المقترح",
+    requestsPublicReasonLabel: "رسالة إلى العميل",
+    requestsPublicReasonHint: "تظهر للعميل. اجعلها قصيرة وواضحة.",
+    requestsInternalReasonLabel: "ملاحظة داخلية",
+    requestsInternalReasonHint: "تُحفظ في سجل الحجز ولا تظهر للعميل أبدًا.",
+    requestsResultAccepted: "تم قبول الطلب وحجز الوقت.",
+    requestsResultRejected: "تم رفض الطلب وسيُبلَّغ العميل.",
+    requestsResultProposed: "تم إرسال اقتراحك إلى العميل.",
+    requestsResultConflict:
+      "اتخذ شخص آخر القرار قبلك أو انتهى موعد الرد. تم تحديث القائمة.",
+    requestsResultUnavailable: "القرار غير متاح مؤقتًا، ولم يتغيّر شيء.",
+    requestsResultInvalid: "راجع الحقول المحددة ثم أعد المحاولة.",
+    requestsResultNotAuthorized: "لا يسمح دورك باتخاذ قرار بشأن هذا الطلب.",
+    requestsResultSlotUnavailable: "لم يعد هذا الوقت متاحًا، لذا لم يُقبل الطلب.",
+    requestsProposalLinkLabel: "رابط العميل",
+    requestsProposalLinkHint:
+      "أرسل هذا الرابط إلى العميل. يظهر مرة واحدة ويعمل لهذا الاقتراح فقط.",
+    requestsPriceLabel: "الإجمالي",
+    navRequests: "الطلبات",
     eyebrow: "مساحة عمل فريق المستأجر",
     title: "يبقى يومك واضحًا حتى عندما يمتلئ الجدول.",
     summary: "واجهة تشغيلية واحدة للوصول والطلبات والمدفوعات والاستثناءات.",

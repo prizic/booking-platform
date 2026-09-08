@@ -24,6 +24,7 @@ export type Database = {
           p_session_token: string;
         };
         Returns: {
+          approval_deadline: string;
           approval_status: string;
           booking_id: string;
           booking_revision: number;
@@ -107,6 +108,27 @@ export type Database = {
           outcome: string;
           remaining_allocations: number;
           staff_id: string;
+        }[];
+      };
+      decide_booking_request_v1: {
+        Args: {
+          p_action: string;
+          p_booking_id: string;
+          p_expected_revision: number;
+          p_proposed_start?: string;
+          p_reason_internal?: string;
+          p_reason_public?: string;
+          p_request_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          proposal_action_token: string;
+          proposal_expires_at: string;
+          status: string;
         }[];
       };
       get_assignment_candidates_v1: {
@@ -299,6 +321,31 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      list_booking_requests_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          approval_deadline: string;
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          currency: string;
+          customer_display_name: string;
+          ends_at: string;
+          has_intake: boolean;
+          locale: string;
+          location_id: string;
+          location_name: string;
+          location_time_zone: string;
+          price_minor: number;
+          proposal_expires_at: string;
+          proposal_starts_at: string;
+          proposal_state: string;
+          public_reference: string;
+          requested_at: string;
+          service_name: string;
+          starts_at: string;
+        }[];
+      };
       list_bookings_v1: {
         Args: { p_from: string; p_tenant_id: string; p_to: string };
         Returns: {
@@ -374,6 +421,24 @@ export type Database = {
           instance_id: string;
           published_brand_revision: number;
           tenant_id: string;
+        }[];
+      };
+      respond_to_proposal_v1: {
+        Args: {
+          p_action: string;
+          p_action_token: string;
+          p_application: string;
+          p_hostname: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          contract_version: number;
+          ends_at: string;
+          proposal_state: string;
+          public_reference: string;
+          starts_at: string;
+          status: string;
         }[];
       };
       save_resource_type_v1: {

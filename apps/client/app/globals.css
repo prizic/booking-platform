@@ -680,3 +680,10 @@ input:focus-visible {
   margin: 0;
   font-weight: var(--brand-font-weight-bold, 700);
 }
+
+.booking-flow__actions {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
