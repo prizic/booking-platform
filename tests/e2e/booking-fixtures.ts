@@ -9,8 +9,8 @@ export const clientOrigin = "http://localhost:41730";
 export const bookingQuery =
   "?service=a7200000-0000-0000-0000-000000000001&location=a5000000-0000-0000-0000-000000000001";
 
-const slotStart = "2035-09-24T13:00:00.000Z";
-const slotEnd = "2035-09-24T13:45:00.000Z";
+export const slotStart = "2035-09-24T13:00:00.000Z";
+export const slotEnd = "2035-09-24T13:45:00.000Z";
 
 const availability = {
   advisory: true,
@@ -144,3 +144,31 @@ export async function fillDetails(page: Page) {
   await page.getByLabel(/reason for visit/iu).fill("First visit");
   await page.getByRole("checkbox").check();
 }
+
+/** A granted manage-booking view, as issue #14's route handler returns it. */
+export const managementView = {
+  booking: {
+    approvalStatus: "not_required",
+    bookingId: "0a3f2b64-0000-4000-8000-000000000004",
+    bookingRevision: 1,
+    consentVersion: "2",
+    customerTimeZone: "Asia/Riyadh",
+    endAt: slotEnd,
+    locale: "en",
+    locationName: "Downtown",
+    locationTimeZone: "America/New_York",
+    paymentStatus: "not_required",
+    price: { currency: "SAR", minorUnits: 18_000 },
+    publicReference: "M4T7XZK3Q2",
+    serviceName: "Initial consultation",
+    startAt: slotStart,
+    status: "confirmed",
+  },
+  canCancel: true,
+  canReschedule: true,
+  intent: "cancel",
+  outcome: "granted",
+  stepUpRequired: true,
+  stepUpVerified: false,
+  tokenExpiresAt: "2035-09-30T13:00:00.000Z",
+};

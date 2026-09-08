@@ -12,6 +12,7 @@ import {
   bookingQuery,
   clientOrigin,
   fillDetails,
+  managementView,
   reachDetailsStep,
   requested,
   stubBookingApi,
@@ -146,6 +147,55 @@ for (const language of locales) {
     page,
   }) => {
     await page.goto(`http://localhost:41731/${language.locale}/requests`);
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+}
+
+// Issue #14. The guest management surface has three states a visitor can land
+// in — granted, refused, and step-up — and each is scanned in both locales.
+for (const language of locales) {
+  test(`client manage booking ${language.locale} has no automated WCAG A/AA violations`, async ({
+    page,
+  }) => {
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        action?: string;
+      };
+      if (body.action === "request-step-up") {
+        return route.fulfill({
+          json: { expiresAt: "2035-09-24T12:40:00.000Z", outcome: "sent" },
+        });
+      }
+      return route.fulfill({ json: managementView });
+    });
+    await page.goto(
+      `${clientOrigin}/${language.locale}/manage?token=${"e".repeat(64)}`,
+    );
+    await expect(page.getByText(managementView.booking.publicReference)).toBeVisible();
+    const scan = () =>
+      new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+    expect((await scan()).violations).toEqual([]);
+
+    await page.getByRole("button", { name: /email me a code|أرسل لي رمزًا/iu }).click();
+    expect((await scan()).violations).toEqual([]);
+  });
+
+  test(`client manage refusal ${language.locale} has no automated WCAG A/AA violations`, async ({
+    page,
+  }) => {
+    await page.route("**/api/manage", (route) =>
+      route.fulfill({ json: { outcome: "unavailable" } }),
+    );
+    await page.goto(
+      `${clientOrigin}/${language.locale}/manage?token=${"e".repeat(64)}`,
+    );
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
 
     const results = await new AxeBuilder({ page })

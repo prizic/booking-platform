@@ -100,6 +100,7 @@ select is(
     'private.decide_booking_request_v1(uuid,uuid,text,bigint,text,text,timestamp with time zone,uuid)',
     'private.expire_booking_requests_v1(uuid,integer)',
     'private.expire_holds_v1(uuid,integer)',
+    'private.expire_management_links_v1(uuid,integer)',
     'private.get_assignment_candidates_v1(uuid,uuid)',
     'private.get_availability_v1(text,text,uuid,uuid,uuid,timestamp with time zone,timestamp with time zone,integer,text)',
     'private.get_hold_form_v1(text,text,uuid,text,text)',
@@ -108,17 +109,23 @@ select is(
     'private.initialize_availability_revision()',
     'private.is_active_tenant_member(uuid)',
     'private.is_public_tenant_context(uuid,uuid,uuid,uuid)',
+    'private.issue_management_token_v1(uuid,uuid,text,uuid)',
+    'private.mint_management_otp_code_v1(uuid)',
+    'private.redeem_management_token_v1(text,text,text,text)',
     'private.release_hold_v1(text,text,uuid,text)',
     'private.request_booking_v1(uuid,app.booking_holds,app.catalog_service_revisions,uuid,uuid,timestamp with time zone)',
+    'private.request_management_otp_v1(text,text,text)',
     'private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)',
     'private.respond_to_proposal_v1(text,text,text,text)',
+    'private.revoke_management_tokens_on_state_change()',
     'private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text)',
     'private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text)',
     'private.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)',
     'private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text)',
     'private.set_resource_location_eligibility_v1(uuid,uuid,uuid,boolean,uuid,text)',
     'private.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text)',
-    'private.set_staff_service_location_eligibility_v1(uuid,uuid,uuid,uuid,boolean,uuid,text)'
+    'private.set_staff_service_location_eligibility_v1(uuid,uuid,uuid,uuid,boolean,uuid,text)',
+    'private.verify_management_otp_v1(text,text,text,text)'
   ]::text[],
   'private SECURITY DEFINER helper identities exactly match the approved inventory'
 );

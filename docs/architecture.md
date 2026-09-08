@@ -317,6 +317,17 @@ separate expiring offer with an intent-scoped customer link whose digest alone
 is stored; accepting one moves the booking under a new revision, which is the
 reschedule shape below.
 
+A guest reaches its own booking through a manage-booking link (issue #14): an
+opaque token scoped to one booking and one intent, stored only as a digest,
+expiring, revocable, and re-checked against current booking state on every use.
+Every action intent additionally needs an email step-up code, which the
+notification worker mints when it sends the message so no code plaintext is
+ever written to a table or an outbox payload. Refusal is a returned value
+rather than an exception — unknown, expired, revoked, consumed, wrong host, and
+rate-limited all answer identically — so the audit row and rate-limit counters
+that the refused call just wrote survive the transaction, and the surface never
+discloses whether a booking or a token exists.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.
