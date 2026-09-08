@@ -604,7 +604,10 @@ export type Database = {
           p_hostname: string;
           p_token: string;
         };
-        Returns: { contract_version: number; verified: boolean }[];
+        Returns: {
+          contract_version: number;
+          verified: boolean;
+        }[];
       };
     };
     Enums: {
