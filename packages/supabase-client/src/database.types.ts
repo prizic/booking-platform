@@ -364,6 +364,21 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      list_booking_notifications_v1: {
+        Args: { p_booking_id: string; p_tenant_id: string };
+        Returns: {
+          attempts: number;
+          contract_version: number;
+          created_at: string;
+          dead_lettered: boolean;
+          last_error_code: string;
+          message_id: string;
+          status: string;
+          template_key: string;
+          template_locale: string;
+          updated_at: string;
+        }[];
+      };
       list_booking_requests_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -487,6 +502,20 @@ export type Database = {
           contract_version: number;
           hold_id: string;
           state: string;
+        }[];
+      };
+      replay_booking_notification_v1: {
+        Args: { p_booking_id: string; p_tenant_id: string };
+        Returns: {
+          contract_version: number;
+          status: string;
+        }[];
+      };
+      replay_notification_v1: {
+        Args: { p_message_id: string; p_tenant_id: string };
+        Returns: {
+          contract_version: number;
+          status: string;
         }[];
       };
       request_management_otp_v1: {

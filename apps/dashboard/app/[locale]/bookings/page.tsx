@@ -25,6 +25,8 @@ const resultKeys = {
   moved: "bookingsResultMoved",
   "not-authorized": "requestsResultNotAuthorized",
   rejected: "bookingsResultCancelled",
+  "resend-unavailable": "bookingsResendUnavailable",
+  resent: "bookingsResultResent",
   "revision-conflict": "requestsResultConflict",
   "slot-unavailable": "requestsResultSlotUnavailable",
 } as const;
@@ -159,6 +161,10 @@ export default async function BookingsPage({
                         <dt>{message("bookingsStatusLabel")}</dt>
                         <dd>{booking.status}</dd>
                       </div>
+                      <div>
+                        <dt>{message("bookingsDeliveryLabel")}</dt>
+                        <dd>{booking.notificationStatus}</dd>
+                      </div>
                     </dl>
                     <form action={changeBookingAction}>
                       <input type="hidden" name="locale" value={locale} />
@@ -210,6 +216,14 @@ export default async function BookingsPage({
                           variant="secondary"
                         >
                           {message("bookingsCancel")}
+                        </Button>
+                        <Button
+                          name="action"
+                          type="submit"
+                          value="resend"
+                          variant="secondary"
+                        >
+                          {message("bookingsResend")}
                         </Button>
                       </div>
                     </form>

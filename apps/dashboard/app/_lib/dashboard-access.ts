@@ -34,6 +34,10 @@ export interface DashboardDataSource {
     request: BookingDecisionV1Request,
   ) => Promise<BookingDecisionV1Response>;
   listBookings?: (tenantId: string) => Promise<readonly BookingSummaryRowV1[]>;
+  resendBookingNotification?: (request: {
+    bookingId: string;
+    tenantId: string;
+  }) => Promise<void>;
   changeBooking?: (request: {
     action: "cancel" | "reschedule";
     bookingId: string;
@@ -54,6 +58,7 @@ export interface BookingSummaryRowV1 {
   readonly locationTimeZone: string;
   readonly publicReference: string;
   readonly serviceName: string;
+  readonly notificationStatus: string;
   readonly startAt: string;
   readonly status: string;
 }

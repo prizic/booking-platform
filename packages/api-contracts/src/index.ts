@@ -150,14 +150,25 @@ export interface BookingRefundV1 {
 export type RefundStatusDto =
   "eligible" | "pending" | "succeeded" | "failed" | "manual_review";
 export type NotificationStatusDto =
-  "queued" | "sending" | "delivered" | "bounced" | "complained" | "failed";
+  | "queued"
+  | "sending"
+  | "sent"
+  | "delivered"
+  | "bounced"
+  | "complained"
+  | "failed"
+  | "suppressed";
 const notificationStatuses = [
   "queued",
   "sending",
+  // Handed to the provider and awaiting its callback. `delivered` is the
+  // provider's own confirmation, and the two are never conflated.
+  "sent",
   "delivered",
   "bounced",
   "complained",
   "failed",
+  "suppressed",
 ] as const;
 export type CalendarExportStatusDto = "pending" | "generated" | "stale";
 const calendarExportStatuses = ["pending", "generated", "stale"] as const;

@@ -33,6 +33,15 @@ export default defineConfig(
     },
   },
   {
+    // Platform Edge Functions run on Deno, are deployed only by the release
+    // pipeline, and are typechecked by the Supabase CLI rather than by a
+    // workspace project.
+    files: ["supabase/functions/**/*.ts"],
+    languageOptions: {
+      globals: { Deno: "readonly" },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     rules: {
       "@typescript-eslint/consistent-type-imports": [

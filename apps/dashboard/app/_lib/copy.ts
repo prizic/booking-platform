@@ -1,6 +1,11 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "bookingsDeliveryLabel"
+  | "bookingsResend"
+  | "bookingsResending"
+  | "bookingsResultResent"
+  | "bookingsResendUnavailable"
   | "bookingsTitle"
   | "bookingsSummary"
   | "bookingsEmpty"
@@ -158,6 +163,11 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    bookingsDeliveryLabel: "Email",
+    bookingsResend: "Send the email again",
+    bookingsResending: "Sending again",
+    bookingsResultResent: "The email is queued to send again.",
+    bookingsResendUnavailable: "That email cannot be sent again.",
     bookingsTitle: "Upcoming bookings",
     bookingsSummary:
       "Move or cancel a booking. The customer is told either way, and any refund follows the policy the booking was made under.",
@@ -336,6 +346,11 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    bookingsDeliveryLabel: "البريد",
+    bookingsResend: "إعادة إرسال الرسالة",
+    bookingsResending: "جارٍ إعادة الإرسال",
+    bookingsResultResent: "تمت جدولة إعادة إرسال الرسالة.",
+    bookingsResendUnavailable: "لا يمكن إعادة إرسال هذه الرسالة.",
     bookingsTitle: "الحجوزات القادمة",
     bookingsSummary:
       "انقل حجزًا أو ألغه. يُبلَّغ العميل في الحالتين، ويتبع أي استرداد السياسة التي تم الحجز وفقها.",

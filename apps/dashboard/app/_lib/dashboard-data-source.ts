@@ -637,6 +637,7 @@ export function createDashboardDataSource(
           bookingRevision: requireNumber(row.booking_revision),
           endAt: new Date(String(row.ends_at)).toISOString(),
           locationName: requireString(row.location_name),
+          notificationStatus: requireString(row.notification_status),
           locationTimeZone: requireString(row.location_time_zone),
           publicReference: requireString(row.public_reference),
           serviceName: requireString(row.service_name),
@@ -644,6 +645,15 @@ export function createDashboardDataSource(
           status: requireString(row.status),
         };
       });
+    },
+
+    resendBookingNotification: async (request) => {
+      assertRpc(
+        await api.rpc("replay_booking_notification_v1", {
+          p_booking_id: request.bookingId,
+          p_tenant_id: request.tenantId,
+        }),
+      );
     },
 
     changeBooking: async (request) => {
