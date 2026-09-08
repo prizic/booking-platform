@@ -89,8 +89,8 @@ Owners are placeholders until the on-call rotation exists.
 ### R-1 Slot contention / double-booking investigation
 
 - **Trigger:** Double-booking report, or exclusion-conflict rate above baseline.
-- **First checks:** Booking RPC error/conflict rate by tenant; exclusion constraint still present on the affected table; capacity config for the service/resource; whether writes bypassed the booking RPC.
-- **Mitigation:** Stop the bypass path first. Reduce capacity to safe value for the affected resource. Contact affected customers via the tenant, not directly.
+- **First checks:** Booking RPC error/conflict rate by tenant; exclusion constraint still present on the affected table; capacity config for the service/resource; whether writes bypassed the booking RPC; stale-hold backlog (`app.booking_holds` still `active` past `expires_at`) and whether the batched expiry job is scheduled and completing.
+- **Mitigation:** Stop the bypass path first. Reduce capacity to safe value for the affected resource. Drain a stale-hold backlog with `select private.expire_holds_v1();` — it is batched, idempotent, and safe to run beside live hold creation. Contact affected customers via the tenant, not directly.
 - **Escalation:** Any confirmed double booking is a correctness incident → engineering lead + affected tenant owner. Add a regression case to the concurrency suite before closing.
 
 ### R-2 Payment succeeded but booking not confirmed

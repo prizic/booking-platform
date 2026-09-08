@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   parseAvailabilityV1Request,
   parseAvailabilityV1Response,
+  parseCreateHoldV1Request,
+  parseCreateHoldV1Response,
   parseAssignmentCandidatesV1,
   parseDashboardContextV1,
   normalizeAvailabilityV1TransportRow,
@@ -522,5 +524,67 @@ describe("tenant isolation DTOs", () => {
     } as const;
 
     expect(parseStaffResourceWorkspaceV1(workspace)).toEqual(workspace);
+  });
+});
+
+describe("create hold v1", () => {
+  const request = {
+    expectedCacheTag: "availability:tenant-a:1:1:1:1",
+    idempotencyKey: "idempotency-key-aaaa-0001",
+    locale: "en",
+    locationId: "location-a",
+    partySize: 1,
+    serviceId: "service-a",
+    sessionToken: "session-token-aaaa-0001",
+    staffPreferenceId: null,
+    startAt: "2026-09-21T14:00:00.000Z",
+  } as const;
+
+  const response = {
+    allocationKind: "appointment",
+    expiresAt: "2026-09-21T13:10:00.000Z",
+    holdId: "hold-a",
+    price: { currency: "SAR", minorUnits: 18000 },
+    replayed: false,
+    slotEnd: "2026-09-21T14:45:00.000Z",
+    slotStart: "2026-09-21T14:00:00.000Z",
+    staffId: "staff-a",
+    state: "active",
+  } as const;
+
+  it("accepts a well formed request and response", () => {
+    expect(parseCreateHoldV1Request(request)).toEqual(request);
+    expect(parseCreateHoldV1Response(response)).toEqual(response);
+  });
+
+  it("rejects a short session token or idempotency key", () => {
+    expect(() =>
+      parseCreateHoldV1Request({ ...request, sessionToken: "short" }),
+    ).toThrow();
+    expect(() =>
+      parseCreateHoldV1Request({ ...request, idempotencyKey: "short" }),
+    ).toThrow();
+  });
+
+  it("rejects a slot that does not start on a whole minute", () => {
+    expect(() =>
+      parseCreateHoldV1Request({ ...request, startAt: "2026-09-21T14:00:30.000Z" }),
+    ).toThrow();
+  });
+
+  it("rejects a party size beyond the exclusive capacity contract", () => {
+    expect(() => parseCreateHoldV1Request({ ...request, partySize: 2 })).toThrow();
+  });
+
+  it("rejects a hold that outlives the slot it protects", () => {
+    expect(() =>
+      parseCreateHoldV1Response({ ...response, expiresAt: "2026-09-21T14:30:00.000Z" }),
+    ).toThrow();
+  });
+
+  it("rejects an exclusive-resource hold that discloses a subject", () => {
+    expect(() =>
+      parseCreateHoldV1Response({ ...response, allocationKind: "exclusive_resource" }),
+    ).toThrow();
   });
 });

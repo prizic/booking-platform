@@ -10,6 +10,37 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      create_hold_v1: {
+        Args: {
+          p_application: string;
+          p_customer_time_zone?: string;
+          p_expected_cache_tag?: string;
+          p_hostname: string;
+          p_idempotency_key: string;
+          p_location_id: string;
+          p_party_size?: number;
+          p_service_id: string;
+          p_session_token: string;
+          p_slot_start: string;
+          p_staff_preference_id?: string;
+        };
+        Returns: {
+          allocation_kind: string;
+          attempts: number;
+          cache_tag: string;
+          contract_version: number;
+          currency: string;
+          expires_at: string;
+          hold_id: string;
+          price_minor: number;
+          replayed: boolean;
+          slot_end: string;
+          slot_start: string;
+          staff_id: string;
+          state: string;
+          tax_rate_bps: number;
+        }[];
+      };
       deactivate_resource_v1: {
         Args: {
           p_reason: string;
@@ -226,6 +257,19 @@ export type Database = {
           cache_tag: string;
           publication_id: string;
           publication_revision: number;
+        }[];
+      };
+      release_hold_v1: {
+        Args: {
+          p_application: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_session_token: string;
+        };
+        Returns: {
+          contract_version: number;
+          hold_id: string;
+          state: string;
         }[];
       };
       resolve_public_tenant_v1: {

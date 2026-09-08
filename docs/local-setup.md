@@ -176,7 +176,7 @@ evidence.
 | pgTAP schema boundary and full tenant RLS matrix | `pnpm test:db` (`supabase test db --local`) | Available — issues #4 and #6; Docker required |
 | Generated `api_v1` database type drift | `pnpm check:db-types` | Available — issue #6; reset local stack and Docker required |
 | Contract tests | `pnpm test:contract` | Available — issue #4 |
-| Booking concurrency tests | `pnpm test:concurrency` | `N/A — not yet implemented, owned by issue #11` |
+| Booking concurrency tests | `pnpm test:concurrency` | Available — issue #11; Docker, a reset local stack, `psql`, and more than 100 spare database connections required |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
 | E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; full journeys are `N/A — not yet implemented, owned by issues #12–#18` |
 | Accessibility (+ RTL interaction) | `pnpm test:a11y` | Client/Dashboard EN/AR × mobile/desktop × brand matrix plus reduced motion available — issue #5; full journeys remain issue #40 |

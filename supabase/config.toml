@@ -18,6 +18,12 @@ shadow_port = 54320
 health_timeout = "2m"
 major_version = 17
 
+# The booking concurrency gate fires a hundred genuinely simultaneous sessions
+# at one capacity-one slot (issue #11). The default hundred-connection ceiling
+# leaves fewer than that spare once the local stack's own services connect.
+[db.settings]
+max_connections = 300
+
 [db.migrations]
 enabled = true
 schema_paths = []
