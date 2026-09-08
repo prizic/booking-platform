@@ -7,6 +7,8 @@ import {
   fillDetails,
   reachDetailsStep,
   requested,
+  slotEnd,
+  slotStart,
   stubBookingApi,
 } from "./booking-fixtures";
 
@@ -198,5 +200,119 @@ test.describe("staff proposal link", () => {
     await expect(
       page.getByRole("button", { name: /accept the new time/iu }),
     ).toHaveCount(0);
+  });
+});
+
+test.describe("guest management link", () => {
+  const token = "d".repeat(64);
+  const grantedView = {
+    booking: {
+      approvalStatus: "not_required",
+      bookingId: "0a3f2b64-0000-4000-8000-000000000004",
+      bookingRevision: 1,
+      consentVersion: "2",
+      customerTimeZone: "Asia/Riyadh",
+      endAt: slotEnd,
+      locale: "en",
+      locationName: "Downtown",
+      locationTimeZone: "America/New_York",
+      paymentStatus: "not_required",
+      price: { currency: "SAR", minorUnits: 18_000 },
+      publicReference: "M4T7XZK3Q2",
+      serviceName: "Initial consultation",
+      startAt: slotStart,
+      status: "confirmed",
+    },
+    canCancel: true,
+    canReschedule: true,
+    intent: "view",
+    outcome: "granted",
+    stepUpRequired: false,
+    stepUpVerified: false,
+    tokenExpiresAt: "2035-09-30T13:00:00.000Z",
+  };
+
+  test("a valid link shows only that booking", async ({ page }) => {
+    await page.route("**/api/manage", (route) => route.fulfill({ json: grantedView }));
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+
+    await expect(page.getByText("M4T7XZK3Q2")).toBeVisible();
+    await expect(page.getByText(/you can cancel this booking/iu)).toBeVisible();
+    // A view link never offers step-up, because it can never act.
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toHaveCount(
+      0,
+    );
+  });
+
+  test("every refusal looks the same and discloses nothing", async ({ page }) => {
+    await page.route("**/api/manage", (route) =>
+      route.fulfill({ json: { outcome: "unavailable" } }),
+    );
+    await page.goto(`${clientOrigin}/ar/manage?token=${token}`);
+
+    await expect(
+      page.getByRole("heading", { name: /لا يمكن استخدام هذا الرابط/u }),
+    ).toBeVisible();
+    await expect(page.getByText("M4T7XZK3Q2")).toHaveCount(0);
+  });
+
+  test("an action link asks for a code before it may act", async ({ page }) => {
+    let verified = false;
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        action?: string;
+        code?: string;
+      };
+      if (body.action === "request-step-up") {
+        return route.fulfill({
+          json: { expiresAt: "2035-09-24T12:40:00.000Z", outcome: "sent" },
+        });
+      }
+      if (body.action === "verify-step-up") {
+        verified = body.code === "123456";
+        return route.fulfill({ json: { verified } });
+      }
+      return route.fulfill({
+        json: {
+          ...grantedView,
+          intent: "cancel",
+          stepUpRequired: true,
+          stepUpVerified: verified,
+        },
+      });
+    });
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+
+    await page.getByRole("button", { name: /email me a code/iu }).click();
+    await expect(page.getByText(/a code is on its way/iu)).toBeVisible();
+
+    await page.getByLabel(/six-digit code/iu).fill("000000");
+    await page.getByRole("button", { name: /confirm code/iu }).click();
+    await expect(page.locator("#manage-step-up-error")).toContainText(
+      /that code did not work/iu,
+    );
+
+    await page.getByLabel(/six-digit code/iu).fill("123456");
+    await page.getByRole("button", { name: /confirm code/iu }).click();
+    await expect(page.getByText(/confirmed\. you can continue/iu)).toBeVisible();
+  });
+
+  test("the link never travels in the URL of a request", async ({ page }) => {
+    const urls: string[] = [];
+    await page.route("**/api/manage", (route) => {
+      urls.push(route.request().url());
+      return route.fulfill({ json: grantedView });
+    });
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+    await expect(page.getByText("M4T7XZK3Q2")).toBeVisible();
+
+    expect(urls.every((url) => !url.includes(token))).toBe(true);
+  });
+
+  test("a page opened without a link offers nothing", async ({ page }) => {
+    await page.goto(`${clientOrigin}/en/manage`);
+    await expect(
+      page.getByText(/open the link from your booking email/iu),
+    ).toBeVisible();
   });
 });

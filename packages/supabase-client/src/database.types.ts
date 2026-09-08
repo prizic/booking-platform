@@ -397,6 +397,42 @@ export type Database = {
           publication_revision: number;
         }[];
       };
+      redeem_management_token_v1: {
+        Args: {
+          p_application: string;
+          p_hostname: string;
+          p_intent?: string;
+          p_token: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          can_cancel: boolean;
+          can_reschedule: boolean;
+          consent_version: string;
+          contract_version: number;
+          currency: string;
+          customer_time_zone: string;
+          ends_at: string;
+          intent: string;
+          locale: string;
+          location_name: string;
+          location_time_zone: string;
+          outcome: string;
+          payment_status: string;
+          policy_snapshot: Json;
+          price_minor: number;
+          public_reference: string;
+          service_name: string;
+          starts_at: string;
+          status: string;
+          step_up_required: boolean;
+          step_up_verified: boolean;
+          tax_rate_bps: number;
+          token_expires_at: string;
+        }[];
+      };
       release_hold_v1: {
         Args: {
           p_application: string;
@@ -408,6 +444,14 @@ export type Database = {
           contract_version: number;
           hold_id: string;
           state: string;
+        }[];
+      };
+      request_management_otp_v1: {
+        Args: { p_application: string; p_hostname: string; p_token: string };
+        Returns: {
+          contract_version: number;
+          expires_at: string;
+          outcome: string;
         }[];
       };
       resolve_public_tenant_v1: {
@@ -551,6 +595,18 @@ export type Database = {
           location_id: string;
           service_id: string;
           staff_id: string;
+        }[];
+      };
+      verify_management_otp_v1: {
+        Args: {
+          p_application: string;
+          p_code: string;
+          p_hostname: string;
+          p_token: string;
+        };
+        Returns: {
+          contract_version: number;
+          verified: boolean;
         }[];
       };
     };

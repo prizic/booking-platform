@@ -1652,6 +1652,198 @@ export function parseProposalResponseV1(value: unknown): ProposalResponseV1 {
   });
 }
 
+export type ManagementIntentV1 =
+  | "view"
+  | "reschedule"
+  | "cancel"
+  | "refund_request"
+  | "request_alternative"
+  | "data_export"
+  | "data_correction_request"
+  | "data_deletion_request"
+  | "data_restriction_request";
+
+const managementIntents = [
+  "view",
+  "reschedule",
+  "cancel",
+  "refund_request",
+  "request_alternative",
+  "data_export",
+  "data_correction_request",
+  "data_deletion_request",
+  "data_restriction_request",
+] as const;
+
+/**
+ * What a guest sees behind a manage-booking link. Every refusal — unknown,
+ * expired, revoked, consumed, wrong host, rate limited — is the same
+ * `unavailable` result, so the surface never discloses whether a booking or a
+ * token exists (ADR-0004 decision 12).
+ */
+export type ManagementViewV1 =
+  | { readonly outcome: "unavailable" }
+  | {
+      readonly booking: {
+        readonly approvalStatus: ConfirmBookingV1Response["approvalStatus"];
+        readonly bookingId: BookingId;
+        readonly bookingRevision: number;
+        readonly consentVersion: string;
+        readonly customerTimeZone: string;
+        readonly endAt: string;
+        readonly locale: ContractLocale;
+        readonly locationName: string;
+        readonly locationTimeZone: string;
+        readonly paymentStatus: PaymentStatusDto;
+        readonly price: MoneyDto;
+        readonly publicReference: string;
+        readonly serviceName: string;
+        readonly startAt: string;
+        readonly status: string;
+      };
+      readonly canCancel: boolean;
+      readonly canReschedule: boolean;
+      readonly intent: ManagementIntentV1;
+      readonly outcome: "granted";
+      readonly stepUpRequired: boolean;
+      readonly stepUpVerified: boolean;
+      readonly tokenExpiresAt: string;
+    };
+
+export function parseManagementViewV1(value: unknown): ManagementViewV1 {
+  if (!isRecord(value)) throw new Error("Management view has an unexpected shape");
+  if (value.outcome === "unavailable") {
+    return Object.freeze({ outcome: "unavailable" as const });
+  }
+  const keys = [
+    "booking",
+    "canCancel",
+    "canReschedule",
+    "intent",
+    "outcome",
+    "stepUpRequired",
+    "stepUpVerified",
+    "tokenExpiresAt",
+  ] as const;
+  if (
+    !hasExactKeys(value, keys) ||
+    value.outcome !== "granted" ||
+    typeof value.canCancel !== "boolean" ||
+    typeof value.canReschedule !== "boolean" ||
+    typeof value.stepUpRequired !== "boolean" ||
+    typeof value.stepUpVerified !== "boolean" ||
+    !managementIntents.includes(value.intent as ManagementIntentV1)
+  ) {
+    throw new Error("Management view is invalid");
+  }
+  // A view link never carries step-up, and an action link is never granted
+  // without it being required (ADR-0004 decisions 6 and 9).
+  if ((value.intent === "view") === value.stepUpRequired) {
+    throw new Error("Management view step-up does not match its intent");
+  }
+  const booking = value.booking;
+  const bookingKeys = [
+    "approvalStatus",
+    "bookingId",
+    "bookingRevision",
+    "consentVersion",
+    "customerTimeZone",
+    "endAt",
+    "locale",
+    "locationName",
+    "locationTimeZone",
+    "paymentStatus",
+    "price",
+    "publicReference",
+    "serviceName",
+    "startAt",
+    "status",
+  ] as const;
+  if (!isRecord(booking) || !hasExactKeys(booking, bookingKeys)) {
+    throw new Error("Management booking has an unexpected shape");
+  }
+  if (
+    (booking.locale !== "en" && booking.locale !== "ar") ||
+    typeof booking.bookingRevision !== "number" ||
+    !Number.isSafeInteger(booking.bookingRevision) ||
+    booking.bookingRevision < 1 ||
+    !paymentStatuses.includes(booking.paymentStatus as PaymentStatusDto) ||
+    !bookingApprovalStatuses.includes(
+      booking.approvalStatus as (typeof bookingApprovalStatuses)[number],
+    )
+  ) {
+    throw new Error("Management booking is invalid");
+  }
+  if (
+    !isRecord(booking.price) ||
+    !hasExactKeys(booking.price, ["currency", "minorUnits"])
+  ) {
+    throw new Error("Management booking price has an unexpected shape");
+  }
+  const currency = requireNonEmptyString(booking.price.currency);
+  if (
+    !/^[A-Z]{3}$/u.test(currency) ||
+    typeof booking.price.minorUnits !== "number" ||
+    !Number.isSafeInteger(booking.price.minorUnits) ||
+    booking.price.minorUnits < 0
+  ) {
+    throw new Error("Management booking price is invalid");
+  }
+  const startAt = requireUtcInstant(booking.startAt);
+  const endAt = requireUtcInstant(booking.endAt);
+  if (Date.parse(startAt) >= Date.parse(endAt)) {
+    throw new Error("Management booking range is invalid");
+  }
+  return Object.freeze({
+    booking: Object.freeze({
+      approvalStatus:
+        booking.approvalStatus as ConfirmBookingV1Response["approvalStatus"],
+      bookingId: requireNonEmptyString(booking.bookingId) as BookingId,
+      bookingRevision: booking.bookingRevision,
+      consentVersion: requireNonEmptyString(booking.consentVersion),
+      customerTimeZone: requireTimeZone(booking.customerTimeZone),
+      endAt,
+      locale: booking.locale,
+      locationName: requireNonEmptyString(booking.locationName),
+      locationTimeZone: requireTimeZone(booking.locationTimeZone),
+      paymentStatus: booking.paymentStatus as PaymentStatusDto,
+      price: Object.freeze({ currency, minorUnits: booking.price.minorUnits }),
+      publicReference: requireNonEmptyString(booking.publicReference),
+      serviceName: requireNonEmptyString(booking.serviceName),
+      startAt,
+      status: requireNonEmptyString(booking.status),
+    }),
+    canCancel: value.canCancel,
+    canReschedule: value.canReschedule,
+    intent: value.intent as ManagementIntentV1,
+    outcome: "granted" as const,
+    stepUpRequired: value.stepUpRequired,
+    stepUpVerified: value.stepUpVerified,
+    tokenExpiresAt: requireUtcInstant(value.tokenExpiresAt),
+  });
+}
+
+/** The step-up request result. `sent` never confirms that an address exists. */
+export interface ManagementStepUpV1 {
+  readonly expiresAt: string | null;
+  readonly outcome: "sent" | "unavailable";
+}
+
+export function parseManagementStepUpV1(value: unknown): ManagementStepUpV1 {
+  if (!isRecord(value) || !hasExactKeys(value, ["expiresAt", "outcome"])) {
+    throw new Error("Management step-up has an unexpected shape");
+  }
+  if (value.outcome !== "sent" && value.outcome !== "unavailable") {
+    throw new Error("Management step-up outcome is invalid");
+  }
+  const expiresAt =
+    value.expiresAt === null ? null : requireUtcInstant(value.expiresAt);
+  if ((value.outcome === "sent") !== (expiresAt !== null)) {
+    throw new Error("Management step-up expiry does not match its outcome");
+  }
+  return Object.freeze({ expiresAt, outcome: value.outcome });
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

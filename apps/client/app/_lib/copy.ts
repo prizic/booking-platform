@@ -113,7 +113,42 @@ export type ClientMessageKey =
   | "proposalErrorTitle"
   | "proposalErrorExpired"
   | "proposalErrorUnavailable"
-  | "proposalMissingToken";
+  | "proposalMissingToken"
+  | "manageTitle"
+  | "manageSummary"
+  | "manageUnavailableTitle"
+  | "manageUnavailableBody"
+  | "manageUnavailableAction"
+  | "manageStatusLabel"
+  | "manageReferenceLabel"
+  | "manageWhenLabel"
+  | "manageServiceLabel"
+  | "manageLocationLabel"
+  | "manageTotalLabel"
+  | "manageTimezoneLabel"
+  | "managePolicyVersionLabel"
+  | "manageLinkExpiresLabel"
+  | "manageRescheduleEligible"
+  | "manageRescheduleIneligible"
+  | "manageCancelEligible"
+  | "manageCancelIneligible"
+  | "manageActionsPending"
+  | "manageStepUpTitle"
+  | "manageStepUpSummary"
+  | "manageStepUpSend"
+  | "manageStepUpSending"
+  | "manageStepUpSent"
+  | "manageStepUpCodeLabel"
+  | "manageStepUpCodeHint"
+  | "manageStepUpVerify"
+  | "manageStepUpVerifying"
+  | "manageStepUpVerified"
+  | "manageStepUpFailed"
+  | "manageMissingToken"
+  | "manageStatusConfirmed"
+  | "manageStatusRequested"
+  | "manageStatusCancelled"
+  | "manageStatusOther";
 
 export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
@@ -245,6 +280,49 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     proposalErrorUnavailable:
       "This is temporarily unavailable. Your request has not changed.",
     proposalMissingToken: "Open the link from your email to see the suggested time.",
+    manageTitle: "Manage your booking",
+    manageSummary:
+      "This page works only for this one booking, and only until the link expires.",
+    manageUnavailableTitle: "This link cannot be used",
+    manageUnavailableBody:
+      "The link may have expired, already been used, or been replaced by a newer one. Check the most recent email about your booking, or contact the business.",
+    manageUnavailableAction: "Return to booking",
+    manageStatusLabel: "Status",
+    manageReferenceLabel: "Booking reference",
+    manageWhenLabel: "When",
+    manageServiceLabel: "Service",
+    manageLocationLabel: "Location",
+    manageTotalLabel: "Total",
+    manageTimezoneLabel: "Time zone",
+    managePolicyVersionLabel: "Policy version",
+    manageLinkExpiresLabel: "This link expires",
+    manageRescheduleEligible: "You can move this booking to another time.",
+    manageRescheduleIneligible:
+      "This booking can no longer be moved online. Contact the business if you need to change it.",
+    manageCancelEligible: "You can cancel this booking.",
+    manageCancelIneligible:
+      "This booking can no longer be cancelled online. Contact the business if you need to cancel.",
+    manageActionsPending:
+      "Changing or cancelling from this page arrives with the next release.",
+    manageStepUpTitle: "Confirm it is you",
+    manageStepUpSummary:
+      "For this action we email a six-digit code to the address on the booking.",
+    manageStepUpSend: "Email me a code",
+    manageStepUpSending: "Sending your code",
+    manageStepUpSent:
+      "If this link is still valid, a code is on its way. It expires shortly.",
+    manageStepUpCodeLabel: "Six-digit code",
+    manageStepUpCodeHint:
+      "Enter the code from the email. Codes expire and can be used once.",
+    manageStepUpVerify: "Confirm code",
+    manageStepUpVerifying: "Checking your code",
+    manageStepUpVerified: "Confirmed. You can continue with this action.",
+    manageStepUpFailed: "That code did not work. Request a new one if you need to.",
+    manageMissingToken: "Open the link from your booking email to manage this booking.",
+    manageStatusConfirmed: "Confirmed",
+    manageStatusRequested: "Awaiting approval",
+    manageStatusCancelled: "Cancelled",
+    manageStatusOther: "See the latest email about this booking",
   },
   ar: {
     eyebrow: "تجربة الحجز العامة",
@@ -370,6 +448,47 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
       "لم يعد هذا الاقتراح متاحًا. راجع بريدك لمعرفة آخر تحديث لطلبك.",
     proposalErrorUnavailable: "الخدمة غير متاحة مؤقتًا، ولم يتغيّر طلبك.",
     proposalMissingToken: "افتح الرابط من بريدك الإلكتروني لعرض الوقت المقترح.",
+    manageTitle: "إدارة حجزك",
+    manageSummary: "تعمل هذه الصفحة لهذا الحجز وحده، وحتى انتهاء صلاحية الرابط فقط.",
+    manageUnavailableTitle: "لا يمكن استخدام هذا الرابط",
+    manageUnavailableBody:
+      "قد تكون صلاحية الرابط انتهت أو استُخدم من قبل أو حلّ محله رابط أحدث. راجع آخر رسالة عن حجزك أو تواصل مع مقدّم الخدمة.",
+    manageUnavailableAction: "العودة إلى الحجز",
+    manageStatusLabel: "الحالة",
+    manageReferenceLabel: "رقم مرجع الحجز",
+    manageWhenLabel: "الموعد",
+    manageServiceLabel: "الخدمة",
+    manageLocationLabel: "الموقع",
+    manageTotalLabel: "الإجمالي",
+    manageTimezoneLabel: "المنطقة الزمنية",
+    managePolicyVersionLabel: "إصدار السياسة",
+    manageLinkExpiresLabel: "تنتهي صلاحية الرابط",
+    manageRescheduleEligible: "يمكنك نقل هذا الحجز إلى وقت آخر.",
+    manageRescheduleIneligible:
+      "لم يعد بالإمكان نقل هذا الحجز عبر الإنترنت. تواصل مع مقدّم الخدمة إذا احتجت لتغييره.",
+    manageCancelEligible: "يمكنك إلغاء هذا الحجز.",
+    manageCancelIneligible:
+      "لم يعد بالإمكان إلغاء هذا الحجز عبر الإنترنت. تواصل مع مقدّم الخدمة إذا احتجت للإلغاء.",
+    manageActionsPending: "سيتاح التعديل أو الإلغاء من هذه الصفحة في الإصدار القادم.",
+    manageStepUpTitle: "تأكيد هويتك",
+    manageStepUpSummary:
+      "لهذا الإجراء نرسل رمزًا من ستة أرقام إلى البريد المسجّل في الحجز.",
+    manageStepUpSend: "أرسل لي رمزًا",
+    manageStepUpSending: "جارٍ إرسال الرمز",
+    manageStepUpSent:
+      "إذا كان هذا الرابط صالحًا، فالرمز في طريقه إليك، وتنتهي صلاحيته بعد قليل.",
+    manageStepUpCodeLabel: "الرمز المكوّن من ستة أرقام",
+    manageStepUpCodeHint:
+      "أدخل الرمز من الرسالة. تنتهي صلاحية الرموز وتُستخدم مرة واحدة.",
+    manageStepUpVerify: "تأكيد الرمز",
+    manageStepUpVerifying: "جارٍ التحقق من الرمز",
+    manageStepUpVerified: "تم التأكيد. يمكنك متابعة هذا الإجراء.",
+    manageStepUpFailed: "لم ينجح هذا الرمز. اطلب رمزًا جديدًا إذا لزم الأمر.",
+    manageMissingToken: "افتح الرابط من رسالة الحجز لإدارة هذا الحجز.",
+    manageStatusConfirmed: "مؤكّد",
+    manageStatusRequested: "بانتظار الموافقة",
+    manageStatusCancelled: "ملغى",
+    manageStatusOther: "راجع آخر رسالة عن هذا الحجز",
   },
 };
 
@@ -414,7 +533,10 @@ export function bookingFlowCopy(locale: Locale): Readonly<Record<string, string>
   return Object.freeze(
     Object.fromEntries(
       Object.entries(clientCopy[locale]).filter(
-        ([key]) => key.startsWith("booking") || key.startsWith("proposal"),
+        ([key]) =>
+          key.startsWith("booking") ||
+          key.startsWith("proposal") ||
+          key.startsWith("manage"),
       ),
     ),
   );

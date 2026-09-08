@@ -34,7 +34,7 @@ Enforcement pointers: SI-1/SI-2 are tested by the RLS matrix, SI-5 by the concur
 | Principal | Identity source | Rules |
 | --- | --- | --- |
 | Customer (account) | Supabase Auth | Standard session; verification and password recovery handled by Auth. |
-| Customer (guest) | Signed manage link | Link is scoped, expiring, and revocable. Sensitive views/actions additionally require email OTP. |
+| Customer (guest) | Signed manage link | Link is scoped, expiring, and revocable. Sensitive views/actions additionally require email OTP. As implemented in issue #14: only the token digest is stored, refusals are indistinguishable from one another, every use is rate limited and audited, and any booking state change revokes every outstanding link. |
 | Tenant staff | Supabase Auth + membership row | Membership is current database state, so revocation takes effect immediately without waiting for a role-bearing JWT to expire. |
 | Tenant owner | Supabase Auth + MFA | Step-up (recent auth + MFA) required for the sensitive-action list below. |
 | Platform operator | Separate operator roles | MFA/AAL2 mandatory. Documented break-glass process, audited. |
