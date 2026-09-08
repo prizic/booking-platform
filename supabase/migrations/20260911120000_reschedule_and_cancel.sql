@@ -1062,3 +1062,81 @@ begin
   return query select 1,'sent'::text,v_expires_at;
 end;
 $function$;
+
+-- The expiry job writes an intent too, so it is re-emitted with the wider
+-- conflict target as well.
+create or replace function private.expire_booking_requests_v1(
+  p_tenant_id uuid default null,
+  p_limit integer default 500
+)
+returns table(expired_requests integer, expired_proposals integer)
+language plpgsql
+volatile
+security definer
+set search_path = ''
+set statement_timeout = '10s'
+as $$
+declare
+  v_now timestamptz := statement_timestamp();
+  v_ids uuid[];
+  v_expired integer;
+  v_proposals integer;
+begin
+  if p_limit is null or p_limit not between 1 and 5000 then
+    raise exception using errcode='22023',message='booking_invalid_batch';
+  end if;
+  select coalesce(array_agg(candidate.id),'{}'::uuid[]) into v_ids from (
+    select b.id from app.bookings b
+    where b.status='requested' and b.approval_deadline<=v_now
+      and (p_tenant_id is null or b.tenant_id=p_tenant_id)
+    order by b.approval_deadline
+    limit p_limit
+    for update skip locked
+  ) candidate;
+
+  update app.assignment_allocations a set state='cancelled'
+  where a.hold_id in (select b.hold_id from app.bookings b where b.id = any(v_ids))
+    and a.state='held';
+  update app.booking_holds h set state='released',released_at=v_now,updated_at=v_now
+  where h.id in (select b.hold_id from app.bookings b where b.id = any(v_ids))
+    and h.state='active';
+
+  insert into app.booking_events(
+    tenant_id,booking_id,sequence,event_type,actor_kind,reason,outcome,request_id,
+    booking_revision,metadata)
+  select b.tenant_id,b.id,
+    coalesce((select max(e.sequence)+1 from app.booking_events e
+      where e.tenant_id=b.tenant_id and e.booking_id=b.id),2),
+    'booking_request_expired','system','response_sla_elapsed','succeeded',
+    b.correlation_id,b.revision+1,jsonb_build_object('deadline',b.approval_deadline)
+  from app.bookings b where b.id = any(v_ids);
+  insert into app.outbox_events(
+    tenant_id,booking_id,topic,payload,correlation_id,booking_revision)
+  select b.tenant_id,b.id,'booking.request_expired',
+    jsonb_build_object('booking_id',b.id,'locale',b.locale,
+      'public_reference',b.public_reference),b.correlation_id,b.revision+1
+  from app.bookings b where b.id = any(v_ids)
+  on conflict (tenant_id,booking_id,topic,booking_revision) do nothing;
+
+  with expired as (
+    update app.bookings b
+    set status='expired', approval_status='expired', approval_deadline=null,
+        revision=b.revision+1, updated_at=v_now
+    where b.id = any(v_ids) and b.status='requested'
+    returning 1
+  ) select count(*)::integer into v_expired from expired;
+
+  with lapsed as (
+    update app.booking_proposals p set state='expired',updated_at=v_now
+    where p.state='pending' and p.expires_at<=v_now
+      and (p_tenant_id is null or p.tenant_id=p_tenant_id)
+    returning 1
+  ) select count(*)::integer into v_proposals from lapsed;
+
+  if v_expired > 0 or v_proposals > 0 then
+    raise log 'booking_request_expiry_batch requests=% proposals=% tenant=%',
+      v_expired,v_proposals,coalesce(p_tenant_id::text,'all');
+  end if;
+  return query select v_expired,v_proposals;
+end;
+$$;
