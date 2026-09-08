@@ -51,7 +51,31 @@ const heldSlot = {
   },
 };
 
+export const requested = {
+  approvalDeadline: "2035-09-26T13:00:00.000Z",
+  approvalStatus: "pending",
+  bookingId: "0a3f2b64-0000-4000-8000-000000000003",
+  bookingRevision: 1,
+  calendarStatus: "pending",
+  consentVersion: "2",
+  customerTimeZone: "Asia/Riyadh",
+  endAt: slotEnd,
+  locale: "en",
+  locationName: "Downtown",
+  locationTimeZone: "America/New_York",
+  notificationStatus: "queued",
+  paymentStatus: "not_required",
+  price: { currency: "SAR", minorUnits: 18_000 },
+  publicReference: "R7Q2M4T9XZ",
+  replayed: false,
+  serviceName: "Site visit",
+  startAt: slotStart,
+  status: "requested",
+  taxRateBps: 1500,
+};
+
 export const confirmed = {
+  approvalDeadline: null,
   approvalStatus: "not_required",
   bookingId: "0a3f2b64-0000-4000-8000-000000000002",
   bookingRevision: 1,

@@ -1129,6 +1129,8 @@ export interface ConfirmBookingV1Request {
 
 export interface ConfirmBookingV1Response {
   readonly approvalStatus: "not_required" | "pending" | "approved" | "declined";
+  /** When a staff decision is due. Present only while a request is pending. */
+  readonly approvalDeadline: string | null;
   readonly bookingId: BookingId;
   /** Snapshot reference: the booking revision the confirmation describes. */
   readonly bookingRevision: number;
@@ -1148,7 +1150,8 @@ export interface ConfirmBookingV1Response {
   readonly replayed: boolean;
   readonly serviceName: string;
   readonly startAt: string;
-  readonly status: "confirmed";
+  /** Approval-gated services commit `requested`, never `confirmed` (ADR-0005). */
+  readonly status: "confirmed" | "requested";
   readonly taxRateBps: number;
 }
 
@@ -1157,6 +1160,7 @@ const bookingApprovalStatuses = [
   "pending",
   "approved",
   "declined",
+  "expired",
 ] as const;
 
 export function parseConfirmBookingV1Request(value: unknown): ConfirmBookingV1Request {
@@ -1248,6 +1252,7 @@ export function parseConfirmBookingV1Response(
   value: unknown,
 ): ConfirmBookingV1Response {
   const keys = [
+    "approvalDeadline",
     "approvalStatus",
     "bookingId",
     "bookingRevision",
@@ -1272,7 +1277,7 @@ export function parseConfirmBookingV1Response(
     throw new Error("Booking response has an unexpected shape");
   }
   if (
-    value.status !== "confirmed" ||
+    (value.status !== "confirmed" && value.status !== "requested") ||
     typeof value.replayed !== "boolean" ||
     (value.locale !== "en" && value.locale !== "ar") ||
     !bookingApprovalStatuses.includes(
@@ -1317,11 +1322,22 @@ export function parseConfirmBookingV1Response(
   if (Date.parse(startAt) >= Date.parse(endAt)) {
     throw new Error("Booking range is invalid");
   }
+  // A pending request always carries the deadline the customer is told about,
+  // and a settled booking never carries a stale one.
+  const approvalDeadline =
+    value.approvalDeadline === null ? null : requireUtcInstant(value.approvalDeadline);
+  if ((value.approvalStatus === "pending") !== (approvalDeadline !== null)) {
+    throw new Error("Booking approval deadline does not match its approval state");
+  }
+  if ((value.status === "requested") !== (value.approvalStatus === "pending")) {
+    throw new Error("Booking status does not match its approval state");
+  }
   const publicReference = requireNonEmptyString(value.publicReference);
   if (!/^[0-9A-HJ-NP-Z]{10}$/u.test(publicReference)) {
     throw new Error("Booking reference is invalid");
   }
   return Object.freeze({
+    approvalDeadline,
     approvalStatus: value.approvalStatus as ConfirmBookingV1Response["approvalStatus"],
     bookingId: requireNonEmptyString(value.bookingId) as BookingId,
     bookingRevision: value.bookingRevision,
@@ -1339,8 +1355,300 @@ export function parseConfirmBookingV1Response(
     replayed: value.replayed,
     serviceName: requireNonEmptyString(value.serviceName),
     startAt,
-    status: "confirmed",
+    status: value.status,
     taxRateBps: value.taxRateBps,
+  });
+}
+
+/** One row of the Dashboard pending-action queue (issue #13). */
+export interface BookingRequestV1 {
+  readonly approvalDeadline: string;
+  readonly bookingId: BookingId;
+  readonly bookingRevision: number;
+  /** Null unless the reader may see customer personal data. */
+  readonly customerDisplayName: string | null;
+  readonly endAt: string;
+  readonly hasIntake: boolean;
+  readonly locale: ContractLocale;
+  readonly locationId: LocationId;
+  readonly locationName: string;
+  readonly locationTimeZone: string;
+  readonly price: MoneyDto;
+  readonly proposal: {
+    readonly expiresAt: string;
+    readonly startAt: string;
+  } | null;
+  readonly publicReference: string;
+  readonly requestedAt: string;
+  readonly serviceName: string;
+  readonly startAt: string;
+}
+
+export type BookingDecisionActionV1 = "accept" | "propose" | "reject";
+
+export interface BookingDecisionV1Request {
+  readonly action: BookingDecisionActionV1;
+  readonly bookingId: BookingId;
+  readonly expectedRevision: number;
+  /** Staff-only note. It is lineage, never customer-facing text. */
+  readonly internalReason: string | null;
+  readonly proposedStartAt: string | null;
+  /** Shown to the customer, so it is bounded and optional. */
+  readonly publicReason: string | null;
+  readonly tenantId: TenantId;
+}
+
+export interface BookingDecisionV1Response {
+  readonly approvalStatus: ConfirmBookingV1Response["approvalStatus"];
+  readonly bookingId: BookingId;
+  readonly bookingRevision: number;
+  /** Returned once, for the customer link. Never stored in the clear. */
+  readonly proposalActionToken: string | null;
+  readonly proposalExpiresAt: string | null;
+  readonly status: "confirmed" | "rejected" | "requested";
+}
+
+export function parseBookingRequestsV1(value: unknown): readonly BookingRequestV1[] {
+  if (!Array.isArray(value) || value.length > 200) {
+    throw new Error("Booking request queue exceeds the result bound");
+  }
+  return Object.freeze(
+    value.map((row) => {
+      const keys = [
+        "approvalDeadline",
+        "bookingId",
+        "bookingRevision",
+        "customerDisplayName",
+        "endAt",
+        "hasIntake",
+        "locale",
+        "locationId",
+        "locationName",
+        "locationTimeZone",
+        "price",
+        "proposal",
+        "publicReference",
+        "requestedAt",
+        "serviceName",
+        "startAt",
+      ] as const;
+      if (!isRecord(row) || !hasExactKeys(row, keys)) {
+        throw new Error("Booking request has an unexpected shape");
+      }
+      if (
+        (row.locale !== "en" && row.locale !== "ar") ||
+        typeof row.hasIntake !== "boolean" ||
+        typeof row.bookingRevision !== "number" ||
+        !Number.isSafeInteger(row.bookingRevision) ||
+        row.bookingRevision < 1
+      ) {
+        throw new Error("Booking request is invalid");
+      }
+      if (
+        !isRecord(row.price) ||
+        !hasExactKeys(row.price, ["currency", "minorUnits"])
+      ) {
+        throw new Error("Booking request price has an unexpected shape");
+      }
+      const currency = requireNonEmptyString(row.price.currency);
+      if (
+        !/^[A-Z]{3}$/u.test(currency) ||
+        typeof row.price.minorUnits !== "number" ||
+        !Number.isSafeInteger(row.price.minorUnits) ||
+        row.price.minorUnits < 0
+      ) {
+        throw new Error("Booking request price is invalid");
+      }
+      let proposal: BookingRequestV1["proposal"] = null;
+      if (row.proposal !== null) {
+        if (
+          !isRecord(row.proposal) ||
+          !hasExactKeys(row.proposal, ["expiresAt", "startAt"])
+        ) {
+          throw new Error("Booking request proposal has an unexpected shape");
+        }
+        proposal = Object.freeze({
+          expiresAt: requireUtcInstant(row.proposal.expiresAt),
+          startAt: requireUtcInstant(row.proposal.startAt),
+        });
+      }
+      const startAt = requireUtcInstant(row.startAt);
+      const endAt = requireUtcInstant(row.endAt);
+      if (Date.parse(startAt) >= Date.parse(endAt)) {
+        throw new Error("Booking request range is invalid");
+      }
+      return Object.freeze({
+        approvalDeadline: requireUtcInstant(row.approvalDeadline),
+        bookingId: requireNonEmptyString(row.bookingId) as BookingId,
+        bookingRevision: row.bookingRevision,
+        customerDisplayName:
+          row.customerDisplayName === null
+            ? null
+            : requireNonEmptyString(row.customerDisplayName),
+        endAt,
+        hasIntake: row.hasIntake,
+        locale: row.locale,
+        locationId: requireNonEmptyString(row.locationId) as LocationId,
+        locationName: requireNonEmptyString(row.locationName),
+        locationTimeZone: requireTimeZone(row.locationTimeZone),
+        price: Object.freeze({ currency, minorUnits: row.price.minorUnits }),
+        proposal,
+        publicReference: requireNonEmptyString(row.publicReference),
+        requestedAt: requireUtcInstant(row.requestedAt),
+        serviceName: requireNonEmptyString(row.serviceName),
+        startAt,
+      });
+    }),
+  );
+}
+
+export function parseBookingDecisionV1Request(
+  value: unknown,
+): BookingDecisionV1Request {
+  const keys = [
+    "action",
+    "bookingId",
+    "expectedRevision",
+    "internalReason",
+    "proposedStartAt",
+    "publicReason",
+    "tenantId",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Booking decision has an unexpected shape");
+  }
+  if (
+    (value.action !== "accept" &&
+      value.action !== "propose" &&
+      value.action !== "reject") ||
+    typeof value.expectedRevision !== "number" ||
+    !Number.isSafeInteger(value.expectedRevision) ||
+    value.expectedRevision < 1
+  ) {
+    throw new Error("Booking decision is invalid");
+  }
+  // A proposal is the only action that carries a time, and it must be one the
+  // database will accept: a whole minute in the future.
+  const proposedStartAt =
+    value.proposedStartAt === null ? null : requireUtcInstant(value.proposedStartAt);
+  if (
+    (value.action === "propose") !== (proposedStartAt !== null) ||
+    (proposedStartAt !== null && Date.parse(proposedStartAt) % 60_000 !== 0)
+  ) {
+    throw new Error("Booking decision proposal time is invalid");
+  }
+  const bounded = (reason: unknown) => {
+    if (reason === null) return null;
+    const text = requireNonEmptyString(reason).trim();
+    if (text.length === 0 || text.length > 500) {
+      throw new Error("Booking decision reason is out of bounds");
+    }
+    return text;
+  };
+  return Object.freeze({
+    action: value.action,
+    bookingId: requireNonEmptyString(value.bookingId) as BookingId,
+    expectedRevision: value.expectedRevision,
+    internalReason: bounded(value.internalReason),
+    proposedStartAt,
+    publicReason: bounded(value.publicReason),
+    tenantId: requireNonEmptyString(value.tenantId) as TenantId,
+  });
+}
+
+export function parseBookingDecisionV1Response(
+  value: unknown,
+): BookingDecisionV1Response {
+  const keys = [
+    "approvalStatus",
+    "bookingId",
+    "bookingRevision",
+    "proposalActionToken",
+    "proposalExpiresAt",
+    "status",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Booking decision result has an unexpected shape");
+  }
+  if (
+    (value.status !== "confirmed" &&
+      value.status !== "rejected" &&
+      value.status !== "requested") ||
+    !bookingApprovalStatuses.includes(
+      value.approvalStatus as (typeof bookingApprovalStatuses)[number],
+    ) ||
+    typeof value.bookingRevision !== "number" ||
+    !Number.isSafeInteger(value.bookingRevision) ||
+    value.bookingRevision < 1
+  ) {
+    throw new Error("Booking decision result is invalid");
+  }
+  const token =
+    value.proposalActionToken === null
+      ? null
+      : requireNonEmptyString(value.proposalActionToken);
+  const expiresAt =
+    value.proposalExpiresAt === null
+      ? null
+      : requireUtcInstant(value.proposalExpiresAt);
+  // The token and its expiry only exist together, and only for a proposal.
+  if (
+    (token !== null) !== (expiresAt !== null) ||
+    (token !== null && !/^[a-f0-9]{64}$/u.test(token))
+  ) {
+    throw new Error("Booking decision proposal link is invalid");
+  }
+  return Object.freeze({
+    approvalStatus: value.approvalStatus as BookingDecisionV1Response["approvalStatus"],
+    bookingId: requireNonEmptyString(value.bookingId) as BookingId,
+    bookingRevision: value.bookingRevision,
+    proposalActionToken: token,
+    proposalExpiresAt: expiresAt,
+    status: value.status,
+  });
+}
+
+export interface ProposalResponseV1 {
+  readonly bookingId: BookingId;
+  readonly endAt: string;
+  readonly proposalState: "accepted" | "declined";
+  readonly publicReference: string;
+  readonly startAt: string;
+  readonly status: "confirmed" | "requested";
+}
+
+export function parseProposalResponseV1(value: unknown): ProposalResponseV1 {
+  const keys = [
+    "bookingId",
+    "endAt",
+    "proposalState",
+    "publicReference",
+    "startAt",
+    "status",
+  ] as const;
+  if (!isRecord(value) || !hasExactKeys(value, keys)) {
+    throw new Error("Proposal response has an unexpected shape");
+  }
+  if (
+    (value.proposalState !== "accepted" && value.proposalState !== "declined") ||
+    (value.status !== "confirmed" && value.status !== "requested") ||
+    // Accepting settles the booking; declining leaves the request pending.
+    (value.proposalState === "accepted") !== (value.status === "confirmed")
+  ) {
+    throw new Error("Proposal response is invalid");
+  }
+  const startAt = requireUtcInstant(value.startAt);
+  const endAt = requireUtcInstant(value.endAt);
+  if (Date.parse(startAt) >= Date.parse(endAt)) {
+    throw new Error("Proposal response range is invalid");
+  }
+  return Object.freeze({
+    bookingId: requireNonEmptyString(value.bookingId) as BookingId,
+    endAt,
+    proposalState: value.proposalState,
+    publicReference: requireNonEmptyString(value.publicReference),
+    startAt,
+    status: value.status,
   });
 }
 

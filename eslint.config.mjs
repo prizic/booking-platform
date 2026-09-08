@@ -9,6 +9,8 @@ export default defineConfig(
   globalIgnores([
     "**/.next/**",
     "**/.next-warm/**",
+    // Playwright starts brand-fixture dev servers with their own dist dirs.
+    "**/.next-warm-*/**",
     "**/.turbo/**",
     "**/coverage/**",
     "**/dist/**",

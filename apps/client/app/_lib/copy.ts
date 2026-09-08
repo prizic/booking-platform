@@ -92,7 +92,28 @@ export type ClientMessageKey =
   | "bookingNotificationQueued"
   | "bookingNextSteps"
   | "bookingConsentVersionLabel"
-  | "bookingReviewTitle";
+  | "bookingReviewTitle"
+  | "bookingRequestedTitle"
+  | "bookingRequestedSummary"
+  | "bookingRequestedStatus"
+  | "bookingDecisionDueLabel"
+  | "bookingRequestedNextSteps"
+  | "proposalTitle"
+  | "proposalSummary"
+  | "proposalCurrentLabel"
+  | "proposalProposedLabel"
+  | "proposalAccept"
+  | "proposalDecline"
+  | "proposalAccepting"
+  | "proposalDeclining"
+  | "proposalAcceptedTitle"
+  | "proposalAcceptedSummary"
+  | "proposalDeclinedTitle"
+  | "proposalDeclinedSummary"
+  | "proposalErrorTitle"
+  | "proposalErrorExpired"
+  | "proposalErrorUnavailable"
+  | "proposalMissingToken";
 
 export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
@@ -198,6 +219,32 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingNextSteps: "Arrive a few minutes early and bring your reference.",
     bookingConsentVersionLabel: "Policy version",
     bookingReviewTitle: "Review your booking",
+    bookingRequestedTitle: "Your request has been sent",
+    bookingRequestedSummary:
+      "This service is confirmed by the team, so your time is not booked yet. Keep your reference — you will need it to follow up.",
+    bookingRequestedStatus: "Awaiting approval — nothing has been charged",
+    bookingDecisionDueLabel: "Decision due by",
+    bookingRequestedNextSteps:
+      "We will email you when the team accepts, suggests another time, or declines. If we do not answer by the date above, your request closes and you can request another time.",
+    proposalTitle: "A new time has been suggested",
+    proposalSummary:
+      "Your original request is still open. Accepting the new time confirms your booking; declining keeps your request as it was.",
+    proposalCurrentLabel: "You requested",
+    proposalProposedLabel: "Suggested instead",
+    proposalAccept: "Accept the new time",
+    proposalDecline: "Keep my original request",
+    proposalAccepting: "Confirming the new time",
+    proposalDeclining: "Keeping your request",
+    proposalAcceptedTitle: "Your booking is confirmed",
+    proposalAcceptedSummary: "The new time is booked. Your reference has not changed.",
+    proposalDeclinedTitle: "Your original request is still open",
+    proposalDeclinedSummary: "We let the team know the suggested time does not work.",
+    proposalErrorTitle: "We could not use this link",
+    proposalErrorExpired:
+      "This suggestion is no longer available. Check your email for the latest update on your request.",
+    proposalErrorUnavailable:
+      "This is temporarily unavailable. Your request has not changed.",
+    proposalMissingToken: "Open the link from your email to see the suggested time.",
   },
   ar: {
     eyebrow: "تجربة الحجز العامة",
@@ -298,6 +345,31 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingNextSteps: "احضر قبل الموعد بدقائق ومعك رقم المرجع.",
     bookingConsentVersionLabel: "إصدار السياسة",
     bookingReviewTitle: "راجع حجزك",
+    bookingRequestedTitle: "تم إرسال طلبك",
+    bookingRequestedSummary:
+      "يؤكّد الفريق هذه الخدمة، لذا لم يُحجز وقتك بعد. احتفظ برقم المرجع لمتابعة الطلب.",
+    bookingRequestedStatus: "بانتظار الموافقة — لم تُفرض أي رسوم",
+    bookingDecisionDueLabel: "موعد الرد",
+    bookingRequestedNextSteps:
+      "سنراسلك عبر البريد عند قبول الفريق للطلب أو اقتراح وقت آخر أو رفضه. وإذا لم نردّ قبل التاريخ أعلاه، يُغلق طلبك ويمكنك طلب وقت آخر.",
+    proposalTitle: "تم اقتراح وقت جديد",
+    proposalSummary:
+      "طلبك الأصلي ما زال قائمًا. قبول الوقت الجديد يؤكّد حجزك، ورفضه يبقي طلبك كما هو.",
+    proposalCurrentLabel: "الوقت الذي طلبته",
+    proposalProposedLabel: "الوقت المقترح",
+    proposalAccept: "قبول الوقت الجديد",
+    proposalDecline: "الإبقاء على طلبي الأصلي",
+    proposalAccepting: "جارٍ تأكيد الوقت الجديد",
+    proposalDeclining: "جارٍ الإبقاء على طلبك",
+    proposalAcceptedTitle: "تم تأكيد حجزك",
+    proposalAcceptedSummary: "تم حجز الوقت الجديد، ولم يتغيّر رقم المرجع.",
+    proposalDeclinedTitle: "طلبك الأصلي ما زال قائمًا",
+    proposalDeclinedSummary: "أبلغنا الفريق بأن الوقت المقترح غير مناسب.",
+    proposalErrorTitle: "تعذّر استخدام هذا الرابط",
+    proposalErrorExpired:
+      "لم يعد هذا الاقتراح متاحًا. راجع بريدك لمعرفة آخر تحديث لطلبك.",
+    proposalErrorUnavailable: "الخدمة غير متاحة مؤقتًا، ولم يتغيّر طلبك.",
+    proposalMissingToken: "افتح الرابط من بريدك الإلكتروني لعرض الوقت المقترح.",
   },
 };
 
@@ -341,7 +413,9 @@ export function availabilityPickerCopy(locale: Locale) {
 export function bookingFlowCopy(locale: Locale): Readonly<Record<string, string>> {
   return Object.freeze(
     Object.fromEntries(
-      Object.entries(clientCopy[locale]).filter(([key]) => key.startsWith("booking")),
+      Object.entries(clientCopy[locale]).filter(
+        ([key]) => key.startsWith("booking") || key.startsWith("proposal"),
+      ),
     ),
   );
 }

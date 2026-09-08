@@ -304,6 +304,19 @@ tenant approval (`policy_denied`) until issues #22 and #13 ship those paths.
 
 **No payment, email, or calendar provider is ever called inside that transaction.** Deadlocks and serialization failures retry a bounded number of times with jitter; exclusion constraints and locked capacity remain the final guard.
 
+Request-to-book (issue #13) uses the same transaction and the same guards. An
+approval-gated service commits `requested` with a wall-clock decision deadline
+instead of `confirmed`; whether that request reserves capacity is the explicit
+per-service `service.request_holds_allocation` setting from ADR-0005, and when
+it does, the checkout hold itself becomes the reservation — its purpose changes
+and its expiry becomes the deadline — so the exclusion constraints, the
+availability engine, and the existing expiry job keep working unchanged. Staff
+decisions are settled by the booking revision, so exactly one of two competing
+accepts wins and the other gets `revision_conflict`. A staff proposal is a
+separate expiring offer with an intent-scoped customer link whose digest alone
+is stored; accepting one moves the booking under a new revision, which is the
+reschedule shape below.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

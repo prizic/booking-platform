@@ -170,7 +170,7 @@ evidence.
 | Lint | `pnpm lint` | Available — issue #3 |
 | Typecheck | `pnpm typecheck` | Available — issue #3 |
 | Unit / domain tests | `pnpm test:unit` | Available — issue #3 |
-| Component tests | `pnpm test:component` | Available — issue #5; booking-flow components expand in issues #13–#18 |
+| Component tests | `pnpm test:component` | Available — issue #5; booking-flow components expand in issues #14–#18 |
 | Database reset from zero | `pnpm db:reset` | Available — issue #4; Docker required |
 | Database lint | `pnpm db:lint` | Available — issue #4; Docker required |
 | pgTAP schema boundary and full tenant RLS matrix | `pnpm test:db` (`supabase test db --local`) | Available — issues #4 and #6; Docker required |
@@ -178,7 +178,7 @@ evidence.
 | Contract tests | `pnpm test:contract` | Available — issue #4 |
 | Booking concurrency tests | `pnpm test:concurrency` | Available — issue #11; Docker, a reset local stack, `psql`, and more than 100 spare database connections required |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
-| E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; the no-payment booking journey (EN/AR × mobile/desktop, validation, duplicate submission, lost slot, payment refusal) available — issue #12, driven against the Client route handlers with platform DTO responses; a browser-driven journey against a seeded live database remains `N/A — not yet implemented, owned by issue #94`; remaining journeys are `N/A — not yet implemented, owned by issues #13–#18` |
+| E2E | `pnpm test:e2e` | Identity/release smoke available — issue #4; the no-payment booking journey (EN/AR × mobile/desktop, validation, duplicate submission, lost slot, payment refusal) available — issue #12; the request-to-book outcome and the customer proposal link available — issue #13; all of them driven against the Client route handlers with platform DTO responses, so a browser-driven journey against a seeded live database remains `N/A — not yet implemented, owned by issue #94`; remaining journeys are `N/A — not yet implemented, owned by issues #14–#18` |
 | Accessibility (+ RTL interaction) | `pnpm test:a11y` | Client/Dashboard EN/AR × mobile/desktop × brand matrix plus reduced motion available — issue #5; full journeys remain issue #40 |
 | Localization parity | `pnpm test:i18n` | Available — issue #5; includes locale rendering plus unit coverage for messages, formatting, and DST gaps/overlaps |
 | Visual regression | `pnpm test:visual` | Client/Dashboard EN/AR × mobile/desktop × brand pixel baselines available — issue #5; full journeys remain issue #40 |

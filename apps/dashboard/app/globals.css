@@ -1067,6 +1067,90 @@ summary:focus-visible {
   }
 }
 
+/* Booking requests queue (issue #13). One decision card per request, so the
+   deadline, the customer context, and the three actions stay together. */
+.requests-queue {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1.25rem;
+  padding: clamp(1.3rem, 3vw, 2rem);
+}
+
+.requests-queue__link input {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 0.6rem;
+}
+
+.requests-list {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1.5rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.requests-list article {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.requests-list dl {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0;
+  margin: 0;
+}
+
+.requests-list dl > div {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(7rem, 0.6fr) 1fr;
+  gap: 1rem;
+  padding-block: 0.6rem;
+  border-block-end: var(--brand-border-width-default, 1px) solid
+    var(--brand-color-border);
+}
+
+.requests-list dt {
+  color: var(--brand-color-muted);
+  font-size: var(--brand-font-size-label, 0.82rem);
+}
+
+.requests-list dd {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-weight: var(--brand-font-weight-bold, 700);
+}
+
+.requests-list form {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.5rem;
+}
+
+.requests-list textarea,
+.requests-list input[type="datetime-local"] {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 0.6rem;
+  font: inherit;
+}
+
+.requests-actions {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

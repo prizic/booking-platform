@@ -7,12 +7,16 @@ import {
   parseStaffResourceDeactivationV1,
   parseStaffResourceWorkspaceV1,
   parseTenantChoicesV1,
+  parseBookingDecisionV1Request,
+  parseBookingDecisionV1Response,
+  parseBookingRequestsV1,
   parseScheduleWorkspaceV1,
   parseSaveScheduleConfigV1,
   type CapabilityName,
   type AvailabilityV1Request,
   type StaffResourceDeactivationV1,
   type StaffResourceWorkspaceV1,
+  type BookingDecisionV1Request,
 } from "@wlbp/api-contracts";
 import { getVerifiedIdentity } from "@wlbp/auth";
 import type { RequestScopedSupabaseClient } from "@wlbp/supabase-client";
@@ -30,7 +34,15 @@ interface RpcResult {
 }
 
 export class DashboardRpcError extends Error {
-  constructor(readonly code: string) {
+  /**
+   * `code` is the SQLSTATE; `stableMessage` is the platform's published error
+   * string, which is what a caller should branch on. Neither discloses the
+   * conflicting row.
+   */
+  constructor(
+    readonly code: string,
+    readonly stableMessage: string | null = null,
+  ) {
     super(`Dashboard API failed: ${code}`);
     this.name = "DashboardRpcError";
   }
@@ -231,7 +243,10 @@ function requireCapabilityGrants(value: unknown) {
 
 function assertRpc(result: RpcResult): unknown {
   if (result.error !== null) {
-    throw new DashboardRpcError(result.error.code ?? "unknown");
+    throw new DashboardRpcError(
+      result.error.code ?? "unknown",
+      result.error.message ?? null,
+    );
   }
   return result.data;
 }
@@ -538,6 +553,73 @@ export function createDashboardDataSource(
         }),
       );
       return parseScheduleWorkspaceV1(rows);
+    },
+
+    listBookingRequests: async (tenantId) => {
+      const rows = assertRpc(
+        await api.rpc("list_booking_requests_v1", { p_tenant_id: tenantId }),
+      );
+      return parseBookingRequestsV1(
+        (Array.isArray(rows) ? rows : []).map((value) => {
+          const row = value as Record<string, unknown>;
+          return {
+            approvalDeadline: new Date(String(row.approval_deadline)).toISOString(),
+            bookingId: row.booking_id,
+            bookingRevision: Number(row.booking_revision),
+            // Null unless this member may read customer personal data: the
+            // contact row is behind its own policy, not this DTO.
+            customerDisplayName: row.customer_display_name ?? null,
+            endAt: new Date(String(row.ends_at)).toISOString(),
+            hasIntake: row.has_intake === true,
+            locale: row.locale,
+            locationId: row.location_id,
+            locationName: row.location_name,
+            locationTimeZone: row.location_time_zone,
+            price: { currency: row.currency, minorUnits: Number(row.price_minor) },
+            proposal:
+              row.proposal_state === "pending"
+                ? {
+                    expiresAt: new Date(String(row.proposal_expires_at)).toISOString(),
+                    startAt: new Date(String(row.proposal_starts_at)).toISOString(),
+                  }
+                : null,
+            publicReference: row.public_reference,
+            requestedAt: new Date(String(row.requested_at)).toISOString(),
+            serviceName: row.service_name,
+            startAt: new Date(String(row.starts_at)).toISOString(),
+          };
+        }),
+      );
+    },
+
+    decideBookingRequest: async (request: BookingDecisionV1Request) => {
+      const decision = parseBookingDecisionV1Request(request);
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("decide_booking_request_v1", {
+            p_action: decision.action,
+            p_booking_id: decision.bookingId,
+            p_expected_revision: decision.expectedRevision,
+            p_proposed_start: decision.proposedStartAt,
+            p_reason_internal: decision.internalReason,
+            p_reason_public: decision.publicReason,
+            p_request_id: crypto.randomUUID(),
+            p_tenant_id: decision.tenantId,
+          }),
+        ),
+      );
+      if (row === null) throw new Error("Booking decision returned no result");
+      return parseBookingDecisionV1Response({
+        approvalStatus: row.approval_status,
+        bookingId: row.booking_id,
+        bookingRevision: Number(row.booking_revision),
+        proposalActionToken: row.proposal_action_token ?? null,
+        proposalExpiresAt:
+          row.proposal_expires_at === null || row.proposal_expires_at === undefined
+            ? null
+            : new Date(String(row.proposal_expires_at)).toISOString(),
+        status: row.status,
+      });
     },
 
     saveScheduleConfig: async (request) => {
