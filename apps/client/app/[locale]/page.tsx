@@ -3,7 +3,7 @@ import { Badge, LinkButton } from "@wlbp/ui-foundation";
 import { BrandShell } from "@wlbp/white-label-ui";
 import Image from "next/image";
 import Link from "next/link";
-import { getClientMessage } from "../_lib/copy";
+import { availabilityPickerCopy, getClientMessage } from "../_lib/copy";
 import { clientBrand } from "../_lib/brand";
 import { BookingPreview } from "./booking-preview";
 import { loadPublishedCatalog } from "../_lib/catalog-data-source";
@@ -87,33 +87,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
           timeZone={timeZone}
         />
         <AvailabilityPicker
-          copy={{
-            advisory: message("availabilityAdvisory"),
-            dateLabel: message("availabilityDateLabel"),
-            empty: message("availabilityEmpty"),
-            emptyAction: message("availabilityEmptyAction"),
-            error: message("availabilityError"),
-            errorTitle: message("availabilityErrorTitle"),
-            locationTimeZone: message("availabilityLocationTimeZone"),
-            noSlotReasons: {
-              capacity_unavailable: message("availabilityNoSlotsCapacity"),
-              no_matching_availability: message("availabilityNoSlotsMatching"),
-              outside_booking_window: message("availabilityNoSlotsWindow"),
-              policy_restricted: message("availabilityNoSlotsPolicy"),
-            },
-            partySizeLabel: message("availabilityPartySizeLabel"),
-            results: message("availabilityResults"),
-            retry: message("availabilityRetry"),
-            search: message("availabilitySearch"),
-            searching: message("availabilitySearching"),
-            select: message("availabilitySelect"),
-            selected: message("availabilitySelected"),
-            selectedAnnouncement: message("availabilitySelectedAnnouncement"),
-            summary: message("availabilitySummary"),
-            timeZoneLabel: message("availabilityTimeZoneLabel"),
-            title: message("availabilityTitle"),
-            unavailable: message("availabilityUnavailable"),
-          }}
+          copy={availabilityPickerCopy(locale)}
           locale={locale}
           locationId={catalog[0]?.locationId ?? null}
           locationTimeZone={catalog[0]?.locationTimeZone ?? timeZone}

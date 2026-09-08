@@ -38,6 +38,8 @@ interface AvailabilityPickerProps {
   readonly locale: Locale;
   readonly locationId: string | null;
   readonly locationTimeZone: string;
+  /** Called when a customer picks a slot, so a caller can continue the journey. */
+  readonly onSlotSelected?: (slot: AvailabilitySlotV1) => void;
   readonly serviceId: string | null;
 }
 
@@ -66,6 +68,7 @@ export function AvailabilityPicker({
   locale,
   locationId,
   locationTimeZone,
+  onSlotSelected,
   serviceId,
 }: AvailabilityPickerProps) {
   const [state, dispatch] = useReducer(
@@ -131,6 +134,7 @@ export function AvailabilityPicker({
 
   function selectSlot(slot: AvailabilitySlotV1) {
     dispatch({ slot, type: "selected" });
+    onSlotSelected?.(slot);
   }
 
   const unavailable = serviceId === null || locationId === null;

@@ -48,7 +48,51 @@ export type ClientMessageKey =
   | "availabilityNoSlotsCapacity"
   | "availabilityNoSlotsMatching"
   | "availabilityNoSlotsWindow"
-  | "availabilityNoSlotsPolicy";
+  | "availabilityNoSlotsPolicy"
+  | "bookingTitle"
+  | "bookingSummary"
+  | "bookingStepSlot"
+  | "bookingStepDetails"
+  | "bookingStepConfirmed"
+  | "bookingHoldExpires"
+  | "bookingContinue"
+  | "bookingHolding"
+  | "bookingNameLabel"
+  | "bookingNameDescription"
+  | "bookingEmailLabel"
+  | "bookingEmailDescription"
+  | "bookingPhoneLabel"
+  | "bookingPhoneDescription"
+  | "bookingIntakeLegend"
+  | "bookingConsentLabel"
+  | "bookingConsentRequired"
+  | "bookingNameRequired"
+  | "bookingEmailRequired"
+  | "bookingFieldRequired"
+  | "bookingSubmit"
+  | "bookingSubmitting"
+  | "bookingErrorTitle"
+  | "bookingErrorSlotUnavailable"
+  | "bookingErrorPolicyDenied"
+  | "bookingErrorRevisionConflict"
+  | "bookingErrorPaymentPending"
+  | "bookingErrorIdempotencyConflict"
+  | "bookingErrorInvalidRequest"
+  | "bookingErrorUnavailable"
+  | "bookingRestart"
+  | "bookingSuccessTitle"
+  | "bookingSuccessSummary"
+  | "bookingReferenceLabel"
+  | "bookingWhenLabel"
+  | "bookingServiceLabel"
+  | "bookingLocationLabel"
+  | "bookingTotalLabel"
+  | "bookingStatusLabel"
+  | "bookingStatusConfirmed"
+  | "bookingNotificationQueued"
+  | "bookingNextSteps"
+  | "bookingConsentVersionLabel"
+  | "bookingReviewTitle";
 
 export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
@@ -102,6 +146,58 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     availabilityNoSlotsMatching: "No bookable times match this search.",
     availabilityNoSlotsWindow: "These dates are outside the booking window.",
     availabilityNoSlotsPolicy: "The current booking policy does not allow these times.",
+    bookingTitle: "Book an appointment",
+    bookingSummary:
+      "Choose a time, share how to reach you, and confirm. Nothing is charged.",
+    bookingStepSlot: "1. Choose a time",
+    bookingStepDetails: "2. Your details",
+    bookingStepConfirmed: "3. Confirmed",
+    bookingHoldExpires: "This time is held for you until {time}.",
+    bookingContinue: "Hold this time",
+    bookingHolding: "Holding your time",
+    bookingNameLabel: "Full name",
+    bookingNameDescription: "Used to identify you at the appointment.",
+    bookingEmailLabel: "Email",
+    bookingEmailDescription: "Your confirmation is sent here.",
+    bookingPhoneLabel: "Phone (optional)",
+    bookingPhoneDescription: "Only used if we need to reach you about this booking.",
+    bookingIntakeLegend: "Before your appointment",
+    bookingConsentLabel: "I accept the booking and cancellation policy.",
+    bookingConsentRequired: "Accept the policy to confirm your booking.",
+    bookingNameRequired: "Enter your full name.",
+    bookingEmailRequired: "Enter an email address we can send your confirmation to.",
+    bookingFieldRequired: "This answer is required.",
+    bookingSubmit: "Confirm booking",
+    bookingSubmitting: "Confirming your booking",
+    bookingErrorTitle: "We could not confirm your booking",
+    bookingErrorSlotUnavailable:
+      "That time was taken while you were filling in your details. Your answers are kept — choose another time.",
+    bookingErrorPolicyDenied: "The current booking policy does not allow this booking.",
+    bookingErrorRevisionConflict:
+      "This service changed while you were booking. Choose a time again to see the current details.",
+    bookingErrorPaymentPending:
+      "This service now needs payment, which is not available yet.",
+    bookingErrorIdempotencyConflict:
+      "Your details changed after you submitted. Start again to confirm the new details.",
+    bookingErrorInvalidRequest: "Check the highlighted answers and try again.",
+    bookingErrorUnavailable:
+      "Booking is temporarily unavailable. Nothing was booked or charged.",
+    bookingRestart: "Choose another time",
+    bookingSuccessTitle: "Your booking is confirmed",
+    bookingSuccessSummary:
+      "Keep your reference — you will need it to change or cancel this booking.",
+    bookingReferenceLabel: "Booking reference",
+    bookingWhenLabel: "When",
+    bookingServiceLabel: "Service",
+    bookingLocationLabel: "Location",
+    bookingTotalLabel: "Total",
+    bookingStatusLabel: "Status",
+    bookingStatusConfirmed: "Confirmed — no payment needed",
+    bookingNotificationQueued:
+      "Your confirmation email is on its way. Your booking is confirmed even if it is delayed.",
+    bookingNextSteps: "Arrive a few minutes early and bring your reference.",
+    bookingConsentVersionLabel: "Policy version",
+    bookingReviewTitle: "Review your booking",
   },
   ar: {
     eyebrow: "تجربة الحجز العامة",
@@ -153,9 +249,99 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     availabilityNoSlotsMatching: "لا توجد أوقات قابلة للحجز تطابق هذا البحث.",
     availabilityNoSlotsWindow: "تقع هذه التواريخ خارج نافذة الحجز.",
     availabilityNoSlotsPolicy: "لا تسمح سياسة الحجز الحالية بهذه الأوقات.",
+    bookingTitle: "احجز موعدًا",
+    bookingSummary: "اختر وقتًا، وشاركنا وسيلة التواصل معك، ثم أكّد. لا توجد أي رسوم.",
+    bookingStepSlot: "١. اختر وقتًا",
+    bookingStepDetails: "٢. بياناتك",
+    bookingStepConfirmed: "٣. تم التأكيد",
+    bookingHoldExpires: "هذا الوقت محجوز لك حتى {time}.",
+    bookingContinue: "احجز هذا الوقت مؤقتًا",
+    bookingHolding: "جارٍ حجز وقتك",
+    bookingNameLabel: "الاسم الكامل",
+    bookingNameDescription: "يُستخدم للتعرّف عليك عند الموعد.",
+    bookingEmailLabel: "البريد الإلكتروني",
+    bookingEmailDescription: "سيصلك تأكيد الحجز على هذا البريد.",
+    bookingPhoneLabel: "الهاتف (اختياري)",
+    bookingPhoneDescription: "يُستخدم فقط إذا احتجنا للتواصل معك بشأن هذا الحجز.",
+    bookingIntakeLegend: "قبل موعدك",
+    bookingConsentLabel: "أوافق على سياسة الحجز والإلغاء.",
+    bookingConsentRequired: "وافق على السياسة لتأكيد حجزك.",
+    bookingNameRequired: "أدخل اسمك الكامل.",
+    bookingEmailRequired: "أدخل بريدًا إلكترونيًا لإرسال التأكيد إليه.",
+    bookingFieldRequired: "هذه الإجابة مطلوبة.",
+    bookingSubmit: "تأكيد الحجز",
+    bookingSubmitting: "جارٍ تأكيد حجزك",
+    bookingErrorTitle: "تعذّر تأكيد حجزك",
+    bookingErrorSlotUnavailable:
+      "تم حجز هذا الوقت أثناء إدخال بياناتك. تم الاحتفاظ بإجاباتك — اختر وقتًا آخر.",
+    bookingErrorPolicyDenied: "لا تسمح سياسة الحجز الحالية بهذا الحجز.",
+    bookingErrorRevisionConflict:
+      "تغيّرت هذه الخدمة أثناء الحجز. اختر وقتًا من جديد لعرض التفاصيل الحالية.",
+    bookingErrorPaymentPending: "أصبحت هذه الخدمة تتطلب الدفع، وهو غير متاح بعد.",
+    bookingErrorIdempotencyConflict:
+      "تغيّرت بياناتك بعد الإرسال. ابدأ من جديد لتأكيد البيانات الجديدة.",
+    bookingErrorInvalidRequest: "راجع الإجابات المحددة ثم أعد المحاولة.",
+    bookingErrorUnavailable:
+      "الحجز غير متاح مؤقتًا. لم يتم إنشاء أي حجز ولم تُفرض أي رسوم.",
+    bookingRestart: "اختر وقتًا آخر",
+    bookingSuccessTitle: "تم تأكيد حجزك",
+    bookingSuccessSummary: "احتفظ برقم المرجع — ستحتاجه لتعديل هذا الحجز أو إلغائه.",
+    bookingReferenceLabel: "رقم مرجع الحجز",
+    bookingWhenLabel: "الموعد",
+    bookingServiceLabel: "الخدمة",
+    bookingLocationLabel: "الموقع",
+    bookingTotalLabel: "الإجمالي",
+    bookingStatusLabel: "الحالة",
+    bookingStatusConfirmed: "مؤكّد — لا حاجة للدفع",
+    bookingNotificationQueued:
+      "رسالة التأكيد في طريقها إليك. حجزك مؤكد حتى إن تأخرت الرسالة.",
+    bookingNextSteps: "احضر قبل الموعد بدقائق ومعك رقم المرجع.",
+    bookingConsentVersionLabel: "إصدار السياسة",
+    bookingReviewTitle: "راجع حجزك",
   },
 };
 
 export function getClientMessage(locale: Locale, key: ClientMessageKey) {
   return clientCopy[locale][key];
+}
+
+/** Availability picker copy, shared by the home page preview and /book. */
+export function availabilityPickerCopy(locale: Locale) {
+  const message = (key: ClientMessageKey) => getClientMessage(locale, key);
+  return {
+    advisory: message("availabilityAdvisory"),
+    dateLabel: message("availabilityDateLabel"),
+    empty: message("availabilityEmpty"),
+    emptyAction: message("availabilityEmptyAction"),
+    error: message("availabilityError"),
+    errorTitle: message("availabilityErrorTitle"),
+    locationTimeZone: message("availabilityLocationTimeZone"),
+    noSlotReasons: {
+      capacity_unavailable: message("availabilityNoSlotsCapacity"),
+      no_matching_availability: message("availabilityNoSlotsMatching"),
+      outside_booking_window: message("availabilityNoSlotsWindow"),
+      policy_restricted: message("availabilityNoSlotsPolicy"),
+    },
+    partySizeLabel: message("availabilityPartySizeLabel"),
+    results: message("availabilityResults"),
+    retry: message("availabilityRetry"),
+    search: message("availabilitySearch"),
+    searching: message("availabilitySearching"),
+    select: message("availabilitySelect"),
+    selected: message("availabilitySelected"),
+    selectedAnnouncement: message("availabilitySelectedAnnouncement"),
+    summary: message("availabilitySummary"),
+    timeZoneLabel: message("availabilityTimeZoneLabel"),
+    title: message("availabilityTitle"),
+    unavailable: message("availabilityUnavailable"),
+  };
+}
+
+/** Every booking-journey string for one locale, keyed as the flow reads them. */
+export function bookingFlowCopy(locale: Locale): Readonly<Record<string, string>> {
+  return Object.freeze(
+    Object.fromEntries(
+      Object.entries(clientCopy[locale]).filter(([key]) => key.startsWith("booking")),
+    ),
+  );
 }

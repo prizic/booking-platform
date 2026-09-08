@@ -117,10 +117,6 @@ jobs:
             exit 1
           fi
 
-      - name: Report booking concurrency-suite ownership
-        run: |
-          echo "::notice title=Booking concurrency coverage::N/A — not yet implemented, owned by issue #11. Tenant-isolation and RLS coverage ran above; atomic booking contention begins with the booking RPCs."
-
       - name: Validate release and compatibility contracts
         run: pnpm test:contract
 

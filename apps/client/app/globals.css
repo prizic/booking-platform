@@ -606,3 +606,77 @@ input:focus-visible {
     transition-duration: var(--brand-motion-reduced, 0ms) !important;
   }
 }
+
+/* Booking journey (/[locale]/book). Reuses the preview surface vocabulary so
+   the flow inherits every brand token and RTL behaviour already proven. */
+.booking-flow,
+.booking-confirmed {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1.25rem;
+  padding: clamp(1.3rem, 3vw, 2rem);
+  background: var(--brand-color-surface);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.booking-flow form {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1.25rem;
+}
+
+.booking-flow fieldset {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1.25rem;
+  padding: 1rem;
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.booking-flow__consent {
+  display: flex;
+  min-inline-size: 0;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.booking-flow__consent input {
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  margin-block-start: 0.15rem;
+}
+
+.booking-flow__review,
+.booking-confirmed__facts {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0;
+  margin-block: 0;
+}
+
+.booking-flow__review > div,
+.booking-confirmed__facts > div {
+  display: grid;
+  min-inline-size: 0;
+  grid-template-columns: minmax(7rem, 0.65fr) 1fr;
+  gap: 1rem;
+  padding-block: 0.85rem;
+  border-block-end: var(--brand-border-width-default, 1px) solid
+    var(--brand-color-border);
+}
+
+.booking-flow__review dt,
+.booking-confirmed__facts dt {
+  color: var(--brand-color-muted);
+  font-size: var(--brand-font-size-label, 0.82rem);
+}
+
+.booking-flow__review dd,
+.booking-confirmed__facts dd {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  margin: 0;
+  font-weight: var(--brand-font-weight-bold, 700);
+}

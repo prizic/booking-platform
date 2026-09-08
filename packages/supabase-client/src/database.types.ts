@@ -10,6 +10,44 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      confirm_booking_v1: {
+        Args: {
+          p_application: string;
+          p_consent_version: string;
+          p_contact: Json;
+          p_customer_time_zone?: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_idempotency_key: string;
+          p_intake?: Json;
+          p_locale?: string;
+          p_session_token: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          calendar_status: string;
+          consent_version: string;
+          contract_version: number;
+          currency: string;
+          customer_time_zone: string;
+          ends_at: string;
+          locale: string;
+          location_name: string;
+          location_time_zone: string;
+          notification_status: string;
+          payment_status: string;
+          policy_snapshot: Json;
+          price_minor: number;
+          public_reference: string;
+          replayed: boolean;
+          service_name: string;
+          starts_at: string;
+          status: string;
+          tax_rate_bps: number;
+        }[];
+      };
       create_hold_v1: {
         Args: {
           p_application: string;
@@ -134,6 +172,32 @@ export type Database = {
           tenant_name: string;
         }[];
       };
+      get_hold_form_v1: {
+        Args: {
+          p_application: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_locale?: string;
+          p_session_token: string;
+        };
+        Returns: {
+          consent_text: string;
+          consent_version: string;
+          contract_version: number;
+          currency: string;
+          expires_at: string;
+          hold_id: string;
+          intake_schema: Json;
+          location_name: string;
+          location_time_zone: string;
+          price_minor: number;
+          service_name: string;
+          slot_end: string;
+          slot_start: string;
+          state: string;
+          tax_rate_bps: number;
+        }[];
+      };
       get_payment_account_status_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -233,6 +297,33 @@ export type Database = {
           service_ids: string[];
           status: string;
           tenant_id: string;
+        }[];
+      };
+      list_bookings_v1: {
+        Args: { p_from: string; p_tenant_id: string; p_to: string };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          calendar_status: string;
+          contract_version: number;
+          currency: string;
+          ends_at: string;
+          has_intake: boolean;
+          locale: string;
+          location_id: string;
+          location_name: string;
+          location_time_zone: string;
+          notification_status: string;
+          payment_status: string;
+          price_minor: number;
+          public_reference: string;
+          service_id: string;
+          service_name: string;
+          staff_id: string;
+          starts_at: string;
+          status: string;
+          tax_rate_bps: number;
         }[];
       };
       list_tenant_choices_v1: {
