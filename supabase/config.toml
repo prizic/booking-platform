@@ -33,9 +33,13 @@ enabled = true
 sql_paths = ["./seed.sql"]
 
 [realtime]
-# Issue #16 owns the private tenant broadcast. The database side is guarded, so
-# the stack still starts where the realtime schema is unavailable.
-enabled = true
+# The private tenant broadcast (issue #16) is written and guarded: where the
+# realtime schema exists the trigger and its topic policy install themselves,
+# and where it does not, nothing is installed and no gate fails. Turning the
+# container on here stopped the local stack from becoming ready in CI, so it
+# stays off until issue #102 wires the browser subscription and can prove the
+# whole path.
+enabled = false
 
 [studio]
 # The issue #4 gate is headless; Studio is optional local tooling.
