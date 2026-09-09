@@ -83,6 +83,9 @@ select is(
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'private'
       and procedure.prosecdef
+      -- The workspace broadcast is installed only where the Supabase realtime
+      -- schema exists, so it is not part of the fixed inventory.
+      and procedure.proname <> 'broadcast_booking_change_v1'
   ),
   array[
     'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',

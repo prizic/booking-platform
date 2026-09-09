@@ -1151,6 +1151,57 @@ summary:focus-visible {
   margin-block-start: 0.5rem;
 }
 
+/* Today queues and calendar groups (issue #16). Each queue is a titled section
+   with its own count, so status is read rather than inferred from colour. */
+.today-queue {
+  display: grid;
+  min-inline-size: 0;
+  gap: 1rem;
+  margin-block-start: 1.5rem;
+}
+
+.today-queue h2,
+.today-queue h3 {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.calendar-filters {
+  display: grid;
+  min-inline-size: 0;
+  gap: 0.75rem;
+  padding: clamp(0.9rem, 2vw, 1.25rem);
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.calendar-filters fieldset {
+  display: flex;
+  min-inline-size: 0;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: var(--brand-border-width-default, 1px) solid var(--brand-color-border);
+  border-radius: var(--brand-radius-surface);
+}
+
+.calendar-filters label {
+  display: flex;
+  min-inline-size: 0;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.calendar-filters input:not([type="radio"]) {
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 0.6rem;
+  font: inherit;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -33,8 +33,9 @@ enabled = true
 sql_paths = ["./seed.sql"]
 
 [realtime]
-# Enabled by its owning product issue together with publication and RLS tests.
-enabled = false
+# Issue #16 owns the private tenant broadcast. The database side is guarded, so
+# the stack still starts where the realtime schema is unavailable.
+enabled = true
 
 [studio]
 # The issue #4 gate is headless; Studio is optional local tooling.
