@@ -364,6 +364,33 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_today_workspace_v1: {
+        Args: { p_from: string; p_tenant_id: string; p_to: string };
+        Returns: {
+          approval_deadline: string;
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          currency: string;
+          customer_display_name: string;
+          ends_at: string;
+          has_intake: boolean;
+          locale: string;
+          location_id: string;
+          location_name: string;
+          location_time_zone: string;
+          notification_status: string;
+          payment_status: string;
+          price_minor: number;
+          public_reference: string;
+          queue: string;
+          service_name: string;
+          staff_id: string;
+          starts_at: string;
+          status: string;
+        }[];
+      };
       list_booking_notifications_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
         Returns: {
@@ -429,6 +456,40 @@ export type Database = {
           starts_at: string;
           status: string;
           tax_rate_bps: number;
+        }[];
+      };
+      list_calendar_v1: {
+        Args: {
+          p_from: string;
+          p_location_id?: string;
+          p_service_id?: string;
+          p_staff_id?: string;
+          p_tenant_id: string;
+          p_to: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          buffer_after_minutes: number;
+          buffer_before_minutes: number;
+          contract_version: number;
+          customer_display_name: string;
+          ends_at: string;
+          has_intake: boolean;
+          locale: string;
+          location_id: string;
+          location_name: string;
+          location_time_zone: string;
+          notification_status: string;
+          payment_status: string;
+          public_reference: string;
+          resource_id: string;
+          service_id: string;
+          service_name: string;
+          staff_id: string;
+          starts_at: string;
+          status: string;
         }[];
       };
       list_tenant_choices_v1: {

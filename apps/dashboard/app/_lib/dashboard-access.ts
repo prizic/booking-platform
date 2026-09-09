@@ -34,6 +34,19 @@ export interface DashboardDataSource {
     request: BookingDecisionV1Request,
   ) => Promise<BookingDecisionV1Response>;
   listBookings?: (tenantId: string) => Promise<readonly BookingSummaryRowV1[]>;
+  getTodayWorkspace?: (request: {
+    from: string;
+    tenantId: string;
+    to: string;
+  }) => Promise<readonly TodayItemV1[]>;
+  listCalendar?: (request: {
+    from: string;
+    locationId: string | null;
+    serviceId: string | null;
+    staffId: string | null;
+    tenantId: string;
+    to: string;
+  }) => Promise<readonly TodayItemV1[]>;
   resendBookingNotification?: (request: {
     bookingId: string;
     tenantId: string;
@@ -47,6 +60,29 @@ export interface DashboardDataSource {
     publicReason: string | null;
     tenantId: string;
   }) => Promise<void>;
+}
+
+/** One item of work in a Today queue (issue #16). */
+export interface TodayItemV1 {
+  readonly approvalDeadline: string | null;
+  readonly bookingId: string;
+  readonly bookingRevision: number;
+  readonly currency: string;
+  readonly customerDisplayName: string | null;
+  readonly endAt: string;
+  readonly hasIntake: boolean;
+  readonly locationName: string;
+  readonly locationTimeZone: string;
+  readonly notificationStatus: string;
+  readonly paymentStatus: string;
+  readonly priceMinor: number;
+  readonly publicReference: string;
+  readonly queue:
+    "arrivals" | "cancellations" | "exceptions" | "payments" | "requests" | "upcoming";
+  readonly serviceName: string;
+  readonly staffId: string | null;
+  readonly startAt: string;
+  readonly status: string;
 }
 
 /** The minimal upcoming-booking row the staff change surface needs. */

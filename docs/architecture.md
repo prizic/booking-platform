@@ -341,6 +341,18 @@ keyed by the revision it describes, so a stale duplicate cannot update the
 wrong version of a booking. The customer reaches both actions through the
 single-intent management link from issue #14, which is consumed on use.
 
+The Dashboard's daily operating centre (issue #16) is two scoped reads over the
+same rows: `get_today_workspace_v1` classifies work into queues — requests,
+delivery exceptions, payments needing action, arrivals, recent cancellations,
+and later work — and `list_calendar_v1` returns a window that the day, week,
+resource, and list views group differently in the client. Both are SECURITY
+INVOKER, so RLS decides what a member sees, and both are `stable`, so neither
+can become a second way to act: every change still goes through the booking
+RPCs and their capability, state, and revision checks. A private per-tenant
+Realtime broadcast carries identifiers and status only, and a listener refetches
+through RLS rather than trusting the wire, so a lost, duplicated, or reordered
+message cannot create false state.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

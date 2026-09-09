@@ -21,7 +21,7 @@ import {
 import { getVerifiedIdentity } from "@wlbp/auth";
 import type { RequestScopedSupabaseClient } from "@wlbp/supabase-client";
 
-import type { DashboardDataSource } from "./dashboard-access";
+import type { DashboardDataSource, TodayItemV1 } from "./dashboard-access";
 
 interface RpcError {
   readonly code?: string;
@@ -239,6 +239,45 @@ function requireCapabilityGrants(value: unknown) {
       scope: item.scopeKind,
     };
   });
+}
+
+const todayQueues = new Set([
+  "arrivals",
+  "cancellations",
+  "exceptions",
+  "payments",
+  "requests",
+  "upcoming",
+]);
+
+function toTodayItem(value: unknown): TodayItemV1 {
+  const row = value as Record<string, unknown>;
+  const queue = String(row.queue ?? "upcoming");
+  return {
+    approvalDeadline:
+      row.approval_deadline === null || row.approval_deadline === undefined
+        ? null
+        : new Date(String(row.approval_deadline)).toISOString(),
+    bookingId: requireString(row.booking_id),
+    bookingRevision: requireNumber(row.booking_revision),
+    currency: typeof row.currency === "string" ? row.currency : "USD",
+    // Null unless this member may read customer personal data.
+    customerDisplayName:
+      typeof row.customer_display_name === "string" ? row.customer_display_name : null,
+    endAt: new Date(String(row.ends_at)).toISOString(),
+    hasIntake: row.has_intake === true,
+    locationName: requireString(row.location_name),
+    locationTimeZone: requireString(row.location_time_zone),
+    notificationStatus: String(row.notification_status ?? "queued"),
+    paymentStatus: String(row.payment_status ?? "not_required"),
+    priceMinor: typeof row.price_minor === "number" ? row.price_minor : 0,
+    publicReference: requireString(row.public_reference),
+    queue: (todayQueues.has(queue) ? queue : "upcoming") as TodayItemV1["queue"],
+    serviceName: requireString(row.service_name),
+    staffId: typeof row.staff_id === "string" ? row.staff_id : null,
+    startAt: new Date(String(row.starts_at)).toISOString(),
+    status: requireString(row.status),
+  };
 }
 
 function assertRpc(result: RpcResult): unknown {
@@ -645,6 +684,35 @@ export function createDashboardDataSource(
           status: requireString(row.status),
         };
       });
+    },
+
+    getTodayWorkspace: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("get_today_workspace_v1", {
+          p_from: request.from,
+          p_tenant_id: request.tenantId,
+          p_to: request.to,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toTodayItem);
+    },
+
+    listCalendar: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("list_calendar_v1", {
+          p_from: request.from,
+          p_location_id: request.locationId,
+          p_service_id: request.serviceId,
+          p_staff_id: request.staffId,
+          p_tenant_id: request.tenantId,
+          p_to: request.to,
+        }),
+      );
+      // The calendar and the queues render the same shape, so one component
+      // can show a booking wherever an operator meets it.
+      return (Array.isArray(rows) ? rows : []).map((row) =>
+        toTodayItem({ ...(row as Record<string, unknown>), queue: "upcoming" }),
+      );
     },
 
     resendBookingNotification: async (request) => {

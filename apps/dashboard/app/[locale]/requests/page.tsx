@@ -1,13 +1,10 @@
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
-import { BrandShell } from "@wlbp/white-label-ui";
-import Image from "next/image";
-import Link from "next/link";
+import { Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import type { BookingRequestV1 } from "@wlbp/api-contracts";
 
-import { dashboardBrand } from "../../_lib/brand";
 import { getDashboardMessage } from "../../_lib/copy";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
+import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { decideRequestAction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -68,60 +65,8 @@ export default async function RequestsPage({
       : null;
 
   return (
-    <BrandShell
-      className="dashboard-shell"
-      labelledBy="requests-title"
-      tokens={dashboardBrand.tokens}
-    >
-      <aside className="dashboard-sidebar">
-        <Link
-          aria-label={dashboardBrand.name}
-          className="dashboard-brand"
-          href={`/${locale}`}
-        >
-          <Image
-            alt=""
-            aria-hidden="true"
-            height={36}
-            src={dashboardBrand.assets.icon}
-            width={36}
-          />
-          <strong>{dashboardBrand.name}</strong>
-        </Link>
-        <nav aria-label={message("primaryNavigation")}>
-          <Link href={`/${locale}`}>
-            <span aria-hidden="true">01</span>
-            {message("navToday")}
-          </Link>
-          <Link aria-current="page" href={`/${locale}/requests`}>
-            <span aria-hidden="true">02</span>
-            {message("navRequests")}
-          </Link>
-        </nav>
-        <Badge tone="positive">{message("privateStatus")}</Badge>
-      </aside>
-
-      <div className="dashboard-main">
-        <header className="dashboard-toolbar">
-          <Link href={`/${locale}`}>{message("navToday")}</Link>
-          <nav aria-label={message("languageNavigation")}>
-            <Link
-              href="/en/requests"
-              aria-current={locale === "en" ? "page" : undefined}
-            >
-              <span aria-hidden="true">EN</span>
-              <span className="sr-only">{message("languageEnglish")}</span>
-            </Link>
-            <Link
-              href="/ar/requests"
-              aria-current={locale === "ar" ? "page" : undefined}
-            >
-              <span aria-hidden="true">عربي</span>
-              <span className="sr-only">{message("languageArabic")}</span>
-            </Link>
-          </nav>
-        </header>
-
+    <WorkspaceShell current="requests" labelledBy="requests-title" locale={locale}>
+      <>
         <Surface as="section" className="requests-queue" labelledBy="requests-title">
           <h1 id="requests-title">{message("requestsTitle")}</h1>
           <p>{message("requestsSummary")}</p>
@@ -297,7 +242,7 @@ export default async function RequestsPage({
             </ul>
           )}
         </Surface>
-      </div>
-    </BrandShell>
+      </>
+    </WorkspaceShell>
   );
 }

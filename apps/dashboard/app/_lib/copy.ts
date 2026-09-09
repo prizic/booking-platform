@@ -1,6 +1,38 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "todayTitle"
+  | "todayIntro"
+  | "todayUnavailable"
+  | "todayEmpty"
+  | "todayNowLabel"
+  | "todayQueueArrivals"
+  | "todayQueueRequests"
+  | "todayQueuePayments"
+  | "todayQueueExceptions"
+  | "todayQueueCancellations"
+  | "todayQueueUpcoming"
+  | "todayCountLabel"
+  | "calendarTitle"
+  | "calendarSummary"
+  | "calendarUnavailable"
+  | "calendarEmpty"
+  | "calendarViewLabel"
+  | "calendarViewDay"
+  | "calendarViewWeek"
+  | "calendarViewResource"
+  | "calendarViewList"
+  | "calendarFilterLocation"
+  | "calendarFilterStaff"
+  | "calendarFilterService"
+  | "calendarFilterApply"
+  | "calendarFilterAll"
+  | "calendarDateLabel"
+  | "calendarTimezoneNote"
+  | "calendarResourceUnassigned"
+  | "calendarStatusLabel"
+  | "calendarOpenBooking"
+  | "calendarListAlternative"
   | "bookingsDeliveryLabel"
   | "bookingsResend"
   | "bookingsResending"
@@ -163,6 +195,41 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    todayTitle: "Today",
+    todayIntro: "Everything waiting on someone, in the order it needs attention.",
+    todayUnavailable: "Today stays closed until the secure connection is complete.",
+    todayEmpty: "Nothing is waiting on you right now.",
+    todayNowLabel: "Current time",
+    todayQueueArrivals: "Arriving today",
+    todayQueueRequests: "Requests awaiting a decision",
+    todayQueuePayments: "Payments needing action",
+    todayQueueExceptions: "Delivery problems",
+    todayQueueCancellations: "Recently cancelled",
+    todayQueueUpcoming: "Later",
+    todayCountLabel: "items",
+    calendarTitle: "Calendar",
+    calendarSummary:
+      "The same bookings by day, by week, by resource, or as a list. Every action recheckes policy on the server.",
+    calendarUnavailable:
+      "The calendar stays closed until the secure connection is complete.",
+    calendarEmpty: "No bookings in this range.",
+    calendarViewLabel: "View",
+    calendarViewDay: "Day",
+    calendarViewWeek: "Week",
+    calendarViewResource: "By staff",
+    calendarViewList: "List",
+    calendarFilterLocation: "Location",
+    calendarFilterStaff: "Staff",
+    calendarFilterService: "Service",
+    calendarFilterApply: "Apply",
+    calendarFilterAll: "All",
+    calendarDateLabel: "Starting date",
+    calendarTimezoneNote: "Times are shown in the location timezone.",
+    calendarResourceUnassigned: "Unassigned",
+    calendarStatusLabel: "Status",
+    calendarOpenBooking: "Open in bookings",
+    calendarListAlternative:
+      "This list carries the same bookings as the day and week views.",
     bookingsDeliveryLabel: "Email",
     bookingsResend: "Send the email again",
     bookingsResending: "Sending again",
@@ -346,6 +413,40 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    todayTitle: "اليوم",
+    todayIntro: "كل ما ينتظر إجراءً، بالترتيب الذي يحتاج الانتباه فيه.",
+    todayUnavailable: "تبقى صفحة اليوم مغلقة حتى يكتمل الاتصال الآمن.",
+    todayEmpty: "لا شيء ينتظر إجراءً منك الآن.",
+    todayNowLabel: "الوقت الحالي",
+    todayQueueArrivals: "الوصول اليوم",
+    todayQueueRequests: "طلبات تنتظر قرارًا",
+    todayQueuePayments: "مدفوعات تحتاج إجراءً",
+    todayQueueExceptions: "مشكلات في الإرسال",
+    todayQueueCancellations: "ملغاة مؤخرًا",
+    todayQueueUpcoming: "لاحقًا",
+    todayCountLabel: "عنصرًا",
+    calendarTitle: "التقويم",
+    calendarSummary:
+      "الحجوزات نفسها بعرض يومي أو أسبوعي أو حسب الموظف أو كقائمة. كل إجراء يعيد التحقق من السياسة على الخادم.",
+    calendarUnavailable: "يبقى التقويم مغلقًا حتى يكتمل الاتصال الآمن.",
+    calendarEmpty: "لا توجد حجوزات في هذا النطاق.",
+    calendarViewLabel: "العرض",
+    calendarViewDay: "يوم",
+    calendarViewWeek: "أسبوع",
+    calendarViewResource: "حسب الموظف",
+    calendarViewList: "قائمة",
+    calendarFilterLocation: "الموقع",
+    calendarFilterStaff: "الموظف",
+    calendarFilterService: "الخدمة",
+    calendarFilterApply: "تطبيق",
+    calendarFilterAll: "الكل",
+    calendarDateLabel: "تاريخ البدء",
+    calendarTimezoneNote: "تُعرض الأوقات بالمنطقة الزمنية للموقع.",
+    calendarResourceUnassigned: "غير مُسند",
+    calendarStatusLabel: "الحالة",
+    calendarOpenBooking: "فتح في الحجوزات",
+    calendarListAlternative:
+      "تحمل هذه القائمة الحجوزات نفسها الموجودة في عرض اليوم والأسبوع.",
     bookingsDeliveryLabel: "البريد",
     bookingsResend: "إعادة إرسال الرسالة",
     bookingsResending: "جارٍ إعادة الإرسال",
