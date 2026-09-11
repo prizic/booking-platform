@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Issue #11 contention gate. Every case runs against the local database through
-// real parallel sessions; nothing here is mocked or simulated. Cases map onto
-// docs/engineering-rules.md §8: 1 (single winner), 3 (adjacency), 4 (expiry
-// racing creation), 5 (duplicate requests), 8 (multi-resource contention).
+// Issue #11 contention gate, extended by issue #17. Every case runs against the
+// local database through real parallel sessions; nothing here is mocked or
+// simulated. Cases map onto docs/engineering-rules.md §8: 1 (single winner),
+// 3 (adjacency), 4 (expiry racing creation), 5 (duplicate requests),
+// 8 (multi-resource contention), plus concurrent staff lifecycle edits.
 import { spawn, spawnSync } from "node:child_process";
 
 const databaseUrl =
@@ -14,6 +15,13 @@ const tenantId = "a0000000-0000-0000-0000-000000000001";
 const locationId = "a5000000-0000-0000-0000-000000000001";
 const appointmentServiceId = "a7200000-0000-0000-0000-000000000001";
 const resourceServiceId = "c7200000-0000-0000-0000-000000000001";
+// The lifecycle fixture is deliberately kept out of cleanup(): a committed
+// booking can never be deleted (invariant 5), so the gate reuses the same one
+// and returns it to `confirmed` through the product's own correction path.
+const lifecycleStaffId = "c9000000-0000-0000-0000-000000000001";
+const adminClaims =
+  '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}';
+const lifecycleContenders = Math.min(contenders, 20);
 
 const results = [];
 let failed = false;
@@ -81,6 +89,19 @@ function fireAt(milliseconds = 1500) {
 
 function cleanup() {
   runSql(`
+    -- A committed booking is append-only and undeletable by design (invariant 5),
+    -- which is exactly right in production and exactly wrong for a gate that must
+    -- leave no trace. Replica mode is the local-only escape hatch, held for these
+    -- statements alone, so every other suite still starts from the seeded state.
+    set local session_replication_role = 'replica';
+    delete from app.booking_events where tenant_id='${tenantId}';
+    delete from app.booking_notes where tenant_id='${tenantId}';
+    delete from app.booking_contacts where tenant_id='${tenantId}';
+    delete from app.booking_intake_answers where tenant_id='${tenantId}';
+    delete from app.outbox_events where tenant_id='${tenantId}';
+    delete from app.bookings where tenant_id='${tenantId}';
+    set local session_replication_role = 'origin';
+
     delete from app.assignment_allocations a using app.booking_holds h
       where h.id=a.hold_id and h.tenant_id='${tenantId}';
     delete from app.booking_holds where tenant_id='${tenantId}';
@@ -100,6 +121,12 @@ function cleanup() {
     delete from app.staff_locations where tenant_id='${tenantId}' and staff_id::text like 'c8000000%';
     delete from app.staff_services where tenant_id='${tenantId}' and staff_id::text like 'c8000000%';
     delete from app.staff_profiles where tenant_id='${tenantId}' and id::text like 'c8000000%';
+    delete from app.weekly_schedules where tenant_id='${tenantId}' and id::text like 'c9200000%';
+    delete from app.schedule_scopes where tenant_id='${tenantId}' and id::text like 'c9100000%';
+    delete from app.staff_service_locations where tenant_id='${tenantId}' and staff_id::text like 'c9000000%';
+    delete from app.staff_locations where tenant_id='${tenantId}' and staff_id::text like 'c9000000%';
+    delete from app.staff_services where tenant_id='${tenantId}' and staff_id::text like 'c9000000%';
+    delete from app.staff_profiles where tenant_id='${tenantId}' and id::text like 'c9000000%';
   `);
 }
 
@@ -145,6 +172,21 @@ function setup() {
     insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute) values
       ('c8700000-0000-0000-0000-000000000001','${tenantId}','c8600000-0000-0000-0000-000000000001',1,540,1020),
       ('c8700000-0000-0000-0000-000000000002','${tenantId}','c8600000-0000-0000-0000-000000000002',1,540,1020);
+
+    insert into app.staff_profiles(id,tenant_id,public_name)
+      values ('${lifecycleStaffId}','${tenantId}','Lifecycle staff');
+    insert into app.staff_services(tenant_id,staff_id,service_id)
+      values ('${tenantId}','${lifecycleStaffId}','${appointmentServiceId}');
+    insert into app.staff_locations(tenant_id,staff_id,location_id)
+      values ('${tenantId}','${lifecycleStaffId}','${locationId}');
+    insert into app.staff_service_locations(tenant_id,staff_id,service_id,location_id)
+      values ('${tenantId}','${lifecycleStaffId}','${appointmentServiceId}','${locationId}');
+    insert into app.schedule_scopes(id,tenant_id,scope_kind,location_id,staff_id,time_zone)
+      values ('c9100000-0000-0000-0000-000000000001','${tenantId}','staff','${locationId}','${lifecycleStaffId}','America/New_York');
+    -- 16:00-18:00 local only, so the permanent lifecycle staff is never a second
+    -- eligible winner in the capacity cases that contend for the morning.
+    insert into app.weekly_schedules(id,tenant_id,schedule_scope_id,day_of_week,start_minute,end_minute)
+      values ('c9200000-0000-0000-0000-000000000001','${tenantId}','c9100000-0000-0000-0000-000000000001',1,960,1080);
   `);
 }
 
@@ -335,6 +377,136 @@ async function resourceContention(slot) {
   );
 }
 
+// A member session. The lifecycle RPCs re-read authority from the JWT claims,
+// so the contenders must arrive as the member they claim to be, not as the
+// superuser psql connects with.
+// psql prints only the last statement of a multi-statement `-c` string, so the
+// call under test is always last and the transaction is left implicit.
+function asMember(sql) {
+  return `select set_config('request.jwt.claims','${adminClaims}',true); set local role authenticated; ${sql}`;
+}
+
+// One real booking, made through the ordinary customer path and pinned to the
+// lifecycle staff member so it never competes with the capacity cases.
+function lifecycleBooking(slot) {
+  const hold = runSql(
+    `select hold_id from api_v1.create_hold_v1('${hostname}','client','${appointmentServiceId}',
+      '${locationId}','${slot}'::timestamptz,'lifecycle-session-0001','lifecycle-hold-key-0001',
+      '${lifecycleStaffId}');`,
+  );
+  return runSql(
+    `select booking_id from api_v1.confirm_booking_v1('${hostname}','client','${hold}',
+      'lifecycle-session-0001','lifecycle-confirm-key-0001',
+      '{"fullName":"Lifecycle Guest","email":"lifecycle@example.invalid"}'::jsonb,
+      '1','en','{}'::jsonb,'America/New_York');`,
+  );
+}
+
+function restoreConfirmed(bookingId) {
+  const status = runSql(
+    `select status from app.bookings where id='${bookingId}'::uuid;`,
+  );
+  if (status === "confirmed") return;
+  const revision = runSql(
+    `select revision from app.bookings where id='${bookingId}'::uuid;`,
+  );
+  // The teardown uses the product's own correction path, so the gate never
+  // reaches around the state machine it is testing.
+  runSql(
+    asMember(
+      `select status from api_v1.transition_booking_v1('${tenantId}','${bookingId}'::uuid,
+        'correct',${revision},'Concurrency gate reset.');`,
+    ),
+  );
+}
+
+async function concurrentStaffEdit(bookingId) {
+  restoreConfirmed(bookingId);
+  const revision = Number(
+    runSql(`select revision from app.bookings where id='${bookingId}'::uuid;`),
+  );
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        asMember(
+          `select status from api_v1.transition_booking_v1('${tenantId}','${bookingId}'::uuid,
+            'check_in',${revision});`,
+        ),
+        at,
+      ),
+    ),
+  );
+  const winners = attempts.filter((result) => result.ok);
+  report(
+    winners.length === 1,
+    `${lifecycleContenders} staff checking the same appointment in at once produce one transition`,
+    `${winners.length} winners`,
+  );
+  report(
+    attempts
+      .filter((result) => !result.ok)
+      .every((result) => result.error === "revision_conflict"),
+    "every losing staff session receives the stable revision_conflict error",
+    [
+      ...new Set(attempts.filter((result) => !result.ok).map((result) => result.error)),
+    ].join(" | "),
+  );
+  const settled = runSql(
+    `select status||':'||revision from app.bookings where id='${bookingId}'::uuid;`,
+  );
+  report(
+    settled === `checked_in:${revision + 1}`,
+    "the booking advances exactly one revision, so no losing edit left a partial effect",
+    settled,
+  );
+  const events = runSql(
+    `select count(*) from app.booking_events
+     where booking_id='${bookingId}'::uuid and event_type='booking_checked_in'
+       and booking_revision=${revision + 1};`,
+  );
+  report(events === "1", "the ledger records exactly one check-in", events);
+  restoreConfirmed(bookingId);
+}
+
+async function duplicateStaffAction(bookingId) {
+  restoreConfirmed(bookingId);
+  const revision = Number(
+    runSql(`select revision from app.bookings where id='${bookingId}'::uuid;`),
+  );
+  const key = `lifecycle-duplicate-${revision}-key`;
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        asMember(
+          `select status from api_v1.transition_booking_v1('${tenantId}','${bookingId}'::uuid,
+            'check_in',${revision},null,null,'${key}');`,
+        ),
+        at,
+      ),
+    ),
+  );
+  report(
+    attempts.every((result) => result.ok && result.value === "checked_in"),
+    "a duplicated staff action under one key answers every caller with the same settled result",
+    [
+      ...new Set(attempts.map((result) => (result.ok ? result.value : result.error))),
+    ].join(" | "),
+  );
+  const events = runSql(
+    `select count(*) from app.booking_events
+     where booking_id='${bookingId}'::uuid and event_type='booking_checked_in'
+       and booking_revision=${revision + 1};`,
+  );
+  report(
+    events === "1",
+    "the duplicated action appended exactly one ledger entry",
+    events,
+  );
+  restoreConfirmed(bookingId);
+}
+
 function noOverlapSurvives() {
   const overlaps = runSql(`
     select count(*) from app.assignment_allocations a
@@ -359,6 +531,9 @@ async function main() {
     await duplicateRequests(slotAt("13:00"));
     await expiryRace(slotAt("14:00"));
     await resourceContention(slotAt("15:00"));
+    const lifecycleId = lifecycleBooking(slotAt("16:00"));
+    await concurrentStaffEdit(lifecycleId);
+    await duplicateStaffAction(lifecycleId);
     noOverlapSurvives();
   } finally {
     cleanup();

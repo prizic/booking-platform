@@ -245,7 +245,7 @@ Public access: anonymous visitors read only published tenant-scoped catalog/bran
 
 The tenant-isolation foundation exposes only three pre-booking v1 surfaces: published public tenant resolution, the authenticated actor's current tenant choices, and an explicitly selected Dashboard context. Caller-supplied tenant identifiers only narrow a request; RLS and live membership decide whether a row is returned. Storage and Realtime remain disabled and grant no application access until their owning issues add tested policies.
 
-Database function policy — data-intensive and transactional behavior (availability, hold, confirm, reschedule, cancel, capacity allocation, idempotency) lives in database functions; Edge Functions handle payment/email/calendar network integrations. Versioned contracts: `resolve_public_tenant_v1`, `get_public_catalog_v1`, `availability_v1`, `create_hold_v1`, `submit_booking_v1`, `confirm_booking_v1`, `reschedule_booking_v1`, `cancel_booking_v1`, `accept_request_v1`, `expire_holds_v1`. Errors return stable codes (`slot_unavailable`, `capacity_exhausted`, `policy_denied`, `revision_conflict`, `payment_pending`, `idempotency_conflict`) and never reveal the conflicting customer or booking.
+Database function policy — data-intensive and transactional behavior (availability, hold, confirm, reschedule, cancel, capacity allocation, idempotency) lives in database functions; Edge Functions handle payment/email/calendar network integrations. Versioned contracts: `resolve_public_tenant_v1`, `get_public_catalog_v1`, `availability_v1`, `create_hold_v1`, `submit_booking_v1`, `confirm_booking_v1`, `reschedule_booking_v1`, `cancel_booking_v1`, `accept_request_v1`, `expire_holds_v1`. Errors return stable codes (`slot_unavailable`, `capacity_exhausted`, `policy_denied`, `revision_conflict`, `payment_pending`, `idempotency_conflict`, `transition_not_allowed`) and never reveal the conflicting customer or booking.
 
 ---
 
@@ -352,6 +352,44 @@ RPCs and their capability, state, and revision checks. A private per-tenant
 Realtime broadcast carries identifiers and status only, and a listener refetches
 through RLS rather than trusting the wire, so a lost, duplicated, or reordered
 message cannot create false state.
+
+The appointment lifecycle after confirmation (issue #17) is one engine,
+`transition_booking_v1`, holding the whole permitted-transition table: from
+`confirmed` to `checked_in` or `no_show`, from `checked_in` to `completed`, and
+from any of those three back to `confirmed` under `booking.correct_status`, which
+is the only authority that can override a recorded outcome and is the only one
+that demands a reason. `cancelled` is deliberately not correctable: cancellation
+released the allocation, so re-confirming would need capacity nobody is holding
+any more and the honest recovery is a new booking. A stale revision is answered
+first, because the loser of a race between two operators must refresh and the
+status it would otherwise hear about is the one the winner just created; the
+transition table is then judged against the state the caller genuinely read, so
+`transition_not_allowed` always means "this booking cannot do that from what you
+saw". Check-in has an operational window read from the
+booking's own policy snapshot, and arriving outside it needs the separate
+`booking.check_in_override` grant. Payment, refund, notification, and calendar
+states are never touched by a transition, so a day closes out while a refund is
+still pending (invariant 9).
+
+Staff-created bookings are the customer confirmation engine with a
+`booking.create_on_behalf` check and an authorship ledger entry in front of it,
+not a second path: there is no other way to allocate capacity, snapshot policy,
+claim an idempotency key, or enqueue the confirmation intent. Operational notes
+and sensitive notes share one table and two visibilities; the sensitive one is
+gated on exactly the `customer.pii.view` capability that already gates contact
+rows and intake answers, so seeing a calendar never reveals a sensitive note,
+and the write gate for each class is its read gate. Notes are append-only and
+the ledger records only that a note exists and its visibility, never what it
+says, so status history stays readable to an operator who is not entitled to the
+note itself. Transitions and administrative actions land in the one
+`app.booking_events` ledger rather than a parallel audit table, which is also
+what `get_lifecycle_analytics_v1` counts: a UI event can be dropped, replayed,
+or fired without a commit, while a ledger row cannot exist without the
+transition that wrote it in the same transaction. Scheduling blocks,
+maintenance, and time off remain `save_schedule_config_v1` operations feeding the
+availability engine, and staff or resource deactivation still demands an
+explicit reassign, cancel, or keep-active decision before it touches a future
+allocation.
 
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 

@@ -21,7 +21,14 @@ import {
 import { getVerifiedIdentity } from "@wlbp/auth";
 import type { RequestScopedSupabaseClient } from "@wlbp/supabase-client";
 
-import type { DashboardDataSource, TodayItemV1 } from "./dashboard-access";
+import type {
+  BookingDetailV1,
+  BookingHistoryEntryV1,
+  BookingNoteV1,
+  BookingSearchRowV1,
+  DashboardDataSource,
+  TodayItemV1,
+} from "./dashboard-access";
 
 interface RpcError {
   readonly code?: string;
@@ -275,6 +282,102 @@ function toTodayItem(value: unknown): TodayItemV1 {
     queue: (todayQueues.has(queue) ? queue : "upcoming") as TodayItemV1["queue"],
     serviceName: requireString(row.service_name),
     staffId: typeof row.staff_id === "string" ? row.staff_id : null,
+    startAt: new Date(String(row.starts_at)).toISOString(),
+    status: requireString(row.status),
+  };
+}
+
+function toSearchRow(value: unknown): BookingSearchRowV1 {
+  const row = value as Record<string, unknown>;
+  return {
+    bookingId: requireString(row.booking_id),
+    bookingRevision: requireNumber(row.booking_revision),
+    currency: typeof row.currency === "string" ? row.currency : "USD",
+    // Null unless this member may read customer personal data.
+    customerDisplayName:
+      typeof row.customer_display_name === "string" ? row.customer_display_name : null,
+    endAt: new Date(String(row.ends_at)).toISOString(),
+    hasIntake: row.has_intake === true,
+    locationName: requireString(row.location_name),
+    locationTimeZone: requireString(row.location_time_zone),
+    noteCount: typeof row.note_count === "number" ? row.note_count : 0,
+    notificationStatus: String(row.notification_status ?? "queued"),
+    paymentStatus: String(row.payment_status ?? "not_required"),
+    priceMinor: typeof row.price_minor === "number" ? row.price_minor : 0,
+    publicReference: requireString(row.public_reference),
+    serviceName: requireString(row.service_name),
+    startAt: new Date(String(row.starts_at)).toISOString(),
+    status: requireString(row.status),
+  };
+}
+
+function toHistory(value: unknown): readonly BookingHistoryEntryV1[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    return {
+      actorKind: String(row.actorKind ?? "system"),
+      bookingRevision: Number(row.bookingRevision ?? 0),
+      createdAt: new Date(String(row.createdAt)).toISOString(),
+      eventType: requireString(row.eventType),
+      reason: typeof row.reason === "string" ? row.reason : null,
+      sequence: Number(row.sequence ?? 0),
+    };
+  });
+}
+
+function toNotes(value: unknown): readonly BookingNoteV1[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const row = entry as Record<string, unknown>;
+    // A visibility this client does not know is dropped rather than guessed:
+    // rendering an unknown class of note as operational would be the one
+    // mistake this surface must never make.
+    const visibility = row.visibility;
+    if (visibility !== "operational" && visibility !== "sensitive") return [];
+    return [
+      {
+        body: requireString(row.body),
+        createdAt: new Date(String(row.createdAt)).toISOString(),
+        noteId: requireString(row.noteId),
+        visibility,
+      },
+    ];
+  });
+}
+
+function toBookingDetail(row: Record<string, unknown>): BookingDetailV1 {
+  return {
+    bookingId: requireString(row.booking_id),
+    bookingRevision: requireNumber(row.booking_revision),
+    cancelledAt:
+      row.cancelled_at === null || row.cancelled_at === undefined
+        ? null
+        : new Date(String(row.cancelled_at)).toISOString(),
+    currency: typeof row.currency === "string" ? row.currency : "USD",
+    customerEmail: typeof row.customer_email === "string" ? row.customer_email : null,
+    customerFullName:
+      typeof row.customer_full_name === "string" ? row.customer_full_name : null,
+    customerPhone: typeof row.customer_phone === "string" ? row.customer_phone : null,
+    durationMinutes:
+      typeof row.duration_minutes === "number" ? row.duration_minutes : 0,
+    endAt: new Date(String(row.ends_at)).toISOString(),
+    // Presence, never content: the answers themselves stay on the intake
+    // surface that is granted separately.
+    hasIntake: row.intake_answers !== null && row.intake_answers !== undefined,
+    history: toHistory(row.history),
+    locationName: requireString(row.location_name),
+    locationTimeZone: requireString(row.location_time_zone),
+    notes: toNotes(row.notes),
+    notificationStatus: String(row.notification_status ?? "queued"),
+    paymentStatus: String(row.payment_status ?? "not_required"),
+    priceMinor: typeof row.price_minor === "number" ? row.price_minor : 0,
+    publicReference: requireString(row.public_reference),
+    refundEligibleMinor:
+      typeof row.refund_eligible_minor === "number" ? row.refund_eligible_minor : null,
+    rescheduleCount:
+      typeof row.reschedule_count === "number" ? row.reschedule_count : 0,
+    serviceName: requireString(row.service_name),
     startAt: new Date(String(row.starts_at)).toISOString(),
     status: requireString(row.status),
   };
@@ -661,31 +764,6 @@ export function createDashboardDataSource(
       });
     },
 
-    listBookings: async (tenantId) => {
-      const rows = assertRpc(
-        await api.rpc("list_bookings_v1", {
-          p_from: new Date().toISOString(),
-          p_tenant_id: tenantId,
-          p_to: null,
-        }),
-      );
-      return (Array.isArray(rows) ? rows : []).map((value) => {
-        const row = value as Record<string, unknown>;
-        return {
-          bookingId: requireString(row.booking_id),
-          bookingRevision: requireNumber(row.booking_revision),
-          endAt: new Date(String(row.ends_at)).toISOString(),
-          locationName: requireString(row.location_name),
-          notificationStatus: requireString(row.notification_status),
-          locationTimeZone: requireString(row.location_time_zone),
-          publicReference: requireString(row.public_reference),
-          serviceName: requireString(row.service_name),
-          startAt: new Date(String(row.starts_at)).toISOString(),
-          status: requireString(row.status),
-        };
-      });
-    },
-
     getTodayWorkspace: async (request) => {
       const rows = assertRpc(
         await api.rpc("get_today_workspace_v1", {
@@ -748,6 +826,63 @@ export function createDashboardDataSource(
           p_reason_internal: request.internalReason,
           p_request_id: crypto.randomUUID(),
           p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    searchBookings: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("search_bookings_v1", {
+          p_from: request.from,
+          p_location_id: request.locationId,
+          p_query: request.query,
+          p_staff_id: request.staffId,
+          p_status: request.status,
+          p_tenant_id: request.tenantId,
+          p_to: request.to,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toSearchRow);
+    },
+
+    getBookingDetail: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_booking_detail_v1", {
+            p_booking_id: request.bookingId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      // No row means row level security did not grant this booking to this
+      // member. That is a missing booking to the caller, never a hint.
+      return row === null ? null : toBookingDetail(row);
+    },
+
+    transitionBooking: async (request) => {
+      // The state machine is the database's. This carries the revision the
+      // reader acted on and the key that makes a double submit one act.
+      assertRpc(
+        await api.rpc("transition_booking_v1", {
+          p_action: request.action,
+          p_booking_id: request.bookingId,
+          p_expected_revision: request.expectedRevision,
+          p_idempotency_key: request.idempotencyKey,
+          p_reason: request.reason,
+          p_request_id: crypto.randomUUID(),
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    addBookingNote: async (request) => {
+      assertRpc(
+        await api.rpc("add_booking_note_v1", {
+          p_body: request.body,
+          p_booking_id: request.bookingId,
+          p_request_id: crypto.randomUUID(),
+          p_tenant_id: request.tenantId,
+          p_visibility: request.visibility,
         }),
       );
     },

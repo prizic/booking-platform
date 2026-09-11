@@ -89,6 +89,7 @@ select is(
   ),
   array[
     'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',
+    'private.add_booking_note_v1(uuid,uuid,text,text,uuid)',
     'private.bump_availability_revision()',
     'private.can_access_location(uuid,uuid)',
     'private.can_decide_booking(uuid,uuid,text)',
@@ -99,6 +100,7 @@ select is(
     'private.cancel_booking_v1(uuid,uuid,bigint,text,text,text,uuid,text)',
     'private.claim_notification_batch_v1(integer,integer)',
     'private.confirm_booking_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text)',
+    'private.create_booking_on_behalf_v1(uuid,text,uuid,text,text,jsonb,text,text,jsonb,text,uuid)',
     'private.create_hold_v1(text,text,uuid,uuid,timestamp with time zone,text,text,uuid,integer,text,text)',
     'private.current_membership_id(uuid)',
     'private.deactivate_resource_v1(uuid,uuid,text,uuid,uuid,text)',
@@ -138,6 +140,7 @@ select is(
     'private.set_resource_requirement_v1(uuid,uuid,uuid,boolean,uuid,text)',
     'private.set_staff_service_location_eligibility_v1(uuid,uuid,uuid,uuid,boolean,uuid,text)',
     'private.sync_booking_notification_status_v1(uuid)',
+    'private.transition_booking_v1(uuid,uuid,text,bigint,text,uuid,text)',
     'private.verify_management_otp_v1(text,text,text,text)'
   ]::text[],
   'private SECURITY DEFINER helper identities exactly match the approved inventory'

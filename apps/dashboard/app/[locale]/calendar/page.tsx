@@ -199,7 +199,7 @@ export default async function CalendarPage({
                           </dd>
                         </div>
                       </dl>
-                      <Link href={`/${locale}/bookings`}>
+                      <Link href={`/${locale}/bookings/${booking.bookingId}`}>
                         {message("calendarOpenBooking")}
                       </Link>
                     </article>

@@ -150,6 +150,9 @@ for (const language of locales) {
     "calendar",
     "calendar?view=day",
     "calendar?view=resource",
+    // Issue #17. The booking detail is the surface the whole lifecycle acts
+    // from, so its closed state is scanned like every other workspace surface.
+    "bookings/00000000-0000-0000-0000-000000000000",
   ]) {
     test(`dashboard ${surface} ${language.locale} has no automated WCAG A/AA violations`, async ({
       page,
