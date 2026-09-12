@@ -746,6 +746,18 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_support_context_v1: {
+        Args: never;
+        Returns: {
+          expires_at: string;
+          grant_id: string;
+          location_id: string;
+          scope: string;
+          tenant_id: string;
+          tenant_name: string;
+          ticket_reference: string;
+        }[];
+      };
       get_tenant_configuration_v1: {
         Args: { p_tenant_id: string };
         Returns: {

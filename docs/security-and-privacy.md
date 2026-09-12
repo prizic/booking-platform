@@ -211,6 +211,19 @@ Terminology for these classes is defined once in the [glossary](./glossary.md).
 - The export artifact is a jsonb document with a seven-day expiry, readable only through `get_privacy_request_v1` with `customer.data.export` and a step-up; the column is excluded from the table grant rather than revoked after it. It is not written to Storage in this release because Postgres PITR does not restore deleted Storage objects — the same recoverability gate that keeps customer attachments out of the first release. Issue #39 brings object backup and a restore drill; the delivery moves then.
 - Legal holds are re-checked on every run attempt, so a hold placed after a request was opened still stops it, and a released hold lets the same request resume.
 
+**Support access** (issue #28)
+
+Support is a grant, never a role and never impersonation. `private.is_active_tenant_member` learns one additional way to be true — a live, approved, unexpired grant for the calling operator — so support access is exactly the **read** a member has and cannot drift from it as new tables are added.
+
+Writes do not follow, and that is the point rather than an accident. Every write path asks `has_direct_capability` or `can_decide_booking`, both of which read `app.memberships`. A support operator has no membership row, so they hold no capability and can change nothing: owner transfer, payout changes, refunds, provider keys and policy edits are all unreachable without any of them needing their own rule. There is no membership to act as, so an audited action would record the operator rather than somebody else.
+
+- A grant needs a reason of real length and an external ticket reference, or it is one nobody can review afterwards.
+- The approver may not be the requester, enforced by a table constraint.
+- Duration is bounded at eight hours whatever was asked for. A grant that never ends is a role.
+- Expiry, revocation, operator removal and an authentication downgrade are all read from current state on **every call**, so each takes effect on the next statement rather than the next login.
+- A grant narrowed to one location sees that location and no other; nothing can widen a granted scope from inside the session.
+- Write support is modelled so it can be added later and is refused today: a capability an operator can assume is one somebody eventually assumes by accident.
+
 **Tenant offboarding phases** (each is a distinct, reversible-until-the-next state)
 
 1. Restrict new bookings.
