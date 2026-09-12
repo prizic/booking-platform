@@ -123,6 +123,18 @@ export interface DashboardDataSource {
     requestId: string;
     tenantId: string;
   }) => Promise<PrivacyRequestDetailV1 | null>;
+  getBookingReport?: (request: ReportRequest) => Promise<BookingReportV1 | null>;
+  getUtilizationReport?: (
+    request: ReportRequest,
+  ) => Promise<readonly UtilizationRowV1[]>;
+  getRevenueReport?: (request: ReportRequest) => Promise<RevenueReportV1 | null>;
+  runReportExport?: (
+    request: ReportRequest & { reportKey: ReportKey },
+  ) => Promise<string>;
+  getReportExport?: (request: {
+    exportId: string;
+    tenantId: string;
+  }) => Promise<ReportExportV1 | null>;
   listPaymentExceptions?: (request: {
     status: string | null;
     tenantId: string;
@@ -222,6 +234,65 @@ export interface PrivacyRequestDetailV1 {
     readonly status: string;
     readonly subsystem: string;
   }[];
+}
+
+/** The reports this surface can read or export (issue #24). */
+export type ReportKey = "bookings" | "customers" | "revenue" | "utilization";
+
+export interface ReportRequest {
+  readonly from: string;
+  readonly locationId: string | null;
+  readonly tenantId: string;
+  readonly timeZone: string;
+  readonly to: string;
+}
+
+export interface BookingReportV1 {
+  readonly averageLeadTimeMinutes: number;
+  readonly bookingsCancelled: number;
+  readonly bookingsCompleted: number;
+  readonly bookingsConfirmed: number;
+  readonly bookingsCreated: number;
+  readonly bookingsNoShow: number;
+  readonly bookingsRequested: number;
+  readonly completionRateBps: number;
+  readonly medianLeadTimeMinutes: number;
+  readonly noShowRateBps: number;
+  /** Stated as a field so nobody has to reconstruct what the rates divide by. */
+  readonly outcomeDenominator: number;
+  readonly reportDefinitionVersion: number;
+  readonly timeZone: string;
+}
+
+export interface UtilizationRowV1 {
+  readonly bookedMinutes: number;
+  readonly bookingCount: number;
+  readonly offeredMinutes: number;
+  readonly staffId: string;
+  readonly staffName: string | null;
+  readonly utilizationBps: number;
+}
+
+export interface RevenueReportV1 {
+  readonly averageOrderValueMinor: number;
+  readonly chargeCount: number;
+  readonly chargedMinor: number;
+  readonly currency: string;
+  readonly netMinor: number;
+  readonly outstandingMinor: number;
+  readonly refundCount: number;
+  readonly refundedMinor: number;
+  /** A total that is still moving says so instead of being read as final. */
+  readonly unsettledPayments: number;
+}
+
+export interface ReportExportV1 {
+  readonly exportId: string;
+  readonly expiresAt: string | null;
+  readonly reportKey: string;
+  readonly rows: readonly Readonly<Record<string, unknown>>[];
+  readonly rowCount: number;
+  readonly status: string;
 }
 
 /** How an operator can close a queue item. The database owns which are valid. */

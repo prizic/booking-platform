@@ -363,6 +363,36 @@ export type Database = {
           status: string;
         }[];
       };
+      get_booking_report_v1: {
+        Args: {
+          p_from: string;
+          p_location_id?: string;
+          p_service_id?: string;
+          p_staff_id?: string;
+          p_tenant_id: string;
+          p_time_zone?: string;
+          p_to: string;
+        };
+        Returns: {
+          average_lead_time_minutes: number;
+          bookings_cancelled: number;
+          bookings_completed: number;
+          bookings_confirmed: number;
+          bookings_created: number;
+          bookings_no_show: number;
+          bookings_requested: number;
+          bookings_rescheduled: number;
+          completion_rate_bps: number;
+          contract_version: number;
+          median_lead_time_minutes: number;
+          no_show_rate_bps: number;
+          outcome_denominator: number;
+          report_definition_version: number;
+          time_zone: string;
+          window_end: string;
+          window_start: string;
+        }[];
+      };
       get_checkout_intent_v1: {
         Args: { p_payment_attempt_id: string; p_tenant_id: string };
         Returns: {
@@ -429,6 +459,24 @@ export type Database = {
           sensitive_note_count: number;
           suppressed: boolean;
           tags: string[];
+        }[];
+      };
+      get_customer_report_v1: {
+        Args: {
+          p_from: string;
+          p_tenant_id: string;
+          p_time_zone?: string;
+          p_to: string;
+        };
+        Returns: {
+          bookings_per_customer_bps: number;
+          contract_version: number;
+          customers_new: number;
+          customers_returning: number;
+          customers_total: number;
+          erased_customers: number;
+          report_definition_version: number;
+          suppressed_contacts: number;
         }[];
       };
       get_dashboard_context_v1: {
@@ -553,6 +601,41 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_report_export_v1: {
+        Args: { p_export_id: string; p_tenant_id: string };
+        Returns: {
+          created_at: string;
+          expires_at: string;
+          export_id: string;
+          parameters: Json;
+          report_definition_version: number;
+          report_key: string;
+          row_count: number;
+          rows_payload: Json;
+          status: string;
+        }[];
+      };
+      get_revenue_report_v1: {
+        Args: {
+          p_from: string;
+          p_tenant_id: string;
+          p_time_zone?: string;
+          p_to: string;
+        };
+        Returns: {
+          average_order_value_minor: number;
+          charge_count: number;
+          charged_minor: number;
+          contract_version: number;
+          currency: string;
+          net_minor: number;
+          outstanding_minor: number;
+          refund_count: number;
+          refunded_minor: number;
+          report_definition_version: number;
+          unsettled_payments: number;
+        }[];
+      };
       get_schedule_workspace_v1: {
         Args: { p_location_id?: string; p_tenant_id: string };
         Returns: {
@@ -633,6 +716,25 @@ export type Database = {
           staff_id: string;
           starts_at: string;
           status: string;
+        }[];
+      };
+      get_utilization_report_v1: {
+        Args: {
+          p_from: string;
+          p_location_id?: string;
+          p_tenant_id: string;
+          p_time_zone?: string;
+          p_to: string;
+        };
+        Returns: {
+          booked_minutes: number;
+          booking_count: number;
+          contract_version: number;
+          offered_minutes: number;
+          report_definition_version: number;
+          staff_id: string;
+          staff_name: string;
+          utilization_bps: number;
         }[];
       };
       list_booking_notifications_v1: {
@@ -784,6 +886,17 @@ export type Database = {
           refund_id: string;
           status: string;
           updated_at: string;
+        }[];
+      };
+      list_report_exports_v1: {
+        Args: { p_limit?: number; p_tenant_id: string };
+        Returns: {
+          created_at: string;
+          expires_at: string;
+          export_id: string;
+          report_key: string;
+          row_count: number;
+          status: string;
         }[];
       };
       list_tenant_choices_v1: {
@@ -1030,6 +1143,22 @@ export type Database = {
         Args: { p_request_id: string; p_tenant_id: string };
         Returns: {
           blocked_reason: string;
+          status: string;
+        }[];
+      };
+      run_report_export_v1: {
+        Args: {
+          p_from: string;
+          p_location_id?: string;
+          p_report_key: string;
+          p_tenant_id: string;
+          p_time_zone?: string;
+          p_to: string;
+        };
+        Returns: {
+          expires_at: string;
+          export_id: string;
+          row_count: number;
           status: string;
         }[];
       };

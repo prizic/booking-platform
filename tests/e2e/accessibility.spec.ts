@@ -159,6 +159,8 @@ for (const language of locales) {
     "customers/00000000-0000-0000-0000-000000000000",
     // Issue #23. The money queue, scanned closed like every other surface.
     "payments",
+    // Issue #24.
+    "reports",
   ]) {
     test(`dashboard ${surface} ${language.locale} has no automated WCAG A/AA violations`, async ({
       page,
