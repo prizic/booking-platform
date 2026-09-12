@@ -13,7 +13,7 @@
 import {
   createCheckoutSession,
   type StripeTransport,
-} from "../../../packages/integrations/src/stripe.ts";
+} from "../_shared/integrations/stripe.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
