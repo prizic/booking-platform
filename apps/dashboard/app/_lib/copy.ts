@@ -165,6 +165,28 @@ export type DashboardMessageKey =
   | "brandResultRolledBack"
   | "brandResultUnsafe"
   | "brandResultNotPublishable"
+  | "navSettings"
+  | "settingsTitle"
+  | "settingsSummary"
+  | "settingsUnavailable"
+  | "settingsPlanTitle"
+  | "settingsPlanHint"
+  | "settingsPlanEmpty"
+  | "settingsFeatureOn"
+  | "settingsFeatureOff"
+  | "settingsEditTitle"
+  | "settingsEditHint"
+  | "settingsDocumentLabel"
+  | "settingsNavigationLabel"
+  | "settingsFeaturesLabel"
+  | "settingsSaveAction"
+  | "settingsVersionsTitle"
+  | "settingsConfigVersion"
+  | "settingsFeatureVersion"
+  | "settingsDefaultLocale"
+  | "settingsResultSaved"
+  | "settingsResultSavedPartial"
+  | "settingsResultInvalid"
   | "paymentsTitle"
   | "paymentsSummary"
   | "paymentsUnavailable"
@@ -546,6 +568,33 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "CSV",
     reportsResultExported: "The export is ready and expires in seven days.",
     paymentsTitle: "Payments",
+    navSettings: "Settings",
+    settingsTitle: "Settings",
+    settingsSummary:
+      "Locale, currency, tax, navigation, and which of your plan's features are switched on. Turning something on here only works if your plan includes it.",
+    settingsUnavailable: "Settings could not be loaded.",
+    settingsPlanTitle: "Included in your plan",
+    settingsPlanHint:
+      "This list is set by your plan and cannot be edited here. Switching a feature on below only takes effect for something already on this list.",
+    settingsPlanEmpty: "No features are included yet.",
+    settingsFeatureOn: "on",
+    settingsFeatureOff: "off",
+    settingsEditTitle: "Edit",
+    settingsEditHint:
+      "Currency, locale, tax rate and reply-to are checked before saving. Navigation may only link to pages this product has, and must be labelled in both languages.",
+    settingsDocumentLabel: "Settings (JSON)",
+    settingsNavigationLabel: "Navigation (JSON)",
+    settingsFeaturesLabel: "Feature switches (JSON)",
+    settingsSaveAction: "Save settings",
+    settingsVersionsTitle: "Versions",
+    settingsConfigVersion: "Configuration version",
+    settingsFeatureVersion: "Feature version",
+    settingsDefaultLocale: "Default language",
+    settingsResultSaved: "Settings saved.",
+    settingsResultSavedPartial:
+      "Settings saved, but one or more features were left off because your plan does not include them.",
+    settingsResultInvalid:
+      "Something in that was out of bounds — check the currency, language, tax rate, reply-to address, and that every navigation link points at a real page and is labelled in both languages.",
     brandTitle: "Brand & site",
     brandSummary:
       "Draft the brand, preview it, and publish when it is right. A published revision is what customers saw, so it is kept exactly as it was and rolled back rather than edited.",
@@ -990,6 +1039,33 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "ملف CSV",
     reportsResultExported: "التصدير جاهز وتنتهي صلاحيته خلال سبعة أيام.",
     paymentsTitle: "المدفوعات",
+    navSettings: "الإعدادات",
+    settingsTitle: "الإعدادات",
+    settingsSummary:
+      "اللغة والعملة والضريبة والتنقّل، وأي مزايا خطّتك مفعّلة. تفعيل ميزة هنا لا يعمل إلا إذا كانت ضمن خطّتك.",
+    settingsUnavailable: "تعذّر تحميل الإعدادات.",
+    settingsPlanTitle: "المتضمَّن في خطّتك",
+    settingsPlanHint:
+      "تُحدَّد هذه القائمة بخطّتك ولا يمكن تعديلها هنا. تفعيل ميزة أدناه لا يسري إلا لما هو مدرج في هذه القائمة.",
+    settingsPlanEmpty: "لا توجد مزايا متضمَّنة بعد.",
+    settingsFeatureOn: "مفعّل",
+    settingsFeatureOff: "غير مفعّل",
+    settingsEditTitle: "تعديل",
+    settingsEditHint:
+      "تُفحص العملة واللغة ونسبة الضريبة وعنوان الردّ قبل الحفظ. ولا يجوز أن يشير التنقّل إلا إلى صفحات موجودة في المنتج، مع تسمية بلغتين.",
+    settingsDocumentLabel: "الإعدادات (JSON)",
+    settingsNavigationLabel: "التنقّل (JSON)",
+    settingsFeaturesLabel: "مفاتيح المزايا (JSON)",
+    settingsSaveAction: "حفظ الإعدادات",
+    settingsVersionsTitle: "الإصدارات",
+    settingsConfigVersion: "إصدار الإعدادات",
+    settingsFeatureVersion: "إصدار المزايا",
+    settingsDefaultLocale: "اللغة الافتراضية",
+    settingsResultSaved: "تم حفظ الإعدادات.",
+    settingsResultSavedPartial:
+      "تم حفظ الإعدادات، لكن بقيت ميزة أو أكثر غير مفعّلة لأن خطّتك لا تتضمّنها.",
+    settingsResultInvalid:
+      "هناك قيمة خارج الحدود — راجع العملة واللغة ونسبة الضريبة وعنوان الردّ، وتأكّد أن كل رابط تنقّل يشير إلى صفحة حقيقية ومسمّى بلغتين.",
     brandTitle: "الهوية والموقع",
     brandSummary:
       "أنشئ مسوّدة الهوية وعاينها وانشرها عندما تكون جاهزة. النسخة المنشورة هي ما رآه العملاء، لذا تُحفظ كما هي ويُرجع إليها بدل تعديلها.",

@@ -163,6 +163,8 @@ for (const language of locales) {
     "reports",
     // Issue #25.
     "brand",
+    // Issue #26.
+    "settings",
   ]) {
     test(`dashboard ${surface} ${language.locale} has no automated WCAG A/AA violations`, async ({
       page,

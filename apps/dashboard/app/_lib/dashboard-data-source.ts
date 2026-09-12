@@ -35,6 +35,7 @@ import type {
   BrandPresentationV1,
   BrandRevisionRowV1,
   DeliveryHealthV1,
+  TenantConfigurationV1,
   PaymentExceptionV1,
   RefundRowV1,
   PrivacyRequestRowV1,
@@ -1265,6 +1266,52 @@ export function createDashboardDataSource(
         rowCount: Number(row.row_count ?? 0),
         status: requireString(row.status),
       };
+    },
+
+    getTenantConfiguration: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_tenant_configuration_v1", {
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      if (row === null) return null;
+      const configuration: TenantConfigurationV1 = {
+        cacheTag: requireString(row.cache_tag),
+        configVersion: Number(row.config_version ?? 1),
+        defaultLocale: String(row.default_locale ?? "en"),
+        entitlements: (row.entitlements ?? {}) as Record<string, boolean>,
+        featureConfiguration: (row.feature_configuration ?? {}) as Record<
+          string,
+          { enabled?: boolean }
+        >,
+        featureVersion: Number(row.feature_version ?? 1),
+        navigation: (row.navigation ?? {}) as Record<string, unknown>,
+        revision: Number(row.revision ?? 1),
+        settings: (row.settings ?? {}) as Record<string, unknown>,
+      };
+      return configuration;
+    },
+
+    saveTenantSettings: async (request) => {
+      // The database strips any feature the plan does not grant and reports
+      // which, so the interface can say so plainly instead of pretending the
+      // save worked exactly as asked.
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("save_tenant_settings_v1", {
+            p_expected_revision: request.expectedRevision,
+            p_feature_configuration: request.featureConfiguration,
+            p_navigation: request.navigation,
+            p_settings: request.settings,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      return Array.isArray(row?.ignored_features)
+        ? (row.ignored_features as string[])
+        : [];
     },
 
     listBrandRevisions: async (request) => {

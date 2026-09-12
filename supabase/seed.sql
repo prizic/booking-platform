@@ -243,3 +243,24 @@ insert into app.catalog_location_revisions (id,tenant_id,location_id,revision,lo
  ('a7310000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',1,'en','published','Downtown','Our central location.','Main Street','/locations/location-a-one','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00'),
  ('a7310000-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',1,'ar','published','وسط المدينة','موقعنا الرئيسي.','الشارع الرئيسي','/locations/location-a-one','a7000000-0000-0000-0000-000000000001','2026-09-05 00:00:00+00');
 insert into app.catalog_service_locations (tenant_id,service_id,location_id) values ('a0000000-0000-0000-0000-000000000001','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001');
+
+-- Issue #26. The first-release feature set, granted to both fixture tenants so
+-- the entitlement path is exercised rather than trivially empty. Real grants are
+-- written by the control plane when a plan is assigned (issue #37), which is why
+-- nothing inside a tenant can write this table.
+insert into app.tenant_entitlements (tenant_id, feature_key, granted, source)
+select t.id, f.key, true, 'plan'
+from app.tenants as t
+cross join (values
+  ('booking.online'),
+  ('booking.request_to_book'),
+  ('booking.guest_management'),
+  ('payments.deposits'),
+  ('reports.operational'),
+  ('brand.custom_domain')
+) as f(key)
+on conflict do nothing;
+
+insert into app.tenant_settings (tenant_id)
+select t.id from app.tenants as t
+on conflict do nothing;

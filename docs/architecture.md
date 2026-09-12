@@ -493,6 +493,29 @@ publishing revokes every preview of that draft. Whether a deployment is
 "branded" or "fully white-label" is computed from domain, sender, brand and
 legal-link state rather than asserted, so the product cannot overclaim.
 
+Entitlements and settings (issue #26) are two different things and the product
+keeps them apart. An **entitlement** is what the plan grants: written by the
+control plane, readable by the tenant, writable by nobody inside it — including
+the owner, enforced by the absence of any INSERT, UPDATE or DELETE grant rather
+than by hoping no interface offers one. A **setting** is how the tenant has
+chosen to use what it was granted: theirs to change, bounded, and audited.
+`isFeatureEnabled` in `packages/config` already read
+`runtimeEntitlements[key] === true && localConfiguration[key]?.enabled === true`,
+so local configuration could only ever narrow; what was missing was something
+authoritative for the left-hand side, and `app.tenant_entitlements` is it. A
+tenant editing a config file in its own instance repository is editing a
+setting, and if the entitlement is absent the feature stays off **at the
+backend** — the difference between a hidden button and an unavailable
+capability. `save_tenant_settings_v1` strips an unentitled feature on the way in
+and reports which, so it is never stored as enabled and the interface can say
+plainly that part of the save did not take. The rest of the document still
+saves, because one stale checkbox must not block every other change an
+administrator is making. Navigation may link only to routes this product has and
+must be labelled in both languages, so it cannot ship half-translated or point
+at a page that does not exist. Settings changes are append-only events recording
+which documents moved and who moved them, never their values — a settings
+document can carry a reply-to address.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.
