@@ -32,6 +32,7 @@ import type {
   CustomerRowV1,
   DashboardDataSource,
   BookingReportV1,
+  DeliveryHealthV1,
   PaymentExceptionV1,
   RefundRowV1,
   PrivacyRequestRowV1,
@@ -1262,6 +1263,27 @@ export function createDashboardDataSource(
         rowCount: Number(row.row_count ?? 0),
         status: requireString(row.status),
       };
+    },
+
+    getDeliveryHealth: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_delivery_health_v1", { p_tenant_id: request.tenantId }),
+        ),
+      );
+      if (row === null) return null;
+      const health: DeliveryHealthV1 = {
+        bounced: Number(row.bounced ?? 0),
+        complained: Number(row.complained ?? 0),
+        deadLettered: Number(row.dead_lettered ?? 0),
+        delivered: Number(row.delivered ?? 0),
+        failed: Number(row.failed ?? 0),
+        oldestQueuedMinutes: Number(row.oldest_queued_minutes ?? 0),
+        queued: Number(row.queued ?? 0),
+        sending: Number(row.sending ?? 0),
+        suppressed: Number(row.suppressed ?? 0),
+      };
+      return health;
     },
 
     listPaymentExceptions: async (request) => {

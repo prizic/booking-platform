@@ -450,6 +450,26 @@ revenue one. Export runs as the caller rather than as a definer, so a
 location-limited member exports their own locations and cannot infer anybody
 else's; only the persistence is privileged.
 
+Reminders and staff alerts (issue #20) reuse the issue #19 pipeline rather than
+adding a second one. **A reminder is an outbox intent with a future
+`available_at`** — the column already existed and the dispatcher already
+respected it, so scheduling is the existing mechanism, later. Invalidation falls
+out of the intent key `(tenant, booking, topic, booking_revision)`: a reschedule
+bumps the revision, so the reminder for the new time is a different intent and
+the one for the old time is marked `superseded` rather than `failed`. It did not
+fail to send; it stopped being true, and the ledger should say which. A booking
+that is cancelled, completed, or a no-show supersedes its reminder and schedules
+no replacement, so nobody is reminded of an appointment that is not happening.
+Staff alerts are messages with a second recipient kind, addressed to a
+membership and resolved to an address at send time exactly as a customer is;
+recipients come from capability and location scope, so a member who loses the
+capability stops being alerted the moment they lose it. Auth mail resolves its
+tenant from membership and invitation records only — never user metadata, a
+redirect URL, or a claimed hostname, all three of which are attacker-controlled
+— and an address belonging to more than one tenant deliberately resolves to
+nothing, because picking one would tell that tenant the person also deals with
+another.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

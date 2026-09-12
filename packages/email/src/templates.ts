@@ -17,6 +17,11 @@ export const notificationTemplateKeys = [
   "management.otp_requested",
   "payment.refunded",
   "payment.refund_failed",
+  "booking.reminder",
+  "staff.request_pending",
+  "staff.payment_exception",
+  "staff.booking_cancelled",
+  "staff.delivery_failed",
 ] as const;
 
 export type NotificationTemplateKey = (typeof notificationTemplateKeys)[number];
@@ -218,6 +223,104 @@ const copy: Record<NotificationTemplateKey, Record<ContractLocale, TemplateCopy>
         "{serviceName}",
         "Refunded: {refund}",
         "It can take a few days to reach your account.",
+        "Reference: {publicReference}",
+      ],
+    },
+  },
+  // Issue #20. The customer's reminder. It carries the manage link, because the
+  // most useful thing a reminder can do is let somebody who cannot come say so.
+  "booking.reminder": {
+    ar: {
+      subject: "تذكير بموعدك {publicReference}",
+      heading: "موعدك يقترب",
+      body: [
+        "{serviceName} — {locationName}",
+        "{startAt} ({timeZone})",
+        "لتعديل الموعد أو إلغائه: {manageUrl}",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "Reminder: your appointment {publicReference}",
+      heading: "Your appointment is coming up",
+      body: [
+        "{serviceName} — {locationName}",
+        "{startAt} ({timeZone})",
+        "Need to change or cancel? {manageUrl}",
+        "Reference: {publicReference}",
+      ],
+    },
+  },
+  // The four staff alerts. These go to the tenant's own team, so they say what
+  // needs doing and never carry a customer's details.
+  "staff.request_pending": {
+    ar: {
+      subject: "طلب حجز ينتظر قراراً — {publicReference}",
+      heading: "طلب حجز ينتظر قراراً",
+      body: [
+        "{serviceName}",
+        "{startAt} ({timeZone})",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "A booking request is waiting — {publicReference}",
+      heading: "A booking request is waiting for a decision",
+      body: ["{serviceName}", "{startAt} ({timeZone})", "Reference: {publicReference}"],
+    },
+  },
+  "staff.payment_exception": {
+    ar: {
+      subject: "مشكلة في الدفع تحتاج إلى تدخّل — {publicReference}",
+      heading: "مشكلة في الدفع",
+      body: [
+        "{serviceName}",
+        "يرجى معالجتها من قائمة استثناءات المدفوعات.",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "A payment needs attention — {publicReference}",
+      heading: "A payment needs attention",
+      body: [
+        "{serviceName}",
+        "Please resolve it from the payment exceptions queue.",
+        "Reference: {publicReference}",
+      ],
+    },
+  },
+  "staff.booking_cancelled": {
+    ar: {
+      subject: "تم إلغاء حجز — {publicReference}",
+      heading: "تم إلغاء حجز",
+      body: [
+        "{serviceName}",
+        "{startAt} ({timeZone})",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "A booking was cancelled — {publicReference}",
+      heading: "A booking was cancelled",
+      body: ["{serviceName}", "{startAt} ({timeZone})", "Reference: {publicReference}"],
+    },
+  },
+  "staff.delivery_failed": {
+    ar: {
+      subject: "تعذّر إيصال رسالة — {publicReference}",
+      heading: "تعذّر إيصال رسالة",
+      body: [
+        "{serviceName}",
+        "قد لا يكون العميل قد استلم رسالته. يرجى التواصل معه مباشرة.",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "A message could not be delivered — {publicReference}",
+      heading: "A message could not be delivered",
+      body: [
+        "{serviceName}",
+        "The customer may not have received their message. Please reach them another way.",
         "Reference: {publicReference}",
       ],
     },
