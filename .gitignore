@@ -27,3 +27,4 @@ apps/*/public/assets/
 # Logs
 *.log
 pnpm-debug.log*
+dist-distribution/
