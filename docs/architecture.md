@@ -470,6 +470,29 @@ redirect URL, or a claimed hostname, all three of which are attacker-controlled
 nothing, because picking one would tell that tenant the person also deals with
 another.
 
+Brand publication (issue #25) splits validation deliberately. Contrast ratios,
+font allow-lists and asset path shapes are arithmetic and string rules that
+already live in `packages/white-label-ui`, unit tested against real colour
+pairs, and they run before anything is submitted — re-deriving a WCAG contrast
+ratio in PL/pgSQL would be a second implementation of a rule that is already
+right, and the two would drift. What the database enforces is what only the
+database can: a published revision is immutable for the same reason a booking
+snapshot is (it is evidence of what customers were shown), exactly one revision
+per brand is live at a time with the outgoing one retired in the same
+transaction so there is never an instant with no brand, and **executable markup
+cannot be stored at all** — a client-side check that the config has no
+`<script>` is a check an attacker skips by calling the RPC directly, so the
+refusal is a table constraint. Publication states the content hash the author
+reviewed, so a draft somebody edited in between is refused rather than shipped
+under the wrong name. Rolling back publishes a copy of a previous revision
+rather than editing a published one, keeping history a list of what was live and
+when, in order. Preview is reachable only by presenting a token the platform
+minted and never through a query parameter, because a query parameter is a value
+anybody can type and an unpublished brand is a tenant's unreleased work;
+publishing revokes every preview of that draft. Whether a deployment is
+"branded" or "fully white-label" is computed from domain, sender, brand and
+legal-link state rather than asserted, so the product cannot overclaim.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

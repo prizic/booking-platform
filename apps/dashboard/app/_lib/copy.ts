@@ -137,6 +137,34 @@ export type DashboardMessageKey =
   | "paymentsDeliverySuppressed"
   | "paymentsDeliveryDead"
   | "paymentsDeliveryResendHint"
+  | "brandTitle"
+  | "brandSummary"
+  | "brandPresentationTitle"
+  | "brandFullyWhiteLabel"
+  | "brandBranded"
+  | "brandHasDomain"
+  | "brandHasSender"
+  | "brandHasPublished"
+  | "brandHasLegal"
+  | "brandYes"
+  | "brandNo"
+  | "brandDraftTitle"
+  | "brandDraftHint"
+  | "brandKeyLabel"
+  | "brandConfigLabel"
+  | "brandContentLabel"
+  | "brandSaveAction"
+  | "brandPublishTitle"
+  | "brandPublishHint"
+  | "brandPublishAction"
+  | "brandHistoryTitle"
+  | "brandHistoryEmpty"
+  | "brandRollbackAction"
+  | "brandResultDrafted"
+  | "brandResultPublished"
+  | "brandResultRolledBack"
+  | "brandResultUnsafe"
+  | "brandResultNotPublishable"
   | "paymentsTitle"
   | "paymentsSummary"
   | "paymentsUnavailable"
@@ -518,6 +546,41 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "CSV",
     reportsResultExported: "The export is ready and expires in seven days.",
     paymentsTitle: "Payments",
+    brandTitle: "Brand & site",
+    brandSummary:
+      "Draft the brand, preview it, and publish when it is right. A published revision is what customers saw, so it is kept exactly as it was and rolled back rather than edited.",
+    brandPresentationTitle: "How this deployment presents",
+    brandFullyWhiteLabel: "Fully white-label",
+    brandBranded: "Branded",
+    brandHasDomain: "Verified own domain",
+    brandHasSender: "Own sending identity",
+    brandHasPublished: "Published brand",
+    brandHasLegal: "Privacy and terms links",
+    brandYes: "yes",
+    brandNo: "no",
+    brandDraftTitle: "Draft",
+    brandDraftHint:
+      "Colours, fonts and asset paths are checked before this is saved, including contrast. Markup and scripts are refused outright.",
+    brandKeyLabel: "Brand key",
+    brandConfigLabel: "Brand configuration (JSON)",
+    brandContentLabel: "Content and legal links (JSON)",
+    brandSaveAction: "Save draft",
+    brandPublishTitle: "Publish",
+    brandPublishHint:
+      "Publishing replaces the live brand in one step, so customers never load a page with no brand at all.",
+    brandPublishAction: "Publish this draft",
+    brandHistoryTitle: "History",
+    brandHistoryEmpty: "No brand revision has been created yet.",
+    brandRollbackAction: "Roll back to this",
+    brandResultDrafted: "The draft was saved.",
+    brandResultPublished:
+      "The brand is live. Any preview links for it have been closed.",
+    brandResultRolledBack:
+      "Rolled back. The previous brand is live again as a new revision.",
+    brandResultUnsafe:
+      "That contained markup or a script, which is never stored. Use plain text and ordinary links.",
+    brandResultNotPublishable:
+      "That revision cannot go live. A brand needs a name, and a revision can only be published once.",
     paymentsDeliveryTitle: "Email delivery",
     paymentsDeliveryStalled:
       "Mail is not going out on time. Check that the delivery worker is running before contacting customers another way.",
@@ -927,6 +990,39 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "ملف CSV",
     reportsResultExported: "التصدير جاهز وتنتهي صلاحيته خلال سبعة أيام.",
     paymentsTitle: "المدفوعات",
+    brandTitle: "الهوية والموقع",
+    brandSummary:
+      "أنشئ مسوّدة الهوية وعاينها وانشرها عندما تكون جاهزة. النسخة المنشورة هي ما رآه العملاء، لذا تُحفظ كما هي ويُرجع إليها بدل تعديلها.",
+    brandPresentationTitle: "كيف يظهر هذا النشر",
+    brandFullyWhiteLabel: "هوية بيضاء كاملة",
+    brandBranded: "يحمل هوية",
+    brandHasDomain: "نطاق خاص موثّق",
+    brandHasSender: "هوية إرسال خاصة",
+    brandHasPublished: "هوية منشورة",
+    brandHasLegal: "روابط الخصوصية والشروط",
+    brandYes: "نعم",
+    brandNo: "لا",
+    brandDraftTitle: "المسوّدة",
+    brandDraftHint:
+      "تُفحص الألوان والخطوط ومسارات الأصول قبل الحفظ، بما في ذلك التباين. ويُرفض أي وسم أو سكربت رفضاً تاماً.",
+    brandKeyLabel: "معرّف الهوية",
+    brandConfigLabel: "إعدادات الهوية (JSON)",
+    brandContentLabel: "المحتوى والروابط القانونية (JSON)",
+    brandSaveAction: "حفظ المسوّدة",
+    brandPublishTitle: "النشر",
+    brandPublishHint:
+      "يستبدل النشر الهوية الحالية في خطوة واحدة، فلا يرى العملاء صفحة بلا هوية إطلاقاً.",
+    brandPublishAction: "نشر هذه المسوّدة",
+    brandHistoryTitle: "السجل",
+    brandHistoryEmpty: "لم تُنشأ أي نسخة هوية بعد.",
+    brandRollbackAction: "الرجوع إلى هذه",
+    brandResultDrafted: "تم حفظ المسوّدة.",
+    brandResultPublished: "الهوية منشورة الآن، وأُغلقت روابط المعاينة الخاصة بها.",
+    brandResultRolledBack: "تم الرجوع. الهوية السابقة منشورة مجدداً كنسخة جديدة.",
+    brandResultUnsafe:
+      "احتوى ذلك على وسم أو سكربت، ولا يُحفظ ذلك أبداً. استخدم نصاً عادياً وروابط اعتيادية.",
+    brandResultNotPublishable:
+      "لا يمكن نشر هذه النسخة. تحتاج الهوية إلى اسم، ولا تُنشر النسخة أكثر من مرة.",
     paymentsDeliveryTitle: "إيصال البريد",
     paymentsDeliveryStalled:
       "البريد لا يخرج في وقته. تأكّد من عمل خدمة الإرسال قبل التواصل مع العملاء بطريقة أخرى.",

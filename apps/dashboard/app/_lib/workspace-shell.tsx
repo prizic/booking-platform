@@ -15,6 +15,7 @@ const sections = [
   { key: "navCustomers", path: "customers" },
   { key: "navPayments", path: "payments" },
   { key: "navReports", path: "reports" },
+  { key: "navBrand", path: "brand" },
   { key: "navRequests", path: "requests" },
   { key: "navTeamResources", path: "team-resources" },
   { key: "navAvailability", path: "availability" },

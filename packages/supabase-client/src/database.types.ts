@@ -393,6 +393,17 @@ export type Database = {
           window_start: string;
         }[];
       };
+      get_brand_presentation_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          contract_version: number;
+          has_legal_links: boolean;
+          has_published_brand: boolean;
+          has_tenant_sender: boolean;
+          has_verified_domain: boolean;
+          presentation: string;
+        }[];
+      };
       get_checkout_intent_v1: {
         Args: { p_payment_attempt_id: string; p_tenant_id: string };
         Returns: {
@@ -616,6 +627,18 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_published_brand_v1: {
+        Args: { p_application: string; p_hostname: string };
+        Returns: {
+          brand_revision_id: string;
+          cache_tag: string;
+          config: Json;
+          content: Json;
+          contract_version: number;
+          published_at: string;
+          revision: number;
+        }[];
+      };
       get_report_export_v1: {
         Args: { p_export_id: string; p_tenant_id: string };
         Returns: {
@@ -752,6 +775,17 @@ export type Database = {
           utilization_bps: number;
         }[];
       };
+      issue_brand_preview_v1: {
+        Args: {
+          p_brand_revision_id: string;
+          p_tenant_id: string;
+          p_ttl_minutes?: number;
+        };
+        Returns: {
+          expires_at: string;
+          preview_token: string;
+        }[];
+      };
       list_booking_notifications_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
         Returns: {
@@ -817,6 +851,20 @@ export type Database = {
           starts_at: string;
           status: string;
           tax_rate_bps: number;
+        }[];
+      };
+      list_brand_revisions_v1: {
+        Args: { p_limit?: number; p_tenant_id: string };
+        Returns: {
+          brand_id: string;
+          brand_key: string;
+          brand_revision_id: string;
+          content_hash: string;
+          created_at: string;
+          notes: string;
+          published_at: string;
+          revision: number;
+          state: string;
         }[];
       };
       list_calendar_v1: {
@@ -928,6 +976,20 @@ export type Database = {
         Args: { p_customer_id: string; p_kind: string; p_tenant_id: string };
         Returns: string;
       };
+      publish_brand_revision_v1: {
+        Args: {
+          p_brand_revision_id: string;
+          p_expected_content_hash: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          brand_revision_id: string;
+          contract_version: number;
+          published_at: string;
+          retired_revision: number;
+          revision: number;
+        }[];
+      };
       publish_catalog_v1: {
         Args: {
           p_category_revision_ids: string[];
@@ -1002,6 +1064,17 @@ export type Database = {
         Returns: {
           refund_id: string;
           status: string;
+        }[];
+      };
+      redeem_brand_preview_v1: {
+        Args: { p_application: string; p_hostname: string; p_token: string };
+        Returns: {
+          brand_revision_id: string;
+          config: Json;
+          content: Json;
+          contract_version: number;
+          revision: number;
+          state: string;
         }[];
       };
       redeem_management_token_v1: {
@@ -1162,6 +1235,14 @@ export type Database = {
           status: string;
         }[];
       };
+      rollback_brand_v1: {
+        Args: { p_brand_id: string; p_tenant_id: string; p_to_revision: number };
+        Returns: {
+          brand_revision_id: string;
+          contract_version: number;
+          revision: number;
+        }[];
+      };
       run_privacy_request_v1: {
         Args: { p_request_id: string; p_tenant_id: string };
         Returns: {
@@ -1183,6 +1264,23 @@ export type Database = {
           export_id: string;
           row_count: number;
           status: string;
+        }[];
+      };
+      save_brand_draft_v1: {
+        Args: {
+          p_brand_key: string;
+          p_config: Json;
+          p_content: Json;
+          p_expected_revision?: number;
+          p_notes?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          brand_id: string;
+          brand_revision_id: string;
+          content_hash: string;
+          contract_version: number;
+          revision: number;
         }[];
       };
       save_resource_type_v1: {

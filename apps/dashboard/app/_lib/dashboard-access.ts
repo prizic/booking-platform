@@ -135,6 +135,32 @@ export interface DashboardDataSource {
     exportId: string;
     tenantId: string;
   }) => Promise<ReportExportV1 | null>;
+  listBrandRevisions?: (request: {
+    tenantId: string;
+  }) => Promise<readonly BrandRevisionRowV1[]>;
+  saveBrandDraft?: (request: {
+    brandKey: string;
+    config: unknown;
+    content: unknown;
+    tenantId: string;
+  }) => Promise<{ brandRevisionId: string; contentHash: string }>;
+  publishBrandRevision?: (request: {
+    brandRevisionId: string;
+    expectedContentHash: string;
+    tenantId: string;
+  }) => Promise<void>;
+  rollbackBrand?: (request: {
+    brandId: string;
+    tenantId: string;
+    toRevision: number;
+  }) => Promise<void>;
+  issueBrandPreview?: (request: {
+    brandRevisionId: string;
+    tenantId: string;
+  }) => Promise<{ expiresAt: string; previewToken: string }>;
+  getBrandPresentation?: (request: {
+    tenantId: string;
+  }) => Promise<BrandPresentationV1 | null>;
   getDeliveryHealth?: (request: {
     tenantId: string;
   }) => Promise<DeliveryHealthV1 | null>;
@@ -296,6 +322,31 @@ export interface ReportExportV1 {
   readonly rows: readonly Readonly<Record<string, unknown>>[];
   readonly rowCount: number;
   readonly status: string;
+}
+
+/** One entry in the brand's publication history (issue #25). */
+export interface BrandRevisionRowV1 {
+  readonly brandId: string;
+  readonly brandKey: string;
+  readonly brandRevisionId: string;
+  readonly contentHash: string | null;
+  readonly createdAt: string;
+  readonly notes: string | null;
+  readonly publishedAt: string | null;
+  readonly revision: number;
+  readonly state: string;
+}
+
+/**
+ * Whether this deployment is genuinely white-label or merely branded, decided
+ * from state rather than from what anybody hopes.
+ */
+export interface BrandPresentationV1 {
+  readonly hasLegalLinks: boolean;
+  readonly hasPublishedBrand: boolean;
+  readonly hasTenantSender: boolean;
+  readonly hasVerifiedDomain: boolean;
+  readonly presentation: string;
 }
 
 /**

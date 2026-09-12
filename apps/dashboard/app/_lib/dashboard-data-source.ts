@@ -32,6 +32,8 @@ import type {
   CustomerRowV1,
   DashboardDataSource,
   BookingReportV1,
+  BrandPresentationV1,
+  BrandRevisionRowV1,
   DeliveryHealthV1,
   PaymentExceptionV1,
   RefundRowV1,
@@ -1263,6 +1265,106 @@ export function createDashboardDataSource(
         rowCount: Number(row.row_count ?? 0),
         status: requireString(row.status),
       };
+    },
+
+    listBrandRevisions: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("list_brand_revisions_v1", { p_tenant_id: request.tenantId }),
+      );
+      return (Array.isArray(rows) ? rows : []).map((value) => {
+        const row = value as Record<string, unknown>;
+        const entry: BrandRevisionRowV1 = {
+          brandId: requireString(row.brand_id),
+          brandKey: requireString(row.brand_key),
+          brandRevisionId: requireString(row.brand_revision_id),
+          contentHash: typeof row.content_hash === "string" ? row.content_hash : null,
+          createdAt: new Date(String(row.created_at)).toISOString(),
+          notes: typeof row.notes === "string" ? row.notes : null,
+          publishedAt:
+            row.published_at === null || row.published_at === undefined
+              ? null
+              : new Date(String(row.published_at)).toISOString(),
+          revision: Number(row.revision ?? 0),
+          state: requireString(row.state),
+        };
+        return entry;
+      });
+    },
+
+    saveBrandDraft: async (request) => {
+      // Token and asset validation ran in `@wlbp/white-label-ui` before this
+      // was called. The database independently refuses executable markup,
+      // because a client-side check is one an attacker skips.
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("save_brand_draft_v1", {
+            p_brand_key: request.brandKey,
+            p_config: request.config,
+            p_content: request.content,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      return {
+        brandRevisionId: String(row?.brand_revision_id ?? ""),
+        contentHash: String(row?.content_hash ?? ""),
+      };
+    },
+
+    publishBrandRevision: async (request) => {
+      // The hash the author reviewed travels with the request, so publishing a
+      // draft somebody edited in between is refused rather than shipping their
+      // work under this person's name.
+      assertRpc(
+        await api.rpc("publish_brand_revision_v1", {
+          p_brand_revision_id: request.brandRevisionId,
+          p_expected_content_hash: request.expectedContentHash,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    rollbackBrand: async (request) => {
+      assertRpc(
+        await api.rpc("rollback_brand_v1", {
+          p_brand_id: request.brandId,
+          p_tenant_id: request.tenantId,
+          p_to_revision: request.toRevision,
+        }),
+      );
+    },
+
+    issueBrandPreview: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("issue_brand_preview_v1", {
+            p_brand_revision_id: request.brandRevisionId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      return {
+        expiresAt: new Date(String(row?.expires_at)).toISOString(),
+        // Returned exactly once. It is never stored and cannot be read back.
+        previewToken: String(row?.preview_token ?? ""),
+      };
+    },
+
+    getBrandPresentation: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_brand_presentation_v1", { p_tenant_id: request.tenantId }),
+        ),
+      );
+      if (row === null) return null;
+      const presentation: BrandPresentationV1 = {
+        hasLegalLinks: row.has_legal_links === true,
+        hasPublishedBrand: row.has_published_brand === true,
+        hasTenantSender: row.has_tenant_sender === true,
+        hasVerifiedDomain: row.has_verified_domain === true,
+        presentation: requireString(row.presentation),
+      };
+      return presentation;
     },
 
     getDeliveryHealth: async (request) => {

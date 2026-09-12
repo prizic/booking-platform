@@ -161,6 +161,8 @@ for (const language of locales) {
     "payments",
     // Issue #24.
     "reports",
+    // Issue #25.
+    "brand",
   ]) {
     test(`dashboard ${surface} ${language.locale} has no automated WCAG A/AA violations`, async ({
       page,
