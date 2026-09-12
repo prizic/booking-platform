@@ -358,6 +358,23 @@ export type Database = {
           utc_offset_seconds: number;
         }[];
       };
+      get_billing_overview_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          account_state: string;
+          contract_version: number;
+          currency: string;
+          current_period_end: string;
+          current_period_start: string;
+          invoices: Json;
+          plan_key: string;
+          plan_revision: number;
+          restrictions: Json;
+          subscription_state: string;
+          trial_ends_at: string;
+          usage: Json;
+        }[];
+      };
       get_booking_detail_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
         Returns: {
