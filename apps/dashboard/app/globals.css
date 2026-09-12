@@ -410,6 +410,27 @@ summary:focus-visible {
   text-transform: uppercase;
 }
 
+.dashboard-live-status {
+  /* The toolbar's other paragraph is an uppercase label; this one is a
+     sentence, and uppercasing a sentence is bad in English and meaningless in
+     Arabic. */
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+  font-size: 0.82rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-inline: 0.75rem;
+}
+
+/* Colour is supplementary here: the sentence itself already says what state the
+   connection is in, which is what a screen reader announces. */
+.dashboard-live-status[data-live-status="reconnecting"],
+.dashboard-live-status[data-live-status="ended"] {
+  color: var(--dashboard-danger);
+  font-weight: 700;
+}
+
 .dashboard-toolbar nav {
   display: flex;
   gap: 0.3rem;
