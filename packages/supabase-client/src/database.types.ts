@@ -576,6 +576,14 @@ export type Database = {
           status: string;
         }[];
       };
+      get_platform_notice_v1: {
+        Args: never;
+        Returns: {
+          ends_at: string;
+          message_ar: string;
+          message_en: string;
+        }[];
+      };
       get_privacy_request_v1: {
         Args: { p_request_id: string; p_tenant_id: string };
         Returns: {

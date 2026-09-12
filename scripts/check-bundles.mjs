@@ -8,6 +8,7 @@ const forbidden = [
   ["platform-only Supabase package", /@wlbp\/supabase-admin|supabase-admin\/dist/iu],
   ["Platform Admin source", /apps[\\/]platform-admin/iu],
   ["control-plane source", /control-plane[\\/]/iu],
+  ["control-plane schema", /control_plane\./iu],
   ["privileged Supabase environment name", /SUPABASE_(?:SERVICE_ROLE|SECRET)_KEY/iu],
   ["Stripe server credential name", /STRIPE_(?:SECRET|RESTRICTED)_KEY/iu],
   ["email provider credential name", /RESEND_API_KEY/iu],
