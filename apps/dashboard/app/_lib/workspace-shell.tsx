@@ -7,6 +7,11 @@ import type { ReactNode } from "react";
 
 import { dashboardBrand } from "./brand";
 import { getDashboardMessage } from "./copy";
+import {
+  getDashboardRuntimeConfiguration,
+  loadDashboardRequestAccess,
+} from "./dashboard-server";
+import { LiveUpdatesListener } from "./live-updates-listener";
 
 const sections = [
   { key: "navToday", path: "today" },
@@ -27,6 +32,28 @@ const sections = [
  * current section marked, the private-view badge, and the language pair. Kept
  * in one place so a new surface cannot drift from the others.
  */
+/**
+ * The live listener, or nothing. It is here rather than on two surfaces because
+ * every workspace read is a server read and `router.refresh()` re-runs whichever
+ * one the operator is looking at — so wiring it once covers all of them and
+ * cannot drift.
+ */
+async function LiveUpdates({ locale }: { readonly locale: Locale }) {
+  const configuration = getDashboardRuntimeConfiguration();
+  if (configuration === null) return null;
+  const { state } = await loadDashboardRequestAccess(locale);
+  // Nobody who is not already inside a tenant subscribes to its topic.
+  if (state.kind !== "ready") return null;
+  return (
+    <LiveUpdatesListener
+      locale={locale}
+      publishableKey={configuration.supabasePublishableKey}
+      supabaseUrl={configuration.supabaseUrl}
+      tenantId={state.context.tenantId}
+    />
+  );
+}
+
 export function WorkspaceShell({
   children,
   current,
@@ -96,6 +123,7 @@ export function WorkspaceShell({
               <span className="sr-only">{message("languageArabic")}</span>
             </Link>
           </nav>
+          <LiveUpdates locale={locale} />
         </header>
         {children}
       </div>

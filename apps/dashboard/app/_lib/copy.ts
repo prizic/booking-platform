@@ -13,6 +13,10 @@ export type DashboardMessageKey =
   | "todayQueueCancellations"
   | "todayQueueUpcoming"
   | "todayCountLabel"
+  | "liveStatusConnecting"
+  | "liveStatusLive"
+  | "liveStatusReconnecting"
+  | "liveStatusEnded"
   | "calendarTitle"
   | "calendarSummary"
   | "calendarUnavailable"
@@ -433,6 +437,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     todayQueueExceptions: "Delivery problems",
     todayQueueCancellations: "Recently cancelled",
     todayQueueUpcoming: "Later",
+    liveStatusConnecting: "Connecting to live updates…",
+    liveStatusLive: "Live — this view updates as bookings change.",
+    liveStatusReconnecting:
+      "Reconnecting. This view may be out of date; reload to be sure.",
+    liveStatusEnded:
+      "Live updates stopped because your access to this workspace changed. Reload to sign in again.",
     todayCountLabel: "items",
     calendarTitle: "Calendar",
     calendarSummary:
@@ -911,6 +921,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     todayQueueExceptions: "مشكلات في الإرسال",
     todayQueueCancellations: "ملغاة مؤخرًا",
     todayQueueUpcoming: "لاحقًا",
+    liveStatusConnecting: "جارٍ الاتصال بالتحديثات المباشرة…",
+    liveStatusLive: "مباشر — يتم تحديث هذه الشاشة مع تغيّر الحجوزات.",
+    liveStatusReconnecting:
+      "جارٍ إعادة الاتصال. قد تكون هذه الشاشة قديمة؛ أعد التحميل للتأكد.",
+    liveStatusEnded:
+      "توقفت التحديثات المباشرة لأن صلاحيتك في مساحة العمل تغيّرت. أعد التحميل لتسجيل الدخول من جديد.",
     todayCountLabel: "عنصرًا",
     calendarTitle: "التقويم",
     calendarSummary:

@@ -3,6 +3,7 @@ import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server"
 import { extractRequestHostname } from "@wlbp/tenant-resolution";
 import type { Locale } from "@wlbp/i18n";
 import { cookies, headers } from "next/headers";
+import { cache } from "react";
 
 import { loadDashboardAccess, type DashboardAccessState } from "./dashboard-access";
 import { createDashboardDataSource } from "./dashboard-data-source";
@@ -61,30 +62,37 @@ export type DashboardRequestAccess =
       readonly state: DashboardAccessState;
     };
 
-export async function loadDashboardRequestAccess(
-  locale: Locale,
-): Promise<DashboardRequestAccess> {
-  const source = await createDashboardRequestDataSource();
-  if (source === null) {
-    return { source: null, state: { kind: "configuration-missing" } };
-  }
+/**
+ * Memoized for the life of one request. Every surface already calls this once,
+ * and issue #102 added a second caller in the shell; without `cache` that would
+ * be a second round trip per page for an answer that cannot have changed.
+ */
+export const loadDashboardRequestAccess = cache(
+  async function loadDashboardRequestAccess(
+    locale: Locale,
+  ): Promise<DashboardRequestAccess> {
+    const source = await createDashboardRequestDataSource();
+    if (source === null) {
+      return { source: null, state: { kind: "configuration-missing" } };
+    }
 
-  let hostname: string;
-  try {
-    const localFallback = process.env.LOCAL_TENANT_HOST;
-    hostname = extractRequestHostname(await headers(), {
-      ...(localFallback === undefined ? {} : { localFallback }),
-      runtimeEnvironment: runtimeEnvironment(),
-    });
-  } catch {
+    let hostname: string;
+    try {
+      const localFallback = process.env.LOCAL_TENANT_HOST;
+      hostname = extractRequestHostname(await headers(), {
+        ...(localFallback === undefined ? {} : { localFallback }),
+        runtimeEnvironment: runtimeEnvironment(),
+      });
+    } catch {
+      return {
+        source,
+        state: { kind: "denied", reason: "invalid_host" },
+      };
+    }
+
     return {
       source,
-      state: { kind: "denied", reason: "invalid_host" },
+      state: await loadDashboardAccess({ hostname, locale }, source),
     };
-  }
-
-  return {
-    source,
-    state: await loadDashboardAccess({ hostname, locale }, source),
-  };
-}
+  },
+);
