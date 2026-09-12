@@ -89,6 +89,7 @@ select is(
   ),
   array[
     'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',
+    'private.active_support_grant_v1(uuid)',
     'private.add_booking_note_v1(uuid,uuid,text,text,uuid)',
     'private.advance_tenant_offboarding_v1(uuid,text)',
     'private.attach_checkout_reference_v1(uuid,uuid,text)',
@@ -134,6 +135,7 @@ select is(
     'private.get_revenue_report_v1(uuid,date,date,text)',
     'private.get_runtime_entitlements_v1(uuid)',
     'private.get_staff_resource_choices_v1(uuid,text)',
+    'private.get_support_context_v1()',
     'private.get_tenant_configuration_v1(uuid)',
     'private.has_direct_capability(uuid,text)',
     'private.has_legal_hold_v1(uuid,uuid)',
