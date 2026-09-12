@@ -68,6 +68,7 @@ export type ContractErrorCode =
   | "policy_denied"
   | "revision_conflict"
   | "payment_pending"
+  | "checkout_not_ready"
   | "idempotency_conflict"
   | "not_authenticated"
   | "not_authorized"
@@ -1062,19 +1063,27 @@ export interface HoldFormFieldV1 {
 }
 
 export interface HoldFormV1 {
+  /** Issue #22. What a deposit leaves owed later. Zero unless `payment_mode` is `deposit`. */
+  readonly balanceMinor: number;
   readonly consentText: string;
   readonly consentVersion: string;
+  /** What is owed today, decided by the server. Zero when nothing is owed. */
+  readonly dueMinor: number;
   readonly fields: readonly HoldFormFieldV1[];
   readonly locationName: string;
+  readonly paymentMode: "deposit" | "full" | "none";
   readonly serviceName: string;
 }
 
 export function parseHoldFormV1(value: unknown): HoldFormV1 {
   const keys = [
+    "balanceMinor",
     "consentText",
     "consentVersion",
+    "dueMinor",
     "fields",
     "locationName",
+    "paymentMode",
     "serviceName",
   ] as const;
   if (!isRecord(value) || !hasExactKeys(value, keys)) {
@@ -1083,6 +1092,26 @@ export function parseHoldFormV1(value: unknown): HoldFormV1 {
   const consentVersion = requireNonEmptyString(value.consentVersion);
   if (consentVersion.length > 40 || typeof value.consentText !== "string") {
     throw new Error("Hold form consent is invalid");
+  }
+  // A payment mode this client does not know is refused rather than guessed:
+  // treating an unknown mode as `none` would show a free booking for a service
+  // that is not free.
+  if (
+    value.paymentMode !== "none" &&
+    value.paymentMode !== "deposit" &&
+    value.paymentMode !== "full"
+  ) {
+    throw new Error("Hold form payment mode is unknown");
+  }
+  if (
+    typeof value.dueMinor !== "number" ||
+    typeof value.balanceMinor !== "number" ||
+    !Number.isSafeInteger(value.dueMinor) ||
+    !Number.isSafeInteger(value.balanceMinor) ||
+    value.dueMinor < 0 ||
+    value.balanceMinor < 0
+  ) {
+    throw new Error("Hold form amounts are invalid");
   }
   if (!Array.isArray(value.fields) || value.fields.length > 50) {
     throw new Error("Hold form exceeds the field bound");
@@ -1113,10 +1142,13 @@ export function parseHoldFormV1(value: unknown): HoldFormV1 {
     });
   });
   return Object.freeze({
+    balanceMinor: value.balanceMinor,
     consentText: value.consentText,
     consentVersion,
+    dueMinor: value.dueMinor,
     fields: Object.freeze(fields),
     locationName: requireNonEmptyString(value.locationName),
+    paymentMode: value.paymentMode,
     serviceName: requireNonEmptyString(value.serviceName),
   });
 }
@@ -1173,6 +1205,47 @@ const bookingApprovalStatuses = [
   "declined",
   "expired",
 ] as const;
+
+/**
+ * Issue #22. Opening a checkout carries exactly what confirming carries, because
+ * it is the same booking — captured before the customer leaves for the provider,
+ * since settlement happens with no browser present. No amount is sent: the
+ * server prices it, and a submitted amount would be a value nothing reads.
+ */
+export type BeginCheckoutV1Request = ConfirmBookingV1Request;
+
+export interface BeginCheckoutV1Response {
+  /** What remains after a deposit. Zero for a full payment. */
+  readonly balanceMinor: number;
+  readonly currency: string;
+  /** What is owed now, decided by the server. */
+  readonly dueMinor: number;
+  readonly paymentAttemptId: string;
+  readonly paymentMode: "deposit" | "full";
+  readonly status: string;
+  readonly taxMinor: number;
+  readonly totalMinor: number;
+}
+
+export interface CheckoutStatusV1Response {
+  readonly balanceMinor: number;
+  readonly bookingId: string | null;
+  readonly bookingStatus: string | null;
+  readonly currency: string;
+  readonly dueMinor: number;
+  /** Named reason a verified payment could not become this booking. */
+  readonly exceptionCode: string | null;
+  readonly paymentStatus: string | null;
+  readonly publicReference: string | null;
+  readonly purpose: "deposit" | "full";
+  readonly status: string;
+}
+
+export function parseBeginCheckoutV1Request(value: unknown): BeginCheckoutV1Request {
+  // Identical shape to confirmation, so there is one place where a booking
+  // request is validated rather than two that can drift.
+  return parseConfirmBookingV1Request(value);
+}
 
 export function parseConfirmBookingV1Request(value: unknown): ConfirmBookingV1Request {
   const keys = [

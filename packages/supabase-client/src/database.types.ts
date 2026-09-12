@@ -55,6 +55,46 @@ export type Database = {
           status: string;
         }[];
       };
+      attach_checkout_reference_v1: {
+        Args: {
+          p_checkout_reference: string;
+          p_payment_attempt_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          payment_attempt_id: string;
+          status: string;
+        }[];
+      };
+      begin_checkout_v1: {
+        Args: {
+          p_application: string;
+          p_consent_version: string;
+          p_contact: Json;
+          p_customer_time_zone?: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_idempotency_key: string;
+          p_intake?: Json;
+          p_locale?: string;
+          p_session_token: string;
+        };
+        Returns: {
+          balance_minor: number;
+          contract_version: number;
+          currency: string;
+          due_minor: number;
+          expires_at: string;
+          payment_attempt_id: string;
+          payment_mode: string;
+          provider: string;
+          provider_account_reference: string;
+          replayed: boolean;
+          status: string;
+          tax_minor: number;
+          total_minor: number;
+        }[];
+      };
       cancel_booking_v1: {
         Args: {
           p_booking_id: string;
@@ -309,6 +349,39 @@ export type Database = {
           status: string;
         }[];
       };
+      get_checkout_intent_v1: {
+        Args: { p_payment_attempt_id: string; p_tenant_id: string };
+        Returns: {
+          amount_minor_units: number;
+          connected_account_reference: string;
+          currency: string;
+          customer_email: string;
+          product_name: string;
+        }[];
+      };
+      get_checkout_status_v1: {
+        Args: {
+          p_application: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_session_token: string;
+        };
+        Returns: {
+          balance_minor: number;
+          booking_id: string;
+          booking_status: string;
+          contract_version: number;
+          currency: string;
+          due_minor: number;
+          exception_code: string;
+          hold_expires_at: string;
+          payment_attempt_id: string;
+          payment_status: string;
+          public_reference: string;
+          purpose: string;
+          status: string;
+        }[];
+      };
       get_customer_detail_v1: {
         Args: { p_customer_id: string; p_tenant_id: string };
         Returns: {
@@ -360,20 +433,24 @@ export type Database = {
           p_session_token: string;
         };
         Returns: {
+          balance_minor: number;
           consent_text: string;
           consent_version: string;
           contract_version: number;
           currency: string;
+          due_minor: number;
           expires_at: string;
           hold_id: string;
           intake_schema: Json;
           location_name: string;
           location_time_zone: string;
+          payment_mode: string;
           price_minor: number;
           service_name: string;
           slot_end: string;
           slot_start: string;
           state: string;
+          tax_minor: number;
           tax_rate_bps: number;
         }[];
       };
@@ -672,6 +749,28 @@ export type Database = {
           cache_tag: string;
           publication_id: string;
           publication_revision: number;
+        }[];
+      };
+      record_payment_event_v1: {
+        Args: {
+          p_amount_minor_units?: number;
+          p_currency?: string;
+          p_event_type: string;
+          p_occurred_at?: string;
+          p_outcome: string;
+          p_provider: string;
+          p_provider_charge_reference?: string;
+          p_provider_event_reference: string;
+          p_provider_object_reference: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          booking_id: string;
+          contract_version: number;
+          exception_code: string;
+          outcome: string;
+          payment_status: string;
+          public_reference: string;
         }[];
       };
       redeem_management_token_v1: {

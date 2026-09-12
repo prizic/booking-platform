@@ -5,6 +5,7 @@ import {
   parseCreateHoldV1Response,
   parseHoldFormV1,
   type AvailabilitySlotV1,
+  type CheckoutStatusV1Response,
   type ConfirmBookingV1Response,
   type CreateHoldV1Response,
   type HoldFormV1,
@@ -109,12 +110,52 @@ export function BookingFlow({
   const [phone, setPhone] = useState("");
   const [consented, setConsented] = useState(false);
   const [intake, setIntake] = useState<Record<string, string>>({});
+  // Issue #22. A payment in flight and, after the customer comes back, what our
+  // own records say happened to it. The return URL itself proves nothing.
+  const [checkout, setCheckout] = useState<{
+    balanceMinor: number;
+    currency: string;
+    dueMinor: number;
+    redirectUrl: string | null;
+  } | null>(null);
+  const [settlement, setSettlement] = useState<CheckoutStatusV1Response | null>(null);
 
   useEffect(() => {
     if (errorCode !== null || fieldErrors.length > 0) {
       document.querySelector<HTMLElement>("#booking-error")?.focus();
     }
   }, [errorCode, fieldErrors]);
+
+  // Coming back from the provider. The URL says only which hold to ask about;
+  // everything the customer is then told comes from our own records.
+  useEffect(() => {
+    const parameters = new URLSearchParams(window.location.search);
+    const returned = parameters.get("checkout");
+    const holdId = parameters.get("hold");
+    if ((returned !== "return" && returned !== "cancelled") || holdId === null) return;
+    let abandoned = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/checkout/status", {
+          body: JSON.stringify({ holdId, sessionToken: sessionToken() }),
+          credentials: "omit",
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        if (abandoned) return;
+        if (!response.ok) {
+          setErrorCode(await readError(response));
+          return;
+        }
+        setSettlement((await response.json()) as CheckoutStatusV1Response);
+      } catch {
+        if (!abandoned) setErrorCode("availability_unavailable");
+      }
+    })();
+    return () => {
+      abandoned = true;
+    };
+  }, []);
 
   async function hold() {
     if (slot === null || serviceId === null || locationId === null) return;
@@ -178,7 +219,8 @@ export function BookingFlow({
           .map((field) => [field.key, (intake[field.key] ?? "").trim()] as const)
           .filter(([, answer]) => answer.length > 0),
       );
-      const response = await fetch("/api/bookings", {
+      const paid = held.form.paymentMode !== "none";
+      const response = await fetch(paid ? "/api/checkout" : "/api/bookings", {
         body: JSON.stringify({
           consentVersion: held.form.consentVersion,
           contact: {
@@ -203,6 +245,23 @@ export function BookingFlow({
         setErrorCode(await readError(response));
         return;
       }
+      if (paid) {
+        const opened = (await response.json()) as {
+          checkout: { balanceMinor: number; currency: string; dueMinor: number };
+          redirectUrl: string | null;
+        };
+        if (opened.redirectUrl !== null) {
+          // The provider page is the next step. Nothing is confirmed until a
+          // signed event says the money moved.
+          window.location.assign(opened.redirectUrl);
+          return;
+        }
+        // No redirect means the provider or its function is unreachable. The
+        // attempt is priced and resumable, so the customer sees that rather
+        // than a dead end.
+        setCheckout({ ...opened.checkout, redirectUrl: null });
+        return;
+      }
       setBooking(parseConfirmBookingV1Response(await response.json()));
     } catch {
       setErrorCode("availability_unavailable");
@@ -216,6 +275,124 @@ export function BookingFlow({
     setSlot(null);
     setErrorCode(null);
     setFieldErrors([]);
+  }
+
+  if (settlement !== null) {
+    // Every state a payment can land in has a sentence and a way forward. A
+    // customer whose money moved but whose slot did not is told plainly, and is
+    // never shown a confirmation that does not exist.
+    const settled = settlement.bookingId !== null;
+    const failed =
+      settlement.exceptionCode !== null ||
+      settlement.status === "failed" ||
+      settlement.status === "cancelled";
+    return (
+      <Surface
+        as="section"
+        className="booking-confirmed"
+        labelledBy="booking-payment-title"
+      >
+        <Badge tone={settled ? "positive" : failed ? "warning" : "neutral"}>
+          {message(
+            settled
+              ? "bookingStepConfirmed"
+              : failed
+                ? "bookingPaymentProblemStatus"
+                : "bookingPaymentPendingStatus",
+          )}
+        </Badge>
+        <h2 id="booking-payment-title">
+          {message(
+            settled
+              ? "bookingSuccessTitle"
+              : settlement.exceptionCode !== null
+                ? "bookingPaymentExceptionTitle"
+                : failed
+                  ? "bookingPaymentFailedTitle"
+                  : "bookingPaymentPendingTitle",
+          )}
+        </h2>
+        <p>
+          {message(
+            settled
+              ? "bookingSuccessSummary"
+              : settlement.exceptionCode !== null
+                ? "bookingPaymentExceptionSummary"
+                : failed
+                  ? "bookingPaymentFailedSummary"
+                  : "bookingPaymentPendingSummary",
+          )}
+        </p>
+        <dl className="booking-confirmed__facts">
+          {settlement.publicReference === null ? null : (
+            <div>
+              <dt>{message("bookingReferenceLabel")}</dt>
+              <dd dir="ltr">{settlement.publicReference}</dd>
+            </div>
+          )}
+          <div>
+            <dt>{message("bookingPaidTodayLabel")}</dt>
+            <dd>{formatCurrency(settlement.dueMinor, settlement.currency, locale)}</dd>
+          </div>
+          {settlement.balanceMinor === 0 ? null : (
+            <div>
+              <dt>{message("bookingBalanceDueLabel")}</dt>
+              <dd>
+                {formatCurrency(settlement.balanceMinor, settlement.currency, locale)}
+              </dd>
+            </div>
+          )}
+        </dl>
+        {settled ? (
+          <StatusMessage tone="positive">
+            {message("bookingNotificationQueued")}
+          </StatusMessage>
+        ) : (
+          <StatusMessage tone="warning">
+            {message(
+              settlement.exceptionCode === null
+                ? "bookingPaymentRetryHint"
+                : "bookingPaymentRefundHint",
+            )}
+          </StatusMessage>
+        )}
+        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
+          {message("bookingChooseAnotherTime")}
+        </Button>
+      </Surface>
+    );
+  }
+
+  if (checkout !== null) {
+    // The attempt is priced and resumable; only the provider hand-off failed.
+    return (
+      <Surface
+        as="section"
+        className="booking-confirmed"
+        labelledBy="booking-checkout-title"
+      >
+        <Badge tone="warning">{message("bookingPaymentProblemStatus")}</Badge>
+        <h2 id="booking-checkout-title">{message("bookingPaymentUnavailableTitle")}</h2>
+        <p>{message("bookingPaymentUnavailableSummary")}</p>
+        <dl className="booking-confirmed__facts">
+          <div>
+            <dt>{message("bookingDueTodayLabel")}</dt>
+            <dd>{formatCurrency(checkout.dueMinor, checkout.currency, locale)}</dd>
+          </div>
+          {checkout.balanceMinor === 0 ? null : (
+            <div>
+              <dt>{message("bookingBalanceDueLabel")}</dt>
+              <dd>
+                {formatCurrency(checkout.balanceMinor, checkout.currency, locale)}
+              </dd>
+            </div>
+          )}
+        </dl>
+        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
+          {message("bookingChooseAnotherTime")}
+        </Button>
+      </Surface>
+    );
   }
 
   if (booking !== null) {
@@ -466,12 +643,44 @@ export function BookingFlow({
             <span>{message("bookingConsentLabel")}</span>
           </label>
 
+          {/* Issue #22. What this will cost, stated before the customer is sent
+              anywhere, and taken from the server's own figures. */}
+          {held.form.paymentMode === "none" ? null : (
+            <dl className="booking-confirmed__facts">
+              <div>
+                <dt>{message("bookingDueTodayLabel")}</dt>
+                <dd>
+                  {formatCurrency(held.form.dueMinor, held.hold.price.currency, locale)}
+                </dd>
+              </div>
+              {held.form.balanceMinor === 0 ? null : (
+                <div>
+                  <dt>{message("bookingBalanceDueLabel")}</dt>
+                  <dd>
+                    {formatCurrency(
+                      held.form.balanceMinor,
+                      held.hold.price.currency,
+                      locale,
+                    )}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          )}
+          {held.form.paymentMode === "deposit" ? (
+            <StatusMessage tone="neutral">
+              {message("bookingDepositNotice")}
+            </StatusMessage>
+          ) : null}
+
           <Button
             loading={busy}
             loadingLabel={message("bookingSubmitting")}
             type="submit"
           >
-            {message("bookingSubmit")}
+            {message(
+              held.form.paymentMode === "none" ? "bookingSubmit" : "bookingPayAction",
+            )}
           </Button>
           <Button onClick={chooseAnotherTime} variant="secondary">
             {message("bookingRestart")}

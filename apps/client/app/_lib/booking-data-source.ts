@@ -1,10 +1,14 @@
 import {
+  parseBeginCheckoutV1Request,
   parseConfirmBookingV1Request,
   parseConfirmBookingV1Response,
   parseCreateHoldV1Request,
   parseCreateHoldV1Response,
   parseHoldFormV1,
   parseProposalResponseV1,
+  type BeginCheckoutV1Request,
+  type BeginCheckoutV1Response,
+  type CheckoutStatusV1Response,
   type ConfirmBookingV1Request,
   type ConfirmBookingV1Response,
   type ContractErrorCode,
@@ -48,6 +52,7 @@ export function mapBookingRpcError(
     case "policy_denied":
     case "revision_conflict":
     case "payment_pending":
+    case "checkout_not_ready":
     case "idempotency_conflict":
       return message;
     default:
@@ -142,8 +147,10 @@ export function createClientBookingDataSource(
       const declared = Array.isArray(schema.fields) ? schema.fields : [];
       try {
         return parseHoldFormV1({
+          balanceMinor: Number(row.balance_minor ?? 0),
           consentText: row.consent_text,
           consentVersion: row.consent_version,
+          dueMinor: Number(row.due_minor ?? 0),
           fields: declared.filter(isRecord).map((field) => ({
             key: field.key,
             label: field.label,
@@ -151,6 +158,7 @@ export function createClientBookingDataSource(
             required: field.required === true,
           })),
           locationName: row.location_name,
+          paymentMode: row.payment_mode,
           serviceName: row.service_name,
         });
       } catch {
@@ -215,6 +223,84 @@ export function createClientBookingDataSource(
       } catch {
         throw new ClientBookingError("availability_unavailable");
       }
+    },
+
+    /**
+     * Issue #22. Prices the booking and opens a payment attempt. Calls no
+     * provider: the redirect is created by the `stripe-checkout` Edge Function,
+     * which is the only thing holding a provider secret.
+     */
+    async beginCheckout(
+      request: BeginCheckoutV1Request,
+    ): Promise<BeginCheckoutV1Response> {
+      const parsed = parseBeginCheckoutV1Request(request);
+      const result = await api.rpc("begin_checkout_v1", {
+        p_application: "client",
+        p_consent_version: parsed.consentVersion,
+        p_contact: {
+          email: parsed.contact.email,
+          fullName: parsed.contact.fullName,
+          ...(parsed.contact.phone === null ? {} : { phone: parsed.contact.phone }),
+        },
+        p_customer_time_zone: parsed.customerTimeZone,
+        p_hold_id: parsed.holdId,
+        p_hostname: trustedHostname,
+        p_idempotency_key: parsed.idempotencyKey,
+        p_intake: parsed.intake,
+        p_locale: parsed.locale,
+        p_session_token: parsed.sessionToken,
+      });
+      if (result.error !== null) {
+        throw new ClientBookingError(
+          mapBookingRpcError(result.error.code, result.error.message),
+        );
+      }
+      const row = firstRow(result.data);
+      return {
+        balanceMinor: Number(row.balance_minor ?? 0),
+        currency: String(row.currency),
+        dueMinor: Number(row.due_minor ?? 0),
+        paymentAttemptId: String(row.payment_attempt_id),
+        paymentMode: row.payment_mode === "deposit" ? "deposit" : "full",
+        status: String(row.status),
+        taxMinor: Number(row.tax_minor ?? 0),
+        totalMinor: Number(row.total_minor ?? 0),
+      };
+    },
+
+    /**
+     * What actually happened, read from our own records. The customer returns
+     * from the provider carrying nothing this trusts.
+     */
+    async getCheckoutStatus(
+      holdId: string,
+      sessionToken: string,
+    ): Promise<CheckoutStatusV1Response> {
+      const result = await api.rpc("get_checkout_status_v1", {
+        p_application: "client",
+        p_hold_id: holdId,
+        p_hostname: trustedHostname,
+        p_session_token: sessionToken,
+      });
+      if (result.error !== null) {
+        throw new ClientBookingError(
+          mapBookingRpcError(result.error.code, result.error.message),
+        );
+      }
+      const row = firstRow(result.data);
+      return {
+        balanceMinor: Number(row.balance_minor ?? 0),
+        bookingId: row.booking_id === null ? null : String(row.booking_id),
+        bookingStatus: row.booking_status === null ? null : String(row.booking_status),
+        currency: String(row.currency),
+        dueMinor: Number(row.due_minor ?? 0),
+        exceptionCode: row.exception_code === null ? null : String(row.exception_code),
+        paymentStatus: row.payment_status === null ? null : String(row.payment_status),
+        publicReference:
+          row.public_reference === null ? null : String(row.public_reference),
+        purpose: row.purpose === "deposit" ? "deposit" : "full",
+        status: String(row.status),
+      };
     },
 
     async respondToProposal(

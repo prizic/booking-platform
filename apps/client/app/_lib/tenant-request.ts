@@ -86,6 +86,7 @@ export function contractErrorStatus(code: string): number {
     case "policy_denied":
       return 422;
     case "payment_pending":
+    case "checkout_not_ready":
       return 402;
     default:
       return 503;

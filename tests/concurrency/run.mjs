@@ -100,6 +100,15 @@ function cleanup() {
     delete from app.booking_intake_answers where tenant_id='${tenantId}';
     delete from app.outbox_events where tenant_id='${tenantId}';
     delete from app.bookings where tenant_id='${tenantId}';
+    delete from app.payment_webhook_events where tenant_id='${tenantId}';
+    delete from app.commerce_ledger_entries where tenant_id='${tenantId}';
+    delete from app.payment_refunds where tenant_id='${tenantId}';
+    delete from app.payment_charges where tenant_id='${tenantId}';
+    delete from app.payment_price_snapshots where tenant_id='${tenantId}';
+    delete from app.payment_attempts where tenant_id='${tenantId}';
+    delete from app.booking_drafts where tenant_id='${tenantId}';
+    delete from app.provider_object_mappings where tenant_id='${tenantId}';
+    delete from app.payment_accounts where tenant_id='${tenantId}' and id='e9000000-0000-0000-0000-00000000cccc';
     delete from app.privacy_request_steps where tenant_id='${tenantId}';
     delete from app.privacy_requests where tenant_id='${tenantId}';
     delete from app.legal_holds where tenant_id='${tenantId}';
@@ -539,6 +548,89 @@ async function concurrentPrivacyRequest(bookingId) {
   );
 }
 
+/**
+ * Issue #22. The money case: one verified payment, delivered to every session at
+ * once, must produce one charge, one ledger entry and one booking. A provider
+ * retries aggressively and a platform that settles twice has both double-booked
+ * its capacity and double-counted its revenue.
+ */
+async function concurrentSettlement(at) {
+  const session = "session-token-settle-000001";
+  runSql(`update app.catalog_service_revisions set payment_mode='full'
+    where tenant_id='${tenantId}' and service_id='${appointmentServiceId}';`);
+  runSql(`insert into app.payment_accounts(
+      id,tenant_id,provider,provider_account_reference,status,charges_enabled,payouts_enabled)
+    values ('e9000000-0000-0000-0000-00000000cccc','${tenantId}','stripe','acct_gate','connected',true,true)
+    on conflict do nothing;`);
+
+  const holdId = runSql(
+    `select h.hold_id from api_v1.create_hold_v1('${hostname}','client',
+      '${appointmentServiceId}','${locationId}','${at}'::timestamptz,
+      '${session}','idempotency-settle-00001') h;`,
+  );
+  const attemptId = runSql(
+    `select c.payment_attempt_id from api_v1.begin_checkout_v1('${hostname}','client',
+      '${holdId}'::uuid,'${session}','idempotency-settle-00002',
+      '{"fullName":"Settle Guest","email":"settle@example.invalid"}'::jsonb,'1') c;`,
+  );
+  runSql(`select * from api_v1.attach_checkout_reference_v1('${tenantId}',
+    '${attemptId}'::uuid,'cs_gate_settle');`);
+
+  // The same provider event, delivered to every session simultaneously.
+  const deliverAt = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        `select outcome from api_v1.record_payment_event_v1('${tenantId}','stripe',
+          'evt_gate_settle','checkout.session.completed','cs_gate_settle','succeeded',
+          null,null,'ch_gate_settle');`,
+        deliverAt,
+      ),
+    ),
+  );
+
+  const confirmed = attempts.filter((r) => r.ok && r.value === "confirmed");
+  report(
+    confirmed.length === 1,
+    `${lifecycleContenders} simultaneous deliveries of one payment confirm exactly one booking`,
+    [...new Set(attempts.map((r) => (r.ok ? r.value : r.error)))].join(" | "),
+  );
+  const bookings = runSql(
+    `select count(*) from app.bookings where hold_id='${holdId}'::uuid;`,
+  );
+  report(
+    bookings === "1",
+    "the database holds exactly one booking for that hold",
+    bookings,
+  );
+  const charges = runSql(
+    `select count(*) from app.payment_charges where tenant_id='${tenantId}';`,
+  );
+  report(
+    charges === "1",
+    "and exactly one charge, so the customer is billed once",
+    charges,
+  );
+  const ledger = runSql(
+    `select count(*) from app.commerce_ledger_entries
+     where tenant_id='${tenantId}' and entry_type='charge';`,
+  );
+  report(ledger === "1", "and exactly one entry reaches the financial ledger", ledger);
+  const allocations = runSql(
+    `select count(*) from app.assignment_allocations
+     where hold_id='${holdId}'::uuid and state='confirmed';`,
+  );
+  report(
+    allocations === "1",
+    "and exactly one allocation, so a retried webhook never double-books capacity",
+    allocations,
+  );
+
+  runSql(`update app.catalog_service_revisions set payment_mode='none'
+    where tenant_id='${tenantId}' and service_id='${appointmentServiceId}';`);
+  return holdId;
+}
+
 async function duplicateStaffAction(bookingId) {
   restoreConfirmed(bookingId);
   const revision = Number(
@@ -605,6 +697,7 @@ async function main() {
     await concurrentStaffEdit(lifecycleId);
     await duplicateStaffAction(lifecycleId);
     await concurrentPrivacyRequest(lifecycleId);
+    await concurrentSettlement(slotAt("09:00"));
     noOverlapSurvives();
   } finally {
     cleanup();

@@ -147,15 +147,18 @@ describe("Client booking data source", () => {
         rpc: async () => ({
           data: [
             {
+              balance_minor: 0,
               consent_text: "Cancellations are free up to 24 hours before.",
               consent_version: "2",
               currency: "SAR",
+              due_minor: 0,
               intake_schema: {
                 fields: [
                   { key: "reason", label: "Reason", maxLength: 500, required: true },
                 ],
               },
               location_name: "Downtown",
+              payment_mode: "none",
               price_minor: 18_000,
               service_name: "Initial consultation",
               tax_rate_bps: 1500,
