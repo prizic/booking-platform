@@ -627,6 +627,15 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      get_public_navigation_v1: {
+        Args: { p_application: string; p_hostname: string };
+        Returns: {
+          cache_tag: string;
+          contract_version: number;
+          default_locale: string;
+          navigation: Json;
+        }[];
+      };
       get_published_brand_v1: {
         Args: { p_application: string; p_hostname: string };
         Returns: {
@@ -727,6 +736,21 @@ export type Database = {
           service_ids: string[];
           status: string;
           tenant_id: string;
+        }[];
+      };
+      get_tenant_configuration_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          cache_tag: string;
+          config_version: number;
+          contract_version: number;
+          default_locale: string;
+          entitlements: Json;
+          feature_configuration: Json;
+          feature_version: number;
+          navigation: Json;
+          revision: number;
+          settings: Json;
         }[];
       };
       get_today_workspace_v1: {
@@ -960,6 +984,15 @@ export type Database = {
           report_key: string;
           row_count: number;
           status: string;
+        }[];
+      };
+      list_settings_events_v1: {
+        Args: { p_limit?: number; p_tenant_id: string };
+        Returns: {
+          actor_membership_id: string;
+          changed: string[];
+          created_at: string;
+          revision: number;
         }[];
       };
       list_tenant_choices_v1: {
@@ -1346,6 +1379,20 @@ export type Database = {
         Returns: {
           revision: number;
           staff_id: string;
+        }[];
+      };
+      save_tenant_settings_v1: {
+        Args: {
+          p_expected_revision?: number;
+          p_feature_configuration: Json;
+          p_navigation: Json;
+          p_settings: Json;
+          p_tenant_id: string;
+        };
+        Returns: {
+          contract_version: number;
+          ignored_features: string[];
+          revision: number;
         }[];
       };
       schedule_booking_reminders_v1: {

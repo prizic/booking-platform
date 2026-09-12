@@ -135,6 +135,16 @@ export interface DashboardDataSource {
     exportId: string;
     tenantId: string;
   }) => Promise<ReportExportV1 | null>;
+  getTenantConfiguration?: (request: {
+    tenantId: string;
+  }) => Promise<TenantConfigurationV1 | null>;
+  saveTenantSettings?: (request: {
+    expectedRevision: number;
+    featureConfiguration: unknown;
+    navigation: unknown;
+    settings: unknown;
+    tenantId: string;
+  }) => Promise<readonly string[]>;
   listBrandRevisions?: (request: {
     tenantId: string;
   }) => Promise<readonly BrandRevisionRowV1[]>;
@@ -322,6 +332,23 @@ export interface ReportExportV1 {
   readonly rows: readonly Readonly<Record<string, unknown>>[];
   readonly rowCount: number;
   readonly status: string;
+}
+
+/**
+ * A tenant's own configuration plus what its plan grants (issue #26).
+ * `isFeatureEnabled` in `@wlbp/config` takes both: local configuration can only
+ * narrow what `entitlements` allows, never widen it.
+ */
+export interface TenantConfigurationV1 {
+  readonly cacheTag: string;
+  readonly configVersion: number;
+  readonly defaultLocale: string;
+  readonly entitlements: Readonly<Record<string, boolean>>;
+  readonly featureConfiguration: Readonly<Record<string, { enabled?: boolean }>>;
+  readonly featureVersion: number;
+  readonly navigation: Readonly<Record<string, unknown>>;
+  readonly revision: number;
+  readonly settings: Readonly<Record<string, unknown>>;
 }
 
 /** One entry in the brand's publication history (issue #25). */
