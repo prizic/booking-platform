@@ -31,6 +31,8 @@ import type {
   CustomerDetailV1,
   CustomerRowV1,
   DashboardDataSource,
+  PaymentExceptionV1,
+  RefundRowV1,
   PrivacyRequestRowV1,
   TodayItemV1,
 } from "./dashboard-access";
@@ -468,6 +470,49 @@ function toPrivacyRequestRow(value: unknown): PrivacyRequestRowV1 {
       typeof row.offboarding_phase === "string" ? row.offboarding_phase : null,
     pendingSteps: Number(row.pending_steps ?? 0),
     requestId: requireString(row.request_id),
+    status: requireString(row.status),
+  };
+}
+
+function toPaymentException(value: unknown): PaymentExceptionV1 {
+  const row = value as Record<string, unknown>;
+  return {
+    amountMinorUnits:
+      typeof row.amount_minor_units === "number" ? row.amount_minor_units : null,
+    bookingId: typeof row.booking_id === "string" ? row.booking_id : null,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    currency: typeof row.currency === "string" ? row.currency : null,
+    detailCode: requireString(row.detail_code),
+    exceptionId: requireString(row.exception_id),
+    kind: requireString(row.kind),
+    providerReference:
+      typeof row.provider_reference === "string" ? row.provider_reference : null,
+    publicReference:
+      typeof row.public_reference === "string" ? row.public_reference : null,
+    resolution: typeof row.resolution === "string" ? row.resolution : null,
+    resolvedAt:
+      row.resolved_at === null || row.resolved_at === undefined
+        ? null
+        : new Date(String(row.resolved_at)).toISOString(),
+    severity: String(row.severity ?? "action_required"),
+    status: requireString(row.status),
+    subjectKind: requireString(row.subject_kind),
+  };
+}
+
+function toRefundRow(value: unknown): RefundRowV1 {
+  const row = value as Record<string, unknown>;
+  return {
+    amountMinorUnits: Number(row.amount_minor_units ?? 0),
+    attempts: Number(row.attempts ?? 0),
+    bookingId: typeof row.booking_id === "string" ? row.booking_id : null,
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    currency: String(row.currency ?? "USD"),
+    failureCode: typeof row.failure_code === "string" ? row.failure_code : null,
+    publicReference:
+      typeof row.public_reference === "string" ? row.public_reference : null,
+    reason: String(row.reason ?? "requested_by_customer"),
+    refundId: requireString(row.refund_id),
     status: requireString(row.status),
   };
 }
@@ -1091,6 +1136,50 @@ export function createDashboardDataSource(
           };
         }),
       };
+    },
+
+    listPaymentExceptions: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("list_payment_exceptions_v1", {
+          p_status: request.status,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toPaymentException);
+    },
+
+    listRefunds: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("list_refunds_v1", {
+          p_booking_id: request.bookingId,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toRefundRow);
+    },
+
+    requestRefund: async (request) => {
+      // Eligibility and amount were decided at cancellation. This asks for the
+      // refund that was already earned; it never proposes a figure.
+      assertRpc(
+        await api.rpc("request_refund_v1", {
+          p_booking_id: request.bookingId,
+          p_idempotency_key: request.idempotencyKey,
+          p_reason: request.reason,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    resolvePaymentException: async (request) => {
+      assertRpc(
+        await api.rpc("resolve_payment_exception_v1", {
+          p_exception_id: request.exceptionId,
+          p_note: request.note,
+          p_resolution: request.resolution,
+          p_tenant_id: request.tenantId,
+        }),
+      );
     },
 
     listPrivacyRequests: async (request) => {

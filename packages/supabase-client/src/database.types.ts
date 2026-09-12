@@ -115,6 +115,20 @@ export type Database = {
           status: string;
         }[];
       };
+      claim_refund_batch_v1: {
+        Args: { p_limit?: number; p_visibility_seconds?: number };
+        Returns: {
+          amount_minor_units: number;
+          attempt: number;
+          booking_id: string;
+          connected_account_reference: string;
+          correlation_id: string;
+          currency: string;
+          provider_charge_reference: string;
+          refund_id: string;
+          tenant_id: string;
+        }[];
+      };
       confirm_booking_v1: {
         Args: {
           p_application: string;
@@ -380,6 +394,19 @@ export type Database = {
           public_reference: string;
           purpose: string;
           status: string;
+        }[];
+      };
+      get_commerce_health_v1: {
+        Args: never;
+        Returns: {
+          account_status: string;
+          charges_enabled: boolean;
+          disputes_open: number;
+          open_exceptions: number;
+          refunds_failed: number;
+          refunds_pending: number;
+          tenant_id: string;
+          urgent_exceptions: number;
         }[];
       };
       get_customer_detail_v1: {
@@ -709,6 +736,26 @@ export type Database = {
           status: string;
         }[];
       };
+      list_payment_exceptions_v1: {
+        Args: { p_limit?: number; p_status?: string; p_tenant_id: string };
+        Returns: {
+          amount_minor_units: number;
+          booking_id: string;
+          created_at: string;
+          currency: string;
+          detail_code: string;
+          exception_id: string;
+          kind: string;
+          provider_reference: string;
+          public_reference: string;
+          resolution: string;
+          resolved_at: string;
+          severity: string;
+          status: string;
+          subject_id: string;
+          subject_kind: string;
+        }[];
+      };
       list_privacy_requests_v1: {
         Args: { p_customer_id?: string; p_limit?: number; p_tenant_id: string };
         Returns: {
@@ -721,6 +768,22 @@ export type Database = {
           pending_steps: number;
           request_id: string;
           status: string;
+        }[];
+      };
+      list_refunds_v1: {
+        Args: { p_booking_id?: string; p_limit?: number; p_tenant_id: string };
+        Returns: {
+          amount_minor_units: number;
+          attempts: number;
+          booking_id: string;
+          created_at: string;
+          currency: string;
+          failure_code: string;
+          public_reference: string;
+          reason: string;
+          refund_id: string;
+          status: string;
+          updated_at: string;
         }[];
       };
       list_tenant_choices_v1: {
@@ -751,6 +814,33 @@ export type Database = {
           publication_revision: number;
         }[];
       };
+      reconcile_commerce_v1: {
+        Args: { p_stale_minutes?: number; p_tenant_id?: string };
+        Returns: {
+          checked: number;
+          opened: number;
+        }[];
+      };
+      record_commerce_event_v1: {
+        Args: {
+          p_amount_minor_units?: number;
+          p_currency?: string;
+          p_event_type: string;
+          p_object_kind: string;
+          p_occurred_at?: string;
+          p_outcome: string;
+          p_provider: string;
+          p_provider_event_reference: string;
+          p_provider_object_reference: string;
+          p_related_reference?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          contract_version: number;
+          detail: string;
+          outcome: string;
+        }[];
+      };
       record_payment_event_v1: {
         Args: {
           p_amount_minor_units?: number;
@@ -771,6 +861,19 @@ export type Database = {
           outcome: string;
           payment_status: string;
           public_reference: string;
+        }[];
+      };
+      record_refund_result_v1: {
+        Args: {
+          p_failure_code?: string;
+          p_outcome: string;
+          p_provider_refund_reference?: string;
+          p_refund_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          refund_id: string;
+          status: string;
         }[];
       };
       redeem_management_token_v1: {
@@ -844,6 +947,23 @@ export type Database = {
           outcome: string;
         }[];
       };
+      request_refund_v1: {
+        Args: {
+          p_amount_minor_units?: number;
+          p_booking_id: string;
+          p_idempotency_key: string;
+          p_reason?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          amount_minor_units: number;
+          contract_version: number;
+          currency: string;
+          refund_id: string;
+          replayed: boolean;
+          status: string;
+        }[];
+      };
       reschedule_booking_v1: {
         Args: {
           p_booking_id: string;
@@ -860,6 +980,18 @@ export type Database = {
           ends_at: string;
           reschedule_count: number;
           starts_at: string;
+          status: string;
+        }[];
+      };
+      resolve_payment_exception_v1: {
+        Args: {
+          p_exception_id: string;
+          p_note?: string;
+          p_resolution: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          exception_id: string;
           status: string;
         }[];
       };

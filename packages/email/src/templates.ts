@@ -15,6 +15,8 @@ export const notificationTemplateKeys = [
   "booking.rescheduled",
   "booking.cancelled",
   "management.otp_requested",
+  "payment.refunded",
+  "payment.refund_failed",
 ] as const;
 
 export type NotificationTemplateKey = (typeof notificationTemplateKeys)[number];
@@ -192,6 +194,53 @@ const copy: Record<NotificationTemplateKey, Record<ContractLocale, TemplateCopy>
         "{serviceName}",
         "{publicReason}",
         "Refund: {refund}",
+        "Reference: {publicReference}",
+      ],
+    },
+  },
+  // Issue #23. Money moving back is its own message: a customer who was
+  // refunded and never told assumes they were not.
+  "payment.refunded": {
+    ar: {
+      subject: "تم استرداد مبلغ حجزك {publicReference}",
+      heading: "تم استرداد المبلغ",
+      body: [
+        "{serviceName}",
+        "المبلغ المسترد: {refund}",
+        "قد يستغرق وصوله إلى حسابك بضعة أيام.",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "Your refund for {publicReference} is on its way",
+      heading: "Your refund has been issued",
+      body: [
+        "{serviceName}",
+        "Refunded: {refund}",
+        "It can take a few days to reach your account.",
+        "Reference: {publicReference}",
+      ],
+    },
+  },
+  // Sent to staff, not the customer: the customer should hear from a person.
+  "payment.refund_failed": {
+    ar: {
+      subject: "تعذّر استرداد مبلغ الحجز {publicReference}",
+      heading: "يحتاج استرداد المبلغ إلى تدخّل",
+      body: [
+        "{serviceName}",
+        "المبلغ: {refund}",
+        "لم يقبل مزوّد الدفع هذا الاسترداد. يرجى معالجته من قائمة استثناءات المدفوعات.",
+        "رقم المرجع: {publicReference}",
+      ],
+    },
+    en: {
+      subject: "A refund for {publicReference} could not be completed",
+      heading: "This refund needs attention",
+      body: [
+        "{serviceName}",
+        "Amount: {refund}",
+        "The payment provider did not accept this refund. Please resolve it from the payment exceptions queue.",
         "Reference: {publicReference}",
       ],
     },

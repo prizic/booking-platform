@@ -91,6 +91,32 @@ export type DashboardMessageKey =
   | "navToday"
   | "navCalendar"
   | "navBookings"
+  | "paymentsTitle"
+  | "paymentsSummary"
+  | "paymentsUnavailable"
+  | "paymentsStatusLabel"
+  | "paymentsStatusOpen"
+  | "paymentsStatusResolved"
+  | "paymentsStatusAll"
+  | "paymentsFilterAction"
+  | "paymentsQueueTitle"
+  | "paymentsQueueEmpty"
+  | "paymentsDetailLabel"
+  | "paymentsAmountLabel"
+  | "paymentsRaisedLabel"
+  | "paymentsResolvedAs"
+  | "paymentsRetryRefund"
+  | "paymentsNoteLabel"
+  | "paymentsResolutionLabel"
+  | "paymentsResolveAction"
+  | "paymentsRefundsTitle"
+  | "paymentsRefundsEmpty"
+  | "paymentsAttempts"
+  | "paymentsResultResolved"
+  | "paymentsResultAlreadyResolved"
+  | "paymentsResultNotEligible"
+  | "paymentsResultRefundRequested"
+  | "navPayments"
   | "customersTitle"
   | "customersSummary"
   | "customersUnavailable"
@@ -403,6 +429,37 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navToday: "Today",
     navCalendar: "Calendar",
     navBookings: "Bookings",
+    navPayments: "Payments",
+    paymentsTitle: "Payments",
+    paymentsSummary:
+      "Refunds, disputes, payouts, and anything the payment provider and this platform disagree about. Every item here is money that needs a decision.",
+    paymentsUnavailable:
+      "The payment queue could not be loaded. This is not an empty queue.",
+    paymentsStatusLabel: "Show",
+    paymentsStatusOpen: "Open",
+    paymentsStatusResolved: "Resolved",
+    paymentsStatusAll: "Everything",
+    paymentsFilterAction: "Apply",
+    paymentsQueueTitle: "Needs a decision",
+    paymentsQueueEmpty: "Nothing needs a decision right now.",
+    paymentsDetailLabel: "What happened",
+    paymentsAmountLabel: "Amount",
+    paymentsRaisedLabel: "Raised",
+    paymentsResolvedAs: "Resolved as",
+    paymentsRetryRefund: "Request the refund again",
+    paymentsNoteLabel: "Note (recorded in the audit trail)",
+    paymentsResolutionLabel: "How was this resolved?",
+    paymentsResolveAction: "Resolve",
+    paymentsRefundsTitle: "Refunds",
+    paymentsRefundsEmpty: "No refund has been requested yet.",
+    paymentsAttempts: "attempts",
+    paymentsResultResolved: "The item was resolved and the decision recorded.",
+    paymentsResultAlreadyResolved:
+      "Somebody else resolved this first. Reload to see how they closed it.",
+    paymentsResultNotEligible:
+      "This booking does not earn that refund. Check the cancellation policy it was made under.",
+    paymentsResultRefundRequested:
+      "The refund was requested. It will be sent to the provider shortly.",
     customersTitle: "Customers",
     customersSummary:
       "Everyone this business has taken a booking from, and the privacy rights they can exercise. Identity is built from bookings; correcting a record here never rewrites the bookings it already has.",
@@ -729,6 +786,35 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navToday: "اليوم",
     navCalendar: "التقويم",
     navBookings: "الحجوزات",
+    navPayments: "المدفوعات",
+    paymentsTitle: "المدفوعات",
+    paymentsSummary:
+      "المبالغ المستردة والنزاعات والتحويلات، وكل ما يختلف عليه مزوّد الدفع وهذه المنصّة. كل عنصر هنا مال يحتاج إلى قرار.",
+    paymentsUnavailable: "تعذّر تحميل قائمة المدفوعات. هذه ليست قائمة فارغة.",
+    paymentsStatusLabel: "العرض",
+    paymentsStatusOpen: "مفتوح",
+    paymentsStatusResolved: "تمت المعالجة",
+    paymentsStatusAll: "الكل",
+    paymentsFilterAction: "تطبيق",
+    paymentsQueueTitle: "يحتاج إلى قرار",
+    paymentsQueueEmpty: "لا شيء يحتاج إلى قرار الآن.",
+    paymentsDetailLabel: "ما الذي حدث",
+    paymentsAmountLabel: "المبلغ",
+    paymentsRaisedLabel: "تاريخ الرصد",
+    paymentsResolvedAs: "تمت المعالجة بـ",
+    paymentsRetryRefund: "إعادة طلب الاسترداد",
+    paymentsNoteLabel: "ملاحظة (تُسجَّل في سجل التدقيق)",
+    paymentsResolutionLabel: "كيف تمت المعالجة؟",
+    paymentsResolveAction: "معالجة",
+    paymentsRefundsTitle: "المبالغ المستردة",
+    paymentsRefundsEmpty: "لم يُطلب أي استرداد بعد.",
+    paymentsAttempts: "محاولات",
+    paymentsResultResolved: "تمت معالجة العنصر وتسجيل القرار.",
+    paymentsResultAlreadyResolved:
+      "عالجها شخص آخر قبلك. أعد التحميل لمعرفة كيف أُغلقت.",
+    paymentsResultNotEligible:
+      "هذا الحجز لا يستحق ذلك الاسترداد. راجع سياسة الإلغاء التي أُجري بموجبها.",
+    paymentsResultRefundRequested: "تم طلب الاسترداد وسيُرسل إلى المزوّد قريباً.",
     customersTitle: "العملاء",
     customersSummary:
       "كل من حجز لدى هذا النشاط، وحقوق الخصوصية التي يمكنه ممارستها. تُبنى الهوية من الحجوزات، وتصحيح السجل هنا لا يُعدّل الحجوزات السابقة.",

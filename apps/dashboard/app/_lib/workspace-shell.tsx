@@ -13,6 +13,7 @@ const sections = [
   { key: "navCalendar", path: "calendar" },
   { key: "navBookings", path: "bookings" },
   { key: "navCustomers", path: "customers" },
+  { key: "navPayments", path: "payments" },
   { key: "navRequests", path: "requests" },
   { key: "navTeamResources", path: "team-resources" },
   { key: "navAvailability", path: "availability" },

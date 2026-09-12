@@ -123,6 +123,26 @@ export interface DashboardDataSource {
     requestId: string;
     tenantId: string;
   }) => Promise<PrivacyRequestDetailV1 | null>;
+  listPaymentExceptions?: (request: {
+    status: string | null;
+    tenantId: string;
+  }) => Promise<readonly PaymentExceptionV1[]>;
+  listRefunds?: (request: {
+    bookingId: string | null;
+    tenantId: string;
+  }) => Promise<readonly RefundRowV1[]>;
+  requestRefund?: (request: {
+    bookingId: string;
+    idempotencyKey: string;
+    reason: string;
+    tenantId: string;
+  }) => Promise<void>;
+  resolvePaymentException?: (request: {
+    exceptionId: string;
+    note: string | null;
+    resolution: PaymentExceptionResolution;
+    tenantId: string;
+  }) => Promise<void>;
   listPrivacyRequests?: (request: {
     customerId: string | null;
     tenantId: string;
@@ -202,6 +222,42 @@ export interface PrivacyRequestDetailV1 {
     readonly status: string;
     readonly subsystem: string;
   }[];
+}
+
+/** How an operator can close a queue item. The database owns which are valid. */
+export type PaymentExceptionResolution =
+  "contested" | "no_action_needed" | "reconciled" | "refunded" | "written_off";
+
+/** One item in the money queue (issue #23). Carries no customer PII by design. */
+export interface PaymentExceptionV1 {
+  readonly amountMinorUnits: number | null;
+  readonly bookingId: string | null;
+  readonly createdAt: string;
+  readonly currency: string | null;
+  readonly detailCode: string;
+  readonly exceptionId: string;
+  readonly kind: string;
+  readonly providerReference: string | null;
+  readonly publicReference: string | null;
+  readonly resolution: string | null;
+  readonly resolvedAt: string | null;
+  readonly severity: string;
+  readonly status: string;
+  readonly subjectKind: string;
+}
+
+/** One refund and how far the worker got with it. */
+export interface RefundRowV1 {
+  readonly amountMinorUnits: number;
+  readonly attempts: number;
+  readonly bookingId: string | null;
+  readonly createdAt: string;
+  readonly currency: string;
+  readonly failureCode: string | null;
+  readonly publicReference: string | null;
+  readonly reason: string;
+  readonly refundId: string;
+  readonly status: string;
 }
 
 /** A privacy job and how far it got. */

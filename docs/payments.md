@@ -69,6 +69,42 @@ authoritative for money; neither is inferred from the other.
   refunds. `checkout.session.completed` for an unpaid asynchronous session is
   likewise not a success, and is settled by the later event that is.
 
+## After the payment (issue #23)
+
+Issue #15 decided *whether* a cancellation earns a refund and *how much*, from
+the snapshotted policy. Issue #23 executes that and handles everything that can
+go wrong afterwards. It recomputes no eligibility and invents no amount.
+
+- **One logical refund per eligible cancellation.** `request_refund_v1` is
+  idempotent on its key, partial refunds accumulate, and together they can never
+  exceed the charge. Issuing money needs `refund.issue`, which is an approval
+  grant for most roles and therefore carries a step-up.
+- **A refund is a durable job.** `claim_refund_batch_v1` claims it under a
+  visibility timeout, exactly like the notification worker, so a crashed worker's
+  claim expires and the refund is retried rather than stranded. Retries back off
+  exponentially and are bounded; past the bound a human owns it, because
+  unreturned money is not something to give up on quietly.
+- **One webhook intake for every provider object.** Issue #22's
+  `record_payment_event_v1` was generalized rather than duplicated. Dedup is on
+  the provider's own event id, and **a terminal state is never walked backwards
+  by an older event** — providers reorder, and a redelivered "won" arriving after
+  "lost" would otherwise silently reverse a real outcome.
+- **One queue, not five.** `app.payment_exceptions` carries refund failures,
+  unmatched refunds, disputes, payout failures, restricted accounts, orphaned
+  payments and reconciliation mismatches, keyed so the same problem found ten
+  times is one row. It holds stable codes and amounts and is incapable of
+  carrying customer data, which is why it is gated on a finance capability rather
+  than on `customer.pii.view`.
+- **Reconciliation is safe to run on any schedule.** `reconcile_commerce_v1`
+  mutates no money; it finds records that have been waiting too long to still be
+  explainable and says so. Running it repeatedly produces the same one row.
+- **The ledger never changes its mind.** `app.commerce_ledger_entries` is
+  append-only. A correction is a compensating entry, never an edit, because the
+  ledger is the explanation of what happened rather than a summary of what we
+  currently believe.
+- **Money state never becomes booking state.** A disputed charge does not
+  un-happen a booking (invariant 9).
+
 Stripe charge liability, tax/KYC duties, PCI SAQ and scope, and production
 enablement all require independent provider, legal, finance, and tax review.
 This document is an architecture contract, not a compliance conclusion.
