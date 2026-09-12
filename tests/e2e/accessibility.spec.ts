@@ -157,6 +157,8 @@ for (const language of locales) {
     // hold customer personal data, scanned closed like every other one.
     "customers",
     "customers/00000000-0000-0000-0000-000000000000",
+    // Issue #23. The money queue, scanned closed like every other surface.
+    "payments",
   ]) {
     test(`dashboard ${surface} ${language.locale} has no automated WCAG A/AA violations`, async ({
       page,
