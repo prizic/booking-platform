@@ -32,7 +32,7 @@
     "db:types": "node scripts/check-database-types.mjs --write",
     "test:db": "supabase test db --local",
     "test:concurrency": "node tests/concurrency/run.mjs",
-    "check": "pnpm check:lockfile && pnpm check:ci && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:contract && pnpm test:config && pnpm test:ci-fixtures && pnpm check:config && pnpm check:distribution && pnpm test:distribution && pnpm build:distribution && pnpm check:secrets && pnpm check:docs && pnpm build && pnpm check:bundles",
+    "check": "pnpm check:lockfile && pnpm check:ci && pnpm format:check && pnpm lint && pnpm typecheck && pnpm test:unit && pnpm test:contract && pnpm test:config && pnpm test:ci-fixtures && pnpm check:config && pnpm check:distribution && pnpm test:distribution && pnpm build:distribution && pnpm check:secrets && pnpm check:docs && pnpm build && pnpm check:edge && pnpm check:bundles",
     "check:boundaries": "node scripts/check-boundaries.mjs && dependency-cruiser --config .dependency-cruiser.cjs apps packages",
     "check:lockfile": "node scripts/check-lockfile.mjs",
     "check:fast": "node scripts/check-fast.mjs",
@@ -48,7 +48,9 @@
     "graph:dependencies": "node scripts/print-dependency-graph.mjs",
     "sbom": "node scripts/generate-sbom.mjs",
     "build:distribution": "node scripts/build-distribution.mjs",
-    "test:distribution": "node --test scripts/build-distribution.test.mjs"
+    "test:distribution": "node --test scripts/build-distribution.test.mjs",
+    "bundle:edge": "node scripts/bundle-edge-shared.mjs",
+    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

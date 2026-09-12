@@ -165,3 +165,37 @@ describe("resend webhook verification", () => {
     ).resolves.toEqual({ ok: false, reason: "invalid" });
   });
 });
+
+describe("auth mail templates", () => {
+  // Auth mail reaches somebody who may not be a customer yet, so the platform
+  // owns every word — and both languages of it.
+  it.each(["auth.sign_in_link", "auth.password_reset", "auth.email_change"] as const)(
+    "%s carries the action link and the brand in both languages",
+    (key) => {
+      const english = renderNotificationEmail(key, {
+        brandName: "Example Booking",
+        locale: "en",
+        variables: { actionUrl: "https://auth.example.invalid/verify?token=abc" },
+      });
+      const arabic = renderNotificationEmail(key, {
+        brandName: "مثال",
+        locale: "ar",
+        variables: { actionUrl: "https://auth.example.invalid/verify?token=abc" },
+      });
+
+      for (const rendered of [english, arabic]) {
+        expect(rendered.text).toContain(
+          "https://auth.example.invalid/verify?token=abc",
+        );
+        expect(rendered.html).toContain(
+          "https://auth.example.invalid/verify?token=abc",
+        );
+        expect(rendered.text).not.toContain("{");
+      }
+      expect(english.subject).toContain("Example Booking");
+      expect(arabic.subject).toContain("مثال");
+      expect(english.subject).not.toEqual(arabic.subject);
+      expect(arabic.html).toContain('dir="rtl"');
+    },
+  );
+});

@@ -8,7 +8,7 @@
 import {
   normalizeStripeEvent,
   verifyStripeWebhook,
-} from "../../../packages/integrations/src/stripe.ts";
+} from "../_shared/integrations/stripe.ts";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
 const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -91,21 +91,30 @@ Deno.serve(async (request: Request): Promise<Response> => {
   return acknowledged(settled[0]?.outcome ?? "recorded");
 });
 
-/** Which tenant owns this provider object, according to our own mapping. */
+/**
+ * Which tenant owns this provider object, according to our own mapping.
+ *
+ * Through `api_v1`, because that is the only exposed schema: this used to ask
+ * PostgREST for `app.provider_object_mappings` with an `accept-profile` header,
+ * which could never have resolved anything.
+ */
 async function resolveTenant(sessionReference: string): Promise<string | null> {
   const response = await fetch(
-    `${supabaseUrl}/rest/v1/provider_object_mappings` +
-      `?select=tenant_id&object_kind=eq.checkout` +
-      `&provider_object_reference=eq.${encodeURIComponent(sessionReference)}`,
+    `${supabaseUrl}/rest/v1/rpc/resolve_provider_object_tenant_v1`,
     {
+      body: JSON.stringify({
+        p_object_kind: "checkout",
+        p_provider_object_reference: sessionReference,
+      }),
       headers: {
         apikey: serviceRoleKey,
         authorization: `Bearer ${serviceRoleKey}`,
-        "accept-profile": "app",
+        "content-type": "application/json",
       },
+      method: "POST",
     },
   );
   if (!response.ok) return null;
-  const rows = (await response.json()) as ReadonlyArray<{ tenant_id?: string }>;
-  return rows[0]?.tenant_id ?? null;
+  const value = (await response.json()) as unknown;
+  return typeof value === "string" ? value : null;
 }
