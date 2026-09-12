@@ -22,6 +22,11 @@ const lifecycleStaffId = "c9000000-0000-0000-0000-000000000001";
 const adminClaims =
   '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}';
 const lifecycleContenders = Math.min(contenders, 20);
+// Issue #30. Provisioning workers are horizontally scaled by design, so "two of
+// them wake up at the same moment" is the ordinary case rather than the edge.
+const provisioningInstanceId = "a4200000-0000-0000-0000-00000000f001";
+const operatorId = "a1000000-0000-0000-0000-000000000002";
+const operatorClaims = `{"sub":"${operatorId}","role":"authenticated","aal":"aal2"}`;
 
 const results = [];
 let failed = false;
@@ -142,7 +147,107 @@ function cleanup() {
     delete from app.staff_locations where tenant_id='${tenantId}' and staff_id::text like 'c9000000%';
     delete from app.staff_services where tenant_id='${tenantId}' and staff_id::text like 'c9000000%';
     delete from app.staff_profiles where tenant_id='${tenantId}' and id::text like 'c9000000%';
+
+    -- The provisioning timeline and the operator audit are append-only for the
+    -- same reason bookings are, and cleared the same local-only way.
+    set local session_replication_role = 'replica';
+    delete from control_plane.provisioning_events e using control_plane.provisioning_runs r
+      where r.id=e.run_id and r.instance_id='${provisioningInstanceId}';
+    delete from control_plane.audit_events where instance_id='${provisioningInstanceId}';
+    set local session_replication_role = 'origin';
+    delete from control_plane.provisioning_steps s using control_plane.provisioning_runs r
+      where r.id=s.run_id and r.instance_id='${provisioningInstanceId}';
+    delete from control_plane.provisioning_runs where instance_id='${provisioningInstanceId}';
+    delete from control_plane.instance_release_state where instance_id='${provisioningInstanceId}';
+    delete from control_plane.instance_infrastructure where instance_id='${provisioningInstanceId}';
+    delete from control_plane.jobs where instance_id='${provisioningInstanceId}';
+    delete from app.instances where id='${provisioningInstanceId}';
+    delete from control_plane.operators where auth_user_id='${operatorId}';
   `);
+}
+
+// Two workers that wake at the same instant must not call the same provider
+// twice, and a provider that answers both must not produce two resources. The
+// first half of this case is the claim; the second is the answer.
+async function concurrentProvisioningStep() {
+  runSql(`
+    insert into control_plane.operators(auth_user_id,email,role)
+    values ('${operatorId}','provisioning-gate@example.invalid','operator');
+    insert into app.instances(id,tenant_id,brand_id,published_brand_revision_id,deployment_state)
+    values ('${provisioningInstanceId}','${tenantId}','a4000000-0000-0000-0000-000000000001',
+      null,'provisioning');
+    insert into control_plane.instance_infrastructure(
+      tenant_id,instance_id,provider,resource_kind,external_id)
+    values ('${tenantId}','${provisioningInstanceId}','github','app_installation','install-gate');
+  `);
+  const runId = runSql(`
+    select set_config('request.jwt.claims','${operatorClaims}',false);
+    select run_id from control_plane.request_provisioning_v1(
+      '${tenantId}','${provisioningInstanceId}','contention-gate','launch','0.1.0',3,1,1,
+      '{"default_locale":"en","timezone":"UTC","currency":"SAR"}'::jsonb,'gate-idem-key');
+  `)
+    .split("\n")
+    .at(-1)
+    .trim();
+
+  const at = fireAt();
+  const claims = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        `select step_key from control_plane.claim_provisioning_step_v1('${runId}'::uuid);`,
+        at,
+      ),
+    ),
+  );
+  const claimed = claims.filter((result) => result.ok && result.value !== "");
+  report(
+    claimed.length === 1 && claimed[0].value === "validate_request",
+    `${lifecycleContenders} workers racing for the first step: exactly one claims it`,
+    claims
+      .map((result) => (result.ok ? result.value || "-" : result.error))
+      .join(" | "),
+  );
+  const attempted = runSql(
+    `select attempts from control_plane.provisioning_steps s
+     where s.run_id='${runId}'::uuid and s.step_key='validate_request';`,
+  );
+  report(
+    attempted === "1",
+    "and the step counts one attempt, so the provider is called once rather than once per worker",
+    attempted,
+  );
+
+  // Now every worker reports the same success at the same moment, which is what
+  // a retry storm after a provider timeout actually looks like.
+  const stepId = runSql(
+    `select id from control_plane.provisioning_steps
+     where run_id='${runId}'::uuid and step_key='validate_request';`,
+  );
+  const answerAt = fireAt();
+  const answers = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        `select duplicate from control_plane.complete_provisioning_step_v1(
+           '${stepId}'::uuid,'succeeded');`,
+        answerAt,
+      ),
+    ),
+  );
+  const firstWriters = answers.filter((result) => result.ok && result.value === "f");
+  report(
+    firstWriters.length === 1,
+    "simultaneous success reports settle to exactly one first writer; the rest are duplicates",
+    answers.map((result) => (result.ok ? result.value : result.error)).join(" | "),
+  );
+  const succeeded = runSql(
+    `select count(*) from control_plane.provisioning_events e
+     where e.run_id='${runId}'::uuid and e.event='succeeded';`,
+  );
+  report(
+    succeeded === "1",
+    "and the timeline records the step succeeding once, not once per session",
+    succeeded,
+  );
 }
 
 function setup() {
@@ -698,6 +803,7 @@ async function main() {
     await duplicateStaffAction(lifecycleId);
     await concurrentPrivacyRequest(lifecycleId);
     await concurrentSettlement(slotAt("09:00"));
+    await concurrentProvisioningStep();
     noOverlapSurvives();
   } finally {
     cleanup();

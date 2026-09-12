@@ -85,6 +85,7 @@ Owners are placeholders until the on-call rotation exists.
 | R-12 | [Tenant export / deletion / legal hold](#r-12-tenant-export--deletion--legal-hold) | TBD — assign at M6 |
 | R-13 | [Platform / tenant suspension and safe reactivation](#r-13-platform--tenant-suspension-and-safe-reactivation) | TBD — assign at M6 |
 | R-14 | [Backend release or environment identity failure](#r-14-backend-release-or-environment-identity-failure) | TBD — assign before the first hosted migration |
+| R-15 | [Stuck, waiting, or drifted provisioning run](#r-15-stuck-waiting-or-drifted-provisioning-run) | TBD — assign at M6 |
 
 ### R-1 Slot contention / double-booking investigation
 
@@ -190,6 +191,13 @@ Owners are placeholders until the on-call rotation exists.
 - **First checks:** Hold the environment concurrency lock; identify the stable Supabase project reference and descriptor fingerprint without printing credentials; compare committed and remote migration history; determine whether the failing statement was transactional; check the current backend contract and the last healthy Client/Dashboard pair; verify PITR/backup state for production.
 - **Mitigation:** Stop the release before application promotion. Never run a linked reset, delete migration history, edit an already-applied migration, or attempt an unreviewed down migration. If the failed transaction rolled back, correct the source and ship a new reviewed migration. If work committed partially or a backfill failed, keep the expanded contract available and use an idempotent compensating migration/job. Re-run safe contract probes before resuming. Follow the detailed sequence in [environments](./environments.md#5-expandcontract-and-forward-repair).
 - **Escalation:** Release owner + database owner immediately; security owner if the target identity is wrong or a credential may have reached the wrong environment. A production restore is a disaster-recovery decision under R-11, never an ordinary deployment rollback.
+
+### R-15 Stuck, waiting, or drifted provisioning run
+
+- **Trigger:** A provisioning run that has not advanced, a step reported `attempts_exhausted`, a `drift` or `orphaned_resource` finding from reconciliation, or a tenant asking why their instance is not live.
+- **First checks:** Read the run with `control_plane.get_provisioning_run_v1` — it returns the step list and the full timeline, and every field in it is a code, an identifier or a count. Distinguish the three shapes before touching anything: a step in `waiting` with a reason (usually `customer_dns`) is *progressing*, not broken, and the fix is with the tenant rather than with us; a step in `failed` has spent its retry budget and needs a human decision; a `running` step with an expired lock is a dead worker and is repaired by `control_plane.reconcile_provisioning_v1` on its own.
+- **Mitigation:** For a terminal failure, correct the cause and call `control_plane.retry_provisioning_run_v1`. It resets only the failed steps: everything that succeeded keeps its success and its external ID, which is what stops a retry from provisioning a second copy of the repository. Never hand-edit a step row to `succeeded` — the worker guard exists precisely so that an instance cannot be declared healthy by somebody who did not check it, and activation re-reads every gate anyway. If the run must be abandoned, `control_plane.deactivate_instance_v1` suspends the instance and flips desired state to inactive; it deletes nothing, because a half-provisioned repository holds the tenant's configuration and a half-provisioned domain holds their DNS.
+- **Escalation:** Provisioning owner. A `domains_unverified` blocker is R-7. A run blocked on `customer_dns` is outside our SLO and belongs with the tenant's account owner, not on-call.
 
 ---
 
