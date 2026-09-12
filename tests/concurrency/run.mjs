@@ -100,6 +100,12 @@ function cleanup() {
     delete from app.booking_intake_answers where tenant_id='${tenantId}';
     delete from app.outbox_events where tenant_id='${tenantId}';
     delete from app.bookings where tenant_id='${tenantId}';
+    delete from app.privacy_request_steps where tenant_id='${tenantId}';
+    delete from app.privacy_requests where tenant_id='${tenantId}';
+    delete from app.legal_holds where tenant_id='${tenantId}';
+    delete from app.customer_consents where tenant_id='${tenantId}';
+    delete from app.notification_suppressions where tenant_id='${tenantId}';
+    delete from app.customers where tenant_id='${tenantId}';
     set local session_replication_role = 'origin';
 
     delete from app.assignment_allocations a using app.booking_holds h
@@ -469,6 +475,70 @@ async function concurrentStaffEdit(bookingId) {
   restoreConfirmed(bookingId);
 }
 
+/**
+ * Two operators reaching for the same person's erasure at the same instant. The
+ * partial unique index on live requests is what makes this one job; without it
+ * the second caller would open a second deletion and the two would race over
+ * the same rows.
+ */
+async function concurrentPrivacyRequest(bookingId) {
+  const customerId = runSql(
+    `select customer_id from app.booking_contacts where booking_id='${bookingId}'::uuid;`,
+  );
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        asMember(
+          `select api_v1.open_privacy_request_v1('${tenantId}','${customerId}'::uuid,'deletion');`,
+        ),
+        at,
+      ),
+    ),
+  );
+  const opened = new Set(attempts.filter((result) => result.ok).map((r) => r.value));
+  report(
+    opened.size === 1,
+    `${lifecycleContenders} simultaneous erasure requests open exactly one job`,
+    [...opened].join(" | "),
+  );
+  const rows = runSql(
+    `select count(*) from app.privacy_requests
+     where customer_id='${customerId}'::uuid and kind='deletion';`,
+  );
+  report(rows === "1", "the database holds exactly one deletion request", rows);
+
+  // Running it from every session at once has to erase once, not N times: the
+  // row lock plus the already-succeeded step check is what settles it.
+  const runAt = fireAt();
+  const runs = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        asMember(
+          `select status from api_v1.run_privacy_request_v1('${tenantId}','${[...opened][0]}'::uuid);`,
+        ),
+        runAt,
+      ),
+    ),
+  );
+  report(
+    runs.filter((result) => result.ok).every((result) => result.value === "completed"),
+    "every session that ran the job sees the same settled outcome",
+    [...new Set(runs.map((result) => (result.ok ? result.value : result.error)))].join(
+      " | ",
+    ),
+  );
+  const attemptsMax = runSql(
+    `select max(attempts) from app.privacy_request_steps
+     where request_id='${[...opened][0]}'::uuid;`,
+  );
+  report(
+    attemptsMax === "1",
+    "and no subsystem step was attempted twice, so the erasure ran exactly once",
+    attemptsMax,
+  );
+}
+
 async function duplicateStaffAction(bookingId) {
   restoreConfirmed(bookingId);
   const revision = Number(
@@ -534,6 +604,7 @@ async function main() {
     const lifecycleId = lifecycleBooking(slotAt("16:00"));
     await concurrentStaffEdit(lifecycleId);
     await duplicateStaffAction(lifecycleId);
+    await concurrentPrivacyRequest(lifecycleId);
     noOverlapSurvives();
   } finally {
     cleanup();

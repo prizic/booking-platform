@@ -26,7 +26,12 @@ import type {
   BookingHistoryEntryV1,
   BookingNoteV1,
   BookingSearchRowV1,
+  CustomerBookingV1,
+  CustomerConsentV1,
+  CustomerDetailV1,
+  CustomerRowV1,
   DashboardDataSource,
+  PrivacyRequestRowV1,
   TodayItemV1,
 } from "./dashboard-access";
 
@@ -372,6 +377,97 @@ function toBookingDetail(row: Record<string, unknown>): BookingDetailV1 {
       typeof row.reschedule_count === "number" ? row.reschedule_count : 0,
     serviceName: requireString(row.service_name),
     startAt: new Date(String(row.starts_at)).toISOString(),
+    status: requireString(row.status),
+  };
+}
+
+function toCustomerRow(value: unknown): CustomerRowV1 {
+  const row = value as Record<string, unknown>;
+  return {
+    bookingCount: Number(row.booking_count ?? 0),
+    customerId: requireString(row.customer_id),
+    // Null once erased. The surface reads absence as erasure rather than
+    // rendering a placeholder that looks like a real address.
+    email: typeof row.email === "string" ? row.email : null,
+    erased: row.erased === true,
+    fullName: typeof row.full_name === "string" ? row.full_name : null,
+    lastBookingAt:
+      row.last_booking_at === null || row.last_booking_at === undefined
+        ? null
+        : new Date(String(row.last_booking_at)).toISOString(),
+    legalHold: row.legal_hold === true,
+    phone: typeof row.phone === "string" ? row.phone : null,
+    restricted: row.restricted === true,
+    suppressed: row.suppressed === true,
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+  };
+}
+
+function toCustomerBookings(value: unknown): readonly CustomerBookingV1[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    return {
+      bookingId: requireString(row.booking_id),
+      contactName: typeof row.contact_name === "string" ? row.contact_name : null,
+      publicReference: requireString(row.public_reference),
+      serviceName: requireString(row.service_name),
+      startAt: new Date(String(row.starts_at)).toISOString(),
+      status: requireString(row.status),
+    };
+  });
+}
+
+function toConsents(value: unknown): readonly CustomerConsentV1[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    return {
+      acceptedAt: new Date(String(row.accepted_at)).toISOString(),
+      policyKey: requireString(row.policy_key),
+      policyVersion: Number(row.policy_version ?? 1),
+      source: String(row.source ?? "booking"),
+    };
+  });
+}
+
+function toCustomerDetail(row: Record<string, unknown>): CustomerDetailV1 {
+  return {
+    bookings: toCustomerBookings(row.bookings),
+    consents: toConsents(row.consents),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    customerId: requireString(row.customer_id),
+    email: typeof row.email === "string" ? row.email : null,
+    erased: row.erased === true,
+    fullName: typeof row.full_name === "string" ? row.full_name : null,
+    intakeCount: Number(row.intake_count ?? 0),
+    legalHold: row.legal_hold === true,
+    phone: typeof row.phone === "string" ? row.phone : null,
+    restricted: row.restricted === true,
+    restrictionReason:
+      typeof row.restriction_reason === "string" ? row.restriction_reason : null,
+    revision: requireNumber(row.revision),
+    sensitiveNoteCount: Number(row.sensitive_note_count ?? 0),
+    suppressed: row.suppressed === true,
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
+  };
+}
+
+function toPrivacyRequestRow(value: unknown): PrivacyRequestRowV1 {
+  const row = value as Record<string, unknown>;
+  return {
+    blockedReason: typeof row.blocked_reason === "string" ? row.blocked_reason : null,
+    completedAt:
+      row.completed_at === null || row.completed_at === undefined
+        ? null
+        : new Date(String(row.completed_at)).toISOString(),
+    createdAt: new Date(String(row.created_at)).toISOString(),
+    customerId: typeof row.customer_id === "string" ? row.customer_id : null,
+    kind: requireString(row.kind),
+    offboardingPhase:
+      typeof row.offboarding_phase === "string" ? row.offboarding_phase : null,
+    pendingSteps: Number(row.pending_steps ?? 0),
+    requestId: requireString(row.request_id),
     status: requireString(row.status),
   };
 }
@@ -878,6 +974,133 @@ export function createDashboardDataSource(
           p_visibility: request.visibility,
         }),
       );
+    },
+
+    searchCustomers: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("search_customers_v1", {
+          p_include_erased: request.includeErased,
+          p_query: request.query,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toCustomerRow);
+    },
+
+    getCustomerDetail: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_customer_detail_v1", {
+            p_customer_id: request.customerId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      // No row means row level security did not grant this customer to this
+      // member. Absent and forbidden read identically on purpose.
+      return row === null ? null : toCustomerDetail(row);
+    },
+
+    correctCustomer: async (request) => {
+      assertRpc(
+        await api.rpc("correct_customer_v1", {
+          p_customer_id: request.customerId,
+          p_email: request.email,
+          p_expected_revision: request.expectedRevision,
+          p_full_name: request.fullName,
+          p_phone: request.phone,
+          p_tags: request.tags,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    setCustomerRestriction: async (request) => {
+      assertRpc(
+        await api.rpc("set_customer_restriction_v1", {
+          p_customer_id: request.customerId,
+          p_reason: request.reason,
+          p_restricted: request.restricted,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    setLegalHold: async (request) => {
+      assertRpc(
+        await api.rpc("set_legal_hold_v1", {
+          p_customer_id: request.customerId,
+          p_hold: request.hold,
+          p_reason: request.reason,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    openPrivacyRequest: async (request) => {
+      const id = assertRpc(
+        await api.rpc("open_privacy_request_v1", {
+          p_customer_id: request.customerId,
+          p_kind: request.kind,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+      return String(id);
+    },
+
+    runPrivacyRequest: async (request) => {
+      // Restartable on the database side, so a retry after a lost response
+      // resumes the same job instead of starting a second one.
+      assertRpc(
+        await api.rpc("run_privacy_request_v1", {
+          p_request_id: request.requestId,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+    },
+
+    getPrivacyRequest: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_privacy_request_v1", {
+            p_request_id: request.requestId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      if (row === null) return null;
+      return {
+        // Null unless this caller may export and stepped up, and unexpired.
+        artifact: row.artifact ?? null,
+        artifactExpiresAt:
+          row.artifact_expires_at === null || row.artifact_expires_at === undefined
+            ? null
+            : new Date(String(row.artifact_expires_at)).toISOString(),
+        blockedReason:
+          typeof row.blocked_reason === "string" ? row.blocked_reason : null,
+        kind: requireString(row.kind),
+        requestId: requireString(row.request_id),
+        status: requireString(row.status),
+        steps: (Array.isArray(row.steps) ? row.steps : []).map((entry) => {
+          const step = entry as Record<string, unknown>;
+          return {
+            outcomeCode:
+              typeof step.outcome_code === "string" ? step.outcome_code : null,
+            status: String(step.status ?? "pending"),
+            subsystem: requireString(step.subsystem),
+          };
+        }),
+      };
+    },
+
+    listPrivacyRequests: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("list_privacy_requests_v1", {
+          p_customer_id: request.customerId,
+          p_tenant_id: request.tenantId,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map(toPrivacyRequestRow);
     },
 
     saveScheduleConfig: async (request) => {

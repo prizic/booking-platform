@@ -12,6 +12,7 @@ const sections = [
   { key: "navToday", path: "today" },
   { key: "navCalendar", path: "calendar" },
   { key: "navBookings", path: "bookings" },
+  { key: "navCustomers", path: "customers" },
   { key: "navRequests", path: "requests" },
   { key: "navTeamResources", path: "team-resources" },
   { key: "navAvailability", path: "availability" },

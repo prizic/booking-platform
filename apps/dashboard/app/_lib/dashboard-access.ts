@@ -80,6 +80,141 @@ export interface DashboardDataSource {
     tenantId: string;
     visibility: BookingNoteVisibility;
   }) => Promise<void>;
+  searchCustomers?: (request: {
+    includeErased: boolean;
+    query: string | null;
+    tenantId: string;
+  }) => Promise<readonly CustomerRowV1[]>;
+  getCustomerDetail?: (request: {
+    customerId: string;
+    tenantId: string;
+  }) => Promise<CustomerDetailV1 | null>;
+  correctCustomer?: (request: {
+    customerId: string;
+    email: string;
+    expectedRevision: number;
+    fullName: string;
+    phone: string | null;
+    tags: readonly string[];
+    tenantId: string;
+  }) => Promise<void>;
+  setCustomerRestriction?: (request: {
+    customerId: string;
+    reason: string | null;
+    restricted: boolean;
+    tenantId: string;
+  }) => Promise<void>;
+  setLegalHold?: (request: {
+    customerId: string;
+    hold: boolean;
+    reason: string;
+    tenantId: string;
+  }) => Promise<void>;
+  openPrivacyRequest?: (request: {
+    customerId: string;
+    kind: PrivacyRequestKind;
+    tenantId: string;
+  }) => Promise<string>;
+  runPrivacyRequest?: (request: {
+    requestId: string;
+    tenantId: string;
+  }) => Promise<void>;
+  getPrivacyRequest?: (request: {
+    requestId: string;
+    tenantId: string;
+  }) => Promise<PrivacyRequestDetailV1 | null>;
+  listPrivacyRequests?: (request: {
+    customerId: string | null;
+    tenantId: string;
+  }) => Promise<readonly PrivacyRequestRowV1[]>;
+}
+
+/** The privacy rights this surface can start as a job (issue #18). */
+export type PrivacyRequestKind = "deletion" | "export";
+
+/** One row of the customer directory. */
+export interface CustomerRowV1 {
+  readonly bookingCount: number;
+  readonly customerId: string;
+  readonly email: string | null;
+  readonly erased: boolean;
+  readonly fullName: string | null;
+  readonly lastBookingAt: string | null;
+  readonly legalHold: boolean;
+  readonly phone: string | null;
+  readonly restricted: boolean;
+  readonly suppressed: boolean;
+  readonly tags: readonly string[];
+}
+
+/** One booking as the customer record sees it: the snapshot, not current identity. */
+export interface CustomerBookingV1 {
+  readonly bookingId: string;
+  readonly contactName: string | null;
+  readonly publicReference: string;
+  readonly serviceName: string;
+  readonly startAt: string;
+  readonly status: string;
+}
+
+/** Minimal consent evidence: the document and version, never its text. */
+export interface CustomerConsentV1 {
+  readonly acceptedAt: string;
+  readonly policyKey: string;
+  readonly policyVersion: number;
+  readonly source: string;
+}
+
+export interface CustomerDetailV1 {
+  readonly bookings: readonly CustomerBookingV1[];
+  readonly consents: readonly CustomerConsentV1[];
+  readonly createdAt: string;
+  readonly customerId: string;
+  readonly email: string | null;
+  readonly erased: boolean;
+  readonly fullName: string | null;
+  readonly intakeCount: number;
+  readonly legalHold: boolean;
+  readonly phone: string | null;
+  readonly restricted: boolean;
+  readonly restrictionReason: string | null;
+  readonly revision: number;
+  readonly sensitiveNoteCount: number;
+  readonly suppressed: boolean;
+  readonly tags: readonly string[];
+}
+
+/**
+ * A finished job with its per-subsystem outcomes and, for an export the caller
+ * is entitled to and has stepped up for, the artifact itself. The list surface
+ * cannot carry this: the artifact is excluded from the table grant and comes
+ * back only from the function that re-checks capability.
+ */
+export interface PrivacyRequestDetailV1 {
+  readonly artifact: unknown;
+  readonly artifactExpiresAt: string | null;
+  readonly blockedReason: string | null;
+  readonly kind: string;
+  readonly requestId: string;
+  readonly status: string;
+  readonly steps: readonly {
+    readonly outcomeCode: string | null;
+    readonly status: string;
+    readonly subsystem: string;
+  }[];
+}
+
+/** A privacy job and how far it got. */
+export interface PrivacyRequestRowV1 {
+  readonly blockedReason: string | null;
+  readonly completedAt: string | null;
+  readonly createdAt: string;
+  readonly customerId: string | null;
+  readonly kind: string;
+  readonly offboardingPhase: string | null;
+  readonly pendingSteps: number;
+  readonly requestId: string;
+  readonly status: string;
 }
 
 /** The §7.1 transitions a member can ask for. The database owns which apply. */

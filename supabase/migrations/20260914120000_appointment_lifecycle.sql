@@ -28,6 +28,14 @@
 --   revision_conflict      23505  the caller acted on a superseded revision
 --   idempotency_conflict   23505  key reused with a different normalized request
 --
+-- Every transition below changes app.bookings.status, which means issue #14's
+-- `revoke_management_tokens_on_state_change` trigger fires and any outstanding
+-- guest manage-booking link is revoked. That is intended rather than incidental:
+-- a link is an offer to act on a booking as the guest last saw it, and a guest
+-- who has already been checked in, completed, or marked absent is not looking at
+-- that booking any more. The guest is never stranded, because the next message
+-- the notification worker sends mints a fresh link.
+--
 -- Scheduling blocks, maintenance, and time off are NOT re-implemented here.
 -- They are `save_schedule_config_v1` operations from issue #9 and already feed
 -- the availability engine, which is the only thing that decides what can be

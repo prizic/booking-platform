@@ -317,6 +317,34 @@ select is((select array[b.status,b.revision::text] from app.bookings b
 rollback to savepoint lc_unauthorized;
 
 -- ---------------------------------------------------------------------------
+-- A transition is a booking state change, so issue #14's revocation trigger
+-- fires on it. Pinned here because it spans two features and could regress
+-- silently from either side.
+savepoint lc_guest_link;
+select set_config('test.link',(select i.token from private.issue_management_token_v1(
+  'a0000000-0000-0000-0000-000000000001',current_setting('test.booking')::uuid,'reschedule') i),true);
+select is((select count(*)::integer from app.management_tokens t
+  where t.booking_id=current_setting('test.booking')::uuid
+    and t.revoked_at is null and t.consumed_at is null),1,
+  'the guest holds a live reschedule link before anyone acts');
+select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
+set local role authenticated;
+select is((select t.status from api_v1.transition_booking_v1(
+    'a0000000-0000-0000-0000-000000000001',current_setting('test.booking')::uuid,'check_in',1) t),
+  'checked_in','the member checks the guest in');
+reset role;
+select set_config('request.jwt.claims',null,true);
+select is((select t.revoked_reason from app.management_tokens t
+  where t.booking_id=current_setting('test.booking')::uuid),
+  'booking_state_changed',
+  'checking a guest in revokes the link that offered to move the booking they are already at');
+select is((select a.outcome from api_v1.act_on_management_link_v1(
+    'client.tenant-a.example.invalid','client',current_setting('test.link'),'reschedule',2,
+    pg_temp.lc_time('13:00')) a),
+  'unavailable','and the revoked link discloses nothing about why it stopped working');
+rollback to savepoint lc_guest_link;
+
+-- ---------------------------------------------------------------------------
 savepoint lc_notes;
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;

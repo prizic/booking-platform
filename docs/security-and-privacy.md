@@ -203,6 +203,14 @@ Terminology for these classes is defined once in the [glossary](./glossary.md).
 - Legal holds suspend deletion for identified records. A hold is explicit, recorded, and outranks any deletion request.
 - Backup retention is tracked separately from business/legal retention. They are different clocks and must not be conflated in policy text.
 
+**How this is implemented** (issue #18)
+
+- One machine, `app.privacy_requests`, covers export, correction, restriction, deletion, and tenant offboarding, with one `app.privacy_request_steps` row per subsystem in the dependency closure: `postgres_primary`, `sensitive_records`, `storage_objects`, `email_provider`, `payment_metadata`, `calendar_metadata`, `analytics`, `backups`.
+- A step that already succeeded is never re-run, which is what makes an interrupted or retried job resume rather than restart. A subsystem with nothing to do records `not_applicable` and a reason, never a silent success.
+- Deletion hard-deletes intake answers and sensitive notes, anonymizes booking contact rows, and leaves an identity row holding nothing identifying with its digest replaced. Operational notes survive, because "the customer arrived late" is the tenant's record of its own day.
+- The export artifact is a jsonb document with a seven-day expiry, readable only through `get_privacy_request_v1` with `customer.data.export` and a step-up; the column is excluded from the table grant rather than revoked after it. It is not written to Storage in this release because Postgres PITR does not restore deleted Storage objects — the same recoverability gate that keeps customer attachments out of the first release. Issue #39 brings object backup and a restore drill; the delivery moves then.
+- Legal holds are re-checked on every run attempt, so a hold placed after a request was opened still stops it, and a released hold lets the same request resume.
+
 **Tenant offboarding phases** (each is a distinct, reversible-until-the-next state)
 
 1. Restrict new bookings.

@@ -91,6 +91,64 @@ export type DashboardMessageKey =
   | "navToday"
   | "navCalendar"
   | "navBookings"
+  | "customersTitle"
+  | "customersSummary"
+  | "customersUnavailable"
+  | "customersEmpty"
+  | "customersSearchLabel"
+  | "customersSearchAction"
+  | "customersIncludeErased"
+  | "customersListLabel"
+  | "customersEmailLabel"
+  | "customersPhoneLabel"
+  | "customersNoPhone"
+  | "customersBookingCountLabel"
+  | "customersLastBookingLabel"
+  | "customersNeverBooked"
+  | "customersOpenDetail"
+  | "customersErasedName"
+  | "customersErasedValue"
+  | "customersBadgeErased"
+  | "customersBadgeHold"
+  | "customersBadgeRestricted"
+  | "customersBadgeSuppressed"
+  | "customersSinceLabel"
+  | "customersSensitiveNotesLabel"
+  | "customersIntakeLabel"
+  | "customersRestrictionReasonLabel"
+  | "customersBookingsTitle"
+  | "customersNoBookings"
+  | "customersBookedAs"
+  | "customersConsentsTitle"
+  | "customersNoConsents"
+  | "customersCorrectTitle"
+  | "customersNameLabel"
+  | "customersCorrectHint"
+  | "customersCorrectAction"
+  | "customersRightsTitle"
+  | "customersReasonLabel"
+  | "customersRestrictAction"
+  | "customersUnrestrictAction"
+  | "customersPlaceHoldAction"
+  | "customersReleaseHoldAction"
+  | "customersJobsHint"
+  | "customersExportAction"
+  | "customersDeleteAction"
+  | "customersJobsTitle"
+  | "customersNoJobs"
+  | "customersPendingSteps"
+  | "customersTagsLabel"
+  | "customersExportTitle"
+  | "customersExportExpires"
+  | "customersExportReveal"
+  | "customersResultCorrected"
+  | "customersResultRestricted"
+  | "customersResultUnrestricted"
+  | "customersResultHeld"
+  | "customersResultReleased"
+  | "customersResultExported"
+  | "customersResultDeleted"
+  | "customersResultDeletionBlocked"
   | "navCustomers"
   | "navTeamResources"
   | "navBrand"
@@ -345,6 +403,72 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navToday: "Today",
     navCalendar: "Calendar",
     navBookings: "Bookings",
+    customersTitle: "Customers",
+    customersSummary:
+      "Everyone this business has taken a booking from, and the privacy rights they can exercise. Identity is built from bookings; correcting a record here never rewrites the bookings it already has.",
+    customersUnavailable:
+      "The customer directory could not be loaded. This is not an empty directory.",
+    customersEmpty: "No customer matches this search.",
+    customersSearchLabel: "Search by name, email, or phone",
+    customersSearchAction: "Search",
+    customersIncludeErased: "Include erased records",
+    customersListLabel: "Customer directory",
+    customersEmailLabel: "Email",
+    customersPhoneLabel: "Phone",
+    customersNoPhone: "No phone on file",
+    customersBookingCountLabel: "Bookings",
+    customersLastBookingLabel: "Most recent booking",
+    customersNeverBooked: "None yet",
+    customersOpenDetail: "Open customer record",
+    customersErasedName: "Erased customer",
+    customersErasedValue: "Erased",
+    customersBadgeErased: "Erased",
+    customersBadgeHold: "Legal hold",
+    customersBadgeRestricted: "Processing restricted",
+    customersBadgeSuppressed: "Email suppressed",
+    customersSinceLabel: "Customer since",
+    customersSensitiveNotesLabel: "Sensitive notes on file",
+    customersIntakeLabel: "Intake answers on file",
+    customersRestrictionReasonLabel: "Restriction reason",
+    customersBookingsTitle: "Booking history",
+    customersNoBookings: "No bookings on this record.",
+    customersBookedAs: "booked as",
+    customersConsentsTitle: "Consent record",
+    customersNoConsents: "No consent evidence on this record.",
+    customersCorrectTitle: "Correct this record",
+    customersNameLabel: "Full name",
+    customersCorrectHint:
+      "A correction changes the current record only. Past bookings keep the contact details they were made under.",
+    customersCorrectAction: "Save correction",
+    customersRightsTitle: "Privacy requests",
+    customersReasonLabel: "Reason (recorded in the audit trail)",
+    customersRestrictAction: "Restrict processing",
+    customersUnrestrictAction: "Lift restriction",
+    customersPlaceHoldAction: "Place legal hold",
+    customersReleaseHoldAction: "Release legal hold",
+    customersJobsHint:
+      "Export and deletion run across every system that holds this person's data and report each one. Backups expire on their own retention and are never edited.",
+    customersExportAction: "Export this record",
+    customersDeleteAction: "Delete this record",
+    customersJobsTitle: "Request history",
+    customersNoJobs: "No privacy request has been made for this record.",
+    customersPendingSteps: "steps still open",
+    customersTagsLabel: "Tags (comma separated)",
+    customersExportTitle: "Latest export",
+    customersExportExpires: "This export expires on",
+    customersExportReveal: "Show the exported record",
+    customersResultCorrected: "The record was corrected. Past bookings are unchanged.",
+    customersResultRestricted:
+      "Processing is restricted and email to this address is suppressed.",
+    customersResultUnrestricted:
+      "The restriction was lifted. Any provider bounce or complaint still stands.",
+    customersResultHeld: "A legal hold is in place. Deletion is suspended.",
+    customersResultReleased: "The legal hold was released.",
+    customersResultExported: "The export is ready and expires in seven days.",
+    customersResultDeleted:
+      "The record was erased. Bookings remain as financial evidence with the contact details removed.",
+    customersResultDeletionBlocked:
+      "Deletion was refused: a legal hold outranks it. Release the hold first.",
     navCustomers: "Customers",
     navTeamResources: "Team & resources",
     navBrand: "Brand & site",
@@ -605,6 +729,70 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navToday: "اليوم",
     navCalendar: "التقويم",
     navBookings: "الحجوزات",
+    customersTitle: "العملاء",
+    customersSummary:
+      "كل من حجز لدى هذا النشاط، وحقوق الخصوصية التي يمكنه ممارستها. تُبنى الهوية من الحجوزات، وتصحيح السجل هنا لا يُعدّل الحجوزات السابقة.",
+    customersUnavailable: "تعذّر تحميل دليل العملاء. هذا ليس دليلاً فارغاً.",
+    customersEmpty: "لا يوجد عميل مطابق لهذا البحث.",
+    customersSearchLabel: "ابحث بالاسم أو البريد أو الهاتف",
+    customersSearchAction: "بحث",
+    customersIncludeErased: "تضمين السجلات الممحوّة",
+    customersListLabel: "دليل العملاء",
+    customersEmailLabel: "البريد الإلكتروني",
+    customersPhoneLabel: "الهاتف",
+    customersNoPhone: "لا يوجد رقم هاتف",
+    customersBookingCountLabel: "الحجوزات",
+    customersLastBookingLabel: "أحدث حجز",
+    customersNeverBooked: "لا يوجد بعد",
+    customersOpenDetail: "فتح سجل العميل",
+    customersErasedName: "عميل ممحوّ",
+    customersErasedValue: "ممحوّ",
+    customersBadgeErased: "ممحوّ",
+    customersBadgeHold: "حجز قانوني",
+    customersBadgeRestricted: "المعالجة مقيّدة",
+    customersBadgeSuppressed: "البريد موقوف",
+    customersSinceLabel: "عميل منذ",
+    customersSensitiveNotesLabel: "ملاحظات حسّاسة مسجّلة",
+    customersIntakeLabel: "إجابات استمارة مسجّلة",
+    customersRestrictionReasonLabel: "سبب التقييد",
+    customersBookingsTitle: "سجل الحجوزات",
+    customersNoBookings: "لا توجد حجوزات في هذا السجل.",
+    customersBookedAs: "حجز باسم",
+    customersConsentsTitle: "سجل الموافقات",
+    customersNoConsents: "لا يوجد دليل موافقة في هذا السجل.",
+    customersCorrectTitle: "تصحيح هذا السجل",
+    customersNameLabel: "الاسم الكامل",
+    customersCorrectHint:
+      "التصحيح يغيّر السجل الحالي فقط. تحتفظ الحجوزات السابقة ببيانات التواصل التي أُجريت بها.",
+    customersCorrectAction: "حفظ التصحيح",
+    customersRightsTitle: "طلبات الخصوصية",
+    customersReasonLabel: "السبب (يُسجَّل في سجل التدقيق)",
+    customersRestrictAction: "تقييد المعالجة",
+    customersUnrestrictAction: "رفع التقييد",
+    customersPlaceHoldAction: "وضع حجز قانوني",
+    customersReleaseHoldAction: "رفع الحجز القانوني",
+    customersJobsHint:
+      "يعمل التصدير والحذف عبر كل نظام يحتفظ ببيانات هذا الشخص ويبلّغ عن كل واحد منها. تنتهي النسخ الاحتياطية بمدة استبقائها ولا تُعدَّل.",
+    customersExportAction: "تصدير هذا السجل",
+    customersDeleteAction: "حذف هذا السجل",
+    customersJobsTitle: "سجل الطلبات",
+    customersNoJobs: "لم يُقدَّم أي طلب خصوصية لهذا السجل.",
+    customersPendingSteps: "خطوات ما زالت مفتوحة",
+    customersTagsLabel: "الوسوم (مفصولة بفواصل)",
+    customersExportTitle: "أحدث تصدير",
+    customersExportExpires: "تنتهي صلاحية هذا التصدير في",
+    customersExportReveal: "إظهار السجل المُصدَّر",
+    customersResultCorrected: "تم تصحيح السجل. الحجوزات السابقة لم تتغيّر.",
+    customersResultRestricted: "المعالجة مقيّدة والبريد إلى هذا العنوان موقوف.",
+    customersResultUnrestricted:
+      "تم رفع التقييد. أي ارتداد أو شكوى من المزوّد ما زال سارياً.",
+    customersResultHeld: "يوجد حجز قانوني. الحذف معلّق.",
+    customersResultReleased: "تم رفع الحجز القانوني.",
+    customersResultExported: "التصدير جاهز وتنتهي صلاحيته خلال سبعة أيام.",
+    customersResultDeleted:
+      "تم محو السجل. تبقى الحجوزات كدليل مالي بعد إزالة بيانات التواصل.",
+    customersResultDeletionBlocked:
+      "رُفض الحذف: الحجز القانوني يعلو عليه. ارفع الحجز أولاً.",
     navCustomers: "العملاء",
     navTeamResources: "الفريق والموارد",
     navBrand: "الهوية والموقع",

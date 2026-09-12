@@ -369,7 +369,12 @@ saw". Check-in has an operational window read from the
 booking's own policy snapshot, and arriving outside it needs the separate
 `booking.check_in_override` grant. Payment, refund, notification, and calendar
 states are never touched by a transition, so a day closes out while a refund is
-still pending (invariant 9).
+still pending (invariant 9). A transition is a booking state change, so it
+revokes any outstanding guest management link through the issue #14 trigger:
+a link offers to act on the booking as the guest last saw it, and a guest who
+has been checked in, completed, or marked absent is no longer looking at that
+booking. The next message the notification worker sends mints a fresh link, so
+nobody is stranded.
 
 Staff-created bookings are the customer confirmation engine with a
 `booking.create_on_behalf` check and an authorship ledger entry in front of it,
@@ -390,6 +395,39 @@ maintenance, and time off remain `save_schedule_config_v1` operations feeding th
 availability engine, and staff or resource deactivation still demands an
 explicit reassign, cancel, or keep-active decision before it touches a future
 allocation.
+
+A customer (issue #18) is an identity the tenant accumulated across bookings,
+not a record anyone imports. `app.customers` is keyed by
+`sha256(tenant_id || ':' || lower(email))` — the same tenant-salted digest the
+notification worker addresses mail with — and a trigger on `app.booking_contacts`
+resolves it on every booking path, so no booking RPC had to change and whatever
+issue #22 adds is covered without being told. Tenant-salting means two tenants
+holding one address produce different digests and cannot be correlated.
+Correcting a customer rewrites current identity and never the booking contact
+rows: a past booking keeps the details it was actually made under, which is what
+makes it evidence rather than a mutable opinion about who someone is. Consent
+evidence is minimal by construction — document key, version, a hash of the
+rendered text, and a timestamp — and is append-only.
+
+Export, deletion, correction, restriction, and tenant offboarding are one
+restartable machine (`app.privacy_requests` plus a step row per subsystem),
+because they share the hold check, the resume logic, and the audit shape. A step
+that succeeded is never re-run, so a job resumes after a crash, a timeout, or a
+partial provider failure rather than starting again. Every subsystem in the
+dependency closure gets a row even when it has nothing to do: "we checked and it
+did not apply" and "we never looked" are different claims to a regulator, and
+`not_applicable` carries the reason. Backups expire on their own retention and
+are never surgically edited; analytics events age out on their own clocks. A
+legal hold outranks a deletion and is re-checked on every attempt, so a hold
+placed after a request was opened still stops it. Erasure is the one operation
+permitted to break append-only, through a single condition in
+`private.enforce_append_only` gated on a transaction-local GUC that only the
+SECURITY DEFINER erasure engine sets; holding the GUC grants nothing, because no
+application role holds an UPDATE or DELETE privilege on those tables in the first
+place. Erasure hard-deletes sensitive intake and sensitive notes, anonymizes
+contact rows so the booking keeps its shape as financial evidence, and leaves the
+identity row as a referent holding nothing that identifies anybody, with its
+digest replaced so it cannot be re-identified by hashing a guessed address.
 
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
