@@ -369,7 +369,12 @@ saw". Check-in has an operational window read from the
 booking's own policy snapshot, and arriving outside it needs the separate
 `booking.check_in_override` grant. Payment, refund, notification, and calendar
 states are never touched by a transition, so a day closes out while a refund is
-still pending (invariant 9).
+still pending (invariant 9). A transition is a booking state change, so it
+revokes any outstanding guest management link through the issue #14 trigger:
+a link offers to act on the booking as the guest last saw it, and a guest who
+has been checked in, completed, or marked absent is no longer looking at that
+booking. The next message the notification worker sends mints a fresh link, so
+nobody is stranded.
 
 Staff-created bookings are the customer confirmation engine with a
 `booking.create_on_behalf` check and an authorship ledger entry in front of it,
