@@ -8,9 +8,7 @@ import type { DashboardMessageKey } from "../../_lib/copy";
 const shared = {
   "backend-unavailable": "requestsResultUnavailable",
   "invalid-request": "requestsResultInvalid",
-  "not-allowed": "bookingsResultNotAllowed",
   "not-authorized": "requestsResultNotAuthorized",
-  "reason-required": "bookingsResultReasonRequired",
   "revision-conflict": "requestsResultConflict",
   "slot-unavailable": "requestsResultSlotUnavailable",
 } as const satisfies Record<string, DashboardMessageKey>;
@@ -25,6 +23,10 @@ export const listResultKeys = {
 
 export const detailResultKeys = {
   ...shared,
+  // Only the detail acts on the lifecycle, so only the detail can be refused
+  // by it.
+  "not-allowed": "bookingsResultNotAllowed",
+  "reason-required": "bookingsResultReasonRequired",
   "checked-in": "bookingsResultCheckedIn",
   completed: "bookingsResultCompleted",
   corrected: "bookingsResultCorrected",

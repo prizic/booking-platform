@@ -103,9 +103,6 @@ export interface BookingSearchRowV1 {
   readonly bookingRevision: number;
   readonly currency: string;
   readonly customerDisplayName: string | null;
-  readonly endAt: string;
-  readonly hasIntake: boolean;
-  readonly locationName: string;
   readonly locationTimeZone: string;
   readonly noteCount: number;
   readonly notificationStatus: string;
@@ -120,7 +117,6 @@ export interface BookingSearchRowV1 {
 /** One entry of the immutable status history. */
 export interface BookingHistoryEntryV1 {
   readonly actorKind: string;
-  readonly bookingRevision: number;
   readonly createdAt: string;
   readonly eventType: string;
   readonly reason: string | null;
@@ -149,7 +145,6 @@ export interface BookingDetailV1 {
   readonly customerFullName: string | null;
   readonly customerPhone: string | null;
   readonly durationMinutes: number;
-  readonly endAt: string;
   readonly hasIntake: boolean;
   readonly history: readonly BookingHistoryEntryV1[];
   readonly locationName: string;

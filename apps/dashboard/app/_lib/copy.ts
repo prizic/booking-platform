@@ -233,6 +233,11 @@ export type DashboardMessageKey =
   | "detailRescheduleCountLabel"
   | "detailDurationLabel"
   | "detailReferenceLabel"
+  | "detailEmailLabel"
+  | "detailPhoneLabel"
+  | "detailLocationLabel"
+  | "detailCancelledAtLabel"
+  | "detailRefundLabel"
   | "availabilityCustomerTimeZone";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
@@ -496,6 +501,11 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     detailRescheduleCountLabel: "Times moved",
     detailDurationLabel: "Duration",
     detailReferenceLabel: "Reference",
+    detailEmailLabel: "Email",
+    detailPhoneLabel: "Phone",
+    detailLocationLabel: "Location",
+    detailCancelledAtLabel: "Cancelled",
+    detailRefundLabel: "Refund eligible",
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
@@ -747,6 +757,11 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     detailRescheduleCountLabel: "عدد مرات النقل",
     detailDurationLabel: "المدة",
     detailReferenceLabel: "المرجع",
+    detailEmailLabel: "البريد الإلكتروني",
+    detailPhoneLabel: "الهاتف",
+    detailLocationLabel: "الموقع",
+    detailCancelledAtLabel: "أُلغي في",
+    detailRefundLabel: "المبلغ المستحق للاسترداد",
     availabilityCustomerTimeZone: "المنطقة الزمنية للعميل",
   },
 };

@@ -296,9 +296,6 @@ function toSearchRow(value: unknown): BookingSearchRowV1 {
     // Null unless this member may read customer personal data.
     customerDisplayName:
       typeof row.customer_display_name === "string" ? row.customer_display_name : null,
-    endAt: new Date(String(row.ends_at)).toISOString(),
-    hasIntake: row.has_intake === true,
-    locationName: requireString(row.location_name),
     locationTimeZone: requireString(row.location_time_zone),
     noteCount: typeof row.note_count === "number" ? row.note_count : 0,
     notificationStatus: String(row.notification_status ?? "queued"),
@@ -317,7 +314,6 @@ function toHistory(value: unknown): readonly BookingHistoryEntryV1[] {
     const row = entry as Record<string, unknown>;
     return {
       actorKind: String(row.actorKind ?? "system"),
-      bookingRevision: Number(row.bookingRevision ?? 0),
       createdAt: new Date(String(row.createdAt)).toISOString(),
       eventType: requireString(row.eventType),
       reason: typeof row.reason === "string" ? row.reason : null,
@@ -361,10 +357,7 @@ function toBookingDetail(row: Record<string, unknown>): BookingDetailV1 {
     customerPhone: typeof row.customer_phone === "string" ? row.customer_phone : null,
     durationMinutes:
       typeof row.duration_minutes === "number" ? row.duration_minutes : 0,
-    endAt: new Date(String(row.ends_at)).toISOString(),
-    // Presence, never content: the answers themselves stay on the intake
-    // surface that is granted separately.
-    hasIntake: row.intake_answers !== null && row.intake_answers !== undefined,
+    hasIntake: row.has_intake === true,
     history: toHistory(row.history),
     locationName: requireString(row.location_name),
     locationTimeZone: requireString(row.location_time_zone),

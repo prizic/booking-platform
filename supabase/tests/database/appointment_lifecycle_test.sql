@@ -453,6 +453,15 @@ select is((select jsonb_array_length(d.history) from api_v1.get_booking_detail_v
 select is((select array[d.status,d.customer_full_name] from api_v1.get_booking_detail_v1(
     'a0000000-0000-0000-0000-000000000001',current_setting('test.booking')::uuid) d),
   array['checked_in','Guest A'],'the detail carries the live status and the customer context');
+-- Sensitive data a surface does not render is data it should not have fetched.
+select ok((select not exists (
+    select 1 from jsonb_object_keys(to_jsonb((select x from api_v1.get_booking_detail_v1(
+      'a0000000-0000-0000-0000-000000000001',current_setting('test.booking')::uuid) x))) key
+    where key in ('intake_answers','policy_snapshot'))),
+  'the detail reports that intake exists without carrying the answers or the policy');
+select is((select d.has_intake from api_v1.get_booking_detail_v1(
+    'a0000000-0000-0000-0000-000000000001',current_setting('test.booking')::uuid) d),
+  false,'presence is the fact the operator needs');
 
 -- Analytics are the ledger, counted. Nothing here reads a UI event.
 select is((select a.event_count from api_v1.get_lifecycle_analytics_v1(

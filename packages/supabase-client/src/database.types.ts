@@ -260,10 +260,8 @@ export type Database = {
       get_booking_detail_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
         Returns: {
-          approval_status: string;
           booking_id: string;
           booking_revision: number;
-          calendar_status: string;
           cancelled_at: string;
           contract_version: number;
           currency: string;
@@ -271,27 +269,20 @@ export type Database = {
           customer_full_name: string;
           customer_phone: string;
           duration_minutes: number;
-          ends_at: string;
+          has_intake: boolean;
           history: Json;
-          intake_answers: Json;
-          locale: string;
-          location_id: string;
           location_name: string;
           location_time_zone: string;
           notes: Json;
           notification_status: string;
           payment_status: string;
-          policy_snapshot: Json;
           price_minor: number;
           public_reference: string;
           refund_eligible_minor: number;
-          refund_percent_bps: number;
           reschedule_count: number;
           service_name: string;
-          staff_id: string;
           starts_at: string;
           status: string;
-          tax_rate_bps: number;
         }[];
       };
       get_dashboard_context_v1: {
@@ -799,17 +790,11 @@ export type Database = {
           p_to?: string;
         };
         Returns: {
-          approval_status: string;
           booking_id: string;
           booking_revision: number;
           contract_version: number;
           currency: string;
           customer_display_name: string;
-          ends_at: string;
-          has_intake: boolean;
-          locale: string;
-          location_id: string;
-          location_name: string;
           location_time_zone: string;
           note_count: number;
           notification_status: string;
@@ -817,7 +802,6 @@ export type Database = {
           price_minor: number;
           public_reference: string;
           service_name: string;
-          staff_id: string;
           starts_at: string;
           status: string;
         }[];

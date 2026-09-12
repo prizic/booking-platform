@@ -25,8 +25,6 @@ type DetailOutcome =
   | "note-added"
   | "reason-required";
 
-const transitions = ["check_in", "complete", "correct", "no_show"] as const;
-
 const outcomeForAction = {
   check_in: "checked-in",
   complete: "completed",
@@ -66,7 +64,7 @@ export async function transitionBookingAction(formData: FormData): Promise<never
   const expectedRevision = Number(formData.get("expectedRevision"));
   if (
     typeof bookingId !== "string" ||
-    !transitions.includes(action as BookingTransitionAction) ||
+    !Object.hasOwn(outcomeForAction, action as string) ||
     !Number.isSafeInteger(expectedRevision)
   ) {
     redirect(resultUrl(locale, "invalid-request"));

@@ -516,11 +516,9 @@ create or replace function api_v1.search_bookings_v1(
 )
 returns table(
   contract_version integer, booking_id uuid, public_reference text, status text,
-  approval_status text, payment_status text, notification_status text,
-  service_name text, location_id uuid, location_name text, location_time_zone text,
-  staff_id uuid, starts_at timestamptz, ends_at timestamptz, price_minor bigint,
-  currency text, locale text, booking_revision bigint, customer_display_name text,
-  has_intake boolean, note_count integer
+  payment_status text, notification_status text, service_name text,
+  location_time_zone text, starts_at timestamptz, price_minor bigint, currency text,
+  booking_revision bigint, customer_display_name text, note_count integer
 )
 language sql stable security invoker set search_path = '' set statement_timeout = '5s' as $$
   with scoped as (
@@ -537,12 +535,9 @@ language sql stable security invoker set search_path = '' set statement_timeout 
       and (p_status is null or b.status=p_status)
       and (p_location_id is null or b.location_id=p_location_id)
   )
-  select 1,s.id,s.public_reference,s.status,s.approval_status,s.payment_status,
-    s.notification_status,s.service_name,s.location_id,s.location_name,
-    s.location_time_zone,s.allocated_staff_id,s.starts_at,s.ends_at,s.price_minor,
-    s.currency,s.locale,s.revision,s.customer_display_name,
-    exists (select 1 from app.booking_intake_answers i
-      where i.tenant_id=s.tenant_id and i.booking_id=s.id),
+  select 1,s.id,s.public_reference,s.status,s.payment_status,s.notification_status,
+    s.service_name,s.location_time_zone,s.starts_at,s.price_minor,s.currency,
+    s.revision,s.customer_display_name,
     (select count(*)::integer from app.booking_notes n
       where n.tenant_id=s.tenant_id and n.booking_id=s.id)
   from scoped s
@@ -557,47 +552,42 @@ $$;
 revoke all on function api_v1.search_bookings_v1(uuid,timestamptz,timestamptz,text,text,uuid,uuid) from public,anon;
 grant execute on function api_v1.search_bookings_v1(uuid,timestamptz,timestamptz,text,text,uuid,uuid) to authenticated;
 
--- One booking, everything an operator needs to act on it, in one round trip.
--- Each nested list is an ordinary RLS-governed read, so a calendar-only member
--- gets the same row with the customer, intake, and sensitive notes absent
--- rather than a different, wider DTO.
+-- One booking, everything an operator needs to act on it, in one round trip,
+-- and nothing more. Each nested list is an ordinary RLS-governed read, so a
+-- calendar-only member gets the same row with the customer and the sensitive
+-- notes absent rather than a different, wider DTO. Intake is reported as
+-- presence only: whether a form was filled in is an operational fact, while the
+-- answers are sensitive data that this read has no reason to carry.
 create or replace function api_v1.get_booking_detail_v1(
   p_tenant_id uuid,
   p_booking_id uuid
 )
 returns table(
   contract_version integer, booking_id uuid, public_reference text, status text,
-  approval_status text, payment_status text, notification_status text,
-  calendar_status text, service_name text, location_id uuid, location_name text,
-  location_time_zone text, staff_id uuid, starts_at timestamptz, ends_at timestamptz,
-  duration_minutes integer, price_minor bigint, tax_rate_bps integer, currency text,
-  locale text, booking_revision bigint, reschedule_count integer,
-  cancelled_at timestamptz, refund_percent_bps integer, refund_eligible_minor bigint,
-  policy_snapshot jsonb, customer_full_name text, customer_email text,
-  customer_phone text, intake_answers jsonb, history jsonb, notes jsonb
+  payment_status text, notification_status text, service_name text,
+  location_name text, location_time_zone text, starts_at timestamptz,
+  duration_minutes integer, price_minor bigint, currency text,
+  booking_revision bigint, reschedule_count integer, cancelled_at timestamptz,
+  refund_eligible_minor bigint, customer_full_name text, customer_email text,
+  customer_phone text, has_intake boolean, history jsonb, notes jsonb
 )
 language sql stable security invoker set search_path = '' set statement_timeout = '5s' as $$
-  select 1,b.id,b.public_reference,b.status,b.approval_status,b.payment_status,
-    b.notification_status,b.calendar_status,b.service_name,b.location_id,b.location_name,
-    b.location_time_zone,
-    (select a.staff_id from app.assignment_allocations a
-      where a.tenant_id=b.tenant_id and a.hold_id=b.hold_id and a.staff_id is not null limit 1),
-    b.starts_at,b.ends_at,b.duration_minutes,b.price_minor,b.tax_rate_bps,b.currency,
-    b.locale,b.revision,b.reschedule_count,b.cancelled_at,b.refund_percent_bps,
-    b.refund_eligible_minor,b.policy_snapshot,
+  select 1,b.id,b.public_reference,b.status,b.payment_status,b.notification_status,
+    b.service_name,b.location_name,b.location_time_zone,b.starts_at,b.duration_minutes,
+    b.price_minor,b.currency,b.revision,b.reschedule_count,b.cancelled_at,
+    b.refund_eligible_minor,
     (select c.full_name from app.booking_contacts c
       where c.tenant_id=b.tenant_id and c.booking_id=b.id),
     (select c.email from app.booking_contacts c
       where c.tenant_id=b.tenant_id and c.booking_id=b.id),
     (select c.phone from app.booking_contacts c
       where c.tenant_id=b.tenant_id and c.booking_id=b.id),
-    (select i.answers from app.booking_intake_answers i
+    exists (select 1 from app.booking_intake_answers i
       where i.tenant_id=b.tenant_id and i.booking_id=b.id),
     -- Status history from the ledger, not from a status column read twice.
     coalesce((select jsonb_agg(jsonb_build_object(
         'sequence',e.sequence,'eventType',e.event_type,'actorKind',e.actor_kind,
-        'reason',e.reason,'outcome',e.outcome,'bookingRevision',e.booking_revision,
-        'metadata',e.metadata,'createdAt',e.created_at) order by e.sequence)
+        'reason',e.reason,'createdAt',e.created_at) order by e.sequence)
       from app.booking_events e
       where e.tenant_id=b.tenant_id and e.booking_id=b.id),'[]'::jsonb),
     coalesce((select jsonb_agg(jsonb_build_object(

@@ -65,11 +65,11 @@ export default async function BookingDetailPage({
     <WorkspaceShell current="bookings" labelledBy="detail-title" locale={locale}>
       <Surface as="section" className="requests-queue" labelledBy="detail-title">
         <h1 id="detail-title">
-          {message("detailTitle")}
-          {booking === null ? null : (
+          {booking === null ? (
+            message("detailTitle")
+          ) : (
             <>
-              {" "}
-              · <bdi>{booking.publicReference}</bdi>
+              {booking.serviceName} · <bdi>{booking.publicReference}</bdi>
             </>
           )}
         </h1>
@@ -120,9 +120,57 @@ export default async function BookingDetailPage({
                 <dd>{booking.rescheduleCount}</dd>
               </div>
               <div>
+                <dt>{message("detailLocationLabel")}</dt>
+                <dd>{booking.locationName}</dd>
+              </div>
+              {booking.cancelledAt === null ? null : (
+                <div>
+                  <dt>{message("detailCancelledAtLabel")}</dt>
+                  <dd>
+                    {formatDateTime(
+                      booking.cancelledAt,
+                      locale,
+                      booking.locationTimeZone,
+                    )}
+                  </dd>
+                </div>
+              )}
+              {booking.refundEligibleMinor === null ? null : (
+                <div>
+                  <dt>{message("detailRefundLabel")}</dt>
+                  <dd>
+                    {formatCurrency(
+                      booking.refundEligibleMinor,
+                      booking.currency,
+                      locale,
+                    )}
+                  </dd>
+                </div>
+              )}
+              <div>
                 <dt>{message("detailCustomerLabel")}</dt>
                 {/* Absent, not blanked: the read never carried it. */}
                 <dd>{booking.customerFullName ?? message("detailContactHidden")}</dd>
+              </div>
+              <div>
+                <dt>{message("detailEmailLabel")}</dt>
+                <dd>
+                  {booking.customerEmail === null ? (
+                    message("detailContactHidden")
+                  ) : (
+                    <bdi>{booking.customerEmail}</bdi>
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>{message("detailPhoneLabel")}</dt>
+                <dd>
+                  {booking.customerPhone === null ? (
+                    message("detailContactHidden")
+                  ) : (
+                    <bdi>{booking.customerPhone}</bdi>
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>{message("bookingsListLabel")}</dt>
