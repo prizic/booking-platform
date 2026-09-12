@@ -33,6 +33,20 @@ export type Database = {
           status: string;
         }[];
       };
+      add_booking_note_v1: {
+        Args: {
+          p_body: string;
+          p_booking_id: string;
+          p_request_id?: string;
+          p_tenant_id: string;
+          p_visibility: string;
+        };
+        Returns: {
+          contract_version: number;
+          note_id: string;
+          visibility: string;
+        }[];
+      };
       cancel_booking_v1: {
         Args: {
           p_booking_id: string;
@@ -90,6 +104,32 @@ export type Database = {
           starts_at: string;
           status: string;
           tax_rate_bps: number;
+        }[];
+      };
+      create_booking_on_behalf_v1: {
+        Args: {
+          p_consent_version: string;
+          p_contact: Json;
+          p_customer_time_zone?: string;
+          p_hold_id: string;
+          p_hostname: string;
+          p_idempotency_key: string;
+          p_intake?: Json;
+          p_locale?: string;
+          p_request_id?: string;
+          p_session_token: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          approval_status: string;
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          ends_at: string;
+          public_reference: string;
+          replayed: boolean;
+          starts_at: string;
+          status: string;
         }[];
       };
       create_hold_v1: {
@@ -217,6 +257,34 @@ export type Database = {
           utc_offset_seconds: number;
         }[];
       };
+      get_booking_detail_v1: {
+        Args: { p_booking_id: string; p_tenant_id: string };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          cancelled_at: string;
+          contract_version: number;
+          currency: string;
+          customer_email: string;
+          customer_full_name: string;
+          customer_phone: string;
+          duration_minutes: number;
+          has_intake: boolean;
+          history: Json;
+          location_name: string;
+          location_time_zone: string;
+          notes: Json;
+          notification_status: string;
+          payment_status: string;
+          price_minor: number;
+          public_reference: string;
+          refund_eligible_minor: number;
+          reschedule_count: number;
+          service_name: string;
+          starts_at: string;
+          status: string;
+        }[];
+      };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -261,6 +329,15 @@ export type Database = {
           slot_start: string;
           state: string;
           tax_rate_bps: number;
+        }[];
+      };
+      get_lifecycle_analytics_v1: {
+        Args: { p_from?: string; p_tenant_id: string; p_to?: string };
+        Returns: {
+          booking_count: number;
+          contract_version: number;
+          event_count: number;
+          event_type: string;
         }[];
       };
       get_payment_account_status_v1: {
@@ -702,6 +779,33 @@ export type Database = {
           staff_id: string;
         }[];
       };
+      search_bookings_v1: {
+        Args: {
+          p_from?: string;
+          p_location_id?: string;
+          p_query?: string;
+          p_staff_id?: string;
+          p_status?: string;
+          p_tenant_id: string;
+          p_to?: string;
+        };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          currency: string;
+          customer_display_name: string;
+          location_time_zone: string;
+          note_count: number;
+          notification_status: string;
+          payment_status: string;
+          price_minor: number;
+          public_reference: string;
+          service_name: string;
+          starts_at: string;
+          status: string;
+        }[];
+      };
       set_resource_location_eligibility_v1: {
         Args: {
           p_eligible: boolean;
@@ -747,6 +851,24 @@ export type Database = {
           location_id: string;
           service_id: string;
           staff_id: string;
+        }[];
+      };
+      transition_booking_v1: {
+        Args: {
+          p_action: string;
+          p_booking_id: string;
+          p_expected_revision: number;
+          p_idempotency_key?: string;
+          p_reason?: string;
+          p_request_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          booking_id: string;
+          booking_revision: number;
+          contract_version: number;
+          replayed: boolean;
+          status: string;
         }[];
       };
       verify_management_otp_v1: {

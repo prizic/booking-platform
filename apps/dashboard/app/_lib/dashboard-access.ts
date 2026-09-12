@@ -33,7 +33,6 @@ export interface DashboardDataSource {
   decideBookingRequest?: (
     request: BookingDecisionV1Request,
   ) => Promise<BookingDecisionV1Response>;
-  listBookings?: (tenantId: string) => Promise<readonly BookingSummaryRowV1[]>;
   getTodayWorkspace?: (request: {
     from: string;
     tenantId: string;
@@ -60,6 +59,106 @@ export interface DashboardDataSource {
     publicReason: string | null;
     tenantId: string;
   }) => Promise<void>;
+  searchBookings?: (
+    request: BookingSearchV1Request,
+  ) => Promise<readonly BookingSearchRowV1[]>;
+  getBookingDetail?: (request: {
+    bookingId: string;
+    tenantId: string;
+  }) => Promise<BookingDetailV1 | null>;
+  transitionBooking?: (request: {
+    action: BookingTransitionAction;
+    bookingId: string;
+    expectedRevision: number;
+    idempotencyKey: string;
+    reason: string | null;
+    tenantId: string;
+  }) => Promise<void>;
+  addBookingNote?: (request: {
+    bookingId: string;
+    body: string;
+    tenantId: string;
+    visibility: BookingNoteVisibility;
+  }) => Promise<void>;
+}
+
+/** The §7.1 transitions a member can ask for. The database owns which apply. */
+export type BookingTransitionAction = "check_in" | "complete" | "correct" | "no_show";
+
+export type BookingNoteVisibility = "operational" | "sensitive";
+
+export interface BookingSearchV1Request {
+  readonly from: string | null;
+  readonly locationId: string | null;
+  readonly query: string | null;
+  readonly staffId: string | null;
+  readonly status: string | null;
+  readonly tenantId: string;
+  readonly to: string | null;
+}
+
+/** One row of the searchable booking list (issue #17). */
+export interface BookingSearchRowV1 {
+  readonly bookingId: string;
+  readonly bookingRevision: number;
+  readonly currency: string;
+  readonly customerDisplayName: string | null;
+  readonly locationTimeZone: string;
+  readonly noteCount: number;
+  readonly notificationStatus: string;
+  readonly paymentStatus: string;
+  readonly priceMinor: number;
+  readonly publicReference: string;
+  readonly serviceName: string;
+  readonly startAt: string;
+  readonly status: string;
+}
+
+/** One entry of the immutable status history. */
+export interface BookingHistoryEntryV1 {
+  readonly actorKind: string;
+  readonly createdAt: string;
+  readonly eventType: string;
+  readonly reason: string | null;
+  readonly sequence: number;
+}
+
+/** A note. Sensitive notes are simply absent for a reader without the grant. */
+export interface BookingNoteV1 {
+  readonly body: string;
+  readonly createdAt: string;
+  readonly noteId: string;
+  readonly visibility: BookingNoteVisibility;
+}
+
+/**
+ * One booking with everything an operator needs to act on it. Every
+ * customer-shaped field is nullable because the same read returns the same row
+ * with less in it for a member who may not see that class of data.
+ */
+export interface BookingDetailV1 {
+  readonly bookingId: string;
+  readonly bookingRevision: number;
+  readonly cancelledAt: string | null;
+  readonly currency: string;
+  readonly customerEmail: string | null;
+  readonly customerFullName: string | null;
+  readonly customerPhone: string | null;
+  readonly durationMinutes: number;
+  readonly hasIntake: boolean;
+  readonly history: readonly BookingHistoryEntryV1[];
+  readonly locationName: string;
+  readonly locationTimeZone: string;
+  readonly notes: readonly BookingNoteV1[];
+  readonly notificationStatus: string;
+  readonly paymentStatus: string;
+  readonly priceMinor: number;
+  readonly publicReference: string;
+  readonly refundEligibleMinor: number | null;
+  readonly rescheduleCount: number;
+  readonly serviceName: string;
+  readonly startAt: string;
+  readonly status: string;
 }
 
 /** One item of work in a Today queue (issue #16). */
@@ -81,20 +180,6 @@ export interface TodayItemV1 {
     "arrivals" | "cancellations" | "exceptions" | "payments" | "requests" | "upcoming";
   readonly serviceName: string;
   readonly staffId: string | null;
-  readonly startAt: string;
-  readonly status: string;
-}
-
-/** The minimal upcoming-booking row the staff change surface needs. */
-export interface BookingSummaryRowV1 {
-  readonly bookingId: string;
-  readonly bookingRevision: number;
-  readonly endAt: string;
-  readonly locationName: string;
-  readonly locationTimeZone: string;
-  readonly publicReference: string;
-  readonly serviceName: string;
-  readonly notificationStatus: string;
   readonly startAt: string;
   readonly status: string;
 }

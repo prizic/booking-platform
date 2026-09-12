@@ -182,7 +182,7 @@ Every field belongs to exactly one class. Each class carries: collection purpose
 | Public brand/catalog assets | Logos, service names, prices shown publicly | Anonymous read | Free to log | Delete with tenant |
 | Tenant operational data | Schedules, resources, staff hours, policies | Tenant staff by role | Structured, no redaction needed | Delete on offboarding |
 | Customer PII / contact data | Name, email, phone, address | Tenant staff by role; customer self | Never in URLs, analytics, or client errors | Delete or anonymize per request |
-| Sensitive intake / notes | Intake answers, rendered consent text, free-text notes | Narrowest staff role; never analytics | Never logged, not even truncated | Hard delete on the sensitive-data clock |
+| Sensitive intake / notes | Intake answers, rendered consent text, free-text notes | Narrowest staff role; never analytics. Sensitive booking notes are gated on `customer.pii.view`, the same capability as contact rows and intake answers, so calendar access never grants them; the booking ledger records that a note exists and its visibility, never its text | Never logged, not even truncated | Hard delete on the sensitive-data clock |
 | Authentication / security events | Sign-ins, MFA events, step-up outcomes | Security roles | Metadata only, never credentials | Retained per security retention, not business retention |
 | Payment references and financial ledger | Provider object IDs, amounts, fees, refunds | Finance roles | IDs and amounts only, never card data | Retained for lawful financial evidence |
 | Provider credentials / tokens | API keys, OAuth refresh tokens | No human read path | Never logged; redact authorization headers | Revoke at source, then delete |

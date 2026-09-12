@@ -191,6 +191,53 @@ export type DashboardMessageKey =
   | "availabilityNoSlotsWindow"
   | "availabilityPreviewError"
   | "availabilityLocationTimeZone"
+  | "bookingsSearchLabel"
+  | "bookingsSearchAction"
+  | "bookingsStatusFilterLabel"
+  | "bookingsStatusAll"
+  | "bookingsOpenDetail"
+  | "bookingsNotesLabel"
+  | "bookingsResultCheckedIn"
+  | "bookingsResultCompleted"
+  | "bookingsResultNoShow"
+  | "bookingsResultCorrected"
+  | "bookingsResultNoteAdded"
+  | "bookingsResultNotAllowed"
+  | "bookingsResultReasonRequired"
+  | "detailTitle"
+  | "detailUnavailable"
+  | "detailBackToList"
+  | "detailHistoryTitle"
+  | "detailHistoryActorLabel"
+  | "detailNotesTitle"
+  | "detailNotesEmpty"
+  | "detailNoteOperational"
+  | "detailNoteSensitive"
+  | "detailAddNoteTitle"
+  | "detailNoteBodyLabel"
+  | "detailNoteVisibilityLabel"
+  | "detailAddNote"
+  | "detailLifecycleTitle"
+  | "detailLifecycleHint"
+  | "detailCheckIn"
+  | "detailComplete"
+  | "detailNoShow"
+  | "detailCorrect"
+  | "detailReasonLabel"
+  | "detailPaymentLabel"
+  | "detailPriceLabel"
+  | "detailCustomerLabel"
+  | "detailContactHidden"
+  | "detailIntakePresent"
+  | "detailIntakeAbsent"
+  | "detailRescheduleCountLabel"
+  | "detailDurationLabel"
+  | "detailReferenceLabel"
+  | "detailEmailLabel"
+  | "detailPhoneLabel"
+  | "detailLocationLabel"
+  | "detailCancelledAtLabel"
+  | "detailRefundLabel"
   | "availabilityCustomerTimeZone";
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
@@ -410,6 +457,55 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityPreviewError:
       "Availability could not be checked. Verify the filters and try again.",
     availabilityLocationTimeZone: "Location timezone",
+    bookingsSearchLabel: "Search reference, service, or customer",
+    bookingsSearchAction: "Search",
+    bookingsStatusFilterLabel: "Status",
+    bookingsStatusAll: "Any status",
+    bookingsOpenDetail: "Open booking",
+    bookingsNotesLabel: "Notes",
+    bookingsResultCheckedIn: "Checked in.",
+    bookingsResultCompleted: "Marked complete.",
+    bookingsResultNoShow: "Marked as a no-show.",
+    bookingsResultCorrected: "Status corrected.",
+    bookingsResultNoteAdded: "Note added.",
+    bookingsResultNotAllowed:
+      "This booking cannot make that change from its current status.",
+    bookingsResultReasonRequired: "Correcting a recorded status needs a reason.",
+    detailTitle: "Booking",
+    detailUnavailable: "This booking is not available to you.",
+    detailBackToList: "Back to bookings",
+    detailHistoryTitle: "Status history",
+    detailHistoryActorLabel: "Acted by",
+    detailNotesTitle: "Notes",
+    detailNotesEmpty: "No notes you can read.",
+    detailNoteOperational: "Operational",
+    detailNoteSensitive: "Sensitive",
+    detailAddNoteTitle: "Add a note",
+    detailNoteBodyLabel: "Note",
+    detailNoteVisibilityLabel: "Who may read it",
+    detailAddNote: "Save note",
+    detailLifecycleTitle: "Appointment actions",
+    detailLifecycleHint:
+      "Only the changes this booking can make from its current status will succeed.",
+    detailCheckIn: "Check in",
+    detailComplete: "Complete",
+    detailNoShow: "Mark no-show",
+    detailCorrect: "Correct status",
+    detailReasonLabel: "Internal reason",
+    detailPaymentLabel: "Payment",
+    detailPriceLabel: "Total",
+    detailCustomerLabel: "Customer",
+    detailContactHidden: "Hidden by your role",
+    detailIntakePresent: "Intake answers were provided",
+    detailIntakeAbsent: "No intake answers",
+    detailRescheduleCountLabel: "Times moved",
+    detailDurationLabel: "Duration",
+    detailReferenceLabel: "Reference",
+    detailEmailLabel: "Email",
+    detailPhoneLabel: "Phone",
+    detailLocationLabel: "Location",
+    detailCancelledAtLabel: "Cancelled",
+    detailRefundLabel: "Refund eligible",
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
@@ -619,6 +715,53 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityPreviewError:
       "تعذر التحقق من التوافر. تحقق من عوامل التصفية وحاول مجددًا.",
     availabilityLocationTimeZone: "المنطقة الزمنية للموقع",
+    bookingsSearchLabel: "ابحث بالمرجع أو الخدمة أو العميل",
+    bookingsSearchAction: "بحث",
+    bookingsStatusFilterLabel: "الحالة",
+    bookingsStatusAll: "أي حالة",
+    bookingsOpenDetail: "فتح الحجز",
+    bookingsNotesLabel: "الملاحظات",
+    bookingsResultCheckedIn: "تم تسجيل الوصول.",
+    bookingsResultCompleted: "تم وضع علامة الإكمال.",
+    bookingsResultNoShow: "تم وضع علامة عدم الحضور.",
+    bookingsResultCorrected: "تم تصحيح الحالة.",
+    bookingsResultNoteAdded: "تمت إضافة الملاحظة.",
+    bookingsResultNotAllowed: "لا يمكن لهذا الحجز إجراء هذا التغيير من حالته الحالية.",
+    bookingsResultReasonRequired: "تصحيح حالة مسجلة يتطلب ذكر السبب.",
+    detailTitle: "الحجز",
+    detailUnavailable: "هذا الحجز غير متاح لك.",
+    detailBackToList: "العودة إلى الحجوزات",
+    detailHistoryTitle: "سجل الحالات",
+    detailHistoryActorLabel: "نفّذها",
+    detailNotesTitle: "الملاحظات",
+    detailNotesEmpty: "لا توجد ملاحظات يمكنك قراءتها.",
+    detailNoteOperational: "تشغيلية",
+    detailNoteSensitive: "حساسة",
+    detailAddNoteTitle: "إضافة ملاحظة",
+    detailNoteBodyLabel: "الملاحظة",
+    detailNoteVisibilityLabel: "من يمكنه قراءتها",
+    detailAddNote: "حفظ الملاحظة",
+    detailLifecycleTitle: "إجراءات الموعد",
+    detailLifecycleHint: "تنجح فقط التغييرات المتاحة لهذا الحجز من حالته الحالية.",
+    detailCheckIn: "تسجيل الوصول",
+    detailComplete: "إكمال",
+    detailNoShow: "تسجيل عدم الحضور",
+    detailCorrect: "تصحيح الحالة",
+    detailReasonLabel: "السبب الداخلي",
+    detailPaymentLabel: "الدفع",
+    detailPriceLabel: "الإجمالي",
+    detailCustomerLabel: "العميل",
+    detailContactHidden: "مخفي بحسب دورك",
+    detailIntakePresent: "تم تقديم إجابات النموذج",
+    detailIntakeAbsent: "لا توجد إجابات نموذج",
+    detailRescheduleCountLabel: "عدد مرات النقل",
+    detailDurationLabel: "المدة",
+    detailReferenceLabel: "المرجع",
+    detailEmailLabel: "البريد الإلكتروني",
+    detailPhoneLabel: "الهاتف",
+    detailLocationLabel: "الموقع",
+    detailCancelledAtLabel: "أُلغي في",
+    detailRefundLabel: "المبلغ المستحق للاسترداد",
     availabilityCustomerTimeZone: "المنطقة الزمنية للعميل",
   },
 };

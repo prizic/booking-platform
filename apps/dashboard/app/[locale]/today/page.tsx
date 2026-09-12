@@ -146,7 +146,7 @@ export default async function TodayPage({ params }: TodayPageProps) {
                             href={
                               queue.key === "requests"
                                 ? `/${locale}/requests`
-                                : `/${locale}/bookings`
+                                : `/${locale}/bookings/${item.bookingId}`
                             }
                           >
                             {queue.key === "requests"
