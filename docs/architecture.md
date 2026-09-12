@@ -396,6 +396,39 @@ availability engine, and staff or resource deactivation still demands an
 explicit reassign, cancel, or keep-active decision before it touches a future
 allocation.
 
+A customer (issue #18) is an identity the tenant accumulated across bookings,
+not a record anyone imports. `app.customers` is keyed by
+`sha256(tenant_id || ':' || lower(email))` — the same tenant-salted digest the
+notification worker addresses mail with — and a trigger on `app.booking_contacts`
+resolves it on every booking path, so no booking RPC had to change and whatever
+issue #22 adds is covered without being told. Tenant-salting means two tenants
+holding one address produce different digests and cannot be correlated.
+Correcting a customer rewrites current identity and never the booking contact
+rows: a past booking keeps the details it was actually made under, which is what
+makes it evidence rather than a mutable opinion about who someone is. Consent
+evidence is minimal by construction — document key, version, a hash of the
+rendered text, and a timestamp — and is append-only.
+
+Export, deletion, correction, restriction, and tenant offboarding are one
+restartable machine (`app.privacy_requests` plus a step row per subsystem),
+because they share the hold check, the resume logic, and the audit shape. A step
+that succeeded is never re-run, so a job resumes after a crash, a timeout, or a
+partial provider failure rather than starting again. Every subsystem in the
+dependency closure gets a row even when it has nothing to do: "we checked and it
+did not apply" and "we never looked" are different claims to a regulator, and
+`not_applicable` carries the reason. Backups expire on their own retention and
+are never surgically edited; analytics events age out on their own clocks. A
+legal hold outranks a deletion and is re-checked on every attempt, so a hold
+placed after a request was opened still stops it. Erasure is the one operation
+permitted to break append-only, through a single condition in
+`private.enforce_append_only` gated on a transaction-local GUC that only the
+SECURITY DEFINER erasure engine sets; holding the GUC grants nothing, because no
+application role holds an UPDATE or DELETE privilege on those tables in the first
+place. Erasure hard-deletes sensitive intake and sensitive notes, anonymizes
+contact rows so the booking keeps its shape as financial evidence, and leaves the
+identity row as a referent holding nothing that identifies anybody, with its
+digest replaced so it cannot be re-identified by hashing a guessed address.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

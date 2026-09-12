@@ -47,6 +47,14 @@ export type Database = {
           visibility: string;
         }[];
       };
+      advance_tenant_offboarding_v1: {
+        Args: { p_phase: string; p_tenant_id: string };
+        Returns: {
+          blocked_reason: string;
+          phase: string;
+          status: string;
+        }[];
+      };
       cancel_booking_v1: {
         Args: {
           p_booking_id: string;
@@ -104,6 +112,22 @@ export type Database = {
           starts_at: string;
           status: string;
           tax_rate_bps: number;
+        }[];
+      };
+      correct_customer_v1: {
+        Args: {
+          p_customer_id: string;
+          p_email: string;
+          p_expected_revision: number;
+          p_full_name: string;
+          p_phone?: string;
+          p_preferred_locale?: string;
+          p_tags?: string[];
+          p_tenant_id: string;
+        };
+        Returns: {
+          customer_id: string;
+          revision: number;
         }[];
       };
       create_booking_on_behalf_v1: {
@@ -285,6 +309,28 @@ export type Database = {
           status: string;
         }[];
       };
+      get_customer_detail_v1: {
+        Args: { p_customer_id: string; p_tenant_id: string };
+        Returns: {
+          bookings: Json;
+          consents: Json;
+          created_at: string;
+          customer_id: string;
+          email: string;
+          erased: boolean;
+          full_name: string;
+          intake_count: number;
+          legal_hold: boolean;
+          phone: string;
+          preferred_locale: string;
+          restricted: boolean;
+          restriction_reason: string;
+          revision: number;
+          sensitive_note_count: number;
+          suppressed: boolean;
+          tags: string[];
+        }[];
+      };
       get_dashboard_context_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -350,6 +396,23 @@ export type Database = {
           provider_account_reference: string;
           requirements: Json;
           status: string;
+        }[];
+      };
+      get_privacy_request_v1: {
+        Args: { p_request_id: string; p_tenant_id: string };
+        Returns: {
+          artifact: Json;
+          artifact_expires_at: string;
+          blocked_reason: string;
+          completed_at: string;
+          created_at: string;
+          customer_id: string;
+          detail: Json;
+          kind: string;
+          offboarding_phase: string;
+          request_id: string;
+          status: string;
+          steps: Json;
         }[];
       };
       get_public_catalog_v1: {
@@ -569,6 +632,20 @@ export type Database = {
           status: string;
         }[];
       };
+      list_privacy_requests_v1: {
+        Args: { p_customer_id?: string; p_limit?: number; p_tenant_id: string };
+        Returns: {
+          blocked_reason: string;
+          completed_at: string;
+          created_at: string;
+          customer_id: string;
+          kind: string;
+          offboarding_phase: string;
+          pending_steps: number;
+          request_id: string;
+          status: string;
+        }[];
+      };
       list_tenant_choices_v1: {
         Args: never;
         Returns: {
@@ -578,6 +655,10 @@ export type Database = {
           tenant_id: string;
           tenant_name: string;
         }[];
+      };
+      open_privacy_request_v1: {
+        Args: { p_customer_id: string; p_kind: string; p_tenant_id: string };
+        Returns: string;
       };
       publish_catalog_v1: {
         Args: {
@@ -714,6 +795,13 @@ export type Database = {
           status: string;
         }[];
       };
+      run_privacy_request_v1: {
+        Args: { p_request_id: string; p_tenant_id: string };
+        Returns: {
+          blocked_reason: string;
+          status: string;
+        }[];
+      };
       save_resource_type_v1: {
         Args: {
           p_exclusive: boolean;
@@ -804,6 +892,55 @@ export type Database = {
           service_name: string;
           starts_at: string;
           status: string;
+        }[];
+      };
+      search_customers_v1: {
+        Args: {
+          p_include_erased?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+          p_query?: string;
+          p_tag?: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          booking_count: number;
+          customer_id: string;
+          email: string;
+          erased: boolean;
+          full_name: string;
+          last_booking_at: string;
+          legal_hold: boolean;
+          phone: string;
+          preferred_locale: string;
+          restricted: boolean;
+          revision: number;
+          suppressed: boolean;
+          tags: string[];
+        }[];
+      };
+      set_customer_restriction_v1: {
+        Args: {
+          p_customer_id: string;
+          p_reason?: string;
+          p_restricted: boolean;
+          p_tenant_id: string;
+        };
+        Returns: {
+          customer_id: string;
+          restricted: boolean;
+        }[];
+      };
+      set_legal_hold_v1: {
+        Args: {
+          p_customer_id: string;
+          p_hold: boolean;
+          p_reason: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          held: boolean;
+          hold_id: string;
         }[];
       };
       set_resource_location_eligibility_v1: {

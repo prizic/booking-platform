@@ -172,6 +172,10 @@ join (
     ('tenant_admin', 'customer.data.export', 'approval', 'tenant'),
     ('tenant_admin', 'customer.data.export_on_behalf', 'approval', 'tenant'),
     ('tenant_admin', 'customer.data.correct', 'direct', 'tenant'),
+    -- Restriction is reversible, so it is a direct grant. Erasure is not, so it
+    -- is an approval grant and never happens without a step-up behind it.
+    ('tenant_admin', 'customer.data.restrict', 'direct', 'tenant'),
+    ('tenant_admin', 'customer.data.delete', 'approval', 'tenant'),
     ('tenant_admin', 'brand.manage', 'direct', 'tenant'),
     ('tenant_admin', 'integration.manage', 'direct', 'tenant'),
     ('tenant_admin', 'billing.view', 'direct', 'tenant'),
