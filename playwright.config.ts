@@ -1,11 +1,34 @@
 import { defineConfig, devices } from "@playwright/test";
 
+import { localSupabaseEnvironment } from "./tests/e2e/local-supabase";
+
 const reuseDevServersInCi = Boolean(process.env.CI);
+
+// Issue #94. A Client dev server wired to the local stack's generated
+// credentials, read once and never printed.
+//
+// A separate server rather than configuration on the shared one, because
+// configuration changes what the Client renders: with a database behind it the
+// home page shows the fixture tenant's real catalog instead of an empty state,
+// and every visual, localization and keyboard baseline is taken against that
+// page. The live journey wants a real database; every other project wants a
+// stable page. Two servers is cheaper than arguing about which.
+const liveClientEnvironment = {
+  ...localSupabaseEnvironment(),
+  LOCAL_TENANT_HOST: "client.tenant-a.example.invalid",
+};
 
 const servers = [
   {
     command: "pnpm --filter @wlbp/client exec next dev --port 41730",
     port: 41730,
+    reuseExistingServer: reuseDevServersInCi,
+  },
+  {
+    command:
+      "WLBP_NEXT_DIST_DIR=.next-live-client pnpm --filter @wlbp/client exec next dev --port 41735",
+    env: liveClientEnvironment,
+    port: 41735,
     reuseExistingServer: reuseDevServersInCi,
   },
   {
@@ -63,7 +86,7 @@ export default defineConfig({
   projects: [
     {
       name: "e2e",
-      testMatch: /(?:booking|smoke|foundation)\.spec\.ts$/u,
+      testMatch: /(?:booking|booking-live|smoke|foundation)\.spec\.ts$/u,
     },
     { name: "component", testMatch: /interactions\.spec\.ts$/u },
     { name: "i18n", testMatch: /localization\.spec\.ts$/u },
@@ -73,10 +96,11 @@ export default defineConfig({
     },
     { name: "visual", testMatch: /visual\.spec\.ts/u },
   ],
-  webServer: servers.map(({ command, port, reuseExistingServer }) => ({
-    command,
-    port,
-    reuseExistingServer,
+  webServer: servers.map((server) => ({
+    command: server.command,
+    ...("env" in server ? { env: server.env } : {}),
+    port: server.port,
+    reuseExistingServer: server.reuseExistingServer,
     timeout: 120_000,
   })),
 });
