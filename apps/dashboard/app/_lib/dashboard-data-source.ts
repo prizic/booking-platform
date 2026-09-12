@@ -397,9 +397,7 @@ function toCustomerRow(value: unknown): CustomerRowV1 {
         : new Date(String(row.last_booking_at)).toISOString(),
     legalHold: row.legal_hold === true,
     phone: typeof row.phone === "string" ? row.phone : null,
-    preferredLocale: String(row.preferred_locale ?? "en"),
     restricted: row.restricted === true,
-    revision: requireNumber(row.revision),
     suppressed: row.suppressed === true,
     tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
   };
@@ -445,13 +443,13 @@ function toCustomerDetail(row: Record<string, unknown>): CustomerDetailV1 {
     intakeCount: Number(row.intake_count ?? 0),
     legalHold: row.legal_hold === true,
     phone: typeof row.phone === "string" ? row.phone : null,
-    preferredLocale: String(row.preferred_locale ?? "en"),
     restricted: row.restricted === true,
     restrictionReason:
       typeof row.restriction_reason === "string" ? row.restriction_reason : null,
     revision: requireNumber(row.revision),
     sensitiveNoteCount: Number(row.sensitive_note_count ?? 0),
     suppressed: row.suppressed === true,
+    tags: Array.isArray(row.tags) ? row.tags.map(String) : [],
   };
 }
 
@@ -983,7 +981,6 @@ export function createDashboardDataSource(
         await api.rpc("search_customers_v1", {
           p_include_erased: request.includeErased,
           p_query: request.query,
-          p_tag: request.tag,
           p_tenant_id: request.tenantId,
         }),
       );
@@ -1012,6 +1009,7 @@ export function createDashboardDataSource(
           p_expected_revision: request.expectedRevision,
           p_full_name: request.fullName,
           p_phone: request.phone,
+          p_tags: request.tags,
           p_tenant_id: request.tenantId,
         }),
       );
@@ -1059,6 +1057,40 @@ export function createDashboardDataSource(
           p_tenant_id: request.tenantId,
         }),
       );
+    },
+
+    getPrivacyRequest: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_privacy_request_v1", {
+            p_request_id: request.requestId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      if (row === null) return null;
+      return {
+        // Null unless this caller may export and stepped up, and unexpired.
+        artifact: row.artifact ?? null,
+        artifactExpiresAt:
+          row.artifact_expires_at === null || row.artifact_expires_at === undefined
+            ? null
+            : new Date(String(row.artifact_expires_at)).toISOString(),
+        blockedReason:
+          typeof row.blocked_reason === "string" ? row.blocked_reason : null,
+        kind: requireString(row.kind),
+        requestId: requireString(row.request_id),
+        status: requireString(row.status),
+        steps: (Array.isArray(row.steps) ? row.steps : []).map((entry) => {
+          const step = entry as Record<string, unknown>;
+          return {
+            outcomeCode:
+              typeof step.outcome_code === "string" ? step.outcome_code : null,
+            status: String(step.status ?? "pending"),
+            subsystem: requireString(step.subsystem),
+          };
+        }),
+      };
     },
 
     listPrivacyRequests: async (request) => {

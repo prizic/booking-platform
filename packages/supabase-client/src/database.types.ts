@@ -900,7 +900,6 @@ export type Database = {
           p_limit?: number;
           p_offset?: number;
           p_query?: string;
-          p_tag?: string;
           p_tenant_id: string;
         };
         Returns: {

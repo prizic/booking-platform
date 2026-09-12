@@ -306,7 +306,6 @@ create table app.privacy_requests (
   artifact jsonb check (artifact is null or jsonb_typeof(artifact) = 'object'),
   artifact_expires_at timestamptz,
   blocked_reason text check (blocked_reason is null or char_length(blocked_reason) between 1 and 200),
-  correlation_id uuid not null default pg_catalog.gen_random_uuid(),
   created_at timestamptz not null default statement_timestamp(),
   updated_at timestamptz not null default statement_timestamp(),
   completed_at timestamptz,
@@ -405,7 +404,7 @@ $rls$;
 revoke select on app.privacy_requests from authenticated;
 grant select (id,tenant_id,customer_id,kind,status,offboarding_phase,
   requested_by_membership_id,detail,artifact_expires_at,blocked_reason,
-  correlation_id,created_at,updated_at,completed_at)
+  created_at,updated_at,completed_at)
   on app.privacy_requests to authenticated;
 
 -- `app.notification_suppressions` is revoked from `authenticated` outright, and
@@ -438,7 +437,6 @@ $$;
 create or replace function api_v1.search_customers_v1(
   p_tenant_id uuid,
   p_query text default null,
-  p_tag text default null,
   p_include_erased boolean default false,
   p_limit integer default 25,
   p_offset integer default 0
@@ -483,7 +481,6 @@ as $$
   from app.customers c
   where c.tenant_id = p_tenant_id
     and (p_include_erased or c.erased_at is null)
-    and (p_tag is null or p_tag = any (c.tags))
     and (
       coalesce(btrim(p_query),'') = ''
       or c.full_name ilike '%'||btrim(p_query)||'%'
@@ -1387,7 +1384,7 @@ grant execute on function
 to authenticated;
 
 revoke all on function
-  api_v1.search_customers_v1(uuid,text,text,boolean,integer,integer),
+  api_v1.search_customers_v1(uuid,text,boolean,integer,integer),
   api_v1.get_customer_detail_v1(uuid,uuid),
   api_v1.correct_customer_v1(uuid,uuid,bigint,text,text,text,text,text[]),
   api_v1.set_customer_restriction_v1(uuid,uuid,boolean,text),
@@ -1400,7 +1397,7 @@ revoke all on function
 from public, anon;
 
 grant execute on function
-  api_v1.search_customers_v1(uuid,text,text,boolean,integer,integer),
+  api_v1.search_customers_v1(uuid,text,boolean,integer,integer),
   api_v1.get_customer_detail_v1(uuid,uuid),
   api_v1.correct_customer_v1(uuid,uuid,bigint,text,text,text,text,text[]),
   api_v1.set_customer_restriction_v1(uuid,uuid,boolean,text),

@@ -30,7 +30,7 @@ select ok((select bool_and(relrowsecurity) from pg_class
   'every table this issue adds carries row level security');
 
 select has_function('api_v1'::name,'search_customers_v1'::name,
-  array['uuid','text','text','boolean','integer','integer']);
+  array['uuid','text','boolean','integer','integer']);
 select has_function('api_v1'::name,'get_customer_detail_v1'::name,array['uuid','uuid']);
 select has_function('api_v1'::name,'correct_customer_v1'::name,
   array['uuid','uuid','bigint','text','text','text','text','text[]']);
@@ -50,7 +50,7 @@ select ok(not exists(select 1 from pg_proc p join pg_namespace n on n.oid=p.pron
     'run_privacy_request_v1','get_privacy_request_v1','advance_tenant_offboarding_v1',
     'list_privacy_requests_v1')),
   'every exposed privacy wrapper is security invoker');
-select ok(not has_function_privilege('anon','api_v1.search_customers_v1(uuid,text,text,boolean,integer,integer)','execute')
+select ok(not has_function_privilege('anon','api_v1.search_customers_v1(uuid,text,boolean,integer,integer)','execute')
   and not has_function_privilege('anon','api_v1.get_customer_detail_v1(uuid,uuid)','execute')
   and not has_function_privilege('anon','api_v1.open_privacy_request_v1(uuid,uuid,text)','execute')
   and not has_function_privilege('anon','api_v1.advance_tenant_offboarding_v1(uuid,text)','execute'),

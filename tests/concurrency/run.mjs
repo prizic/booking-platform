@@ -524,9 +524,9 @@ async function concurrentPrivacyRequest(bookingId) {
   report(
     runs.filter((result) => result.ok).every((result) => result.value === "completed"),
     "every session that ran the job sees the same settled outcome",
-    [
-      ...new Set(runs.map((result) => (result.ok ? result.value : result.error))),
-    ].join(" | "),
+    [...new Set(runs.map((result) => (result.ok ? result.value : result.error)))].join(
+      " | ",
+    ),
   );
   const attemptsMax = runSql(
     `select max(attempts) from app.privacy_request_steps

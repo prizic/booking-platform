@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getDashboardMessage } from "../../../_lib/copy";
 import type {
   CustomerDetailV1,
+  PrivacyRequestDetailV1,
   PrivacyRequestRowV1,
 } from "../../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../../_lib/dashboard-server";
@@ -26,12 +27,14 @@ type CustomerDetailPageProps = {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type Loaded = {
-  readonly customer: CustomerDetailV1;
-  readonly jobs: readonly PrivacyRequestRowV1[];
-};
-
-async function load(locale: Locale, customerId: string): Promise<Loaded | null> {
+async function load(
+  locale: Locale,
+  customerId: string,
+): Promise<{
+  customer: CustomerDetailV1;
+  export: PrivacyRequestDetailV1 | null;
+  jobs: readonly PrivacyRequestRowV1[];
+} | null> {
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
@@ -52,7 +55,19 @@ async function load(locale: Locale, customerId: string): Promise<Loaded | null> 
     (await request.source
       .listPrivacyRequests?.({ customerId, tenantId })
       .catch(() => [])) ?? [];
-  return { customer, jobs };
+  // The artifact never travels in a list: it is excluded from the table grant
+  // and comes back only from the function that re-checks capability and
+  // step-up. So the newest finished export is re-read on its own.
+  const newestExport = jobs.find(
+    (job) => job.kind === "export" && job.status === "completed",
+  );
+  const exported =
+    newestExport === undefined
+      ? null
+      : ((await request.source
+          .getPrivacyRequest?.({ requestId: newestExport.requestId, tenantId })
+          .catch(() => null)) ?? null);
+  return { customer, export: exported, jobs };
 }
 
 export default async function CustomerDetailPage({
@@ -66,7 +81,7 @@ export default async function CustomerDetailPage({
 
   const loaded = await load(locale, customerId);
   if (loaded === null) notFound();
-  const { customer, jobs } = loaded;
+  const { customer, export: exported, jobs } = loaded;
 
   const result = typeof query.result === "string" ? query.result : null;
   const resultKey =
@@ -209,6 +224,14 @@ export default async function CustomerDetailPage({
                 name="phone"
                 type="tel"
               />
+              <label htmlFor="correct-tags">{message("customersTagsLabel")}</label>
+              <input
+                defaultValue={customer.tags.join(", ")}
+                id="correct-tags"
+                maxLength={400}
+                name="tags"
+                type="text"
+              />
               <p>{message("customersCorrectHint")}</p>
               <Button type="submit">{message("customersCorrectAction")}</Button>
             </form>
@@ -267,6 +290,28 @@ export default async function CustomerDetailPage({
             </div>
           </form>
         </section>
+
+        {exported === null || exported.artifact === null ? null : (
+          <section aria-labelledby="customer-export-title">
+            <h2 id="customer-export-title">{message("customersExportTitle")}</h2>
+            <p>
+              {message("customersExportExpires")}{" "}
+              {exported.artifactExpiresAt === null
+                ? message("customersErasedValue")
+                : formatDateTime(exported.artifactExpiresAt, locale, "UTC")}
+            </p>
+            {/* ponytail: the artifact is disclosed here, inside a closed
+                disclosure, because there is nowhere to put a file yet: Postgres
+                PITR does not restore deleted Storage objects, so an export
+                written to Storage would have no restore story. Issue #39 brings
+                object backup and a restore drill; this becomes a signed
+                download then. */}
+            <details>
+              <summary>{message("customersExportReveal")}</summary>
+              <pre>{JSON.stringify(exported.artifact, null, 2)}</pre>
+            </details>
+          </section>
+        )}
 
         <section aria-labelledby="customer-jobs-title">
           <h2 id="customer-jobs-title">{message("customersJobsTitle")}</h2>

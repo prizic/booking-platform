@@ -73,6 +73,10 @@ export async function correctCustomerAction(formData: FormData): Promise<never> 
       expectedRevision,
       fullName,
       phone: trimmed(formData, "phone"),
+      tags: (trimmed(formData, "tags") ?? "")
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag !== ""),
       tenantId: request.state.context.tenantId,
     });
     outcome = "corrected";
@@ -170,12 +174,7 @@ export async function runPrivacyRequestAction(formData: FormData): Promise<never
     // A deletion the database refused is still a completed call. The job's own
     // status is what says whether anything was erased, so it is re-read rather
     // than inferred from the absence of an exception.
-    const jobs =
-      (await request.source.listPrivacyRequests?.({
-        customerId,
-        tenantId,
-      })) ?? [];
-    const job = jobs.find((candidate) => candidate.requestId === requestId);
+    const job = await request.source.getPrivacyRequest?.({ requestId, tenantId });
     outcome =
       job?.status === "blocked"
         ? "deletion-blocked"

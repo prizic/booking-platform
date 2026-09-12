@@ -83,7 +83,6 @@ export interface DashboardDataSource {
   searchCustomers?: (request: {
     includeErased: boolean;
     query: string | null;
-    tag: string | null;
     tenantId: string;
   }) => Promise<readonly CustomerRowV1[]>;
   getCustomerDetail?: (request: {
@@ -96,6 +95,7 @@ export interface DashboardDataSource {
     expectedRevision: number;
     fullName: string;
     phone: string | null;
+    tags: readonly string[];
     tenantId: string;
   }) => Promise<void>;
   setCustomerRestriction?: (request: {
@@ -119,6 +119,10 @@ export interface DashboardDataSource {
     requestId: string;
     tenantId: string;
   }) => Promise<void>;
+  getPrivacyRequest?: (request: {
+    requestId: string;
+    tenantId: string;
+  }) => Promise<PrivacyRequestDetailV1 | null>;
   listPrivacyRequests?: (request: {
     customerId: string | null;
     tenantId: string;
@@ -138,9 +142,7 @@ export interface CustomerRowV1 {
   readonly lastBookingAt: string | null;
   readonly legalHold: boolean;
   readonly phone: string | null;
-  readonly preferredLocale: string;
   readonly restricted: boolean;
-  readonly revision: number;
   readonly suppressed: boolean;
   readonly tags: readonly string[];
 }
@@ -174,12 +176,32 @@ export interface CustomerDetailV1 {
   readonly intakeCount: number;
   readonly legalHold: boolean;
   readonly phone: string | null;
-  readonly preferredLocale: string;
   readonly restricted: boolean;
   readonly restrictionReason: string | null;
   readonly revision: number;
   readonly sensitiveNoteCount: number;
   readonly suppressed: boolean;
+  readonly tags: readonly string[];
+}
+
+/**
+ * A finished job with its per-subsystem outcomes and, for an export the caller
+ * is entitled to and has stepped up for, the artifact itself. The list surface
+ * cannot carry this: the artifact is excluded from the table grant and comes
+ * back only from the function that re-checks capability.
+ */
+export interface PrivacyRequestDetailV1 {
+  readonly artifact: unknown;
+  readonly artifactExpiresAt: string | null;
+  readonly blockedReason: string | null;
+  readonly kind: string;
+  readonly requestId: string;
+  readonly status: string;
+  readonly steps: readonly {
+    readonly outcomeCode: string | null;
+    readonly status: string;
+    readonly subsystem: string;
+  }[];
 }
 
 /** A privacy job and how far it got. */

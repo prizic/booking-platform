@@ -42,7 +42,6 @@ async function loadCustomers(
     .searchCustomers({
       includeErased: filters.includeErased,
       query: filters.query,
-      tag: null,
       tenantId: request.state.context.tenantId,
     })
     .catch(() => null);

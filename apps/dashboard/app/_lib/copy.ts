@@ -137,6 +137,10 @@ export type DashboardMessageKey =
   | "customersJobsTitle"
   | "customersNoJobs"
   | "customersPendingSteps"
+  | "customersTagsLabel"
+  | "customersExportTitle"
+  | "customersExportExpires"
+  | "customersExportReveal"
   | "customersResultCorrected"
   | "customersResultRestricted"
   | "customersResultUnrestricted"
@@ -449,6 +453,10 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     customersJobsTitle: "Request history",
     customersNoJobs: "No privacy request has been made for this record.",
     customersPendingSteps: "steps still open",
+    customersTagsLabel: "Tags (comma separated)",
+    customersExportTitle: "Latest export",
+    customersExportExpires: "This export expires on",
+    customersExportReveal: "Show the exported record",
     customersResultCorrected: "The record was corrected. Past bookings are unchanged.",
     customersResultRestricted:
       "Processing is restricted and email to this address is suppressed.",
@@ -770,6 +778,10 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     customersJobsTitle: "سجل الطلبات",
     customersNoJobs: "لم يُقدَّم أي طلب خصوصية لهذا السجل.",
     customersPendingSteps: "خطوات ما زالت مفتوحة",
+    customersTagsLabel: "الوسوم (مفصولة بفواصل)",
+    customersExportTitle: "أحدث تصدير",
+    customersExportExpires: "تنتهي صلاحية هذا التصدير في",
+    customersExportReveal: "إظهار السجل المُصدَّر",
     customersResultCorrected: "تم تصحيح السجل. الحجوزات السابقة لم تتغيّر.",
     customersResultRestricted: "المعالجة مقيّدة والبريد إلى هذا العنوان موقوف.",
     customersResultUnrestricted:
