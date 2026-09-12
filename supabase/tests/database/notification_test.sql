@@ -37,7 +37,7 @@ select ok(not has_function_privilege('anon','private.claim_notification_batch_v1
 select ok(has_function_privilege('authenticated','api_v1.list_booking_notifications_v1(uuid,uuid)','execute')
   and not has_function_privilege('anon','api_v1.list_booking_notifications_v1(uuid,uuid)','execute'),
   'the delivery view is a scoped member read, never anonymous');
-select is((select count(*)::integer from app.notification_templates where retired_at is null),22,
+select is((select count(*)::integer from app.notification_templates where retired_at is null),32,
   'every template key has one live English and Arabic version');
 -- Issue #23. The count is a bound, not the point: what matters is that no key
 -- exists in only one language, which is what would ship an English-only message.

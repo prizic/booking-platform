@@ -128,6 +128,15 @@ export type DashboardMessageKey =
   | "reportsExportRows"
   | "reportsExportCsv"
   | "reportsResultExported"
+  | "paymentsDeliveryTitle"
+  | "paymentsDeliveryStalled"
+  | "paymentsDeliveryQueued"
+  | "paymentsDeliveryOldest"
+  | "paymentsDeliveryFailed"
+  | "paymentsDeliveryBounced"
+  | "paymentsDeliverySuppressed"
+  | "paymentsDeliveryDead"
+  | "paymentsDeliveryResendHint"
   | "paymentsTitle"
   | "paymentsSummary"
   | "paymentsUnavailable"
@@ -509,6 +518,17 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "CSV",
     reportsResultExported: "The export is ready and expires in seven days.",
     paymentsTitle: "Payments",
+    paymentsDeliveryTitle: "Email delivery",
+    paymentsDeliveryStalled:
+      "Mail is not going out on time. Check that the delivery worker is running before contacting customers another way.",
+    paymentsDeliveryQueued: "Waiting to send",
+    paymentsDeliveryOldest: "Oldest waiting (minutes)",
+    paymentsDeliveryFailed: "Failed",
+    paymentsDeliveryBounced: "Bounced or reported as spam",
+    paymentsDeliverySuppressed: "Not sent (address suppressed)",
+    paymentsDeliveryDead: "Given up on",
+    paymentsDeliveryResendHint:
+      "A single message can be resent from the booking it belongs to.",
     paymentsSummary:
       "Refunds, disputes, payouts, and anything the payment provider and this platform disagree about. Every item here is money that needs a decision.",
     paymentsUnavailable:
@@ -907,6 +927,16 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsExportCsv: "ملف CSV",
     reportsResultExported: "التصدير جاهز وتنتهي صلاحيته خلال سبعة أيام.",
     paymentsTitle: "المدفوعات",
+    paymentsDeliveryTitle: "إيصال البريد",
+    paymentsDeliveryStalled:
+      "البريد لا يخرج في وقته. تأكّد من عمل خدمة الإرسال قبل التواصل مع العملاء بطريقة أخرى.",
+    paymentsDeliveryQueued: "في انتظار الإرسال",
+    paymentsDeliveryOldest: "أقدم رسالة منتظرة (دقائق)",
+    paymentsDeliveryFailed: "فشلت",
+    paymentsDeliveryBounced: "ارتدّت أو صُنّفت كمزعجة",
+    paymentsDeliverySuppressed: "لم تُرسل (العنوان موقوف)",
+    paymentsDeliveryDead: "توقّفت المحاولات",
+    paymentsDeliveryResendHint: "يمكن إعادة إرسال أي رسالة من الحجز التابعة له.",
     paymentsSummary:
       "المبالغ المستردة والنزاعات والتحويلات، وكل ما يختلف عليه مزوّد الدفع وهذه المنصّة. كل عنصر هنا مال يحتاج إلى قرار.",
     paymentsUnavailable: "تعذّر تحميل قائمة المدفوعات. هذه ليست قائمة فارغة.",

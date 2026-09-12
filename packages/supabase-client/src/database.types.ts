@@ -499,6 +499,21 @@ export type Database = {
           tenant_name: string;
         }[];
       };
+      get_delivery_health_v1: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          bounced: number;
+          complained: number;
+          contract_version: number;
+          dead_lettered: number;
+          delivered: number;
+          failed: number;
+          oldest_queued_minutes: number;
+          queued: number;
+          sending: number;
+          suppressed: number;
+        }[];
+      };
       get_hold_form_v1: {
         Args: {
           p_application: string;
@@ -1096,6 +1111,14 @@ export type Database = {
           status: string;
         }[];
       };
+      resolve_auth_mail_context_v1: {
+        Args: { p_email: string };
+        Returns: {
+          ambiguous: boolean;
+          brand_name: string;
+          tenant_id: string;
+        }[];
+      };
       resolve_payment_exception_v1: {
         Args: {
           p_exception_id: string;
@@ -1225,6 +1248,13 @@ export type Database = {
         Returns: {
           revision: number;
           staff_id: string;
+        }[];
+      };
+      schedule_booking_reminders_v1: {
+        Args: { p_limit?: number; p_tenant_id?: string };
+        Returns: {
+          scheduled: number;
+          superseded: number;
         }[];
       };
       search_bookings_v1: {

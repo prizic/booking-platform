@@ -135,6 +135,9 @@ export interface DashboardDataSource {
     exportId: string;
     tenantId: string;
   }) => Promise<ReportExportV1 | null>;
+  getDeliveryHealth?: (request: {
+    tenantId: string;
+  }) => Promise<DeliveryHealthV1 | null>;
   listPaymentExceptions?: (request: {
     status: string | null;
     tenantId: string;
@@ -293,6 +296,23 @@ export interface ReportExportV1 {
   readonly rows: readonly Readonly<Record<string, unknown>>[];
   readonly rowCount: number;
   readonly status: string;
+}
+
+/**
+ * Tenant-wide mail health (issue #20). Counts and states only — no address, no
+ * subject, no body. `oldestQueuedMinutes` is the number that says a worker has
+ * stopped, which no per-message view shows.
+ */
+export interface DeliveryHealthV1 {
+  readonly bounced: number;
+  readonly complained: number;
+  readonly deadLettered: number;
+  readonly delivered: number;
+  readonly failed: number;
+  readonly oldestQueuedMinutes: number;
+  readonly queued: number;
+  readonly sending: number;
+  readonly suppressed: number;
 }
 
 /** How an operator can close a queue item. The database owns which are valid. */
