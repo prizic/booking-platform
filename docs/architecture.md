@@ -429,6 +429,27 @@ contact rows so the booking keeps its shape as financial evidence, and leaves th
 identity row as a referent holding nothing that identifies anybody, with its
 digest replaced so it cannot be re-identified by hashing a guessed address.
 
+Reporting (issue #24) counts committed rows and nothing else: `app.booking_events`
+for lifecycle facts and `app.commerce_ledger_entries` for money. A client
+analytics event can be dropped by an ad blocker, fired twice by a retry, or
+fired without a commit; a ledger row cannot exist without the transaction that
+wrote it. Denominators are published rather than implied — the no-show and
+completion rates divide by confirmed plus checked-in plus completed plus no-show,
+and **cancellations are excluded**, because a customer who cancelled did not fail
+to arrive and counting them would make a generous cancellation policy look like
+unreliability. Utilization is booked minutes over offered minutes, where offered
+minutes are the published weekly schedule inside the window minus time off and
+blackouts, and booked minutes include buffers because a buffer is time nobody
+else can have; fairness is the same ratio, so somebody working two days a week is
+not reported as underused. A report day is a day in the tenant's timezone, so a
+23- or 25-hour day is reported as one. Every read and every export carries a
+`report_definition_version`, so a historical comparison can tell whether the
+numbers moved or the calculation did. Money is a separate entitlement from
+operations: a scheduler who runs the day reads the operational report and not the
+revenue one. Export runs as the caller rather than as a definer, so a
+location-limited member exports their own locations and cannot infer anybody
+else's; only the persistence is privileged.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

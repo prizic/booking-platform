@@ -31,6 +31,7 @@ import type {
   CustomerDetailV1,
   CustomerRowV1,
   DashboardDataSource,
+  BookingReportV1,
   PaymentExceptionV1,
   RefundRowV1,
   PrivacyRequestRowV1,
@@ -514,6 +515,24 @@ function toRefundRow(value: unknown): RefundRowV1 {
     reason: String(row.reason ?? "requested_by_customer"),
     refundId: requireString(row.refund_id),
     status: requireString(row.status),
+  };
+}
+
+function toBookingReport(row: Record<string, unknown>): BookingReportV1 {
+  return {
+    averageLeadTimeMinutes: Number(row.average_lead_time_minutes ?? 0),
+    bookingsCancelled: Number(row.bookings_cancelled ?? 0),
+    bookingsCompleted: Number(row.bookings_completed ?? 0),
+    bookingsConfirmed: Number(row.bookings_confirmed ?? 0),
+    bookingsCreated: Number(row.bookings_created ?? 0),
+    bookingsNoShow: Number(row.bookings_no_show ?? 0),
+    bookingsRequested: Number(row.bookings_requested ?? 0),
+    completionRateBps: Number(row.completion_rate_bps ?? 0),
+    medianLeadTimeMinutes: Number(row.median_lead_time_minutes ?? 0),
+    noShowRateBps: Number(row.no_show_rate_bps ?? 0),
+    outcomeDenominator: Number(row.outcome_denominator ?? 0),
+    reportDefinitionVersion: Number(row.report_definition_version ?? 1),
+    timeZone: String(row.time_zone ?? "UTC"),
   };
 }
 
@@ -1135,6 +1154,113 @@ export function createDashboardDataSource(
             subsystem: requireString(step.subsystem),
           };
         }),
+      };
+    },
+
+    getBookingReport: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_booking_report_v1", {
+            p_from: request.from,
+            p_location_id: request.locationId,
+            p_tenant_id: request.tenantId,
+            p_time_zone: request.timeZone,
+            p_to: request.to,
+          }),
+        ),
+      );
+      return row === null ? null : toBookingReport(row);
+    },
+
+    getUtilizationReport: async (request) => {
+      const rows = assertRpc(
+        await api.rpc("get_utilization_report_v1", {
+          p_from: request.from,
+          p_location_id: request.locationId,
+          p_tenant_id: request.tenantId,
+          p_time_zone: request.timeZone,
+          p_to: request.to,
+        }),
+      );
+      return (Array.isArray(rows) ? rows : []).map((value) => {
+        const row = value as Record<string, unknown>;
+        return {
+          bookedMinutes: Number(row.booked_minutes ?? 0),
+          bookingCount: Number(row.booking_count ?? 0),
+          offeredMinutes: Number(row.offered_minutes ?? 0),
+          staffId: requireString(row.staff_id),
+          staffName: typeof row.staff_name === "string" ? row.staff_name : null,
+          utilizationBps: Number(row.utilization_bps ?? 0),
+        };
+      });
+    },
+
+    getRevenueReport: async (request) => {
+      // The database refuses this without the financial capability, so a
+      // reader who may not see money gets no revenue panel rather than zeroes.
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_revenue_report_v1", {
+            p_from: request.from,
+            p_tenant_id: request.tenantId,
+            p_time_zone: request.timeZone,
+            p_to: request.to,
+          }),
+        ),
+      );
+      if (row === null) return null;
+      return {
+        averageOrderValueMinor: Number(row.average_order_value_minor ?? 0),
+        chargeCount: Number(row.charge_count ?? 0),
+        chargedMinor: Number(row.charged_minor ?? 0),
+        currency: String(row.currency ?? ""),
+        netMinor: Number(row.net_minor ?? 0),
+        outstandingMinor: Number(row.outstanding_minor ?? 0),
+        refundCount: Number(row.refund_count ?? 0),
+        refundedMinor: Number(row.refunded_minor ?? 0),
+        unsettledPayments: Number(row.unsettled_payments ?? 0),
+      };
+    },
+
+    runReportExport: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("run_report_export_v1", {
+            p_from: request.from,
+            p_location_id: request.locationId,
+            p_report_key: request.reportKey,
+            p_tenant_id: request.tenantId,
+            p_time_zone: request.timeZone,
+            p_to: request.to,
+          }),
+        ),
+      );
+      return String(row?.export_id ?? "");
+    },
+
+    getReportExport: async (request) => {
+      const row = firstRow(
+        assertRpc(
+          await api.rpc("get_report_export_v1", {
+            p_export_id: request.exportId,
+            p_tenant_id: request.tenantId,
+          }),
+        ),
+      );
+      if (row === null) return null;
+      return {
+        exportId: requireString(row.export_id),
+        expiresAt:
+          row.expires_at === null || row.expires_at === undefined
+            ? null
+            : new Date(String(row.expires_at)).toISOString(),
+        reportKey: requireString(row.report_key),
+        // Null once expired, or when the reader may not see the money it holds.
+        rows: Array.isArray(row.rows_payload)
+          ? (row.rows_payload as Readonly<Record<string, unknown>>[])
+          : [],
+        rowCount: Number(row.row_count ?? 0),
+        status: requireString(row.status),
       };
     },
 

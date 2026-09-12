@@ -91,6 +91,43 @@ export type DashboardMessageKey =
   | "navToday"
   | "navCalendar"
   | "navBookings"
+  | "navReports"
+  | "reportsTitle"
+  | "reportsSummary"
+  | "reportsUnavailable"
+  | "reportsFromLabel"
+  | "reportsToLabel"
+  | "reportsTimeZoneLabel"
+  | "reportsApplyAction"
+  | "reportsBookingsTitle"
+  | "reportsDenominatorNote"
+  | "reportsEmptyWindow"
+  | "reportsCreatedLabel"
+  | "reportsCompletedLabel"
+  | "reportsNoShowLabel"
+  | "reportsCancelledLabel"
+  | "reportsNoShowRateLabel"
+  | "reportsCompletionRateLabel"
+  | "reportsMedianLeadLabel"
+  | "reportsDefinitionLabel"
+  | "reportsUtilizationTitle"
+  | "reportsUtilizationNote"
+  | "reportsUtilizationEmpty"
+  | "reportsBookingsUnit"
+  | "reportsRevenueTitle"
+  | "reportsUnsettledNote"
+  | "reportsChargedLabel"
+  | "reportsRefundedLabel"
+  | "reportsNetLabel"
+  | "reportsAovLabel"
+  | "reportsOutstandingLabel"
+  | "reportsCustomersTitle"
+  | "reportsExportTitle"
+  | "reportsExportWhich"
+  | "reportsExportAction"
+  | "reportsExportRows"
+  | "reportsExportCsv"
+  | "reportsResultExported"
   | "paymentsTitle"
   | "paymentsSummary"
   | "paymentsUnavailable"
@@ -430,6 +467,47 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCalendar: "Calendar",
     navBookings: "Bookings",
     navPayments: "Payments",
+    navReports: "Reports",
+    reportsTitle: "Reports",
+    reportsSummary:
+      "Every number here is counted from committed records — the booking ledger and the financial ledger — not from anything a browser reported.",
+    reportsUnavailable: "The report could not be loaded. This is not a quiet week.",
+    reportsFromLabel: "From",
+    reportsToLabel: "To",
+    reportsTimeZoneLabel: "Time zone",
+    reportsApplyAction: "Apply",
+    reportsBookingsTitle: "Bookings",
+    reportsDenominatorNote:
+      "Rates below are out of this many outcomes (cancellations excluded):",
+    reportsEmptyWindow:
+      "Nothing happened in this window, so the rates are zero because there was nothing to measure — not because everything went well.",
+    reportsCreatedLabel: "Created",
+    reportsCompletedLabel: "Completed",
+    reportsNoShowLabel: "No-shows",
+    reportsCancelledLabel: "Cancelled",
+    reportsNoShowRateLabel: "No-show rate",
+    reportsCompletionRateLabel: "Completion rate",
+    reportsMedianLeadLabel: "Median lead time (minutes)",
+    reportsDefinitionLabel: "Definition",
+    reportsUtilizationTitle: "Utilization",
+    reportsUtilizationNote:
+      "Booked minutes out of offered minutes. Offered hours exclude time off and blackouts, and booked minutes include buffers, because a buffer is time nobody else can have.",
+    reportsUtilizationEmpty: "No published working hours in this window.",
+    reportsBookingsUnit: "bookings",
+    reportsRevenueTitle: "Revenue",
+    reportsUnsettledNote: "Payments still in flight, so these totals may still move:",
+    reportsChargedLabel: "Charged",
+    reportsRefundedLabel: "Refunded",
+    reportsNetLabel: "Net",
+    reportsAovLabel: "Average order value",
+    reportsOutstandingLabel: "Outstanding balances",
+    reportsCustomersTitle: "Customers",
+    reportsExportTitle: "Export",
+    reportsExportWhich: "Which report",
+    reportsExportAction: "Export",
+    reportsExportRows: "Rows in this export:",
+    reportsExportCsv: "CSV",
+    reportsResultExported: "The export is ready and expires in seven days.",
     paymentsTitle: "Payments",
     paymentsSummary:
       "Refunds, disputes, payouts, and anything the payment provider and this platform disagree about. Every item here is money that needs a decision.",
@@ -787,6 +865,47 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCalendar: "التقويم",
     navBookings: "الحجوزات",
     navPayments: "المدفوعات",
+    navReports: "التقارير",
+    reportsTitle: "التقارير",
+    reportsSummary:
+      "كل رقم هنا محسوب من سجلات مثبتة — سجل الحجوزات والسجل المالي — وليس من أي شيء أبلغ عنه المتصفّح.",
+    reportsUnavailable: "تعذّر تحميل التقرير. هذا ليس أسبوعاً هادئاً.",
+    reportsFromLabel: "من",
+    reportsToLabel: "إلى",
+    reportsTimeZoneLabel: "المنطقة الزمنية",
+    reportsApplyAction: "تطبيق",
+    reportsBookingsTitle: "الحجوزات",
+    reportsDenominatorNote:
+      "النِّسب أدناه محسوبة من هذا العدد من النتائج (باستثناء الإلغاءات):",
+    reportsEmptyWindow:
+      "لم يحدث شيء في هذه الفترة، فالنِّسب صفر لعدم وجود ما يُقاس، لا لأن كل شيء سار على ما يرام.",
+    reportsCreatedLabel: "أُنشئت",
+    reportsCompletedLabel: "اكتملت",
+    reportsNoShowLabel: "عدم حضور",
+    reportsCancelledLabel: "أُلغيت",
+    reportsNoShowRateLabel: "نسبة عدم الحضور",
+    reportsCompletionRateLabel: "نسبة الاكتمال",
+    reportsMedianLeadLabel: "وسيط مدة الحجز المسبق (دقائق)",
+    reportsDefinitionLabel: "التعريف",
+    reportsUtilizationTitle: "معدّل الاستغلال",
+    reportsUtilizationNote:
+      "الدقائق المحجوزة من الدقائق المتاحة. لا تشمل الساعات المتاحة الإجازات وفترات التوقف، وتشمل الدقائق المحجوزة الفواصل، لأن الفاصل وقت لا يمكن لأحد آخر أخذه.",
+    reportsUtilizationEmpty: "لا توجد ساعات عمل منشورة في هذه الفترة.",
+    reportsBookingsUnit: "حجوزات",
+    reportsRevenueTitle: "الإيرادات",
+    reportsUnsettledNote: "مدفوعات ما زالت قيد التنفيذ، وقد تتغيّر هذه الإجماليات:",
+    reportsChargedLabel: "المحصّل",
+    reportsRefundedLabel: "المسترد",
+    reportsNetLabel: "الصافي",
+    reportsAovLabel: "متوسط قيمة الطلب",
+    reportsOutstandingLabel: "المبالغ المتبقية",
+    reportsCustomersTitle: "العملاء",
+    reportsExportTitle: "التصدير",
+    reportsExportWhich: "أي تقرير",
+    reportsExportAction: "تصدير",
+    reportsExportRows: "عدد الصفوف في هذا التصدير:",
+    reportsExportCsv: "ملف CSV",
+    reportsResultExported: "التصدير جاهز وتنتهي صلاحيته خلال سبعة أيام.",
     paymentsTitle: "المدفوعات",
     paymentsSummary:
       "المبالغ المستردة والنزاعات والتحويلات، وكل ما يختلف عليه مزوّد الدفع وهذه المنصّة. كل عنصر هنا مال يحتاج إلى قرار.",
