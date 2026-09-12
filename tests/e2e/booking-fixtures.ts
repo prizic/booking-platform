@@ -30,12 +30,16 @@ const availability = {
 
 const heldSlot = {
   form: {
+    balanceMinor: 0,
     consentText: "Cancellations are free up to 24 hours before.",
     consentVersion: "2",
+    // Issue #22. A free service owes nothing today and leaves no balance.
+    dueMinor: 0,
     fields: [
       { key: "reason", label: "Reason for visit", maxLength: 500, required: true },
     ],
     locationName: "Downtown",
+    paymentMode: "none",
     serviceName: "Initial consultation",
   },
   hold: {
@@ -124,6 +128,69 @@ export async function stubBookingApi(page: Page, options: StubOptions = {}) {
     });
   });
   return submissions;
+}
+
+/**
+ * Issue #22. The same journey for a service that takes a deposit. The hold form
+ * carries what the server decided is owed today and what is left, and the
+ * details step posts to the checkout route instead of the booking route.
+ */
+export async function stubDepositCheckout(
+  page: Page,
+  outcome: {
+    readonly redirectUrl?: string | null;
+    readonly status?: Record<string, unknown>;
+  } = {},
+) {
+  await page.route("**/api/availability**", (route) =>
+    route.fulfill({ json: availability }),
+  );
+  await page.route("**/api/holds", (route) =>
+    route.fulfill({
+      json: {
+        ...heldSlot,
+        form: {
+          ...heldSlot.form,
+          balanceMinor: 13_500,
+          dueMinor: 4_500,
+          paymentMode: "deposit",
+        },
+      },
+    }),
+  );
+  await page.route("**/api/checkout", (route) =>
+    route.fulfill({
+      json: {
+        checkout: {
+          balanceMinor: 13_500,
+          currency: "SAR",
+          dueMinor: 4_500,
+          paymentAttemptId: "0a3f2b64-0000-4000-8000-00000000000a",
+          paymentMode: "deposit",
+          status: "requires_payment",
+          taxMinor: 0,
+          totalMinor: 18_000,
+        },
+        redirectUrl: outcome.redirectUrl ?? null,
+      },
+    }),
+  );
+  await page.route("**/api/checkout/status", (route) =>
+    route.fulfill({
+      json: outcome.status ?? {
+        balanceMinor: 13_500,
+        bookingId: null,
+        bookingStatus: null,
+        currency: "SAR",
+        dueMinor: 4_500,
+        exceptionCode: "hold_lost",
+        paymentStatus: "failed",
+        publicReference: null,
+        purpose: "deposit",
+        status: "exception",
+      },
+    }),
+  );
 }
 
 export async function reachDetailsStep(page: Page, locale: "en" | "ar") {

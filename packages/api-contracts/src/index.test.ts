@@ -704,13 +704,55 @@ describe("confirm booking v1", () => {
   it("accepts only a declared hold form shape", () => {
     expect(
       parseHoldFormV1({
+        balanceMinor: 0,
         consentText: "Cancellations are free up to 24 hours before.",
         consentVersion: "2",
+        dueMinor: 0,
         fields: [{ key: "reason", label: "Reason", maxLength: 500, required: true }],
         locationName: "Downtown",
+        paymentMode: "none",
         serviceName: "Initial consultation",
       }).fields[0]?.key,
     ).toBe("reason");
+    // Issue #22. A deposit is carried as two server-decided numbers, so the
+    // customer sees what is owed today and what is owed later.
+    expect(
+      parseHoldFormV1({
+        balanceMinor: 13500,
+        consentText: "",
+        consentVersion: "1",
+        dueMinor: 4500,
+        fields: [],
+        locationName: "Downtown",
+        paymentMode: "deposit",
+        serviceName: "Initial consultation",
+      }),
+    ).toMatchObject({ balanceMinor: 13500, dueMinor: 4500, paymentMode: "deposit" });
+    // An unknown mode is refused rather than treated as free.
+    expect(() =>
+      parseHoldFormV1({
+        balanceMinor: 0,
+        consentText: "",
+        consentVersion: "1",
+        dueMinor: 0,
+        fields: [],
+        locationName: "Downtown",
+        paymentMode: "invoice",
+        serviceName: "Initial consultation",
+      }),
+    ).toThrow();
+    expect(() =>
+      parseHoldFormV1({
+        balanceMinor: 0,
+        consentText: "",
+        consentVersion: "1",
+        dueMinor: -1,
+        fields: [],
+        locationName: "Downtown",
+        paymentMode: "full",
+        serviceName: "Initial consultation",
+      }),
+    ).toThrow();
     expect(() =>
       parseHoldFormV1({
         consentText: "",

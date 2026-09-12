@@ -87,6 +87,23 @@ export type ClientMessageKey =
   | "bookingServiceLabel"
   | "bookingLocationLabel"
   | "bookingTotalLabel"
+  | "bookingPaymentPendingStatus"
+  | "bookingPaymentProblemStatus"
+  | "bookingPaymentPendingTitle"
+  | "bookingPaymentPendingSummary"
+  | "bookingPaymentFailedTitle"
+  | "bookingPaymentFailedSummary"
+  | "bookingPaymentExceptionTitle"
+  | "bookingPaymentExceptionSummary"
+  | "bookingPaymentRetryHint"
+  | "bookingPaymentRefundHint"
+  | "bookingPaymentUnavailableTitle"
+  | "bookingPaymentUnavailableSummary"
+  | "bookingDueTodayLabel"
+  | "bookingPaidTodayLabel"
+  | "bookingBalanceDueLabel"
+  | "bookingPayAction"
+  | "bookingDepositNotice"
   | "bookingStatusLabel"
   | "bookingStatusConfirmed"
   | "bookingNotificationQueued"
@@ -260,6 +277,30 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingServiceLabel: "Service",
     bookingLocationLabel: "Location",
     bookingTotalLabel: "Total",
+    bookingPaymentPendingStatus: "Payment pending",
+    bookingPaymentProblemStatus: "Payment problem",
+    bookingPaymentPendingTitle: "We are still waiting for your payment",
+    bookingPaymentPendingSummary:
+      "Your bank has not confirmed this payment yet. Your time is still held, and this page will show the confirmation as soon as the payment clears.",
+    bookingPaymentFailedTitle: "That payment did not go through",
+    bookingPaymentFailedSummary:
+      "Nothing was charged. Your time is still held for a short while, so you can choose it again and try a different card.",
+    bookingPaymentExceptionTitle: "We could not hold your time after all",
+    bookingPaymentExceptionSummary:
+      "Your payment went through, but the time you chose was no longer available by the time it cleared. We have not booked anything.",
+    bookingPaymentRetryHint:
+      "You can try again without losing the details you entered.",
+    bookingPaymentRefundHint:
+      "A refund has been started automatically. Please allow a few days for it to reach your account, and contact the business if you would like to rebook.",
+    bookingPaymentUnavailableTitle: "Payment is temporarily unavailable",
+    bookingPaymentUnavailableSummary:
+      "We could not reach the payment provider. Nothing was charged and your time is still held, so please try again in a moment.",
+    bookingDueTodayLabel: "Due today",
+    bookingPaidTodayLabel: "Paid today",
+    bookingBalanceDueLabel: "Balance due at your appointment",
+    bookingPayAction: "Continue to payment",
+    bookingDepositNotice:
+      "This service takes a deposit now. The balance is due at your appointment.",
     bookingStatusLabel: "Status",
     bookingStatusConfirmed: "Confirmed — no payment needed",
     bookingNotificationQueued:
@@ -447,6 +488,28 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingServiceLabel: "الخدمة",
     bookingLocationLabel: "الموقع",
     bookingTotalLabel: "الإجمالي",
+    bookingPaymentPendingStatus: "الدفع قيد الانتظار",
+    bookingPaymentProblemStatus: "مشكلة في الدفع",
+    bookingPaymentPendingTitle: "ما زلنا بانتظار تأكيد دفعتك",
+    bookingPaymentPendingSummary:
+      "لم يؤكّد البنك هذه الدفعة بعد. ما زال موعدك محجوزاً، وستظهر هنا رسالة التأكيد فور اكتمال الدفع.",
+    bookingPaymentFailedTitle: "لم تتم عملية الدفع",
+    bookingPaymentFailedSummary:
+      "لم يُخصم أي مبلغ. ما زال موعدك محجوزاً لفترة قصيرة، ويمكنك اختياره مجدداً والمحاولة ببطاقة أخرى.",
+    bookingPaymentExceptionTitle: "لم نتمكّن من تثبيت موعدك",
+    bookingPaymentExceptionSummary:
+      "تمت عملية الدفع، لكن الموعد الذي اخترته لم يعد متاحاً عند اكتمالها. لم نُنشئ أي حجز.",
+    bookingPaymentRetryHint: "يمكنك المحاولة مرة أخرى دون فقدان البيانات التي أدخلتها.",
+    bookingPaymentRefundHint:
+      "بدأنا إجراءات استرداد المبلغ تلقائياً. قد يستغرق وصوله إلى حسابك بضعة أيام، ويسعدنا تواصلك مع النشاط لإعادة الحجز.",
+    bookingPaymentUnavailableTitle: "الدفع غير متاح مؤقتاً",
+    bookingPaymentUnavailableSummary:
+      "تعذّر الوصول إلى مزوّد الدفع. لم يُخصم أي مبلغ وما زال موعدك محجوزاً، فيرجى المحاولة بعد لحظات.",
+    bookingDueTodayLabel: "المستحق اليوم",
+    bookingPaidTodayLabel: "المدفوع اليوم",
+    bookingBalanceDueLabel: "المتبقي عند الموعد",
+    bookingPayAction: "المتابعة إلى الدفع",
+    bookingDepositNotice: "يتطلّب هذا الحجز عربوناً الآن، ويُدفع المتبقي عند الموعد.",
     bookingStatusLabel: "الحالة",
     bookingStatusConfirmed: "مؤكّد — لا حاجة للدفع",
     bookingNotificationQueued:

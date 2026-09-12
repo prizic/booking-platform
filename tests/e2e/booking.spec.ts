@@ -11,6 +11,7 @@ import {
   slotEnd,
   slotStart,
   stubBookingApi,
+  stubDepositCheckout,
 } from "./booking-fixtures";
 
 for (const profile of responsiveProfiles) {
@@ -369,5 +370,68 @@ test.describe("guest booking changes", () => {
     );
     // The booking facts are still on screen: nothing was applied.
     await expect(page.getByText(managementView.booking.publicReference)).toBeVisible();
+  });
+});
+
+// Issue #22. A deposit-backed booking: what is owed is stated before the
+// customer goes anywhere, and every way the payment can end has a sentence.
+test.describe("deposit checkout", () => {
+  test("states the deposit and the balance before asking for payment", async ({
+    page,
+  }) => {
+    await stubDepositCheckout(page);
+    await reachDetailsStep(page, "en");
+
+    await expect(page.getByText(/due today/iu)).toBeVisible();
+    await expect(page.getByText(/balance due at your appointment/iu)).toBeVisible();
+    // The server's figures, rendered as money in the customer's locale.
+    await expect(page.getByText(/45\.00/u)).toBeVisible();
+    await expect(page.getByText(/135\.00/u)).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /continue to payment/iu }),
+    ).toBeVisible();
+  });
+
+  test("shows a recoverable message when the provider cannot be reached", async ({
+    page,
+  }) => {
+    await stubDepositCheckout(page, { redirectUrl: null });
+    await reachDetailsStep(page, "en");
+    await fillDetails(page);
+    await page.getByRole("button", { name: /continue to payment/iu }).click();
+
+    await expect(
+      page.getByRole("heading", { name: /payment is temporarily unavailable/iu }),
+    ).toBeVisible();
+    // Nothing was charged and the customer is not stranded.
+    await expect(page.getByText(/nothing was charged/iu)).toBeVisible();
+  });
+
+  test("tells a customer plainly when their slot went while they paid", async ({
+    page,
+  }) => {
+    await stubDepositCheckout(page);
+    await page.goto(
+      `${clientOrigin}/en/book${bookingQuery}&checkout=return&hold=0a3f2b64-0000-4000-8000-000000000001`,
+    );
+
+    await expect(
+      page.getByRole("heading", { name: /could not hold your time/iu }),
+    ).toBeVisible();
+    await expect(page.getByText(/refund has been started/iu)).toBeVisible();
+    // A booking that does not exist is never shown as one.
+    await expect(page.getByText(/your booking is confirmed/iu)).toHaveCount(0);
+  });
+
+  test("keeps the Arabic recovery path complete", async ({ page }) => {
+    await stubDepositCheckout(page);
+    await page.goto(
+      `${clientOrigin}/ar/book${bookingQuery}&checkout=return&hold=0a3f2b64-0000-4000-8000-000000000001`,
+    );
+
+    await expect(
+      page.getByRole("heading", { name: /لم نتمكّن من تثبيت موعدك/u }),
+    ).toBeVisible();
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
   });
 });
