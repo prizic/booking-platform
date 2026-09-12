@@ -72,6 +72,9 @@ const forbiddenContent = [
   /@wlbp\/platform-admin/u,
   /apps\/platform-admin/u,
   /control-plane\//u,
+  // Issue #27. The control-plane schema is named in SQL and in privileged
+  // clients; a distributed instance has no business referring to it at all.
+  /control_plane\./u,
   /SUPABASE_SERVICE_ROLE_KEY/u,
   /SUPABASE_SECRET_KEY/u,
 ];

@@ -126,6 +126,7 @@ select is(
     'private.get_commerce_health_v1()',
     'private.get_customer_report_v1(uuid,date,date,text)',
     'private.get_hold_form_v1(text,text,uuid,text,text)',
+    'private.get_platform_notice_v1()',
     'private.get_privacy_request_v1(uuid,uuid)',
     'private.get_public_navigation_v1(text,text)',
     'private.get_published_brand_v1(text,text)',

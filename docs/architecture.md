@@ -516,6 +516,36 @@ at a page that does not exist. Settings changes are append-only events recording
 which documents moved and who moved them, never their values — a settings
 document can carry a reply-to address.
 
+The control plane (issue #27) lives in its own `control_plane` schema, and the
+reason is the whole design: `anon` and `authenticated` are never granted USAGE on
+it. A tenant session cannot reach those tables to be refused by a policy — it
+cannot name them. That is a stronger statement than row level security and the
+right one for a schema whose rows are *about* tenants rather than owned by them;
+every table in it still carries RLS as a second lock, and `check:distribution`
+and `check:bundles` both refuse the schema name in anything distributable.
+
+Everything infrastructural is recorded as **desired versus current**: what we
+asked for, what we last observed, when, how many attempts it took, and a
+sanitized error code. A third-party API call that returned 200 last Tuesday is
+not a fact about today, so drift is a value an operator can read rather than a
+surprise a customer finds. External resources are keyed by the provider's stable
+identifier rather than a mutable name, because a repository can be renamed and a
+reconciler still has to find it.
+
+There are no secrets in the control plane structurally: columns hold references,
+fingerprints and status, and a check constraint refuses anything shaped like a
+credential, so a provisioning worker that puts a token in a payload fails loudly
+at the write rather than quietly storing a key that then appears in every backup.
+Privileged work is a queued job row with attempts and an audit trail rather than
+a call fired from a request handler, because a destructive call that
+half-succeeds has nowhere to resume from; destructive kinds require a second
+operator, and the approver may not be the requester. Operator standing is
+re-read on every privileged call rather than trusted from a session claim, so
+revoking somebody takes effect on their next action rather than when their token
+expires, and break-glass cannot be created without an expiry. The one thing that
+crosses the boundary outward is an incident banner, which carries a bilingual
+message and an end time and nothing about any tenant, flag key or kill switch.
+
 Rescheduling is lineage plus a new booking revision, not a terminal `rescheduled` status: hold and allocate the new slot before releasing the old one, complete atomically, and preserve old time, price/policy snapshot, actor, reason, and revision in history. Recurring series require explicit "this occurrence" / "this and future" / "entire series" semantics.
 
 Time and DST: store start/end as UTC `timestamptz` plus the IANA timezone used for interpretation and display; keep weekly rules in local civil time plus timezone; never store only a numeric UTC offset; test nonexistent spring-forward and duplicated fall-back times; show the timezone at slot selection, review, confirmation, email, calendar export, and Dashboard detail; when timezone rules change, preserve booked instants and the original booking-time context.

@@ -3,7 +3,16 @@ import { spawnSync } from "node:child_process";
 import { failCheck, repositoryRoot } from "./workspace.mjs";
 
 const errors = [];
-const revisions = spawnSync("git", ["rev-list", "--all"], {
+// The history that merging this checkout would actually put into the product,
+// rather than every object the clone happens to hold.
+//
+// `--all` was the original scope and it cannot stay green: CI clones every
+// branch in the repository, and a commit that was amended away is still present
+// in that clone for a while afterwards. A secret shape in a commit that can
+// never reach `main` would then fail this gate forever, with no commit left to
+// fix. Nothing is lost by narrowing it — a secret on another branch fails that
+// branch's own run, which is where somebody can still do something about it.
+const revisions = spawnSync("git", ["rev-list", "HEAD"], {
   cwd: repositoryRoot,
   encoding: "utf8",
 });
