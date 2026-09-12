@@ -160,6 +160,11 @@ const ignoredDirectoryNames = new Set([
   ".turbo",
   "coverage",
   "dist",
+  // Issue #29. The distribution export is build output, not workspace source:
+  // it deliberately contains its own pruned lockfile and a copy of every
+  // distributed member, and every checker that walks the tree would otherwise
+  // read it as a second workspace.
+  "dist-distribution",
   "node_modules",
 ]);
 
