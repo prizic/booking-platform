@@ -30,9 +30,11 @@ select is(
 select ok(not exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='api_v1' and p.proname in ('save_schedule_config_v1','get_schedule_workspace_v1') and p.prosecdef), 'schedule API functions are invoker functions');
 select ok((select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='private' and p.proname='can_manage_schedule_scope')=1, 'schedule scope authorization is a single narrow helper');
 
-select is((select count(*)::integer from app.schedule_scopes where tenant_id='a0000000-0000-0000-0000-000000000001'), 1, 'seed contains one tenant A location scope');
+-- Two location scopes and the journey fixture's own staff scope (issue #94):
+-- a location scope is opening hours, a staff scope is somebody being there.
+select is((select count(*)::integer from app.schedule_scopes where tenant_id='a0000000-0000-0000-0000-000000000001'), 3, 'seed contains both tenant A location scopes and the bookable staff scope');
 select is((select count(*)::integer from app.schedule_scopes where tenant_id='b0000000-0000-0000-0000-000000000001'), 1, 'seed contains one tenant B location scope');
-select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where kind='weekly'), 5, 'workspace exposes only normalized weekly rows');
+select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where kind='weekly'), 15, 'workspace exposes only normalized weekly rows');
 select ok(not exists (select 1 from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where reason is not null and kind not in ('time_off','holiday','blackout','maintenance')), 'schedule workspace keeps reason fields limited to exception records');
 
 select throws_ok(
@@ -42,7 +44,7 @@ select throws_ok(
 
 select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}', true);
 set local role authenticated;
-select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where kind='weekly'), 5, 'tenant A scheduler can read the complete schedule workspace');
+select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('a0000000-0000-0000-0000-000000000001',null) where kind='weekly'), 15, 'tenant A scheduler can read the complete schedule workspace');
 select is((select count(*)::integer from api_v1.get_schedule_workspace_v1('b0000000-0000-0000-0000-000000000001',null)), 0, 'tenant A scheduler cannot read tenant B schedule rows');
 create temp table schedule_first_result as
   select null::uuid as target_id, null::bigint as revision

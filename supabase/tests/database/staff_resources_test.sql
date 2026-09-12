@@ -97,12 +97,19 @@ select is(
   2,
   'any_available returns every eligible staff choice'
 );
+-- The pairing this asserts about is created here rather than borrowed from the
+-- seed: issue #94 published the seed's second location, and a test that depends
+-- on a shared fixture staying unpublished is a test waiting to be broken by
+-- somebody else's fixture.
+insert into app.locations (id, tenant_id, key, name, time_zone, status)
+values ('a5000000-0000-0000-0000-0000000000ff', 'a0000000-0000-0000-0000-000000000001',
+  'location-a-unpublished', 'Unpublished Location', 'America/New_York', 'active');
 select is(
   (
     select count(*)::integer
     from api_v1.get_assignment_candidates_v1(
       'a7200000-0000-0000-0000-000000000001',
-      'a5000000-0000-0000-0000-000000000002'
+      'a5000000-0000-0000-0000-0000000000ff'
     )
   ),
   0,
