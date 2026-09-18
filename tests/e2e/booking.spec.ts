@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import {
   expect,
@@ -460,14 +462,6 @@ test.describe("live database booking journey", () => {
   );
   test.describe.configure({ mode: "serial" });
 
-  function requiredEnvironment(name: string): string {
-    const value = process.env[name];
-    if (value === undefined || value === "") {
-      throw new Error(`Live booking E2E requires ${name}.`);
-    }
-    return value;
-  }
-
   function futureDate(daysFromNow: number): string {
     return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)
       .toISOString()
@@ -513,37 +507,19 @@ test.describe("live database booking journey", () => {
   }
 
   async function signInLiveDashboard(context: BrowserContext) {
-    const apiUrl = requiredEnvironment("NEXT_PUBLIC_SUPABASE_URL");
-    const publishableKey = requiredEnvironment("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
-    const password = requiredEnvironment("LIVE_BOOKING_DASHBOARD_PASSWORD");
-    const response = await fetch(`${apiUrl}/auth/v1/token?grant_type=password`, {
-      body: JSON.stringify({
-        email: "live-dashboard@example.invalid",
-        password,
-      }),
-      headers: {
-        apikey: publishableKey,
-        Authorization: `Bearer ${publishableKey}`,
-        "content-type": "application/json",
-      },
-      method: "POST",
-    });
-    if (!response.ok) {
-      throw new Error(
-        `Live E2E dashboard sign-in was rejected with ${response.status}.`,
-      );
+    const credentialFile = process.env.LIVE_BOOKING_CREDENTIAL_FILE;
+    if (credentialFile === undefined || credentialFile === "") {
+      throw new Error("Live booking E2E requires its credential-file path.");
     }
-    const session = await response.json();
-    const storageKey = `sb-${new URL(apiUrl).hostname.split(".")[0]}-auth-token`;
-    const value = `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`;
-    await context.addCookies([
-      {
-        name: storageKey,
-        sameSite: "Lax",
-        url: dashboardOrigin,
-        value,
-      },
-    ]);
+    execFileSync("node", ["scripts/live-booking-e2e.mjs", "dashboard-session"], {
+      cwd: process.cwd(),
+      stdio: "ignore",
+    });
+    const sessionFile = join(dirname(credentialFile), "dashboard-storage-state.json");
+    const storageState = JSON.parse(readFileSync(sessionFile, "utf8")) as {
+      cookies: Parameters<BrowserContext["addCookies"]>[0];
+    };
+    await context.addCookies(storageState.cookies);
   }
 
   function expireFixtureHold(holdId: string) {

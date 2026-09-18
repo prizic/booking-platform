@@ -1,5 +1,8 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const fixturePath = new URL("../tests/e2e/fixtures/live-booking.sql", import.meta.url);
@@ -47,6 +50,18 @@ export function createLiveBookingEnvironment(local, hostname) {
   };
 }
 
+/**
+ * The Playwright runner receives only a path to its owner-only fixture
+ * credential file. Public runtime configuration is resolved independently by
+ * each Client or Dashboard web-server command below.
+ */
+export function createLiveBookingRunnerEnvironment(credentialFile) {
+  return {
+    LIVE_BOOKING_CREDENTIAL_FILE: credentialFile,
+    LIVE_BOOKING_E2E: "1",
+  };
+}
+
 export function readLocalSupabaseEnvironment() {
   const output = execFileSync("supabase", ["status", "--output", "env"], {
     encoding: "utf8",
@@ -58,7 +73,7 @@ export function readLocalSupabaseEnvironment() {
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: process.cwd(),
-    env: { ...process.env, ...options.env },
+    env: options.env ?? process.env,
     stdio: "inherit",
   });
   if (result.error !== undefined) throw result.error;
@@ -119,12 +134,100 @@ export function prepareLiveBookingFixture(local) {
   return { dashboardPassword };
 }
 
-export function runWithLiveBookingEnvironment(hostname, command, args) {
-  const local = readLocalSupabaseEnvironment();
-  run(command, args, { env: createLiveBookingEnvironment(local, hostname) });
+function createLiveBookingCredentialFile(dashboardPassword) {
+  const directory = mkdtempSync(join(tmpdir(), "wlbp-live-booking-"));
+  const credentialFile = join(directory, "credentials.json");
+  writeFileSync(credentialFile, JSON.stringify({ dashboardPassword }), {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+  return credentialFile;
 }
 
-function main() {
+function dashboardCredentialFileFromEnvironment() {
+  const credentialFile = process.env.LIVE_BOOKING_CREDENTIAL_FILE;
+  if (
+    credentialFile === undefined ||
+    credentialFile === "" ||
+    !isAbsolute(credentialFile)
+  ) {
+    throw new Error("Live booking E2E requires an absolute credential-file path.");
+  }
+  return credentialFile;
+}
+
+function removeLiveBookingRunnerVariables(environment) {
+  const result = { ...environment };
+  for (const key of Object.keys(result)) {
+    if (key.startsWith("LIVE_BOOKING_")) delete result[key];
+  }
+  return result;
+}
+
+export function createLiveBookingApplicationEnvironment(environment, local, hostname) {
+  return {
+    ...removeLiveBookingRunnerVariables(environment),
+    ...createLiveBookingEnvironment(local, hostname),
+  };
+}
+
+function readDashboardPassword(credentialFile) {
+  const credential = JSON.parse(readFileSync(credentialFile, "utf8"));
+  if (
+    typeof credential.dashboardPassword !== "string" ||
+    credential.dashboardPassword === ""
+  ) {
+    throw new Error("The live booking credential file is malformed.");
+  }
+  return credential.dashboardPassword;
+}
+
+async function createLiveDashboardSessionState() {
+  const credentialFile = dashboardCredentialFileFromEnvironment();
+  const local = readLocalSupabaseEnvironment();
+  const password = readDashboardPassword(credentialFile);
+  const response = await fetch(`${local.apiUrl}/auth/v1/token?grant_type=password`, {
+    body: JSON.stringify({
+      email: "live-dashboard@example.invalid",
+      password,
+    }),
+    headers: {
+      apikey: local.publishableKey,
+      Authorization: `Bearer ${local.publishableKey}`,
+      "content-type": "application/json",
+    },
+    method: "POST",
+  });
+  if (!response.ok) {
+    throw new Error(`Live E2E dashboard sign-in was rejected with ${response.status}.`);
+  }
+  const session = await response.json();
+  const storageKey = `sb-${new URL(local.apiUrl).hostname.split(".")[0]}-auth-token`;
+  const sessionFile = join(dirname(credentialFile), "dashboard-storage-state.json");
+  writeFileSync(
+    sessionFile,
+    JSON.stringify({
+      cookies: [
+        {
+          name: storageKey,
+          sameSite: "Lax",
+          url: "http://localhost:41731",
+          value: `base64-${Buffer.from(JSON.stringify(session)).toString("base64url")}`,
+        },
+      ],
+    }),
+    { encoding: "utf8", mode: 0o600 },
+  );
+}
+
+export function runWithLiveBookingEnvironment(hostname, command, args) {
+  const local = readLocalSupabaseEnvironment();
+  run(command, args, {
+    env: createLiveBookingApplicationEnvironment(process.env, local, hostname),
+  });
+}
+
+async function main() {
   const [command, ...args] = process.argv.slice(2);
   if (command === undefined) {
     throw new Error("Usage: live-booking-e2e.mjs <command> [arguments...]");
@@ -136,15 +239,31 @@ function main() {
     expireLiveBookingHold(args[0]);
     return;
   }
+  if (command === "dashboard-session") {
+    if (args.length !== 0) {
+      throw new Error("Usage: live-booking-e2e.mjs dashboard-session");
+    }
+    await createLiveDashboardSessionState();
+    return;
+  }
   const local = readLocalSupabaseEnvironment();
   const fixture = prepareLiveBookingFixture(local);
-  run(command, args, {
-    env: {
-      ...createLiveBookingEnvironment(local, "client.live-booking.example.invalid"),
-      LIVE_BOOKING_DASHBOARD_PASSWORD: fixture.dashboardPassword,
-      LIVE_BOOKING_E2E: "1",
-    },
-  });
+  const credentialFile = createLiveBookingCredentialFile(fixture.dashboardPassword);
+  try {
+    run(command, args, {
+      env: {
+        ...process.env,
+        ...createLiveBookingRunnerEnvironment(credentialFile),
+      },
+    });
+  } finally {
+    rmSync(dirname(credentialFile), { force: true, recursive: true });
+  }
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  void main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

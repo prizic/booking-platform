@@ -84,6 +84,11 @@ export default defineConfig({
       name: "live-booking",
       grep: /live database booking journey/u,
       testMatch: /booking\.spec\.ts$/u,
+      use: {
+        screenshot: "off",
+        trace: "off",
+        video: "off",
+      },
     },
     { name: "component", testMatch: /interactions\.spec\.ts$/u },
     { name: "i18n", testMatch: /localization\.spec\.ts$/u },
