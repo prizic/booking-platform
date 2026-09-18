@@ -3,6 +3,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import test from "node:test";
 
 import { createGitHubAppClient } from "./github-app-client.mjs";
+import { buildGovernancePolicy } from "./governance.mjs";
 
 const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const privateKeyPem = privateKey.export({ format: "pem", type: "pkcs8" });
@@ -140,6 +141,73 @@ test("refuses an out-of-scope repository before a configuration mutation", async
   ]);
 });
 
+test("fails safely when the App installation was removed before a mutation", async () => {
+  const requests = [];
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url, init = {}) => {
+      const target = String(url);
+      requests.push({ method: init.method ?? "GET", target });
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: "ghs_fixture",
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(404, { message: "installation not found" });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  assert.deepEqual(
+    await client.commitConfiguration({
+      defaultBranch: "main",
+      files: [{ content: Buffer.from("{}\n"), path: "instance/manifest.json" }],
+      repository: { externalId: "R_kgDOremoved", name: "removed", restId: 42 },
+    }),
+    { kind: "failed", code: "github_scope_or_resource_missing" },
+  );
+  assert.equal(requests.length, 2);
+});
+
+test("fails safely when the App lacks repository administration permission", async () => {
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: "ghs_fixture",
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(403, { message: "resource not accessible" });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  assert.deepEqual(
+    await client.commitConfiguration({
+      defaultBranch: "main",
+      files: [{ content: Buffer.from("{}\n"), path: "instance/manifest.json" }],
+      repository: { externalId: "R_kgDOfixture", name: "fixture", restId: 42 },
+    }),
+    { kind: "failed", code: "github_permission_missing" },
+  );
+});
+
 test("commits changed configuration as one scoped fast-forward update", async () => {
   const calls = [];
   const currentCommit = "1".repeat(40);
@@ -240,9 +308,14 @@ test("does not create a duplicate configuration commit when the tree already mat
   const currentCommit = "6".repeat(40);
   const currentTree = "7".repeat(40);
   const configuration = Buffer.from('{"defaultLocale":"en"}\n');
+  const codeowners = Buffer.from("* @prizic/platform-owners\n");
   const configurationBlob = createHash("sha1")
     .update(`blob ${configuration.length}\0`)
     .update(configuration)
+    .digest("hex");
+  const codeownersBlob = createHash("sha1")
+    .update(`blob ${codeowners.length}\0`)
+    .update(codeowners)
     .digest("hex");
   const client = createGitHubAppClient({
     appId: "123",
@@ -275,6 +348,11 @@ test("does not create a duplicate configuration commit when the tree already mat
         return response(200, {
           tree: [
             {
+              path: ".github/CODEOWNERS",
+              sha: codeownersBlob,
+              type: "blob",
+            },
+            {
               mode: "100644",
               path: "instance/manifest.json",
               sha: configurationBlob,
@@ -289,7 +367,10 @@ test("does not create a duplicate configuration commit when the tree already mat
 
   const result = await client.commitConfiguration({
     defaultBranch: "main",
-    files: [{ content: configuration, path: "instance/manifest.json" }],
+    files: [
+      { content: codeowners, path: ".github/CODEOWNERS" },
+      { content: configuration, path: "instance/manifest.json" },
+    ],
     idempotencyKey: "run:configuration",
     repository: { name: "northside-clinic", restId: 42 },
   });
@@ -476,6 +557,192 @@ test("treats a release already present on the default branch as the seed retry r
   assert.equal(
     calls.filter(
       (call) => call.method !== "GET" && !call.target.endsWith("/access_tokens"),
+    ).length,
+    0,
+  );
+});
+
+test("applies the named ruleset and repository security policy with a scoped token", async () => {
+  const calls = [];
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url, init = {}) => {
+      const target = String(url);
+      const body = init.body ? JSON.parse(init.body) : undefined;
+      calls.push({ body, method: init.method ?? "GET", target });
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: `ghs_${calls.length}`,
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(200, {
+          total_count: 1,
+          repositories: [{ id: 42, name: "renamed-instance" }],
+        });
+      }
+      if (target.endsWith("/contents/.github/CODEOWNERS?ref=main")) {
+        return response(200, { type: "file" });
+      }
+      if (target.endsWith("/rulesets") && (init.method ?? "GET") === "GET")
+        return response(200, []);
+      if (target.endsWith("/rulesets") && init.method === "POST") {
+        assert.equal(body.name, "wlbp-instance-governance");
+        assert.deepEqual(body.conditions.ref_name.include, ["~DEFAULT_BRANCH"]);
+        return response(201, { id: 99 });
+      }
+      if (
+        target.endsWith("/repos/prizic/renamed-instance") &&
+        init.method === "PATCH"
+      ) {
+        assert.deepEqual(body, {
+          private: true,
+          security_and_analysis: {
+            advanced_security: { status: "enabled" },
+            secret_scanning: { status: "enabled" },
+            secret_scanning_push_protection: { status: "enabled" },
+          },
+        });
+        return response(200, { id: 42 });
+      }
+      if (target.endsWith("/vulnerability-alerts") && init.method === "PUT") {
+        return new Response(null, { status: 204 });
+      }
+      if (target.endsWith("/automated-security-fixes") && init.method === "PUT") {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  const result = await client.applyGovernance({
+    defaultBranch: "main",
+    repository: {
+      externalId: "R_kgDOinstance",
+      name: "renamed-instance",
+      restId: 42,
+    },
+    requiredChecks: ["Instance CI"],
+  });
+
+  assert.deepEqual(result, {
+    defaultBranch: "main",
+    externalId: "R_kgDOinstance",
+    installationId: "456",
+    kind: "succeeded",
+    name: "renamed-instance",
+    organization: "prizic",
+    private: true,
+    restId: 42,
+    rulesetId: "99",
+  });
+  assert.deepEqual(calls[2], {
+    body: { repository_ids: [42] },
+    method: "POST",
+    target: "https://api.github.com/app/installations/456/access_tokens",
+  });
+});
+
+test("waits visibly when governance is rate-limited after scope validation", async () => {
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url) => {
+      const target = String(url);
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: "ghs_fixture",
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(200, {
+          total_count: 1,
+          repositories: [{ id: 42, name: "northside" }],
+        });
+      }
+      if (target.endsWith("/contents/.github/CODEOWNERS?ref=main")) {
+        return response(429, { message: "slow down" }, { "retry-after": "30" });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  assert.deepEqual(
+    await client.applyGovernance({
+      defaultBranch: "main",
+      repository: { externalId: "R_kgDOnorthside", name: "northside", restId: 42 },
+      requiredChecks: ["Instance CI"],
+    }),
+    { kind: "waiting", reason: "provider_rate_limit", retryAfterSeconds: 30 },
+  );
+});
+
+test("does not create a second ruleset when a retry finds the desired one", async () => {
+  const calls = [];
+  const policy = buildGovernancePolicy({
+    defaultBranch: "main",
+    requiredChecks: ["Instance CI"],
+  });
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url, init = {}) => {
+      const target = String(url);
+      calls.push({ method: init.method ?? "GET", target });
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: `ghs_${calls.length}`,
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(200, {
+          total_count: 1,
+          repositories: [{ id: 42, name: "northside" }],
+        });
+      }
+      if (target.endsWith("/contents/.github/CODEOWNERS?ref=main")) {
+        return response(200, { type: "file" });
+      }
+      if (target.endsWith("/rulesets") && (init.method ?? "GET") === "GET") {
+        return response(200, [{ id: 99, ...policy.ruleset }]);
+      }
+      if (target.endsWith("/repos/prizic/northside") && init.method === "PATCH") {
+        return response(200, { id: 42 });
+      }
+      if (
+        target.endsWith("/vulnerability-alerts") ||
+        target.endsWith("/automated-security-fixes")
+      ) {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  const result = await client.applyGovernance({
+    defaultBranch: "main",
+    repository: { externalId: "R_kgDOnorthside", name: "northside", restId: 42 },
+    requiredChecks: ["Instance CI"],
+  });
+
+  assert.equal(result.rulesetId, "99");
+  assert.equal(
+    calls.filter(
+      (call) =>
+        call.target.includes("/rulesets") && ["POST", "PUT"].includes(call.method),
     ).length,
     0,
   );

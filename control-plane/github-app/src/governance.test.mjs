@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { governanceFingerprint, reconcileGovernance } from "./governance.mjs";
+import {
+  buildGovernancePolicy,
+  governanceFingerprint,
+  reconcileGovernance,
+} from "./governance.mjs";
 
 const desired = {
   defaultBranch: "main",
@@ -39,4 +43,63 @@ test("reports a changed required-check ruleset as drift without weakening it", (
     desiredFingerprint: governanceFingerprint(desired),
     actualFingerprint: governanceFingerprint({ ...desired, requiredChecks: ["lint"] }),
   });
+});
+
+test("builds a pinned, code-owner-reviewed branch policy from explicit checks", () => {
+  assert.deepEqual(
+    buildGovernancePolicy({
+      defaultBranch: "main",
+      requiredChecks: ["Instance CI", "boundary-check"],
+    }),
+    {
+      desired: {
+        defaultBranch: "main",
+        dependencyProtection: true,
+        private: true,
+        requireCodeOwnerReview: true,
+        requiredChecks: ["boundary-check", "Instance CI"],
+        secretScanning: true,
+      },
+      ruleset: {
+        conditions: {
+          ref_name: { exclude: [], include: ["~DEFAULT_BRANCH"] },
+        },
+        enforcement: "active",
+        name: "wlbp-instance-governance",
+        rules: [
+          { type: "deletion" },
+          { type: "non_fast_forward" },
+          {
+            parameters: {
+              dismiss_stale_reviews_on_push: true,
+              require_code_owner_review: true,
+              require_last_push_approval: true,
+              required_approving_review_count: 1,
+              required_review_thread_resolution: true,
+            },
+            type: "pull_request",
+          },
+          {
+            parameters: {
+              do_not_enforce_on_create: false,
+              required_status_checks: [
+                { context: "boundary-check" },
+                { context: "Instance CI" },
+              ],
+              strict_required_status_checks_policy: true,
+            },
+            type: "required_status_checks",
+          },
+        ],
+        target: "branch",
+      },
+    },
+  );
+});
+
+test("rejects a governance policy with no actual required check", () => {
+  assert.equal(
+    buildGovernancePolicy({ defaultBranch: "main", requiredChecks: [] }),
+    null,
+  );
 });

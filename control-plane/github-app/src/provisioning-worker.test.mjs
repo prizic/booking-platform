@@ -236,3 +236,142 @@ test("fails before GitHub when the persisted repository identity is unavailable"
     },
   ]);
 });
+
+test("applies governance from an explicit policy after loading the canonical repository", async () => {
+  const completions = [];
+  let governanceInput;
+  const worker = createGitHubProvisioningWorker({
+    github: {
+      applyGovernance: async (input) => {
+        governanceInput = input;
+        return {
+          defaultBranch: "main",
+          externalId: "R_kgDOinstance",
+          kind: "succeeded",
+          name: "northside",
+          private: true,
+          restId: 42,
+          rulesetId: "99",
+        };
+      },
+    },
+    loadGovernance: async (step) => ({
+      defaultBranch: step.repository.defaultBranch,
+      requiredChecks: ["Instance CI"],
+    }),
+    store: {
+      claim: async () => ({
+        id: "step-protect",
+        provider: "github",
+        runId: "run-1",
+        stepKey: "protect_repository",
+      }),
+      complete: async (command) => completions.push(command),
+      githubRepositoryFor: async () => ({
+        defaultBranch: "main",
+        externalId: "R_kgDOinstance",
+        name: "northside",
+        restId: 42,
+      }),
+    },
+  });
+
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "completed",
+    stepKey: "protect_repository",
+  });
+  assert.deepEqual(governanceInput, {
+    defaultBranch: "main",
+    repository: {
+      defaultBranch: "main",
+      externalId: "R_kgDOinstance",
+      name: "northside",
+      restId: 42,
+    },
+    requiredChecks: ["Instance CI"],
+  });
+  assert.deepEqual(completions[0], {
+    externalId: "R_kgDOinstance",
+    observedState: {
+      default_branch: "main",
+      github_ruleset_id: "99",
+      private: true,
+      repository_name: "northside",
+      repository_rest_id: 42,
+    },
+    outcome: "succeeded",
+    stepId: "step-protect",
+  });
+});
+
+test("fails governance before GitHub when its required-check policy is unavailable", async () => {
+  const completions = [];
+  const worker = createGitHubProvisioningWorker({
+    github: { applyGovernance: async () => assert.fail("must not call GitHub") },
+    store: {
+      claim: async () => ({
+        id: "step-protect",
+        provider: "github",
+        runId: "run-1",
+        stepKey: "protect_repository",
+      }),
+      complete: async (command) => completions.push(command),
+      githubRepositoryFor: async () => ({
+        defaultBranch: "main",
+        externalId: "R_kgDOinstance",
+        name: "northside",
+        restId: 42,
+      }),
+    },
+  });
+
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "failed",
+    stepKey: "protect_repository",
+  });
+  assert.deepEqual(completions, [
+    {
+      errorCode: "github_governance_unavailable",
+      outcome: "failed",
+      stepId: "step-protect",
+    },
+  ]);
+});
+
+test("a restarted worker does not replay a seed step already completed durably", async () => {
+  const completions = [];
+  let claimed = true;
+  let seedCalls = 0;
+  const store = {
+    claim: async () => {
+      if (!claimed) return null;
+      claimed = false;
+      return {
+        id: "step-seed",
+        idempotencyKey: "run-1:seed",
+        provider: "github",
+        slug: "northside",
+        stepKey: "seed_repository",
+      };
+    },
+    complete: async (command) => completions.push(command),
+  };
+  const github = {
+    seedRepository: async () => {
+      seedCalls += 1;
+      return { externalId: "R_kgDOinstance", kind: "succeeded", name: "northside" };
+    },
+  };
+  const loadRelease = async () => ({
+    files: [{ content: Buffer.from("{}\n"), path: "distribution-manifest.json" }],
+    treeSha256: "a".repeat(64),
+  });
+
+  await createGitHubProvisioningWorker({ github, loadRelease, store }).runOnce();
+  assert.deepEqual(
+    await createGitHubProvisioningWorker({ github, loadRelease, store }).runOnce(),
+    { kind: "idle" },
+  );
+  assert.equal(seedCalls, 1);
+  assert.equal(completions.length, 1);
+});

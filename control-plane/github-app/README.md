@@ -28,6 +28,12 @@ durable provisioning completion contract. The database owns retries, ordering,
 and idempotency. A timeout after a repository create is reconciled by resolving
 the stable repository identity before another create is considered.
 
+The GitHub node ID is the canonical repository identity because webhook events
+use it. The numeric REST ID, current name, and default branch are safe observed
+metadata retained only for scoped API calls. Follow-up configuration and
+governance work loads that identity from the seed step; it never guesses a
+repository from a tenant slug.
+
 `GitHubWebhookIngress` verifies `x-hub-signature-256` against unmodified bytes
 before parsing. It retains only the delivery ID, body SHA-256, event, action,
 and repository identity. Duplicate delivery IDs do not schedule a second
@@ -38,6 +44,16 @@ Governance is compared as a canonical desired/actual fingerprint. A changed
 ruleset, required check, CODEOWNERS setting, reusable-workflow pin, secret
 scanning state, or dependency protection setting is drift and remains visible
 until a privileged reconciliation changes it.
+
+The `protect_repository` step requires an explicit, non-empty required-check
+policy and a committed `.github/CODEOWNERS` file. The worker then applies the
+named branch ruleset (reviews, CODEOWNERS, non-fast-forward and deletion
+protection), enables secret scanning and push protection, and enables GitHub
+vulnerability alerts plus automated security fixes. It fails visibly instead
+of weakening governance when an organization plan, App permission, workflow
+check, or CODEOWNERS prerequisite is unavailable. Issue #34 owns the
+distributable CI workflow/check that can satisfy this policy; issue #32 owns
+the separate Vercel GitHub App access check.
 
 ## Verification
 

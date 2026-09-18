@@ -15,12 +15,15 @@ function safeRepositoryState(repository) {
     state.github_organization = repository.organization;
   if (typeof repository.installationId === "string")
     state.github_installation_id = repository.installationId;
+  if (typeof repository.rulesetId === "string")
+    state.github_ruleset_id = repository.rulesetId;
   return state;
 }
 
 export function createGitHubProvisioningWorker({
   github,
   loadConfiguration,
+  loadGovernance,
   loadRelease,
   store,
 }) {
@@ -53,16 +56,31 @@ export function createGitHubProvisioningWorker({
       }
       let configuration;
       try {
-        configuration = await loadConfiguration({ ...step, repository: identity.repository });
+        configuration = await loadConfiguration({
+          ...step,
+          repository: identity.repository,
+        });
       } catch {
         return { kind: "failed", code: "github_configuration_unavailable" };
       }
-      return github.commitConfiguration({ ...configuration, repository: identity.repository });
+      return github.commitConfiguration({
+        ...configuration,
+        repository: identity.repository,
+      });
     },
     protect_repository: async (step) => {
       const identity = await repositoryForStep(step);
       if (identity.kind !== "succeeded") return identity;
-      return github.applyGovernance({ ...step, repository: identity.repository });
+      if (typeof loadGovernance !== "function") {
+        return { kind: "failed", code: "github_governance_unavailable" };
+      }
+      let governance;
+      try {
+        governance = await loadGovernance({ ...step, repository: identity.repository });
+      } catch {
+        return { kind: "failed", code: "github_governance_unavailable" };
+      }
+      return github.applyGovernance({ ...governance, repository: identity.repository });
     },
     seed_repository: async (step) => {
       if (typeof loadRelease !== "function") {

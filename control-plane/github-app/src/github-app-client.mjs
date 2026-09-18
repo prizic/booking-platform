@@ -1,6 +1,7 @@
 import { createHash, createSign } from "node:crypto";
 
 import { providerFailure } from "./contracts.mjs";
+import { buildGovernancePolicy, governanceFingerprint } from "./governance.mjs";
 import { safeProviderError } from "./redaction.mjs";
 
 function isSafeRelativePath(value) {
@@ -109,6 +110,25 @@ function providerResult(response) {
   });
 }
 
+function governanceResult(response) {
+  return response.status === 422
+    ? { kind: "failed", code: "github_governance_unsupported" }
+    : providerResult(response);
+}
+
+function equivalentRuleset(actual, desired) {
+  if (!actual || typeof actual !== "object") return false;
+  return (
+    governanceFingerprint({
+      conditions: actual.conditions,
+      enforcement: actual.enforcement,
+      name: actual.name,
+      rules: actual.rules,
+      target: actual.target,
+    }) === governanceFingerprint(desired)
+  );
+}
+
 function normalizeConfigurationFiles(files) {
   if (!Array.isArray(files) || files.length === 0) return null;
   const normalized = [];
@@ -117,7 +137,7 @@ function normalizeConfigurationFiles(files) {
     if (
       !file ||
       typeof file.path !== "string" ||
-      !/^instance\/(?:assets\/[A-Za-z0-9][A-Za-z0-9._/-]*|(?:brand|features|navigation)\.json|content\/(?:en|ar)\.json|manifest\.json|theme\.css)$/u.test(
+      !/^(?:\.github\/CODEOWNERS|instance\/(?:assets\/[A-Za-z0-9][A-Za-z0-9._/-]*|(?:brand|features|navigation)\.json|content\/(?:en|ar)\.json|manifest\.json|theme\.css))$/u.test(
         file.path,
       ) ||
       file.path.includes("..") ||
@@ -240,7 +260,15 @@ export function createGitHubAppClient({
     } catch {
       throw new Error("github_provider_network_error");
     }
-    const payload = await response.json();
+    const rawPayload = await response.text();
+    let payload = {};
+    if (rawPayload) {
+      try {
+        payload = JSON.parse(rawPayload);
+      } catch {
+        payload = {};
+      }
+    }
     return { payload, response };
   }
 
@@ -585,6 +613,94 @@ export function createGitHubAppClient({
     return seedRelease({ defaultBranch, release, repository });
   }
 
+  async function applyGovernance({ defaultBranch, repository, requiredChecks }) {
+    const policy = buildGovernancePolicy({ defaultBranch, requiredChecks });
+    if (!policy) return { kind: "failed", code: "github_governance_invalid" };
+    const scope = await verifyRepositoryScope(repository);
+    if (scope.kind !== "succeeded") return scope;
+    const tokenScope = { repositoryIds: [repository.restId] };
+    const repositoryPath = `/repos/${organization}/${encodeURIComponent(repository.name)}`;
+
+    const codeowners = await githubRequest(
+      `${repositoryPath}/contents/.github/CODEOWNERS?ref=${encodeURIComponent(defaultBranch)}`,
+      {},
+      tokenScope,
+    );
+    if (codeowners.response.status === 404)
+      return { kind: "failed", code: "github_codeowners_missing" };
+    if (!codeowners.response.ok) return governanceResult(codeowners.response);
+    if (codeowners.payload?.type !== "file")
+      return { kind: "failed", code: "github_codeowners_missing" };
+
+    const existingRulesets = await githubRequest(
+      `${repositoryPath}/rulesets`,
+      {},
+      tokenScope,
+    );
+    if (!existingRulesets.response.ok)
+      return governanceResult(existingRulesets.response);
+    if (!Array.isArray(existingRulesets.payload)) {
+      return { kind: "failed", code: "github_repository_state_invalid" };
+    }
+    const existing = existingRulesets.payload.find(
+      (ruleset) => ruleset?.name === policy.ruleset.name,
+    );
+    let rulesetId = existing?.id;
+    if (!equivalentRuleset(existing, policy.ruleset)) {
+      const path =
+        rulesetId === undefined || rulesetId === null
+          ? `${repositoryPath}/rulesets`
+          : `${repositoryPath}/rulesets/${encodeURIComponent(String(rulesetId))}`;
+      const ruleset = await githubRequest(
+        path,
+        {
+          body: JSON.stringify(policy.ruleset),
+          method: rulesetId === undefined || rulesetId === null ? "POST" : "PUT",
+        },
+        tokenScope,
+      );
+      if (!ruleset.response.ok) return governanceResult(ruleset.response);
+      rulesetId = ruleset.payload?.id;
+    }
+    if (typeof rulesetId !== "number" && typeof rulesetId !== "string") {
+      return { kind: "failed", code: "github_repository_state_invalid" };
+    }
+
+    const settings = await githubRequest(
+      repositoryPath,
+      {
+        body: JSON.stringify({
+          private: true,
+          security_and_analysis: {
+            advanced_security: { status: "enabled" },
+            secret_scanning: { status: "enabled" },
+            secret_scanning_push_protection: { status: "enabled" },
+          },
+        }),
+        method: "PATCH",
+      },
+      tokenScope,
+    );
+    if (!settings.response.ok) return governanceResult(settings.response);
+    for (const endpoint of ["vulnerability-alerts", "automated-security-fixes"]) {
+      const protection = await githubRequest(
+        `${repositoryPath}/${endpoint}`,
+        { method: "PUT" },
+        tokenScope,
+      );
+      if (!protection.response.ok) return governanceResult(protection.response);
+    }
+    return {
+      ...succeededRepository({
+        defaultBranch,
+        installationId,
+        organization,
+        repository: { ...repository, private: true },
+      }),
+      rulesetId: String(rulesetId),
+    };
+  }
+
   async function createOrResolveRepository({ name, idempotencyKey }) {
     const existing = await resolveRepository({ name });
     if (existing) return existing;
@@ -611,6 +727,7 @@ export function createGitHubAppClient({
   }
 
   return {
+    applyGovernance,
     commitConfiguration,
     createOrResolveRepository,
     resolveRepository,
