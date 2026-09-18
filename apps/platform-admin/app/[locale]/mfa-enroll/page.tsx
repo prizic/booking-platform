@@ -24,7 +24,11 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     getAdminMessage(locale, key);
   const router = useRouter();
 
-  const [factor, setFactor] = useState<{ id: string; secret: string } | null>(null);
+  const [factor, setFactor] = useState<{
+    id: string;
+    qrCode: string;
+    secret: string;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
@@ -38,7 +42,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
           setError(enrollError.message);
           return;
         }
-        setFactor({ id: data.id, secret: data.totp.secret });
+        setFactor({ id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
       });
     return () => {
       cancelled = true;
@@ -73,6 +77,13 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
         )}
         {factor === null ? null : (
           <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
+            <img
+              alt=""
+              height={200}
+              src={`data:image/svg+xml;utf8,${encodeURIComponent(factor.qrCode)}`}
+              width={200}
+            />
             <p>
               <strong>{message("mfaEnrollSecretLabel")}:</strong>{" "}
               <code>{factor.secret}</code>
