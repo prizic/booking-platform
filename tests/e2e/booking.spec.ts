@@ -1,5 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
-import { locales, responsiveProfiles } from "./apps";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import {
   bookingQuery,
   clientOrigin,
@@ -13,6 +22,7 @@ import {
   stubBookingApi,
   stubDepositCheckout,
 } from "./booking-fixtures";
+import { locales, responsiveProfiles } from "./apps";
 
 for (const profile of responsiveProfiles) {
   test.describe(`${profile.name} booking journey`, () => {
@@ -433,5 +443,279 @@ test.describe("deposit checkout", () => {
       page.getByRole("heading", { name: /لم نتمكّن من تثبيت موعدك/u }),
     ).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  });
+});
+
+// Issue #94. These cases use the Client's own route handlers against a
+// separately seeded local tenant. They deliberately share no mocked booking
+// DTOs with the broader browser suite above.
+test.describe("live database booking journey", () => {
+  const dashboardOrigin = "http://localhost:41731";
+  const liveServiceId = "e7200000-0000-0000-0000-000000000001";
+  const liveLocationId = "e5000000-0000-0000-0000-000000000001";
+  const tenantAServiceId = "a7200000-0000-0000-0000-000000000001";
+  const tenantALocationId = "a5000000-0000-0000-0000-000000000001";
+
+  test.skip(
+    process.env.LIVE_BOOKING_E2E !== "1",
+    "requires the isolated local Supabase fixture",
+  );
+  test.describe.configure({ mode: "serial" });
+
+  function futureDate(daysFromNow: number): string {
+    return new Date(Date.now() + daysFromNow * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  async function chooseLiveSlot(page: Page, daysFromNow: number) {
+    await page.goto(
+      `${clientOrigin}/en/book?service=${liveServiceId}&location=${liveLocationId}`,
+    );
+    const dateInput = page.locator('input[name="date"]');
+    await expect(dateInput).toBeEnabled();
+    await dateInput.fill(futureDate(daysFromNow));
+    await page.getByRole("button", { name: /find times/iu }).click();
+    await page
+      .getByRole("button", { name: /^select$/iu })
+      .first()
+      .click();
+  }
+
+  async function holdLiveSlot(page: Page): Promise<string> {
+    const holdResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/holds" &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: /hold this time/iu }).click();
+    const response = await holdResponse;
+    expect(response.status()).toBe(200);
+    const payload = (await response.json()) as { hold: { holdId: string } };
+    await expect(page.getByLabel(/reason for visit/iu)).toBeVisible();
+    return payload.hold.holdId;
+  }
+
+  async function reachLiveDetails(page: Page, daysFromNow: number): Promise<string> {
+    await chooseLiveSlot(page, daysFromNow);
+    return holdLiveSlot(page);
+  }
+
+  async function fillLiveDetails(page: Page, email = "live-guest@example.invalid") {
+    await page.getByLabel(/full name/iu).fill("Live Booking Guest");
+    await page.getByLabel(/email/iu).fill(email);
+    await page.getByLabel(/reason for visit/iu).fill("Live browser coverage");
+    await page.getByRole("checkbox").check();
+  }
+
+  async function signInLiveDashboard(context: BrowserContext) {
+    const credentialFile = process.env.LIVE_BOOKING_CREDENTIAL_FILE;
+    if (credentialFile === undefined || credentialFile === "") {
+      throw new Error("Live booking E2E requires its credential-file path.");
+    }
+    execFileSync("node", ["scripts/live-booking-e2e.mjs", "dashboard-session"], {
+      cwd: process.cwd(),
+      stdio: "ignore",
+    });
+    const sessionFile = join(dirname(credentialFile), "dashboard-storage-state.json");
+    const storageState = JSON.parse(readFileSync(sessionFile, "utf8")) as {
+      cookies: Parameters<BrowserContext["addCookies"]>[0];
+    };
+    await context.addCookies(storageState.cookies);
+  }
+
+  function expireFixtureHold(holdId: string) {
+    execFileSync("node", ["scripts/live-booking-e2e.mjs", "expire-hold", holdId], {
+      cwd: process.cwd(),
+      stdio: "ignore",
+    });
+  }
+
+  async function createWinningBooking(browser: Browser, daysFromNow: number) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+      await reachLiveDetails(page, daysFromNow);
+      await fillLiveDetails(page, "live-winning-guest@example.invalid");
+      await page.getByRole("button", { name: /confirm booking/iu }).click();
+      await expect(
+        page.getByRole("heading", { name: /your booking is confirmed/iu }),
+      ).toBeVisible();
+    } finally {
+      await context.close();
+    }
+  }
+
+  test("Client commits a live booking that the authenticated Dashboard lists", async ({
+    page,
+    context,
+  }) => {
+    await reachLiveDetails(page, 1);
+    await fillLiveDetails(page);
+    const bookingResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/bookings" &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: /confirm booking/iu }).click();
+    const booking = (await (await bookingResponse).json()) as {
+      publicReference: string;
+    };
+
+    await expect(
+      page.getByRole("heading", { name: /your booking is confirmed/iu }),
+    ).toBeVisible();
+
+    await signInLiveDashboard(context);
+    await page.goto(`${dashboardOrigin}/en/bookings`);
+    await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: new RegExp(`Live consultation · ${booking.publicReference}`, "u"),
+      }),
+    ).toBeVisible();
+  });
+
+  test("Client validation blocks an incomplete live submission before the booking route", async ({
+    page,
+  }) => {
+    await reachLiveDetails(page, 2);
+    let bookingRequests = 0;
+    page.on("request", (request) => {
+      if (request.url().endsWith("/api/bookings") && request.method() === "POST") {
+        bookingRequests += 1;
+      }
+    });
+
+    await page.getByRole("button", { name: /confirm booking/iu }).click();
+    await expect(page.locator("#booking-error")).toContainText(
+      /enter your full name/iu,
+    );
+    await expect(page.locator("#booking-error")).toContainText(/accept the policy/iu);
+    expect(bookingRequests).toBe(0);
+  });
+
+  test("Client duplicate submits converge on one live booking", async ({
+    page,
+    context,
+  }) => {
+    await reachLiveDetails(page, 3);
+    await fillLiveDetails(page, "live-duplicate-guest@example.invalid");
+
+    const confirmations: { readonly body: unknown; readonly status: number }[] = [];
+    page.on("response", async (response) => {
+      if (
+        new URL(response.url()).pathname === "/api/bookings" &&
+        response.request().method() === "POST"
+      ) {
+        confirmations.push({
+          body: await response.json(),
+          status: response.status(),
+        });
+      }
+    });
+
+    await page.getByRole("button", { name: /confirm booking/iu }).evaluate((button) => {
+      button.click();
+      button.click();
+    });
+
+    await expect(
+      page.getByRole("heading", { name: /your booking is confirmed/iu }),
+    ).toBeVisible();
+    await expect.poll(() => confirmations.length).toBe(2);
+    expect(confirmations.map(({ status }) => status)).toEqual([200, 200]);
+
+    const results = confirmations.map(
+      ({ body }) =>
+        body as {
+          bookingId: string;
+          publicReference: string;
+          replayed: boolean;
+        },
+    );
+    expect(new Set(results.map(({ bookingId }) => bookingId)).size).toBe(1);
+    expect(results.filter(({ replayed }) => replayed)).toHaveLength(1);
+    const publicReference = results[0]!.publicReference;
+
+    await signInLiveDashboard(context);
+    await page.goto(`${dashboardOrigin}/en/bookings`);
+    await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: new RegExp(publicReference, "u") }),
+    ).toBeVisible();
+  });
+
+  test("Client preserves details after its real hold expires", async ({ page }) => {
+    const holdId = await reachLiveDetails(page, 4);
+    await fillLiveDetails(page, "live-expired-guest@example.invalid");
+    expireFixtureHold(holdId);
+
+    await page.getByRole("button", { name: /confirm booking/iu }).click();
+    await expect(page.locator("#booking-error")).toContainText(/that time was taken/iu);
+    await expect(page.getByLabel(/full name/iu)).toHaveValue("Live Booking Guest");
+    await expect(page.getByLabel(/reason for visit/iu)).toHaveValue(
+      "Live browser coverage",
+    );
+  });
+
+  test("Client keeps answers when another guest commits after its hold has expired", async ({
+    browser,
+    page,
+  }) => {
+    const holdId = await reachLiveDetails(page, 5);
+    await fillLiveDetails(page, "live-stale-guest@example.invalid");
+    expireFixtureHold(holdId);
+    await createWinningBooking(browser, 5);
+
+    await page.getByRole("button", { name: /confirm booking/iu }).click();
+    await expect(page.locator("#booking-error")).toContainText(/that time was taken/iu);
+    await expect(page.getByLabel(/full name/iu)).toHaveValue("Live Booking Guest");
+    await expect(page.getByLabel(/reason for visit/iu)).toHaveValue(
+      "Live browser coverage",
+    );
+    await page
+      .locator("#booking-error")
+      .getByRole("button", { name: /choose another time/iu })
+      .click();
+    await expect(page.getByRole("button", { name: /find times/iu })).toBeVisible();
+  });
+
+  test("Client rejects another tenant's catalog identifiers without disclosing them", async ({
+    page,
+  }) => {
+    await page.goto(`${clientOrigin}/en`);
+    const response = await page.evaluate(
+      async ({ locationId: foreignLocationId, serviceId: foreignServiceId }) => {
+        const nonce = crypto.randomUUID();
+        const result = await fetch("/api/holds", {
+          body: JSON.stringify({
+            expectedCacheTag: null,
+            idempotencyKey: `cross-tenant-hold-${nonce}`,
+            locale: "en",
+            locationId: foreignLocationId,
+            partySize: 1,
+            serviceId: foreignServiceId,
+            sessionToken: `cross-tenant-session-${nonce}`,
+            staffPreferenceId: null,
+            startAt: "2035-01-02T13:00:00.000Z",
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        return { body: await result.json(), status: result.status };
+      },
+      { locationId: tenantALocationId, serviceId: tenantAServiceId },
+    );
+
+    expect(response).toEqual({
+      body: {
+        error: {
+          code: "not_authorized",
+          messageKey: "booking.error.not_authorized",
+        },
+      },
+      status: 403,
+    });
   });
 });

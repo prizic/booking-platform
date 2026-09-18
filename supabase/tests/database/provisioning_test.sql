@@ -244,6 +244,43 @@ select is((select s.external_id from control_plane.provisioning_steps s
 rollback to savepoint pv_duplicate;
 
 -- ---------------------------------------------------------------------------
+-- Follow-up GitHub steps receive the seed step's immutable node identity and
+-- bounded REST metadata. A mutable repository name is never rediscovered from
+-- the desired slug after a webhook rename.
+savepoint pv_repository_identity;
+select pg_temp.seed_instance('a4200000-0000-0000-0000-0000000000d1');
+select pg_temp.become_operator('operator');
+select * from pg_temp.request('a4200000-0000-0000-0000-0000000000d1','identity');
+select pg_temp.become_worker();
+select pg_temp.advance((select id from control_plane.provisioning_runs where slug='identity'));
+select pg_temp.advance((select id from control_plane.provisioning_runs where slug='identity'));
+select is((select c.step_key from control_plane.claim_provisioning_step_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) c),'seed_repository',
+  'the repository seed step is ready to record its immutable identity');
+select is((select c.step_status from control_plane.complete_provisioning_step_v1(
+  (select s.id from control_plane.provisioning_steps s
+   join control_plane.provisioning_runs r on r.id=s.run_id
+   where r.slug='identity' and s.step_key='seed_repository'),
+  'succeeded','R_kgDOidentity',
+  '{"repository_rest_id":42,"repository_name":"renamed-instance","default_branch":"main"}'::jsonb) c),
+  'succeeded','the seed step records webhook-compatible node identity');
+select is((select i.repository_external_id from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),
+  'R_kgDOidentity','follow-up work receives the immutable GitHub node ID');
+select is((select i.repository_rest_id from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),42::bigint,
+  'and the scoped API receives the recorded numeric REST ID');
+select is((select i.repository_name from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),
+  'renamed-instance','a renamed repository remains addressable from recorded state');
+select pg_temp.become_operator('operator');
+select throws_ok(
+  $$select * from control_plane.github_repository_for_run_v1(
+    (select id from control_plane.provisioning_runs where slug='identity'))$$,
+  '42501','policy_denied','an operator cannot extract GitHub repository state from the worker RPC');
+rollback to savepoint pv_repository_identity;
+
+-- ---------------------------------------------------------------------------
 -- Failure, backoff, exhaustion, and an operator's retry.
 savepoint pv_failure;
 select pg_temp.seed_instance('a4200000-0000-0000-0000-0000000000ee');
@@ -527,6 +564,36 @@ select is((select c.step_status from control_plane.complete_provisioning_step_v1
    where r.slug='authority' and s.step_key='configure_mail'),'skipped') c),'skipped',
   'but an optional one can be, and the run goes on without it');
 rollback to savepoint pv_authority;
+
+-- ---------------------------------------------------------------------------
+-- GitHub deliveries are durable, but webhook bodies and credentials never are.
+savepoint pv_github_delivery;
+select pg_temp.become_worker();
+select ok(not exists(
+  select 1 from information_schema.table_privileges
+  where table_schema='control_plane' and table_name='github_webhook_deliveries'
+    and grantee in ('anon','authenticated','PUBLIC')
+), 'GitHub delivery state is not readable or writable by application roles');
+select ok((select c.relrowsecurity from pg_class c
+  join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='control_plane' and c.relname='github_webhook_deliveries'),
+  'GitHub delivery state has RLS enabled');
+select is((select d.duplicate from control_plane.record_github_webhook_delivery_v1(
+  'delivery-00000001',repeat('a',64),'repository','R_kgDOexample',
+  'renamed') d),false,
+  'the first verified GitHub delivery is recorded');
+select ok((select d.duplicate from control_plane.record_github_webhook_delivery_v1(
+  'delivery-00000001',repeat('a',64),'repository','R_kgDOexample',
+  'renamed') d),
+  'a repeated delivery is a no-op rather than a second reconciliation');
+select is((select count(*)::integer from control_plane.github_webhook_deliveries),1,
+  'only its identifier, digest, event, repository identity, and safe metadata persist');
+select throws_ok(
+  $$select * from control_plane.record_github_webhook_delivery_v1(
+    'delivery-00000002',repeat('b',64),'repository','R_kgDOexample',
+    'Bearer not-a-token')$$,
+  '22023','transition_not_allowed','the narrow ingress has no arbitrary metadata field that could retain a token');
+rollback to savepoint pv_github_delivery;
 
 -- The savepoint rollbacks above revert pgTAP's own counter, so it is restored
 -- from the non-transactional sequence before the plan is emitted.
