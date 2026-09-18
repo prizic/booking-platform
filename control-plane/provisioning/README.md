@@ -53,5 +53,6 @@ That is deliberate: otherwise an operator could mark the health check succeeded
 from a browser and activate an instance nobody checked.
 
 The GitHub App implementation is documented in
-[`../github-app/`](../github-app/README.md); Vercel calls remain issue #32.
-Operator procedure is [R-15](../../docs/runbooks.md#r-15-stuck-waiting-or-drifted-provisioning-run).
+[`../github-app/`](../github-app/README.md); the Vercel implementation is in
+[`../vercel/`](../vercel/README.md). Operator procedure is
+[R-15](../../docs/runbooks.md#r-15-stuck-waiting-or-drifted-provisioning-run).

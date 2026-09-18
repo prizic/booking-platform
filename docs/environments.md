@@ -75,6 +75,8 @@ fingerprints, never credentials.
 | `GITHUB_APP_PRIVATE_KEY` | Privileged GitHub App signing key | Protected environment secret only |
 | `GITHUB_APP_WEBHOOK_SECRET` | Privileged webhook signature secret | Protected environment secret only |
 | `GITHUB_APP_INSTALLATION_ID` | Stable per-tenant installation identifier, not an authentication secret | Protected environment variable / control-plane descriptor |
+| `VERCEL_API_TOKEN` | Privileged deployment provider credential | Protected environment secret only |
+| `VERCEL_TEAM_ID` | Stable Vercel team scope (`team_katana`), not an authentication secret | Protected environment variable / control-plane descriptor |
 
 The service-role key, provider credentials, access token, database password,
 webhook bodies, and customer data never appear in a descriptor, fingerprint,

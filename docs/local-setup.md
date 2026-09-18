@@ -116,6 +116,7 @@ These belong to Platform Admin and the provisioning automation only. **A Client 
 | -------- | ------- |
 | `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY` | Identity for minting short-lived, per-job GitHub installation tokens (§21.2). |
 | `VERCEL_API_TOKEN` | Provisioning of instance projects, environment variables, and domains (§21.3). |
+| `VERCEL_TEAM_ID` | The platform's Vercel team scope (`team_katana`) every project/domain call is issued under. |
 
 ---
 
