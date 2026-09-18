@@ -747,3 +747,91 @@ test("does not create a second ruleset when a retry finds the desired one", asyn
     0,
   );
 });
+
+test("bootstraps and seeds a repository GitHub reports as empty", async () => {
+  const calls = [];
+  const releaseTreeSha256 = "c".repeat(64);
+  const release = {
+    files: [
+      { content: Buffer.from('{"name":"instance"}\n'), path: "package.json" },
+      {
+        content: Buffer.from(`{"treeSha256":"${releaseTreeSha256}"}\n`),
+        path: "distribution-manifest.json",
+      },
+    ],
+    treeSha256: releaseTreeSha256,
+  };
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (url, init = {}) => {
+      const target = String(url);
+      const method = init.method ?? "GET";
+      calls.push({ body: init.body, method, target });
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: "ghs_empty",
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(200, {
+          total_count: 1,
+          repositories: [{ id: 42, name: "lighthouse-studio" }],
+        });
+      }
+      // What GitHub actually answers for a repository with no commits: every
+      // git-data write is refused until the contents API creates the first one.
+      if (target.endsWith("/git/ref/heads/main"))
+        return response(409, { message: "Git Repository is empty." });
+      if (target.endsWith("/contents/package.json")) {
+        return response(201, { commit: { sha: "9".repeat(40) } });
+      }
+      if (target.endsWith("/git/blobs")) {
+        const bootstrapped = calls.some((call) =>
+          call.target.endsWith("/contents/package.json"),
+        );
+        return bootstrapped
+          ? response(201, { sha: `b${calls.length}`.padEnd(40, "0") })
+          : response(409, { message: "Git Repository is empty." });
+      }
+      if (target.endsWith("/git/trees")) return response(201, { sha: "7".repeat(40) });
+      if (target.endsWith("/git/commits"))
+        return response(201, { sha: "8".repeat(40) });
+      if (target.endsWith("/git/refs/heads/main"))
+        return response(200, { object: { sha: "8".repeat(40) } });
+      if (target.endsWith("/repos/prizic/lighthouse-studio")) {
+        return response(200, {
+          default_branch: "main",
+          id: 42,
+          name: "lighthouse-studio",
+          node_id: "R_kgDOempty",
+          private: true,
+        });
+      }
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  const result = await client.seedRepository({
+    defaultBranch: "main",
+    idempotencyKey: "run:seed-empty",
+    name: "lighthouse-studio",
+    release,
+  });
+
+  assert.equal(result.kind, "succeeded");
+  assert.equal(result.commitSha, "8".repeat(40));
+  // The bootstrap must never be the manifest: the retry path recognises a
+  // finished seed by that blob, so seeding it first would lie about progress.
+  const bootstrap = calls.find((call) => call.target.includes("/contents/"));
+  assert.equal(bootstrap.target.endsWith("/contents/package.json"), true);
+  // The seed commit descends from the bootstrap and moves the branch forward.
+  const commit = calls.find((call) => call.target.endsWith("/git/commits"));
+  assert.deepEqual(JSON.parse(commit.body).parents, ["9".repeat(40)]);
+  const ref = calls.find((call) => call.target.endsWith("/git/refs/heads/main"));
+  assert.equal(ref.method, "PATCH");
+});

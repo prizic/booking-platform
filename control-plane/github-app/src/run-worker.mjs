@@ -53,7 +53,7 @@ function createRestClient({ serviceRoleKey, url }) {
  * and seeding them from here with anything other than the template would
  * silently become the place those defaults live.
  */
-async function loadConfiguration(step, { contract, templateRoot }) {
+async function loadConfiguration(step, { codeowners, contract, templateRoot }) {
   const read = (relative) => readFile(path.join(templateRoot, relative));
   const template = JSON.parse(await read("manifest.template.json"));
   const request = step.request ?? {};
@@ -79,6 +79,13 @@ async function loadConfiguration(step, { contract, templateRoot }) {
       content: Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`),
       path: "instance/manifest.json",
     },
+    // protect_repository refuses to apply the branch ruleset without this, and
+    // the ruleset is what makes code owner review mean anything — so the file
+    // has to arrive with the configuration, not after it.
+    {
+      content: Buffer.from(`* ${codeowners}\n`),
+      path: ".github/CODEOWNERS",
+    },
   ];
   for (const relative of copied) {
     files.push({ content: await read(relative), path: `instance/${relative}` });
@@ -97,6 +104,11 @@ export function createWorkerFromEnvironment({ env = process.env, root } = {}) {
     organization: required("GITHUB_APP_ORGANIZATION"),
     privateKey: required("GITHUB_APP_PRIVATE_KEY"),
   });
+  // Stated, never defaulted, and read at startup so a missing owner fails the
+  // worker rather than one step: an owner that does not resolve leaves the
+  // ruleset in place but makes code owner review unenforceable, which fails
+  // open exactly where governance is supposed to fail closed.
+  const codeowners = required("GITHUB_INSTANCE_CODEOWNERS");
   const templateRoot = path.join(root, "instance-template/instance");
   const distributionRoot = env.WLBP_DISTRIBUTION_ROOT
     ? path.resolve(env.WLBP_DISTRIBUTION_ROOT)
@@ -106,6 +118,7 @@ export function createWorkerFromEnvironment({ env = process.env, root } = {}) {
     github,
     loadConfiguration: async (step) =>
       loadConfiguration(step, {
+        codeowners,
         contract: JSON.parse(
           await readFile(path.join(root, "platform-contract.json"), "utf8"),
         ),

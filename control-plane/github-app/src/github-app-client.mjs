@@ -508,7 +508,49 @@ export function createGitHubAppClient({
         treeSha,
       });
     }
-    if (reference.response.status !== 404) return providerResult(reference.response);
+    // A repository created moments ago has no ref yet, and GitHub reports that
+    // as 409 "Git Repository is empty" rather than 404 — so 409 is the normal
+    // first-seed path, not a provider failure. 404 covers the other empty case:
+    // a repository with commits but not this branch.
+    if (reference.response.status !== 404 && reference.response.status !== 409) {
+      return providerResult(reference.response);
+    }
+
+    // The Git Data API cannot write to a repository with no commits at all —
+    // blobs, trees and commits all answer 409 there. The contents API is the
+    // only one that can create the first commit, so an empty repository gets
+    // bootstrapped with a single file and everything below builds on it.
+    // Deliberately never the manifest: the retry path above recognises a
+    // finished seed by the manifest blob, and bootstrapping with it would make
+    // a half-seeded repository look complete.
+    // ponytail: a crash between the bootstrap and the seed commit leaves a
+    // one-file branch that the next attempt reports as a seed conflict;
+    // deleting the repository is the recovery.
+    let parentSha = null;
+    if (reference.response.status === 409) {
+      const bootstrap =
+        files.find((file) => file.path !== "distribution-manifest.json") ?? files[0];
+      const seeded = await githubRequest(
+        `${repositoryPath}/contents/${bootstrap.path
+          .split("/")
+          .map(encodeURIComponent)
+          .join("/")}`,
+        {
+          body: JSON.stringify({
+            branch: defaultBranch,
+            content: bootstrap.content.toString("base64"),
+            message: `Initialise ${defaultBranch}`,
+          }),
+          method: "PUT",
+        },
+        tokenScope,
+      );
+      if (!seeded.response.ok) return providerResult(seeded.response);
+      if (typeof seeded.payload?.commit?.sha !== "string") {
+        return { kind: "failed", code: "github_repository_state_invalid" };
+      }
+      parentSha = seeded.payload.commit.sha;
+    }
 
     const entries = [];
     for (const file of files) {
@@ -548,7 +590,7 @@ export function createGitHubAppClient({
       {
         body: JSON.stringify({
           message: `Seed white-label release ${release.treeSha256.slice(0, 12)}`,
-          parents: [],
+          parents: parentSha ? [parentSha] : [],
           tree: tree.payload.sha,
         }),
         method: "POST",
@@ -559,14 +601,19 @@ export function createGitHubAppClient({
     if (typeof commit.payload?.sha !== "string") {
       return { kind: "failed", code: "github_repository_state_invalid" };
     }
+    // The bootstrap already created the branch, so this moves it forward
+    // instead of creating it; the seed commit descends from it, so no force.
     const created = await githubRequest(
-      `${repositoryPath}/git/refs`,
+      parentSha
+        ? `${repositoryPath}/git/refs/heads/${encodeURIComponent(defaultBranch)}`
+        : `${repositoryPath}/git/refs`,
       {
-        body: JSON.stringify({
-          ref: `refs/heads/${defaultBranch}`,
-          sha: commit.payload.sha,
-        }),
-        method: "POST",
+        body: JSON.stringify(
+          parentSha
+            ? { sha: commit.payload.sha }
+            : { ref: `refs/heads/${defaultBranch}`, sha: commit.payload.sha },
+        ),
+        method: parentSha ? "PATCH" : "POST",
       },
       tokenScope,
     );

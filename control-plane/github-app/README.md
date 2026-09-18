@@ -13,6 +13,7 @@ an application env file or Git:
 - `GITHUB_APP_INSTALLATION_ID`
 - `GITHUB_APP_WEBHOOK_SECRET`
 - `GITHUB_APP_ORGANIZATION`
+- `GITHUB_INSTANCE_CODEOWNERS`
 
 The App must be organization-owned and installed only on the intended platform
 repositories. It needs the least privileges for repository administration,
@@ -46,7 +47,10 @@ scanning state, or dependency protection setting is drift and remains visible
 until a privileged reconciliation changes it.
 
 The `protect_repository` step requires an explicit, non-empty required-check
-policy and a committed `.github/CODEOWNERS` file. The worker then applies the
+policy and a committed `.github/CODEOWNERS` file. `commit_configuration` writes
+that file from `GITHUB_INSTANCE_CODEOWNERS`, which has no default: an owner that
+does not resolve leaves the ruleset in place but makes code owner review
+unenforceable, so the platform states it rather than guessing it. The worker then applies the
 named branch ruleset (reviews, CODEOWNERS, non-fast-forward and deletion
 protection), enables secret scanning and push protection, and enables GitHub
 vulnerability alerts plus automated security fixes. It fails visibly instead
