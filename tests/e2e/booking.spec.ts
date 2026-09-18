@@ -472,7 +472,9 @@ test.describe("live database booking journey", () => {
     await page.goto(
       `${clientOrigin}/en/book?service=${liveServiceId}&location=${liveLocationId}`,
     );
-    await page.locator('input[name="date"]').fill(futureDate(daysFromNow));
+    const dateInput = page.locator('input[name="date"]');
+    await expect(dateInput).toBeEnabled();
+    await dateInput.fill(futureDate(daysFromNow));
     await page.getByRole("button", { name: /find times/iu }).click();
     await page
       .getByRole("button", { name: /^select$/iu })
