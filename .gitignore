@@ -6,8 +6,7 @@ node_modules/
 # Builds and test artifacts
 .artifacts/
 .next/
-.next-warm/
-.next-warm-*/
+.next-*/
 next-env.d.ts
 dist/
 coverage/
