@@ -193,7 +193,7 @@ select is(
       'a0000000-0000-0000-0000-000000000001'
     )
   ),
-  4,
+  5,
   'tenant administrator receives staff and resource rows across the tenant'
 );
 select is(

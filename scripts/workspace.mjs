@@ -157,6 +157,8 @@ const ignoredDirectoryNames = new Set([
   ".next-warm",
   ".next-warm-client",
   ".next-warm-dashboard",
+  // Issue #94. The live journey's own Next build output.
+  ".next-live-client",
   ".turbo",
   "coverage",
   "dist",

@@ -21,6 +21,7 @@ try {
     ".next-warm",
     ".next-warm-client",
     ".next-warm-dashboard",
+    ".next-live-client",
     ".turbo",
     "coverage",
     "dist",
