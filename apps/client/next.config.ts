@@ -22,7 +22,6 @@ const nextConfig: NextConfig = {
   env: {
     WLBP_BRAND_CONFIG_JSON: instanceBrand.serialized,
   },
-  output: "standalone",
   poweredByHeader: false,
   productionBrowserSourceMaps: false,
   reactStrictMode: true,
