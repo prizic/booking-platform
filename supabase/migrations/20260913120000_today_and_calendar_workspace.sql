@@ -209,19 +209,28 @@ begin
   $trg$;
 
   -- Authorization: a member may read its own tenant's private topic and no
-  -- other, and nobody may write to a topic from a client.
+  -- other, and nobody may write to a topic from a client. `realtime.messages`
+  -- is owned by the platform's own `supabase_realtime_admin` role on hosted
+  -- projects, not by the migration role, so a managed project that has not
+  -- granted ownership across still must not fail the whole migration over an
+  -- accelerator: the broadcast policy is simply not installed, same as when
+  -- `realtime.send` itself is absent.
   if to_regclass('realtime.messages') is not null then
-    execute 'alter table realtime.messages enable row level security';
-    execute $pol$
-      create policy tenant_workspace_broadcast_read on realtime.messages
-      for select to authenticated
-      using (
-        realtime.messages.extension = 'broadcast'
-        and exists (
-          select 1 from app.tenants t
-          where realtime.topic() = 'tenant:'||t.id::text
-            and (select private.is_active_tenant_member(t.id))))
-    $pol$;
+    begin
+      execute 'alter table realtime.messages enable row level security';
+      execute $pol$
+        create policy tenant_workspace_broadcast_read on realtime.messages
+        for select to authenticated
+        using (
+          realtime.messages.extension = 'broadcast'
+          and exists (
+            select 1 from app.tenants t
+            where realtime.topic() = 'tenant:'||t.id::text
+              and (select private.is_active_tenant_member(t.id))))
+      $pol$;
+    exception when insufficient_privilege then
+      raise notice 'insufficient privilege on realtime.messages; the workspace broadcast read policy is not installed';
+    end;
   end if;
 end;
 $realtime$;
