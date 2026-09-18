@@ -34,16 +34,35 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
 
   useEffect(() => {
     let cancelled = false;
-    getPlatformAdminBrowserClient()
-      .auth.mfa.enroll({ factorType: "totp" })
-      .then(({ data, error: enrollError }) => {
-        if (cancelled) return;
-        if (enrollError) {
-          setError(enrollError.message);
-          return;
-        }
-        setFactor({ id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+
+    async function startEnrollment() {
+      const client = getPlatformAdminBrowserClient();
+
+      // An abandoned attempt (refresh, closed tab, a previous broken QR)
+      // leaves an unverified factor behind, and Supabase refuses a second
+      // one with the same friendly name — so a retry has to clear those
+      // first rather than fail confusingly on the second visit.
+      const { data: existing } = await client.auth.mfa.listFactors();
+      const stale = existing?.all.filter(
+        (factor) => factor.factor_type === "totp" && factor.status === "unverified",
+      );
+      for (const factor of stale ?? []) {
+        await client.auth.mfa.unenroll({ factorId: factor.id });
+      }
+      if (cancelled) return;
+
+      const { data, error: enrollError } = await client.auth.mfa.enroll({
+        factorType: "totp",
       });
+      if (cancelled) return;
+      if (enrollError) {
+        setError(enrollError.message);
+        return;
+      }
+      setFactor({ id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
+    }
+
+    void startEnrollment();
     return () => {
       cancelled = true;
     };
@@ -78,12 +97,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
         {factor === null ? null : (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
-            <img
-              alt=""
-              height={200}
-              src={factor.qrCode}
-              width={200}
-            />
+            <img alt="" height={200} src={factor.qrCode} width={200} />
             <p>
               <strong>{message("mfaEnrollSecretLabel")}:</strong>{" "}
               <code>{factor.secret}</code>
