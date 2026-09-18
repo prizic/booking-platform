@@ -68,6 +68,13 @@ fingerprints, never credentials.
 | `RECOVERY_VERIFIED_AT` | Exact UTC timestamp for that recovery review, refreshed within 24 hours of a production migration | Protected production environment variable / release record |
 | `NEXT_PUBLIC_SUPABASE_URL` | Browser-safe project URL | App environment storage, scoped by environment |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe, RLS-constrained key | App environment storage, scoped by environment |
+| `STRIPE_SECRET_KEY` | Privileged payment provider credential | Protected environment secret only |
+| `STRIPE_WEBHOOK_SECRET` | Privileged webhook signature secret | Protected environment secret only |
+| `RESEND_API_KEY` | Privileged email provider credential | Protected environment secret only |
+| `GITHUB_APP_ID` | Stable GitHub App identifier, not an authentication secret | Protected environment variable / control-plane descriptor |
+| `GITHUB_APP_PRIVATE_KEY` | Privileged GitHub App signing key | Protected environment secret only |
+| `GITHUB_APP_WEBHOOK_SECRET` | Privileged webhook signature secret | Protected environment secret only |
+| `GITHUB_APP_INSTALLATION_ID` | Stable per-tenant installation identifier, not an authentication secret | Protected environment variable / control-plane descriptor |
 
 The service-role key, provider credentials, access token, database password,
 webhook bodies, and customer data never appear in a descriptor, fingerprint,
