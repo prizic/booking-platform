@@ -81,7 +81,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
             <img
               alt=""
               height={200}
-              src={`data:image/svg+xml;utf8,${encodeURIComponent(factor.qrCode)}`}
+              src={factor.qrCode}
               width={200}
             />
             <p>
