@@ -196,12 +196,18 @@ importers:
 
   apps/platform-admin:
     dependencies:
+      '@wlbp/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@wlbp/config':
         specifier: workspace:*
         version: link:../../packages/config
       '@wlbp/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@wlbp/supabase-client':
+        specifier: workspace:*
+        version: link:../../packages/supabase-client
       '@wlbp/ui-foundation':
         specifier: workspace:*
         version: link:../../packages/ui-foundation

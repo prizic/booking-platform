@@ -22,7 +22,28 @@ export type AdminMessageKey =
   | "notFoundTitle"
   | "returnHome"
   | "controlCode"
-  | "notFoundCode";
+  | "notFoundCode"
+  | "loginTitle"
+  | "loginEmailLabel"
+  | "loginPasswordLabel"
+  | "loginSubmit"
+  | "loginMfaCodeLabel"
+  | "loginMfaSubmit"
+  | "loginErrorTitle"
+  | "mfaEnrollTitle"
+  | "mfaEnrollInstructions"
+  | "mfaEnrollSecretLabel"
+  | "mfaEnrollCodeLabel"
+  | "mfaEnrollSubmit"
+  | "mfaEnrollErrorTitle"
+  | "signOut"
+  | "createTenantTitle"
+  | "tenantNameLabel"
+  | "tenantBrandKeyLabel"
+  | "tenantBrandKeyDescription"
+  | "createTenantSubmit"
+  | "createTenantErrorTitle"
+  | "createTenantSuccess";
 
 const adminCopy: Record<Locale, Record<AdminMessageKey, string>> = {
   en: {
@@ -50,6 +71,28 @@ const adminCopy: Record<Locale, Record<AdminMessageKey, string>> = {
     returnHome: "Return to the control plane",
     controlCode: "Control / 001",
     notFoundCode: "404 / Private",
+    loginTitle: "Sign in to the control plane",
+    loginEmailLabel: "Email",
+    loginPasswordLabel: "Password",
+    loginSubmit: "Sign in",
+    loginMfaCodeLabel: "6-digit authenticator code",
+    loginMfaSubmit: "Verify",
+    loginErrorTitle: "Sign-in failed",
+    mfaEnrollTitle: "Set up your authenticator app",
+    mfaEnrollInstructions:
+      "Scan this key with an authenticator app, then enter the 6-digit code it shows to finish enrollment.",
+    mfaEnrollSecretLabel: "Setup key",
+    mfaEnrollCodeLabel: "6-digit code",
+    mfaEnrollSubmit: "Verify and enable",
+    mfaEnrollErrorTitle: "Could not enroll",
+    signOut: "Sign out",
+    createTenantTitle: "Register a new tenant",
+    tenantNameLabel: "Tenant name",
+    tenantBrandKeyLabel: "Brand key",
+    tenantBrandKeyDescription: "Lowercase, hyphen-separated, e.g. lighthouse-studio.",
+    createTenantSubmit: "Create tenant",
+    createTenantErrorTitle: "Could not create tenant",
+    createTenantSuccess: "Tenant created. Provisioning can now be requested for it.",
   },
   ar: {
     eyebrow: "لوحة تحكم خاصة بالمنصة",
@@ -76,6 +119,28 @@ const adminCopy: Record<Locale, Record<AdminMessageKey, string>> = {
     returnHome: "العودة إلى لوحة تحكم المنصة",
     controlCode: "تحكم / ٠٠١",
     notFoundCode: "٤٠٤ / خاص",
+    loginTitle: "تسجيل الدخول إلى لوحة التحكم",
+    loginEmailLabel: "البريد الإلكتروني",
+    loginPasswordLabel: "كلمة المرور",
+    loginSubmit: "تسجيل الدخول",
+    loginMfaCodeLabel: "رمز التحقق المكوّن من ٦ أرقام",
+    loginMfaSubmit: "تحقق",
+    loginErrorTitle: "فشل تسجيل الدخول",
+    mfaEnrollTitle: "إعداد تطبيق المصادقة",
+    mfaEnrollInstructions:
+      "امسح هذا المفتاح باستخدام تطبيق مصادقة، ثم أدخل الرمز المكوّن من ٦ أرقام لإكمال الإعداد.",
+    mfaEnrollSecretLabel: "مفتاح الإعداد",
+    mfaEnrollCodeLabel: "رمز من ٦ أرقام",
+    mfaEnrollSubmit: "تحقق وفعّل",
+    mfaEnrollErrorTitle: "تعذّر الإعداد",
+    signOut: "تسجيل الخروج",
+    createTenantTitle: "تسجيل مستأجر جديد",
+    tenantNameLabel: "اسم المستأجر",
+    tenantBrandKeyLabel: "مفتاح العلامة التجارية",
+    tenantBrandKeyDescription: "أحرف صغيرة مفصولة بشرطات، مثل lighthouse-studio.",
+    createTenantSubmit: "إنشاء المستأجر",
+    createTenantErrorTitle: "تعذّر إنشاء المستأجر",
+    createTenantSuccess: "تم إنشاء المستأجر. يمكن الآن طلب التهيئة له.",
   },
 };
 

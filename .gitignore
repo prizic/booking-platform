@@ -20,6 +20,7 @@ apps/*/public/assets/
 .env
 .env.*
 !.env.example
+.vercel/
 .DS_Store
 .idea/
 .vscode/

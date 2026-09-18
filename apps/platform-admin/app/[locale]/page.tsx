@@ -1,7 +1,10 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import { Badge, Surface } from "@wlbp/ui-foundation";
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getAdminMessage } from "../_lib/copy";
+import { loadOperatorSession } from "../_lib/platform-admin-server";
+import { CreateTenantForm } from "./create-tenant-form";
 
 type AdminPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -11,6 +14,11 @@ export default async function PlatformAdminPage({ params }: AdminPageProps) {
   const { locale } = await params;
   const message = (key: Parameters<typeof getAdminMessage>[1]) =>
     getAdminMessage(locale, key);
+
+  const { state } = await loadOperatorSession();
+  if (state.kind === "signed-out") redirect(`/${locale}/login`);
+  if (state.kind === "mfa-enrollment-required") redirect(`/${locale}/mfa-enroll`);
+  if (state.kind === "step-up-required") redirect(`/${locale}/login`);
 
   return (
     <main className="admin-shell">
@@ -81,6 +89,10 @@ export default async function PlatformAdminPage({ params }: AdminPageProps) {
         </div>
 
         <p className="operator-notice">{message("operatorNotice")}</p>
+      </Surface>
+
+      <Surface as="section" className="fleet-panel" labelledBy="create-tenant-title">
+        <CreateTenantForm locale={locale} />
       </Surface>
     </main>
   );

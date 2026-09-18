@@ -1,7 +1,17 @@
 export type Json =
-  string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[];
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5";
+  };
   api_v1: {
     Tables: {
       [_ in never]: never;
@@ -255,6 +265,14 @@ export type Database = {
           staff_id: string;
           state: string;
           tax_rate_bps: number;
+        }[];
+      };
+      create_tenant_v1: {
+        Args: { p_brand_key: string; p_name: string };
+        Returns: {
+          brand_id: string;
+          instance_id: string;
+          tenant_id: string;
         }[];
       };
       deactivate_resource_v1: {
@@ -1256,6 +1274,25 @@ export type Database = {
           outcome: string;
         }[];
       };
+      request_provisioning_v1: {
+        Args: {
+          p_backend_contract_max: number;
+          p_backend_contract_min: number;
+          p_config_schema_version: number;
+          p_desired_release: string;
+          p_idempotency_key: string;
+          p_instance_id: string;
+          p_plan_key: string;
+          p_request: Json;
+          p_slug: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          rejected: string[];
+          run_id: string;
+          state: string;
+        }[];
+      };
       request_refund_v1: {
         Args: {
           p_amount_minor_units?: number;
@@ -1348,7 +1385,11 @@ export type Database = {
         }[];
       };
       rollback_brand_v1: {
-        Args: { p_brand_id: string; p_tenant_id: string; p_to_revision: number };
+        Args: {
+          p_brand_id: string;
+          p_tenant_id: string;
+          p_to_revision: number;
+        };
         Returns: {
           brand_revision_id: string;
           contract_version: number;
@@ -1645,7 +1686,10 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
+type DefaultSchema = DatabaseWithoutInternals[Extract<
+  keyof Database,
+  "public"
+>];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -1742,7 +1786,8 @@ export type Enums<
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
+    | keyof DefaultSchema["CompositeTypes"]
+    | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }

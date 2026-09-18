@@ -11,8 +11,10 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@wlbp/auth": "workspace:*",
     "@wlbp/config": "workspace:*",
     "@wlbp/i18n": "workspace:*",
+    "@wlbp/supabase-client": "workspace:*",
     "@wlbp/ui-foundation": "workspace:*",
     "next": "catalog:",
     "react": "catalog:",
