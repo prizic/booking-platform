@@ -147,6 +147,7 @@ select is(
   array[
     'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',
     'private.active_support_grant_v1(uuid)',
+    'private.active_tenant_restrictions_v1(uuid)',
     'private.add_booking_note_v1(uuid,uuid,text,text,uuid)',
     'private.advance_tenant_offboarding_v1(uuid,text)',
     'private.attach_checkout_reference_v1(uuid,uuid,text)',
@@ -178,6 +179,7 @@ select is(
     'private.expire_management_links_v1(uuid,integer)',
     'private.get_assignment_candidates_v1(uuid,uuid)',
     'private.get_availability_v1(text,text,uuid,uuid,uuid,timestamp with time zone,timestamp with time zone,integer,text)',
+    'private.get_billing_overview_v1(uuid)',
     'private.get_brand_presentation_v1(uuid)',
     'private.get_checkout_intent_v1(uuid,uuid)',
     'private.get_checkout_status_v1(text,text,uuid,text)',

@@ -163,7 +163,60 @@ function cleanup() {
     delete from control_plane.jobs where instance_id='${provisioningInstanceId}';
     delete from app.instances where id='${provisioningInstanceId}';
     delete from control_plane.operators where auth_user_id='${operatorId}';
+
+    set local session_replication_role = 'replica';
+    delete from control_plane.usage_events where tenant_id='${tenantId}';
+    set local session_replication_role = 'origin';
+    delete from control_plane.invoice_lines l using control_plane.invoices i
+      where i.id=l.invoice_id and i.tenant_id='${tenantId}';
+    delete from control_plane.billing_credits where tenant_id='${tenantId}';
+    delete from control_plane.invoices where tenant_id='${tenantId}';
+    delete from control_plane.usage_counters where tenant_id='${tenantId}';
+    delete from control_plane.tenant_restrictions where tenant_id='${tenantId}';
+    delete from control_plane.subscriptions where tenant_id='${tenantId}';
+    delete from control_plane.billing_accounts where tenant_id='${tenantId}';
+    delete from app.tenant_quotas where tenant_id='${tenantId}';
   `);
+}
+
+// Issue #37. Billing runs on a schedule, and a schedule that fires on two
+// workers is the ordinary way a tenant gets invoiced twice for one month.
+async function concurrentInvoiceIssue() {
+  runSql(`
+    insert into control_plane.operators(auth_user_id,email,role)
+    values ('${operatorId}','billing-gate@example.invalid','operator')
+    on conflict (auth_user_id) do update set role='operator', disabled_at=null;
+  `);
+  runSql(`
+    select set_config('request.jwt.claims','${operatorClaims}',false);
+    select * from control_plane.change_plan_v1('${tenantId}','launch',1,
+      '2026-03-01T00:00:00Z'::timestamptz,'2026-04-01T00:00:00Z'::timestamptz);
+  `);
+
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        `select replayed from control_plane.issue_invoice_v1('${tenantId}',
+           '2026-03-01T00:00:00Z'::timestamptz,'2026-04-01T00:00:00Z'::timestamptz);`,
+        at,
+      ),
+    ),
+  );
+  const firstWriters = attempts.filter((result) => result.ok && result.value === "f");
+  report(
+    firstWriters.length === 1,
+    `${lifecycleContenders} billing workers firing at once issue exactly one invoice`,
+    attempts.map((result) => (result.ok ? result.value : result.error)).join(" | "),
+  );
+  const invoices = runSql(
+    `select count(*) from control_plane.invoices where tenant_id='${tenantId}';`,
+  );
+  report(
+    invoices === "1",
+    "and the tenant is billed once for the month, not once per worker",
+    invoices,
+  );
 }
 
 // Two workers that wake at the same instant must not call the same provider
@@ -804,6 +857,7 @@ async function main() {
     await concurrentPrivacyRequest(lifecycleId);
     await concurrentSettlement(slotAt("09:00"));
     await concurrentProvisioningStep();
+    await concurrentInvoiceIssue();
     noOverlapSurvives();
   } finally {
     cleanup();
