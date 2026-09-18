@@ -53,6 +53,10 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
 
       const { data, error: enrollError } = await client.auth.mfa.enroll({
         factorType: "totp",
+        friendlyName: "Atlas platform operations",
+        // Without this the authenticator app labels the entry with the
+        // project's site_url, which reads as "localhost".
+        issuer: "Atlas Platform Admin",
       });
       if (cancelled) return;
       if (enrollError) {

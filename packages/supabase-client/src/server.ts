@@ -26,6 +26,9 @@ export function createRequestScopedSupabaseClient(
         };
 
   return createSsrServerClient<Database, "api_v1">(config.url, config.publishableKey, {
+    // The generic above is type-only. Without this the client sends
+    // Content-Profile: public, which this project does not expose.
+    db: { schema: "api_v1" },
     cookies: {
       getAll: async () => {
         const values = await cookies.getAll();
