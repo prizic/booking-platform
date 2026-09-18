@@ -115,6 +115,22 @@ export type Database = {
           status: string;
         }[];
       };
+      claim_notification_batch_v1: {
+        Args: { p_limit?: number; p_visibility_seconds?: number };
+        Returns: {
+          attempt: number;
+          booking_id: string;
+          booking_revision: number;
+          correlation_id: string;
+          message_id: string;
+          payload: Json;
+          recipient_email: string;
+          template_key: string;
+          template_locale: string;
+          template_version: number;
+          tenant_id: string;
+        }[];
+      };
       claim_refund_batch_v1: {
         Args: { p_limit?: number; p_visibility_seconds?: number };
         Returns: {
@@ -290,6 +306,13 @@ export type Database = {
           proposal_action_token: string;
           proposal_expires_at: string;
           status: string;
+        }[];
+      };
+      dispatch_notifications_v1: {
+        Args: { p_limit?: number; p_tenant_id?: string };
+        Returns: {
+          dispatched: number;
+          suppressed: number;
         }[];
       };
       get_assignment_candidates_v1: {
@@ -563,6 +586,10 @@ export type Database = {
           event_count: number;
           event_type: string;
         }[];
+      };
+      get_notification_brand_v1: {
+        Args: { p_tenant_id: string };
+        Returns: string;
       };
       get_payment_account_status_v1: {
         Args: { p_tenant_id: string };
@@ -1084,6 +1111,34 @@ export type Database = {
           outcome: string;
         }[];
       };
+      record_notification_attempt_v1: {
+        Args: {
+          p_attempt: number;
+          p_error_code?: string;
+          p_message_id: string;
+          p_outcome: string;
+          p_provider_reference?: string;
+          p_started_at: string;
+        };
+        Returns: {
+          dead_lettered: boolean;
+          next_attempt_at: string;
+          status: string;
+        }[];
+      };
+      record_notification_event_v1: {
+        Args: {
+          p_event_type: string;
+          p_occurred_at: string;
+          p_provider: string;
+          p_provider_event_reference: string;
+          p_provider_message_reference?: string;
+        };
+        Returns: {
+          applied: boolean;
+          message_id: string;
+        }[];
+      };
       record_payment_event_v1: {
         Args: {
           p_amount_minor_units?: number;
@@ -1256,6 +1311,10 @@ export type Database = {
           exception_id: string;
           status: string;
         }[];
+      };
+      resolve_provider_object_tenant_v1: {
+        Args: { p_object_kind: string; p_provider_object_reference: string };
+        Returns: string;
       };
       resolve_public_tenant_v1: {
         Args: { p_application: string; p_hostname: string };

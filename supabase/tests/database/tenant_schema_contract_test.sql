@@ -1,6 +1,6 @@
 begin;
 
-select plan(45);
+select plan(48);
 
 select has_table('app'::name, 'tenants'::name);
 select has_table('app'::name, 'permissions'::name);
@@ -76,6 +76,63 @@ select ok(
   'no exposed api_v1 function is SECURITY DEFINER'
 );
 
+-- Issue #101. The consequence of the rule above, which nothing checked until a
+-- production call returned `permission denied for schema private`: an exposed
+-- wrapper is SECURITY INVOKER, so the *caller* needs EXECUTE on the engine
+-- underneath. Every `api_v1` function reachable by `service_role` was
+-- unreachable, because `service_role` had no USAGE on `private` at all.
+--
+-- Stated generally rather than function by function, so the next wrapper that
+-- forgets its grant fails here instead of in a webhook nobody is watching.
+select is(
+  (
+    with exposed as (
+      select procedure.prosrc
+      from pg_proc as procedure
+      join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+      where namespace.nspname = 'api_v1'
+        and exists (
+          select 1 from aclexplode(procedure.proacl) as entry
+          join pg_roles as grantee on grantee.oid = entry.grantee
+          where grantee.rolname = 'service_role' and entry.privilege_type = 'EXECUTE')
+    )
+    select array_agg(distinct callee.oid::regprocedure::text
+      order by callee.oid::regprocedure::text)
+    from exposed
+    cross join lateral regexp_matches(exposed.prosrc,'private\.([a-z0-9_]+)\s*\(','g') as reference
+    join pg_proc as callee on callee.proname = reference[1]
+    join pg_namespace as callee_schema
+      on callee_schema.oid = callee.pronamespace and callee_schema.nspname = 'private'
+    where not has_function_privilege('service_role',callee.oid,'execute')
+  ),
+  null,
+  'every private function called by a service-role-callable api_v1 wrapper is '
+  'itself executable by service_role, so the platform can actually call its own '
+  'Data API'
+);
+
+select ok(has_schema_privilege('service_role','private','usage'),
+  'the platform key can reach the schema its wrappers delegate to');
+-- `private` is guarded per function, not by hiding the schema: application
+-- roles have USAGE and reach exactly the engines their own wrappers need. So
+-- the line worth asserting is not that they cannot see the schema — it is that
+-- a queue worker's surface is not a customer's.
+select ok(
+  not exists (
+    select 1
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'api_v1'
+      and procedure.proname in (
+        'dispatch_notifications_v1','claim_notification_batch_v1',
+        'record_notification_attempt_v1','record_notification_event_v1',
+        'get_notification_brand_v1')
+      and (has_function_privilege('anon',procedure.oid,'execute')
+        or has_function_privilege('authenticated',procedure.oid,'execute'))
+  ),
+  'no application role can claim a notification batch, record a delivery '
+  'attempt, or apply a provider event: those are platform operations');
+
 select is(
   (
     select array_agg(procedure.oid::regprocedure::text order by procedure.oid::regprocedure::text)
@@ -127,6 +184,7 @@ select is(
     'private.get_commerce_health_v1()',
     'private.get_customer_report_v1(uuid,date,date,text)',
     'private.get_hold_form_v1(text,text,uuid,text,text)',
+    'private.get_notification_brand_v1(uuid)',
     'private.get_platform_notice_v1()',
     'private.get_privacy_request_v1(uuid,uuid)',
     'private.get_public_navigation_v1(text,text)',
@@ -171,6 +229,7 @@ select is(
     'private.resolve_auth_mail_context_v1(text)',
     'private.resolve_availability_policy_v1(uuid,uuid,uuid,uuid,uuid,text,integer)',
     'private.resolve_payment_exception_v1(uuid,uuid,text,text)',
+    'private.resolve_provider_object_tenant_v1(text,text)',
     'private.respond_to_proposal_v1(text,text,text,text)',
     'private.revoke_management_tokens_on_state_change()',
     'private.rollback_brand_v1(uuid,uuid,bigint)',

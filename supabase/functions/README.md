@@ -20,6 +20,32 @@ Provider-specific functions land with their owning integration issues.
 | `auth-mail-hook`      | issue #20 | The Supabase Send Email Hook. Resolves tenant branding through `resolve_auth_mail_context_v1`, which reads membership and invitation records only; an ambiguous or unknown address gets a generic message. Never trusts user metadata, a redirect URL, or a claimed hostname.                                                                          |
 | `stripe-webhook`      | issue #22 | Verifies the signed callback over the unmodified raw body, normalizes the event, and hands it to `record_payment_event_v1`, which is idempotent on the provider's own event id. Reads `STRIPE_WEBHOOK_SECRET`. A forged, stale, replayed or malformed delivery is refused identically.                                                                 |
 
+## `_shared` is generated, not written
+
+A Supabase Edge Function may only import files under `supabase/functions/`, and
+Deno resolves specifiers literally — so neither `packages/email`'s `./x.js`
+imports (correct for the Node build, files that do not exist) nor its bare
+`@wlbp/api-contracts` specifier can be followed from here.
+
+`pnpm bundle:edge` copies the modules these functions need into
+`_shared/<package>/` and rewrites those specifiers. The logic still lives in
+exactly one place; `_shared` is a generated view of it, and `pnpm check` fails
+if the two drift. Do not edit anything under `_shared`.
+
+The same applies to `packages/integrations`, for a second reason: its modules
+resolve locally through a relative path that climbs out of `supabase/functions`,
+but `supabase functions deploy` bundles with that directory as its root and
+refuses to follow one.
+
+## Scheduling
+
+`supabase/cron/schedule.sql` holds every scheduled job, applied by the release
+pipeline rather than by `supabase db reset`: pg_cron runs jobs in a separate
+session against committed state, so scheduling them in a migration would put
+background work underneath every local gate. Expiry jobs run as SQL inside the
+database; the two that need a provider key go out through an Edge Function, and
+the key is read from Vault by name so it never appears in a committed file.
+
 Every decision these functions make lives in a package — `packages/email` for
 Resend, `packages/integrations` for Stripe — where it is unit tested with an
 injected transport, so none of them needs a network, a provider account, or a

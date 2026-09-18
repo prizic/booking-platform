@@ -124,6 +124,11 @@ select is((select array[e.applied::text] from private.record_notification_event_
   array['false'],'a duplicate callback changes nothing');
 select is((select count(*)::integer from app.notification_provider_events),1,
   'the duplicate was deduplicated by the provider event id');
+select is((select array[e.applied::text,coalesce(e.message_id::text,'')]
+  from private.record_notification_event_v1(
+    'resend','evt-unmapped','delivered',statement_timestamp(),'other-provider-message') e),
+  array['false',''],
+  'a verified event for an unrelated provider message is acknowledged without a booking mutation');
 select is((select array[e.applied::text] from private.record_notification_event_v1(
     'resend','evt-0','delayed',statement_timestamp()-interval '1 hour','prov-ref-1') e),
   array['false'],'an out-of-order earlier event never regresses the state');

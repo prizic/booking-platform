@@ -81,7 +81,7 @@ describe("notification batch", () => {
     expect(summary).toEqual({ accepted: 0, failed: 0, retried: 1 });
   });
 
-  it("gives the provider a per-attempt idempotency key", async () => {
+  it("keeps the provider idempotency key stable when a visibility timeout reclaims a message", async () => {
     const keys: string[] = [];
     await runNotificationBatch(
       ports({
@@ -91,6 +91,18 @@ describe("notification batch", () => {
         },
       }),
     );
+    await runNotificationBatch(
+      ports({
+        claim: async () => [{ ...claimed, attempt: 2 }],
+        deliver: async (input) => {
+          keys.push(input.idempotencyKey);
+          return { outcome: "accepted" };
+        },
+      }),
+    );
+
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
     expect(keys[0]).toContain(claimed.messageId);
   });
 });
@@ -104,6 +116,7 @@ describe("resend adapter", () => {
     });
 
   const command = {
+    correlationId: "0a3f2b64-0000-4000-8000-000000000009",
     html: "<p>hello</p>",
     idempotencyKey: "tenant:message:1",
     subject: "Your booking is confirmed",
@@ -161,5 +174,8 @@ describe("resend adapter", () => {
     expect((seen?.headers as Record<string, string>).Authorization).toBe(
       "Bearer test-key",
     );
+    expect(JSON.parse(String(seen?.body))).toMatchObject({
+      tags: [{ name: "correlation_id", value: command.correlationId }],
+    });
   });
 });

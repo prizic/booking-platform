@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { renderNotificationEmail } from "./templates.js";
-import { verifyResendWebhook } from "./webhook.js";
+import { normalizeResendEventType, verifyResendWebhook } from "./webhook.js";
 
 const variables = {
   locationName: "Downtown",
@@ -119,6 +119,14 @@ describe("resend webhook verification", () => {
     ).resolves.toEqual({ ok: true });
   });
 
+  it("normalizes Resend event names to the durable notification contract", () => {
+    expect(normalizeResendEventType("email.delivered")).toBe("delivered");
+    expect(normalizeResendEventType("email.bounced")).toBe("bounced");
+    expect(normalizeResendEventType("email.complained")).toBe("complained");
+    expect(normalizeResendEventType("email.sent")).toBeNull();
+    expect(normalizeResendEventType("email.unknown")).toBeNull();
+  });
+
   it("refuses a body that was re-serialized after signing", async () => {
     const signature = await sign(secret, "msg_1", timestamp, body);
     await expect(
@@ -164,4 +172,38 @@ describe("resend webhook verification", () => {
       verifyResendWebhook({ ...base, secret: btoa("another-secret-value") }),
     ).resolves.toEqual({ ok: false, reason: "invalid" });
   });
+});
+
+describe("auth mail templates", () => {
+  // Auth mail reaches somebody who may not be a customer yet, so the platform
+  // owns every word — and both languages of it.
+  it.each(["auth.sign_in_link", "auth.password_reset", "auth.email_change"] as const)(
+    "%s carries the action link and the brand in both languages",
+    (key) => {
+      const english = renderNotificationEmail(key, {
+        brandName: "Example Booking",
+        locale: "en",
+        variables: { actionUrl: "https://auth.example.invalid/verify?token=abc" },
+      });
+      const arabic = renderNotificationEmail(key, {
+        brandName: "مثال",
+        locale: "ar",
+        variables: { actionUrl: "https://auth.example.invalid/verify?token=abc" },
+      });
+
+      for (const rendered of [english, arabic]) {
+        expect(rendered.text).toContain(
+          "https://auth.example.invalid/verify?token=abc",
+        );
+        expect(rendered.html).toContain(
+          "https://auth.example.invalid/verify?token=abc",
+        );
+        expect(rendered.text).not.toContain("{");
+      }
+      expect(english.subject).toContain("Example Booking");
+      expect(arabic.subject).toContain("مثال");
+      expect(english.subject).not.toEqual(arabic.subject);
+      expect(arabic.html).toContain('dir="rtl"');
+    },
+  );
 });
