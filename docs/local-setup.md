@@ -170,6 +170,7 @@ evidence.
 | Lint | `pnpm lint` | Available — issue #3 |
 | Typecheck | `pnpm typecheck` | Available — issue #3 |
 | Unit / domain tests | `pnpm test:unit` | Available — issue #3 |
+| GitHub App provisioning unit tests | `pnpm test:github-app` | Available — issue #31; live App calls are N/A until its organization-owned installation and runtime-only secret references exist |
 | Component tests | `pnpm test:component` | Available — issue #5; booking-flow components expand in issues #14–#18 |
 | Database reset from zero | `pnpm db:reset` | Available — issue #4; Docker required |
 | Database lint | `pnpm db:lint` | Available — issue #4; Docker required |

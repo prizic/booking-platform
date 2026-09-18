@@ -9,7 +9,9 @@ function base64Url(value) {
 function appJwt({ appId, privateKey, now }) {
   const issuedAt = Math.floor(now().getTime() / 1000) - 30;
   const header = base64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64Url(JSON.stringify({ iat: issuedAt, exp: issuedAt + 540, iss: appId }));
+  const payload = base64Url(
+    JSON.stringify({ iat: issuedAt, exp: issuedAt + 540, iss: appId }),
+  );
   const signer = createSign("RSA-SHA256");
   signer.update(`${header}.${payload}`);
   signer.end();
@@ -17,8 +19,14 @@ function appJwt({ appId, privateKey, now }) {
 }
 
 function repositoryObservation(repository) {
-  if (!repository || typeof repository.node_id !== "string" || typeof repository.name !== "string") {
-    throw new Error("github_provider_error status=200 detail=[REDACTED_INVALID_REPOSITORY_RESPONSE]");
+  if (
+    !repository ||
+    typeof repository.node_id !== "string" ||
+    typeof repository.name !== "string"
+  ) {
+    throw new Error(
+      "github_provider_error status=200 detail=[REDACTED_INVALID_REPOSITORY_RESPONSE]",
+    );
   }
   return {
     externalId: repository.node_id,
@@ -28,23 +36,37 @@ function repositoryObservation(repository) {
   };
 }
 
-export function createGitHubAppClient({ appId, installationId, organization, privateKey, fetchImpl = fetch, now = () => new Date() }) {
+export function createGitHubAppClient({
+  appId,
+  installationId,
+  organization,
+  privateKey,
+  fetchImpl = fetch,
+  now = () => new Date(),
+}) {
   let token = null;
   let tokenExpiresAt = 0;
 
   async function requestInstallationToken() {
     if (token && now().getTime() < tokenExpiresAt - 60_000) return token;
-    const response = await fetchImpl(`https://api.github.com/app/installations/${installationId}/access_tokens`, {
-      method: "POST",
-      headers: {
-        accept: "application/vnd.github+json",
-        authorization: `Bearer ${appJwt({ appId, privateKey, now })}`,
-        "user-agent": "wlbp-github-app-provisioner",
-        "x-github-api-version": "2022-11-28",
+    const response = await fetchImpl(
+      `https://api.github.com/app/installations/${installationId}/access_tokens`,
+      {
+        method: "POST",
+        headers: {
+          accept: "application/vnd.github+json",
+          authorization: `Bearer ${appJwt({ appId, privateKey, now })}`,
+          "user-agent": "wlbp-github-app-provisioner",
+          "x-github-api-version": "2022-11-28",
+        },
       },
-    });
+    );
     const payload = await response.json();
-    if (!response.ok || typeof payload.token !== "string" || typeof payload.expires_at !== "string") {
+    if (
+      !response.ok ||
+      typeof payload.token !== "string" ||
+      typeof payload.expires_at !== "string"
+    ) {
       throw safeProviderError(response.status, JSON.stringify(payload));
     }
     token = payload.token;
@@ -74,7 +96,9 @@ export function createGitHubAppClient({ appId, installationId, organization, pri
   }
 
   async function resolveRepository({ name }) {
-    const { response, payload } = await githubRequest(`/repos/${organization}/${encodeURIComponent(name)}`);
+    const { response, payload } = await githubRequest(
+      `/repos/${organization}/${encodeURIComponent(name)}`,
+    );
     if (response.status === 404) return null;
     if (!response.ok) throw safeProviderError(response.status, JSON.stringify(payload));
     return repositoryObservation(payload);
@@ -87,9 +111,16 @@ export function createGitHubAppClient({ appId, installationId, organization, pri
       const { response, payload } = await githubRequest(`/orgs/${organization}/repos`, {
         method: "POST",
         headers: { "x-github-idempotency-key": idempotencyKey },
-        body: JSON.stringify({ name, private: true, has_issues: true, has_projects: false, has_wiki: false }),
+        body: JSON.stringify({
+          name,
+          private: true,
+          has_issues: true,
+          has_projects: false,
+          has_wiki: false,
+        }),
       });
-      if (!response.ok) throw safeProviderError(response.status, JSON.stringify(payload));
+      if (!response.ok)
+        throw safeProviderError(response.status, JSON.stringify(payload));
       return repositoryObservation(payload);
     } catch {
       const reconciled = await resolveRepository({ name });

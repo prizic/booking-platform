@@ -208,7 +208,7 @@ const handlers = {
 export async function runOnce() {
   const step = await store.claim();
   if (!step || step.provider !== 'github') return { kind: 'idle' };
-  const result = await handlers[step.step_key](step);
+  const result = await handlers[step.step_key].call(null, step);
   return store.complete(step.id, toCompletion(result));
 }
 ```
