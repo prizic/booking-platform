@@ -14,6 +14,7 @@ an application env file or Git:
 - `GITHUB_APP_WEBHOOK_SECRET`
 - `GITHUB_APP_ORGANIZATION`
 - `GITHUB_INSTANCE_CODEOWNERS`
+- `GITHUB_INSTANCE_VISIBILITY` (optional)
 
 The App must be organization-owned and installed only on the intended platform
 repositories. It needs the least privileges for repository administration,
@@ -55,7 +56,16 @@ named branch ruleset (reviews, CODEOWNERS, non-fast-forward and deletion
 protection), enables secret scanning and push protection, and enables GitHub
 vulnerability alerts plus automated security fixes. It fails visibly instead
 of weakening governance when an organization plan, App permission, workflow
-check, or CODEOWNERS prerequisite is unavailable. Issue #34 owns the
+check, or CODEOWNERS prerequisite is unavailable.
+
+Instance repositories are private unless `GITHUB_INSTANCE_VISIBILITY` is set to
+exactly `public`; any other value, including a typo, keeps them private. Set it
+only on a plan that charges for rulesets on private repositories: there the
+choice is a public repository with the branch ruleset enforced or a private one
+with no governance at all, and the enforced rules are worth more than the
+visibility. Advanced security is not sent for a public repository because GitHub
+always has it enabled there and rejects the request. Unset it after upgrading
+the plan; the next run re-privates the repository. Issue #34 owns the
 distributable CI workflow/check that can satisfy this policy; issue #32 owns
 the separate Vercel GitHub App access check.
 

@@ -202,7 +202,14 @@ export function createGitHubAppClient({
   privateKey,
   fetchImpl = fetch,
   now = () => new Date(),
+  visibility = "private",
 }) {
+  // A tenant repository is private and the governance policy assumes it. Public
+  // is the one deliberate exception, stated once for the whole deployment and
+  // never per tenant: repository rulesets and secret scanning are both paid on
+  // a private repository, so a deployment without that plan chooses between
+  // running public with the rules enforced and running private with none.
+  const isPrivate = visibility !== "public";
   const tokens = new Map();
 
   async function requestInstallationToken({ repositoryIds } = {}) {
@@ -621,7 +628,7 @@ export function createGitHubAppClient({
     const updatedRepository = await githubRequest(
       repositoryPath,
       {
-        body: JSON.stringify({ default_branch: defaultBranch, private: true }),
+        body: JSON.stringify({ default_branch: defaultBranch, private: isPrivate }),
         method: "PATCH",
       },
       tokenScope,
@@ -717,9 +724,12 @@ export function createGitHubAppClient({
       repositoryPath,
       {
         body: JSON.stringify({
-          private: true,
+          private: isPrivate,
           security_and_analysis: {
-            advanced_security: { status: "enabled" },
+            // Unsettable on a public repository — GitHub answers 422 "always
+            // available for public repos" — so sending it unconditionally made
+            // this step unreachable for one.
+            ...(isPrivate ? { advanced_security: { status: "enabled" } } : {}),
             secret_scanning: { status: "enabled" },
             secret_scanning_push_protection: { status: "enabled" },
           },
@@ -742,7 +752,7 @@ export function createGitHubAppClient({
         defaultBranch,
         installationId,
         organization,
-        repository: { ...repository, private: true },
+        repository: { ...repository, private: isPrivate },
       }),
       rulesetId: String(rulesetId),
     };
@@ -757,7 +767,7 @@ export function createGitHubAppClient({
         headers: { "x-github-idempotency-key": idempotencyKey },
         body: JSON.stringify({
           name,
-          private: true,
+          private: isPrivate,
           has_issues: true,
           has_projects: false,
           has_wiki: false,

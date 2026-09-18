@@ -835,3 +835,63 @@ test("bootstraps and seeds a repository GitHub reports as empty", async () => {
   const ref = calls.find((call) => call.target.endsWith("/git/refs/heads/main"));
   assert.equal(ref.method, "PATCH");
 });
+
+test("applies governance to a public repository without advanced security", async () => {
+  let settings;
+  const client = createGitHubAppClient({
+    appId: "123",
+    installationId: "456",
+    organization: "prizic",
+    privateKey: privateKeyPem,
+    visibility: "public",
+    now: () => new Date("2026-09-18T00:00:00.000Z"),
+    fetchImpl: async (input, init = {}) => {
+      const target = typeof input === "string" ? input : input.url;
+      const body = init.body ? JSON.parse(init.body) : undefined;
+      if (target.endsWith("/access_tokens")) {
+        return response(201, {
+          token: "ghs_public",
+          expires_at: "2026-09-18T00:09:00.000Z",
+        });
+      }
+      if (target.endsWith("/installation/repositories?per_page=100&page=1")) {
+        return response(200, {
+          total_count: 1,
+          repositories: [{ id: 42, name: "public-instance" }],
+        });
+      }
+      if (target.endsWith("/contents/.github/CODEOWNERS?ref=main"))
+        return response(200, { type: "file" });
+      if (target.endsWith("/rulesets") && (init.method ?? "GET") === "GET")
+        return response(200, []);
+      if (target.endsWith("/rulesets") && init.method === "POST")
+        return response(201, { id: 99 });
+      if (target.endsWith("/repos/prizic/public-instance") && init.method === "PATCH") {
+        settings = body;
+        return response(200, { id: 42 });
+      }
+      if (init.method === "PUT") return new Response(null, { status: 204 });
+      throw new Error(`unexpected request ${target}`);
+    },
+  });
+
+  const result = await client.applyGovernance({
+    defaultBranch: "main",
+    repository: {
+      externalId: "R_kgDOinstance",
+      name: "public-instance",
+      restId: 42,
+    },
+    requiredChecks: ["Instance CI"],
+  });
+
+  assert.equal(result.kind, "succeeded");
+  assert.equal(result.private, false);
+  assert.deepEqual(settings, {
+    private: false,
+    security_and_analysis: {
+      secret_scanning: { status: "enabled" },
+      secret_scanning_push_protection: { status: "enabled" },
+    },
+  });
+});

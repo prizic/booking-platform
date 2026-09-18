@@ -103,6 +103,10 @@ export function createWorkerFromEnvironment({ env = process.env, root } = {}) {
     installationId: required("GITHUB_APP_INSTALLATION_ID"),
     organization: required("GITHUB_APP_ORGANIZATION"),
     privateKey: required("GITHUB_APP_PRIVATE_KEY"),
+    // Private unless an operator says otherwise, and only "public" says it, so
+    // a typo fails closed. Set it to run instance repositories public on a plan
+    // that charges for rulesets on private ones; unset it after upgrading.
+    visibility: env.GITHUB_INSTANCE_VISIBILITY ?? "private",
   });
   // Stated, never defaulted, and read at startup so a missing owner fails the
   // worker rather than one step: an owner that does not resolve leaves the
