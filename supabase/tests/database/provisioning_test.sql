@@ -528,6 +528,36 @@ select is((select c.step_status from control_plane.complete_provisioning_step_v1
   'but an optional one can be, and the run goes on without it');
 rollback to savepoint pv_authority;
 
+-- ---------------------------------------------------------------------------
+-- GitHub deliveries are durable, but webhook bodies and credentials never are.
+savepoint pv_github_delivery;
+select pg_temp.become_worker();
+select ok(not exists(
+  select 1 from information_schema.table_privileges
+  where table_schema='control_plane' and table_name='github_webhook_deliveries'
+    and grantee in ('anon','authenticated','PUBLIC')
+), 'GitHub delivery state is not readable or writable by application roles');
+select ok((select c.relrowsecurity from pg_class c
+  join pg_namespace n on n.oid=c.relnamespace
+  where n.nspname='control_plane' and c.relname='github_webhook_deliveries'),
+  'GitHub delivery state has RLS enabled');
+select is((select d.duplicate from control_plane.record_github_webhook_delivery_v1(
+  'delivery-00000001',repeat('a',64),'repository','R_kgDOexample',
+  'renamed') d),false,
+  'the first verified GitHub delivery is recorded');
+select ok((select d.duplicate from control_plane.record_github_webhook_delivery_v1(
+  'delivery-00000001',repeat('a',64),'repository','R_kgDOexample',
+  'renamed') d),
+  'a repeated delivery is a no-op rather than a second reconciliation');
+select is((select count(*)::integer from control_plane.github_webhook_deliveries),1,
+  'only its identifier, digest, event, repository identity, and safe metadata persist');
+select throws_ok(
+  $$select * from control_plane.record_github_webhook_delivery_v1(
+    'delivery-00000002',repeat('b',64),'repository','R_kgDOexample',
+    'Bearer not-a-token')$$,
+  '22023','transition_not_allowed','the narrow ingress has no arbitrary metadata field that could retain a token');
+rollback to savepoint pv_github_delivery;
+
 -- The savepoint rollbacks above revert pgTAP's own counter, so it is restored
 -- from the non-transactional sequence before the plan is emitted.
 select _set('curr_test',(select last_value::integer from __tresults___numb_seq));
