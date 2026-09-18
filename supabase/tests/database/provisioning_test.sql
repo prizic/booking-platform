@@ -244,6 +244,43 @@ select is((select s.external_id from control_plane.provisioning_steps s
 rollback to savepoint pv_duplicate;
 
 -- ---------------------------------------------------------------------------
+-- Follow-up GitHub steps receive the seed step's immutable node identity and
+-- bounded REST metadata. A mutable repository name is never rediscovered from
+-- the desired slug after a webhook rename.
+savepoint pv_repository_identity;
+select pg_temp.seed_instance('a4200000-0000-0000-0000-0000000000d1');
+select pg_temp.become_operator('operator');
+select * from pg_temp.request('a4200000-0000-0000-0000-0000000000d1','identity');
+select pg_temp.become_worker();
+select pg_temp.advance((select id from control_plane.provisioning_runs where slug='identity'));
+select pg_temp.advance((select id from control_plane.provisioning_runs where slug='identity'));
+select is((select c.step_key from control_plane.claim_provisioning_step_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) c),'seed_repository',
+  'the repository seed step is ready to record its immutable identity');
+select is((select c.step_status from control_plane.complete_provisioning_step_v1(
+  (select s.id from control_plane.provisioning_steps s
+   join control_plane.provisioning_runs r on r.id=s.run_id
+   where r.slug='identity' and s.step_key='seed_repository'),
+  'succeeded','R_kgDOidentity',
+  '{"repository_rest_id":42,"repository_name":"renamed-instance","default_branch":"main"}'::jsonb) c),
+  'succeeded','the seed step records webhook-compatible node identity');
+select is((select i.repository_external_id from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),
+  'R_kgDOidentity','follow-up work receives the immutable GitHub node ID');
+select is((select i.repository_rest_id from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),42::bigint,
+  'and the scoped API receives the recorded numeric REST ID');
+select is((select i.repository_name from control_plane.github_repository_for_run_v1(
+  (select id from control_plane.provisioning_runs where slug='identity')) i),
+  'renamed-instance','a renamed repository remains addressable from recorded state');
+select pg_temp.become_operator('operator');
+select throws_ok(
+  $$select * from control_plane.github_repository_for_run_v1(
+    (select id from control_plane.provisioning_runs where slug='identity'))$$,
+  '42501','policy_denied','an operator cannot extract GitHub repository state from the worker RPC');
+rollback to savepoint pv_repository_identity;
+
+-- ---------------------------------------------------------------------------
 -- Failure, backoff, exhaustion, and an operator's retry.
 savepoint pv_failure;
 select pg_temp.seed_instance('a4200000-0000-0000-0000-0000000000ee');

@@ -55,6 +55,33 @@ function repositoryObservation(repository) {
   };
 }
 
+function succeededRepository({
+  commitSha,
+  defaultBranch,
+  installationId,
+  organization,
+  releaseTreeSha256,
+  repository,
+  treeSha,
+}) {
+  const result = {
+    kind: "succeeded",
+    ...(typeof releaseTreeSha256 === "string" ? { releaseTreeSha256 } : {}),
+    ...(typeof commitSha === "string" ? { commitSha } : {}),
+    ...(typeof treeSha === "string" ? { treeSha } : {}),
+  };
+  if (typeof repository.externalId === "string") {
+    result.externalId = repository.externalId;
+    result.restId = repository.restId;
+    result.name = repository.name;
+    result.private = repository.private;
+    result.defaultBranch = defaultBranch;
+    result.organization = organization;
+    result.installationId = String(installationId);
+  }
+  return result;
+}
+
 function gitBlobSha(contents) {
   return createHash("sha1")
     .update(`blob ${contents.length}\0`)
@@ -311,9 +338,15 @@ export function createGitHubAppClient({
     const changed = configuration.filter(
       (file) => currentBlobs.get(file.path) !== gitBlobSha(file.content),
     );
-    if (changed.length === 0) {
-      return { kind: "succeeded", commitSha, treeSha: baseTreeSha };
-    }
+    if (changed.length === 0)
+      return succeededRepository({
+        commitSha,
+        defaultBranch,
+        installationId,
+        organization,
+        repository,
+        treeSha: baseTreeSha,
+      });
     const entries = [];
     for (const file of changed) {
       const blob = await githubRequest(
@@ -375,11 +408,14 @@ export function createGitHubAppClient({
       tokenScope,
     );
     if (!updated.response.ok) return providerResult(updated.response);
-    return {
-      kind: "succeeded",
+    return succeededRepository({
       commitSha: nextCommit.payload.sha,
+      defaultBranch,
+      installationId,
+      organization,
+      repository,
       treeSha: nextTree.payload.sha,
-    };
+    });
   }
 
   async function seedRelease({ defaultBranch, release, repository }) {
@@ -434,14 +470,15 @@ export function createGitHubAppClient({
       );
       if (!alreadySeeded)
         return { kind: "failed", code: "github_repository_seed_conflict" };
-      return {
-        kind: "succeeded",
+      return succeededRepository({
         commitSha,
-        externalId: String(repository.restId),
-        nodeId: repository.externalId,
+        defaultBranch,
+        installationId,
+        organization,
         releaseTreeSha256: release.treeSha256,
+        repository,
         treeSha,
-      };
+      });
     }
     if (reference.response.status !== 404) return providerResult(reference.response);
 
@@ -516,14 +553,15 @@ export function createGitHubAppClient({
     );
     if (!updatedRepository.response.ok)
       return providerResult(updatedRepository.response);
-    return {
-      kind: "succeeded",
+    return succeededRepository({
       commitSha: commit.payload.sha,
-      externalId: String(repository.restId),
-      nodeId: repository.externalId,
+      defaultBranch,
+      installationId,
+      organization,
       releaseTreeSha256: release.treeSha256,
+      repository,
       treeSha: tree.payload.sha,
-    };
+    });
   }
 
   async function seedRepository({

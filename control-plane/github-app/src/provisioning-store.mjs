@@ -17,6 +17,24 @@ function mappedStep(row) {
   return step;
 }
 
+function mappedRepository(row) {
+  if (
+    !row ||
+    typeof row.repository_external_id !== "string" ||
+    typeof row.repository_name !== "string" ||
+    !Number.isInteger(row.repository_rest_id) ||
+    row.repository_rest_id <= 0
+  ) {
+    return null;
+  }
+  return {
+    defaultBranch: typeof row.default_branch === "string" ? row.default_branch : null,
+    externalId: row.repository_external_id,
+    name: row.repository_name,
+    restId: row.repository_rest_id,
+  };
+}
+
 export function createSupabaseProvisioningStore({ now = () => new Date(), supabase }) {
   if (!supabase || typeof supabase.rpc !== "function") {
     throw new Error("provisioning_database_client_required");
@@ -55,5 +73,12 @@ export function createSupabaseProvisioningStore({ now = () => new Date(), supaba
     });
   }
 
-  return { claim, complete };
+  async function githubRepositoryFor(step) {
+    if (!step || typeof step.runId !== "string") return null;
+    const rows = await rpc("github_repository_for_run_v1", { p_run_id: step.runId });
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    return mappedRepository(rows[0]);
+  }
+
+  return { claim, complete, githubRepositoryFor };
 }

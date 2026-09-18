@@ -371,8 +371,13 @@ test("seeds a checked distribution release as one initial private branch commit"
 
   assert.deepEqual(result, {
     kind: "succeeded",
-    externalId: "42",
-    nodeId: "R_kgDOinstance",
+    externalId: "R_kgDOinstance",
+    defaultBranch: "main",
+    installationId: "456",
+    name: "northside-clinic",
+    organization: "prizic",
+    private: true,
+    restId: 42,
     releaseTreeSha256,
     commitSha: "8".repeat(40),
     treeSha: "7".repeat(40),
@@ -457,8 +462,13 @@ test("treats a release already present on the default branch as the seed retry r
 
   assert.deepEqual(result, {
     kind: "succeeded",
-    externalId: "42",
-    nodeId: "R_kgDOinstance",
+    externalId: "R_kgDOinstance",
+    defaultBranch: "main",
+    installationId: "456",
+    name: "northside-clinic",
+    organization: "prizic",
+    private: true,
+    restId: 42,
     releaseTreeSha256,
     commitSha: currentCommit,
     treeSha: currentTree,

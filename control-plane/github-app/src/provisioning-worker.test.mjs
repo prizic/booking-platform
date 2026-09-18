@@ -89,7 +89,7 @@ test("maps a rate-limited configuration commit into one durable wait", async () 
         path: "instance/manifest.json",
       },
     ],
-    repository: { name: "northside", restId: 42 },
+    repository: { externalId: "R_kgDOinstance", name: "northside", restId: 42 },
   };
   let committed;
   const worker = createGitHubProvisioningWorker({
@@ -113,6 +113,7 @@ test("maps a rate-limited configuration commit into one durable wait", async () 
         idempotencyKey: "run:configuration",
       }),
       complete: async (command) => completions.push(command),
+      githubRepositoryFor: async () => configuration.repository,
     },
   });
 
@@ -127,6 +128,111 @@ test("maps a rate-limited configuration commit into one durable wait", async () 
       outcome: "waiting",
       waitingReason: "provider_rate_limit",
       retryAfterSeconds: 45,
+    },
+  ]);
+});
+
+test("loads the canonical repository identity before committing configuration", async () => {
+  const completions = [];
+  let configurationStep;
+  const worker = createGitHubProvisioningWorker({
+    github: {
+      commitConfiguration: async (input) => {
+        assert.deepEqual(input.repository, {
+          externalId: "R_kgDOinstance",
+          name: "northside",
+          restId: 42,
+        });
+        return {
+          commitSha: "b".repeat(40),
+          externalId: "R_kgDOinstance",
+          kind: "succeeded",
+          name: "northside",
+          private: true,
+          restId: 42,
+          treeSha: "c".repeat(40),
+        };
+      },
+    },
+    loadConfiguration: async (step) => {
+      configurationStep = step;
+      return {
+        defaultBranch: "main",
+        files: [
+          {
+            content: Buffer.from('{"defaultLocale":"en"}\n'),
+            path: "instance/manifest.json",
+          },
+        ],
+        repository: step.repository,
+      };
+    },
+    store: {
+      claim: async () => ({
+        id: "step-configuration",
+        provider: "github",
+        runId: "run-1",
+        stepKey: "commit_configuration",
+      }),
+      complete: async (command) => completions.push(command),
+      githubRepositoryFor: async () => ({
+        externalId: "R_kgDOinstance",
+        name: "northside",
+        restId: 42,
+      }),
+    },
+  });
+
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "completed",
+    stepKey: "commit_configuration",
+  });
+  assert.deepEqual(configurationStep.repository, {
+    externalId: "R_kgDOinstance",
+    name: "northside",
+    restId: 42,
+  });
+  assert.deepEqual(completions[0], {
+    externalId: "R_kgDOinstance",
+    observedState: {
+      commit_sha: "b".repeat(40),
+      default_branch: null,
+      private: true,
+      repository_name: "northside",
+      repository_rest_id: 42,
+      tree_sha: "c".repeat(40),
+    },
+    outcome: "succeeded",
+    stepId: "step-configuration",
+  });
+});
+
+test("fails before GitHub when the persisted repository identity is unavailable", async () => {
+  const completions = [];
+  const worker = createGitHubProvisioningWorker({
+    github: { commitConfiguration: async () => assert.fail("must not call GitHub") },
+    loadConfiguration: async () => assert.fail("must not load configuration"),
+    store: {
+      claim: async () => ({
+        id: "step-configuration",
+        provider: "github",
+        runId: "run-1",
+        stepKey: "commit_configuration",
+      }),
+      complete: async (command) => completions.push(command),
+      githubRepositoryFor: async () => null,
+    },
+  });
+
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "failed",
+    stepKey: "commit_configuration",
+  });
+  assert.deepEqual(completions, [
+    {
+      errorCode: "github_repository_identity_unavailable",
+      outcome: "failed",
+      stepId: "step-configuration",
     },
   ]);
 });

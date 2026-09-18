@@ -76,3 +76,38 @@ test("reports a provider wait with a database-owned retry timestamp", async () =
     },
   ]);
 });
+
+test("reads the canonical repository identity from the durable run state", async () => {
+  const calls = [];
+  const store = createSupabaseProvisioningStore({
+    supabase: {
+      rpc: async (name, args) => {
+        calls.push({ args, name });
+        return {
+          data: [
+            {
+              default_branch: "main",
+              repository_external_id: "R_kgDOinstance",
+              repository_name: "northside",
+              repository_rest_id: 42,
+            },
+          ],
+          error: null,
+        };
+      },
+    },
+  });
+
+  assert.deepEqual(await store.githubRepositoryFor({ runId: "run-1" }), {
+    defaultBranch: "main",
+    externalId: "R_kgDOinstance",
+    name: "northside",
+    restId: 42,
+  });
+  assert.deepEqual(calls, [
+    {
+      args: { p_run_id: "run-1" },
+      name: "github_repository_for_run_v1",
+    },
+  ]);
+});
