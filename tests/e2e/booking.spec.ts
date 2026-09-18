@@ -550,17 +550,28 @@ test.describe("live database booking journey", () => {
   }) => {
     await reachLiveDetails(page, 1);
     await fillLiveDetails(page);
+    const bookingResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/bookings" &&
+        response.request().method() === "POST",
+    );
     await page.getByRole("button", { name: /confirm booking/iu }).click();
+    const booking = (await (await bookingResponse).json()) as {
+      publicReference: string;
+    };
 
     await expect(
       page.getByRole("heading", { name: /your booking is confirmed/iu }),
     ).toBeVisible();
-    await expect(page.getByText(/live consultation/iu)).toBeVisible();
 
     await signInLiveDashboard(context);
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
-    await expect(page.getByText(/live consultation/iu)).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: new RegExp(`Live consultation · ${booking.publicReference}`, "u"),
+      }),
+    ).toBeVisible();
   });
 
   test("Client validation blocks an incomplete live submission before the booking route", async ({
