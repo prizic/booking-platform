@@ -133,6 +133,9 @@ jobs:
       - name: Run end-to-end smoke tests
         run: pnpm test:e2e
 
+      - name: Drive the Client booking journey against the seeded live database
+        run: pnpm test:e2e:live
+
       - name: Run accessible component interaction tests
         run: pnpm test:component
 

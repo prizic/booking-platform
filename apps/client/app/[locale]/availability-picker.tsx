@@ -6,7 +6,7 @@ import {
 } from "@wlbp/api-contracts";
 import { formatDateTime, resolveZonedLocalDateTime, type Locale } from "@wlbp/i18n";
 import { Button, ErrorSummary, StatusMessage, Surface } from "@wlbp/ui-foundation";
-import { useEffect, useReducer, useRef, type FormEvent } from "react";
+import { useEffect, useReducer, useRef, useState, type FormEvent } from "react";
 
 import {
   AvailabilityResults,
@@ -76,8 +76,14 @@ export function AvailabilityPicker({
     locationTimeZone,
     initialAvailabilityPickerState,
   );
+  const [interactive, setInteractive] = useState(false);
   const requestSequence = useRef(0);
   const activeRequest = useRef<AbortController>(null);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setInteractive(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     if (state.failed) {
@@ -151,7 +157,7 @@ export function AvailabilityPicker({
       {unavailable ? (
         <p>{copy.unavailable}</p>
       ) : (
-        <form aria-busy={state.loading || undefined} onSubmit={search}>
+        <form aria-busy={state.loading || !interactive || undefined} onSubmit={search}>
           {state.failed ? (
             <ErrorSummary focusTarget id="availability-error" title={copy.errorTitle}>
               <p>{copy.error}</p>
@@ -164,6 +170,7 @@ export function AvailabilityPicker({
             <label>
               <span>{copy.dateLabel}</span>
               <input
+                disabled={!interactive}
                 name="date"
                 onChange={(event) =>
                   changeFilter({
@@ -181,6 +188,7 @@ export function AvailabilityPicker({
               <span>{copy.timeZoneLabel}</span>
               <input
                 autoComplete="off"
+                disabled={!interactive}
                 dir="ltr"
                 name="timeZone"
                 onChange={(event) =>
@@ -197,6 +205,7 @@ export function AvailabilityPicker({
             <label>
               <span>{copy.partySizeLabel}</span>
               <input
+                disabled={!interactive}
                 inputMode="numeric"
                 max={50}
                 min={1}
@@ -214,7 +223,12 @@ export function AvailabilityPicker({
               />
             </label>
           </div>
-          <Button loading={state.loading} loadingLabel={copy.searching} type="submit">
+          <Button
+            disabled={!interactive}
+            loading={state.loading}
+            loadingLabel={copy.searching}
+            type="submit"
+          >
             {copy.search}
           </Button>
         </form>

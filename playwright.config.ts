@@ -35,6 +35,21 @@ const servers = [
   },
 ] as const;
 
+const liveBookingServers = [
+  {
+    command:
+      "node scripts/run-with-local-supabase-env.mjs client.live-booking.example.invalid pnpm --filter @wlbp/client exec next dev --port 41730",
+    port: 41730,
+    reuseExistingServer: false,
+  },
+  {
+    command:
+      "node scripts/run-with-local-supabase-env.mjs dashboard.live-booking.example.invalid pnpm --filter @wlbp/dashboard exec next dev --port 41731",
+    port: 41731,
+    reuseExistingServer: false,
+  },
+] as const;
+
 export default defineConfig({
   testDir: "tests/e2e",
   outputDir: "test-results",
@@ -65,6 +80,16 @@ export default defineConfig({
       name: "e2e",
       testMatch: /(?:booking|smoke|foundation)\.spec\.ts$/u,
     },
+    {
+      name: "live-booking",
+      grep: /live database booking journey/u,
+      testMatch: /booking\.spec\.ts$/u,
+      use: {
+        screenshot: "off",
+        trace: "off",
+        video: "off",
+      },
+    },
     { name: "component", testMatch: /interactions\.spec\.ts$/u },
     { name: "i18n", testMatch: /localization\.spec\.ts$/u },
     {
@@ -73,10 +98,12 @@ export default defineConfig({
     },
     { name: "visual", testMatch: /visual\.spec\.ts/u },
   ],
-  webServer: servers.map(({ command, port, reuseExistingServer }) => ({
-    command,
-    port,
-    reuseExistingServer,
-    timeout: 120_000,
-  })),
+  webServer: (process.env.LIVE_BOOKING_E2E === "1" ? liveBookingServers : servers).map(
+    ({ command, port, reuseExistingServer }) => ({
+      command,
+      port,
+      reuseExistingServer,
+      timeout: 120_000,
+    }),
+  ),
 });
