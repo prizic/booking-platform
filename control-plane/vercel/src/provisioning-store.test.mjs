@@ -36,7 +36,7 @@ test("claims one durable provisioning step through the database RPC", async () =
   });
   assert.deepEqual(calls, [
     {
-      args: { p_lock_seconds: 300, p_run_id: null },
+      args: { p_lock_seconds: 300, p_providers: ["vercel"], p_run_id: null },
       name: "claim_provisioning_step_v1",
     },
   ]);

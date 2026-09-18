@@ -49,6 +49,10 @@ export function createSupabaseProvisioningStore({ now = () => new Date(), supaba
   async function claim() {
     const rows = await rpc("claim_provisioning_step_v1", {
       p_lock_seconds: 300,
+      // Claiming a step this worker cannot execute strands it: the claim marks
+      // it running, nothing completes it, and it only frees when the lock
+      // lapses. Ask for github steps and nothing else.
+      p_providers: ["github"],
       p_run_id: null,
     });
     if (!Array.isArray(rows) || rows.length === 0) return null;

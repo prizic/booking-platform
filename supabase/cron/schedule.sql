@@ -66,6 +66,10 @@ begin
       ('wlbp-expire-holds',            '* * * * *',   $$select private.expire_holds_v1(null,500)$$),
       ('wlbp-expire-booking-requests', '* * * * *',   $$select private.expire_booking_requests_v1(null,500)$$),
       ('wlbp-expire-management-links', '*/5 * * * *', $$select private.expire_management_links_v1(null,500)$$),
+      -- Provisioning steps 1 and 2 are pure database work, so they run here
+      -- rather than in a worker that would need a host and a credential to
+      -- issue SQL. is_worker_v1() passes because pg_cron carries no JWT.
+      ('wlbp-local-provisioning',      '* * * * *',   $$select control_plane.execute_local_provisioning_steps_v1(10)$$),
       -- Sending mail needs a provider key, which must not live in Postgres, so
       -- these two go out through the Edge Function that holds it.
       ('wlbp-notification-worker',     '* * * * *',   $$select private.invoke_edge_function_v1('notification-worker')$$),
