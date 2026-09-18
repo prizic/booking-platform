@@ -5,11 +5,19 @@
 // `schedule_booking_reminders_v1` and nothing else. It is idempotent on the
 // intent key, so running it twice schedules nothing twice, and it supersedes
 // reminders whose booking moved.
-import { callRpc, json, platformConfigured, unconfigured } from "../_shared/rpc.ts";
+import {
+  callRpc,
+  isInternalInvocation,
+  json,
+  platformConfigured,
+  unauthorized,
+  unconfigured,
+} from "../_shared/rpc.ts";
 
 const batchSize = Number(Deno.env.get("REMINDER_BATCH_SIZE") ?? "200");
 
-Deno.serve(async (): Promise<Response> => {
+Deno.serve(async (request: Request): Promise<Response> => {
+  if (!isInternalInvocation(request)) return unauthorized();
   if (!platformConfigured()) return unconfigured();
   const result = await callRpc<{ scheduled: number; superseded: number }>(
     "schedule_booking_reminders_v1",

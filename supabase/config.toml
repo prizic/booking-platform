@@ -78,3 +78,8 @@ secure_password_change = true
 enabled = true
 policy = "per_worker"
 inspector_port = 8083
+
+# Resend cannot present a Supabase JWT. The function verifies Resend's Svix
+# signature over the raw request body before it reaches the private RPC.
+[functions.resend-webhook]
+verify_jwt = false

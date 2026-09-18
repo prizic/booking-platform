@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { renderNotificationEmail } from "./templates.js";
-import { verifyResendWebhook } from "./webhook.js";
+import { normalizeResendEventType, verifyResendWebhook } from "./webhook.js";
 
 const variables = {
   locationName: "Downtown",
@@ -117,6 +117,14 @@ describe("resend webhook verification", () => {
         secret,
       }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  it("normalizes Resend event names to the durable notification contract", () => {
+    expect(normalizeResendEventType("email.delivered")).toBe("delivered");
+    expect(normalizeResendEventType("email.bounced")).toBe("bounced");
+    expect(normalizeResendEventType("email.complained")).toBe("complained");
+    expect(normalizeResendEventType("email.sent")).toBeNull();
+    expect(normalizeResendEventType("email.unknown")).toBeNull();
   });
 
   it("refuses a body that was re-serialized after signing", async () => {

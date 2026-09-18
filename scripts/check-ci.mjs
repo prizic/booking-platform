@@ -40,8 +40,11 @@ const requiredWorkflows = new Map([
       "RECOVERY_VERIFIED_AT",
       "age <= 24 * 60 * 60 * 1000",
       "supabase db push",
+      "supabase functions deploy",
+      "supabase db query --linked --file supabase/cron/schedule.sql",
       "cancel-in-progress: false",
-      "Unchecksummed Edge Function",
+      "Verify checksummed Edge Function release inputs",
+      "sha256sum --check .artifacts/edge-function-checksums.txt",
       "NEXT_PUBLIC_SITE_URL",
     ],
   ],
@@ -112,10 +115,12 @@ if (await pathExists(releasePath)) {
   const orderedReleaseControls = [
     "Validate protected-environment references",
     "Require fresh independent recovery evidence for production",
-    "Refuse unchecksummed Edge Function deployment",
+    "Verify checksummed Edge Function release inputs",
     "Link the selected hosted project",
     "Preview pending central migrations",
     "Apply pending central migrations",
+    "Deploy reviewed Edge Functions",
+    "Apply the reviewed Cron schedule",
   ];
   let previousPosition = -1;
   for (const control of orderedReleaseControls) {

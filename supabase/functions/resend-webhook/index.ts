@@ -4,7 +4,10 @@
 // against a known secret with no network. What is left here is reading those
 // exact bytes before anything parses them, and handing verified fact to a
 // database function that is idempotent on the provider's own event id.
-import { verifyResendWebhook } from "../_shared/email/webhook.ts";
+import {
+  normalizeResendEventType,
+  verifyResendWebhook,
+} from "../_shared/email/webhook.ts";
 import { callRpc, json, platformConfigured, unconfigured } from "../_shared/rpc.ts";
 
 const signingSecret = Deno.env.get("RESEND_WEBHOOK_SECRET") ?? "";
@@ -45,11 +48,16 @@ Deno.serve(async (request: Request): Promise<Response> => {
     return refused();
   }
   if (typeof event.type !== "string") return refused();
+  const eventType = normalizeResendEventType(event.type);
+  // A valid provider event can be informational (`email.sent`) rather than a
+  // durable delivery-state transition. Acknowledge it so Resend does not retry
+  // indefinitely, but never invent a database event type.
+  if (eventType === null) return json({ applied: false });
 
   const applied = await callRpc<{ applied: boolean; message_id: string | null }>(
     "record_notification_event_v1",
     {
-      p_event_type: event.type,
+      p_event_type: eventType,
       p_occurred_at:
         typeof event.created_at === "string"
           ? event.created_at

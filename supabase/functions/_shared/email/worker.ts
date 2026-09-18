@@ -26,6 +26,7 @@ export interface NotificationPorts {
   /** Claims a bounded batch under a visibility timeout. */
   readonly claim: () => Promise<readonly ClaimedNotification[]>;
   readonly deliver: (input: {
+    readonly correlationId: string;
     readonly html: string;
     readonly idempotencyKey: string;
     readonly subject: string;
@@ -72,10 +73,11 @@ export async function runNotificationBatch(
       });
       report = await ports.deliver({
         html: rendered.html,
-        // Durable identity first: tenant, booking revision, template, and
-        // recipient already made this message unique, and the provider key is
-        // only a second, short-window defence.
-        idempotencyKey: `${message.tenantId}:${message.messageId}:${message.attempt}`,
+        correlationId: message.correlationId,
+        // A visibility-timeout reclaim increments `attempt`; that must not
+        // make a network-successful send look new to the provider. The
+        // durable message id is the stable idempotency identity.
+        idempotencyKey: `${message.tenantId}:${message.messageId}`,
         subject: rendered.subject,
         text: rendered.text,
         to: message.recipient,
@@ -127,6 +129,7 @@ export function createResendAdapter(
           html: input.html,
           ...(options.replyTo === undefined ? {} : { reply_to: options.replyTo }),
           subject: input.subject,
+          tags: [{ name: "correlation_id", value: input.correlationId }],
           text: input.text,
           to: [input.to],
         }),

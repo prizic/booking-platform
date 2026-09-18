@@ -50,7 +50,7 @@
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:distribution": "node --test scripts/build-distribution.test.mjs",
     "bundle:edge": "node scripts/bundle-edge-shared.mjs",
-    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs"
+    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs && deno test --allow-env supabase/functions/_shared/rpc.test.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

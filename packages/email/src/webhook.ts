@@ -16,6 +16,36 @@ export interface WebhookVerificationInput {
 export type WebhookVerification =
   { readonly ok: false; readonly reason: "invalid" } | { readonly ok: true };
 
+/**
+ * Converts the provider's event namespace to the database-owned notification
+ * state vocabulary. Events that do not change notification state are accepted
+ * by the webhook caller but deliberately not recorded as delivery events.
+ */
+export function normalizeResendEventType(
+  eventType: string,
+):
+  | "bounced"
+  | "clicked"
+  | "complained"
+  | "delayed"
+  | "delivered"
+  | "failed"
+  | "opened"
+  | "suppressed"
+  | null {
+  const eventTypes = {
+    "email.bounced": "bounced",
+    "email.clicked": "clicked",
+    "email.complained": "complained",
+    "email.delivery_delayed": "delayed",
+    "email.delivered": "delivered",
+    "email.failed": "failed",
+    "email.opened": "opened",
+    "email.suppressed": "suppressed",
+  } as const;
+  return eventTypes[eventType as keyof typeof eventTypes] ?? null;
+}
+
 const toleranceSeconds = 300;
 
 function decodeBase64(value: string): Uint8Array {

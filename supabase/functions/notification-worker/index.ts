@@ -15,7 +15,14 @@ import {
   runNotificationBatch,
   type ClaimedNotification,
 } from "../_shared/email/worker.ts";
-import { callRpc, json, platformConfigured, unconfigured } from "../_shared/rpc.ts";
+import {
+  callRpc,
+  isInternalInvocation,
+  json,
+  platformConfigured,
+  unauthorized,
+  unconfigured,
+} from "../_shared/rpc.ts";
 
 const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
 const sender = Deno.env.get("NOTIFICATION_SENDER") ?? "";
@@ -37,11 +44,8 @@ interface ClaimedRow {
   readonly tenant_id: string;
 }
 
-// Resolved once per batch rather than once per message: a batch is usually one
-// tenant, and the name does not change inside a few seconds.
-const brandNames = new Map<string, string>();
-
-Deno.serve(async (): Promise<Response> => {
+Deno.serve(async (request: Request): Promise<Response> => {
+  if (!isInternalInvocation(request)) return unauthorized();
   if (!platformConfigured() || resendApiKey === "" || sender === "") {
     return unconfigured();
   }
@@ -92,8 +96,6 @@ Deno.serve(async (): Promise<Response> => {
       });
     },
     resolveBrandName: async (tenantId) => {
-      const cached = brandNames.get(tenantId);
-      if (cached !== undefined) return cached;
       const rows = await callRpc<string>("get_notification_brand_v1", {
         p_tenant_id: tenantId,
       });
@@ -102,7 +104,6 @@ Deno.serve(async (): Promise<Response> => {
       // lookup that fails leaves the message for the next attempt.
       const name = typeof rows?.[0] === "string" ? rows[0] : "";
       if (name === "") throw new Error("brand_unresolved");
-      brandNames.set(tenantId, name);
       return name;
     },
   });

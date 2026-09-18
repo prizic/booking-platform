@@ -4,16 +4,25 @@
 // Every entry point here runs as `service_role`, which bypasses row level
 // security. That is exactly why the surface it may call is narrow and named:
 // the functions in `api_v1` granted to `service_role` and nothing else.
-const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-
 export const platformConfigured = (): boolean =>
-  supabaseUrl !== "" && serviceRoleKey !== "";
+  (Deno.env.get("SUPABASE_URL") ?? "") !== "" &&
+  (Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "") !== "";
+
+/** Only the platform scheduler may invoke privileged worker entry points. */
+export const isInternalInvocation = (request: Request): boolean => {
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  return (
+    serviceRoleKey !== "" &&
+    request.headers.get("authorization") === `Bearer ${serviceRoleKey}`
+  );
+};
 
 export async function callRpc<T>(
   name: string,
   parameters: Readonly<Record<string, unknown>>,
 ): Promise<readonly T[] | null> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
   const response = await fetch(`${supabaseUrl}/rest/v1/rpc/${name}`, {
     body: JSON.stringify(parameters),
     headers: {
@@ -41,4 +50,10 @@ export const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
     headers: { "cache-control": "no-store", "content-type": "application/json" },
     status,
+  });
+
+export const unauthorized = (): Response =>
+  new Response(JSON.stringify({ error: "unauthorized" }), {
+    headers: { "cache-control": "no-store", "content-type": "application/json" },
+    status: 401,
   });

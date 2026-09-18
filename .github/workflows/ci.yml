@@ -44,6 +44,11 @@ jobs:
           corepack enable
           corepack prepare pnpm@11.25.0 --activate
 
+      - name: Set up the pinned Deno runtime
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: 2.5.2
+
       - name: Install from the frozen lockfile
         run: pnpm install --frozen-lockfile
 
@@ -66,6 +71,9 @@ jobs:
 
       - name: Run domain and unit tests
         run: pnpm test:unit
+
+      - name: Validate Edge Function bundles and invocation controls
+        run: pnpm check:edge
 
       - name: Start the local Supabase stack without printing generated keys
         run: |
