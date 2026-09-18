@@ -88,7 +88,7 @@ export function createGitHubAppClient({
           ...init.headers,
         },
       });
-    } catch (error) {
+    } catch {
       throw new Error("github_provider_network_error");
     }
     const payload = await response.json();
