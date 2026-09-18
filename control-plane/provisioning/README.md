@@ -52,5 +52,6 @@ Claim and complete are refused to any session carrying an end-user identity.
 That is deliberate: otherwise an operator could mark the health check succeeded
 from a browser and activate an instance nobody checked.
 
-The provider calls themselves belong to issues #31 (GitHub App) and #32
-(Vercel). Operator procedure is [R-15](../../docs/runbooks.md#r-15-stuck-waiting-or-drifted-provisioning-run).
+The GitHub App implementation is documented in
+[`../github-app/`](../github-app/README.md); Vercel calls remain issue #32.
+Operator procedure is [R-15](../../docs/runbooks.md#r-15-stuck-waiting-or-drifted-provisioning-run).
