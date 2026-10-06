@@ -71,8 +71,9 @@ begin
       -- issue SQL. is_worker_v1() passes because pg_cron carries no JWT.
       ('wlbp-local-provisioning',      '* * * * *',   $$select control_plane.execute_local_provisioning_steps_v1(10)$$),
       -- Sending mail needs a provider key, which must not live in Postgres, so
-      -- these two go out through the Edge Function that holds it.
+      -- these jobs go out through the Edge Function that holds it.
       ('wlbp-notification-worker',     '* * * * *',   $$select private.invoke_edge_function_v1('notification-worker')$$),
+      ('wlbp-staff-invitation-worker', '* * * * *',   $$select private.invoke_edge_function_v1('staff-invitation-worker')$$),
       ('wlbp-reminder-scheduler',      '*/5 * * * *', $$select private.invoke_edge_function_v1('reminder-scheduler')$$)
     ) as j(name,cadence,command)
   loop

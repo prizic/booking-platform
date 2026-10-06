@@ -12,15 +12,8 @@ export type DecisionOutcome =
   | "revision-conflict"
   | "slot-unavailable";
 
-export function decisionResultUrl(
-  locale: Locale,
-  outcome: DecisionOutcome,
-  token?: string,
-): string {
+export function decisionResultUrl(locale: Locale, outcome: DecisionOutcome): string {
   const query = new URLSearchParams({ result: outcome });
-  // The customer link is returned once and never stored, so it travels back to
-  // the deciding member in the redirect that renders it.
-  if (token !== undefined) query.set("link", token);
   return `/${locale}/requests?${query.toString()}`;
 }
 
@@ -54,6 +47,7 @@ export function decisionOutcomeFor(error: unknown): DecisionOutcome {
 export function resolveProposedInstant(
   localDateTime: string | null,
   timeZone: string,
+  fold: "0" | "1" | null = null,
 ): string | null {
   const match =
     localDateTime === null
@@ -72,7 +66,9 @@ export function resolveProposedInstant(
       { day, hour, minute, month, year },
       timeZone,
     );
-    return resolution.kind === "gap" ? null : (resolution.instants[0] ?? null);
+    if (resolution.kind === "gap" || (resolution.instants.length > 1 && fold === null))
+      return null;
+    return resolution.instants[fold === "1" ? 1 : 0] ?? null;
   } catch {
     return null;
   }

@@ -1,0 +1,84 @@
+import type { Locale } from "@wlbp/i18n";
+export const authCopy = {
+  en: {
+    signIn: "Sign in",
+    intro: "Use your staff account to enter this workspace.",
+    email: "Email",
+    password: "Password",
+    newPassword: "New password",
+    confirmPassword: "Confirm password",
+    pending: "Working…",
+    invalid: "Check the fields and try again.",
+    credentials: "Sign-in failed. Check your email and password and try again.",
+    unavailable: "Account access is unavailable. Try again shortly.",
+    recover: "Forgot your password?",
+    recoverTitle: "Reset your password",
+    send: "Send recovery link",
+    sent: "If this address has an account, a recovery link will be sent. Check your inbox.",
+    updateTitle: "Choose a new password",
+    update: "Save password",
+    passwordHint: "Use at least 8 characters. Your passwords must match.",
+    expired:
+      "This recovery session has expired or the link has already been used. Request a new link.",
+    mfaTitle: "Account security",
+    mfaIntro:
+      "Use an authenticator app to verify sensitive actions. After verification, return to your task and submit it again.",
+    enroll: "Add authenticator",
+    verify: "Verify code",
+    code: "Six-digit code",
+    factor: "Authenticator",
+    remove: "Remove authenticator",
+    removeHint:
+      "Verify a code before removing a factor. Removing a factor changes your account security.",
+    setup:
+      "Scan the QR code with your authenticator, or enter this setup key. Keep it private.",
+    qr: "Authenticator setup QR code",
+    verified: "Verification completed. Return to your task.",
+    back: "Return to workspace",
+    noFactor: "No authenticator enrolled.",
+    cancelSetup: "Cancel setup",
+    invitationExpired:
+      "This invitation could not be accepted. Ask an administrator for a fresh invitation.",
+  },
+  ar: {
+    signIn: "تسجيل الدخول",
+    intro: "استخدم حساب الموظف للدخول إلى مساحة العمل.",
+    email: "البريد الإلكتروني",
+    password: "كلمة المرور",
+    newPassword: "كلمة المرور الجديدة",
+    confirmPassword: "تأكيد كلمة المرور",
+    pending: "جارٍ التنفيذ…",
+    invalid: "تحقق من الحقول وحاول مرة أخرى.",
+    credentials: "تعذر تسجيل الدخول. تحقق من البريد وكلمة المرور وحاول مرة أخرى.",
+    unavailable: "الدخول إلى الحساب غير متاح. حاول مجددًا بعد قليل.",
+    recover: "نسيت كلمة المرور؟",
+    recoverTitle: "إعادة تعيين كلمة المرور",
+    send: "إرسال رابط الاستعادة",
+    sent: "إذا كان لهذا العنوان حساب، فسيُرسل رابط استعادة. تحقق من بريدك.",
+    updateTitle: "اختر كلمة مرور جديدة",
+    update: "حفظ كلمة المرور",
+    passwordHint: "استخدم ٨ أحرف على الأقل. يجب أن تتطابق كلمتا المرور.",
+    expired: "انتهت جلسة الاستعادة أو سبق استخدام الرابط. اطلب رابطًا جديدًا.",
+    mfaTitle: "أمان الحساب",
+    mfaIntro:
+      "استخدم تطبيق مصادقة للتحقق من الإجراءات الحساسة. بعد التحقق، عد إلى المهمة وأرسلها مجددًا.",
+    enroll: "إضافة تطبيق مصادقة",
+    verify: "التحقق من الرمز",
+    code: "رمز من ستة أرقام",
+    factor: "تطبيق المصادقة",
+    remove: "إزالة تطبيق المصادقة",
+    removeHint: "تحقق من رمز قبل إزالة وسيلة المصادقة. الإزالة تغيّر أمان حسابك.",
+    setup:
+      "امسح رمز الاستجابة السريعة بتطبيق المصادقة أو أدخل مفتاح الإعداد. احتفظ به سرًا.",
+    qr: "رمز إعداد تطبيق المصادقة",
+    verified: "اكتمل التحقق. عد إلى مهمتك.",
+    back: "العودة إلى مساحة العمل",
+    noFactor: "لم يُضف تطبيق مصادقة.",
+    cancelSetup: "إلغاء الإعداد",
+    invitationExpired: "تعذر قبول الدعوة. اطلب من المسؤول دعوة جديدة.",
+  },
+} as const;
+export type AuthMessageKey = keyof typeof authCopy.en;
+export function authMessage(locale: Locale, key: AuthMessageKey) {
+  return authCopy[locale][key];
+}

@@ -35,6 +35,27 @@ const servers = [
   },
 ] as const;
 
+const completionServers = [
+  {
+    command:
+      "WLBP_NEXT_DIST_DIR=.next-completion-client node scripts/run-with-local-supabase-env.mjs client.dashboard-completion.example.invalid pnpm --filter @wlbp/client exec next dev --port 41730",
+    port: 41730,
+    reuseExistingServer: false,
+  },
+  {
+    command:
+      "WLBP_NEXT_DIST_DIR=.next-completion-dashboard node scripts/run-with-local-supabase-env.mjs dashboard.dashboard-completion.example.invalid pnpm --filter @wlbp/dashboard exec next dev --port 41731",
+    port: 41731,
+    reuseExistingServer: false,
+  },
+  {
+    command:
+      "WLBP_BRAND_CONFIG_PATH=tests/e2e/fixtures/warm-brand.json WLBP_NEXT_DIST_DIR=.next-completion-warm node scripts/run-with-local-supabase-env.mjs dashboard.dashboard-completion.example.invalid pnpm --filter @wlbp/dashboard exec next dev --port 41734",
+    port: 41734,
+    reuseExistingServer: false,
+  },
+] as const;
+
 const liveBookingServers = [
   {
     command:
@@ -54,9 +75,11 @@ export default defineConfig({
   testDir: "tests/e2e",
   outputDir: "test-results",
   fullyParallel: true,
+  // Expanded route compilation shares local Next servers; cap cold-start contention.
+  timeout: 60_000,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
-  workers: process.env.CI ? 2 : undefined,
+  workers: 2,
   reporter: process.env.CI
     ? [["line"], ["html", { open: "never", outputFolder: "playwright-report" }]]
     : "list",
@@ -82,12 +105,25 @@ export default defineConfig({
     },
     {
       name: "live-booking",
+      // One journey compiles both applications and traverses several real RPCs.
+      timeout: 180_000,
       grep: /live database booking journey/u,
       testMatch: /booking\.spec\.ts$/u,
       use: {
         screenshot: "off",
         trace: "off",
         video: "off",
+      },
+    },
+    {
+      name: "dashboard-completion",
+      testMatch: /dashboard-completion\.spec\.ts$/u,
+      use: {
+        screenshot: "off",
+        trace: "off",
+        video: "off",
+        actionTimeout: 60_000,
+        navigationTimeout: 60_000,
       },
     },
     {
@@ -121,9 +157,11 @@ export default defineConfig({
           reuseExistingServer: false,
         },
       ]
-    : process.env.LIVE_BOOKING_E2E === "1"
-      ? liveBookingServers
-      : servers
+    : process.env.DASHBOARD_COMPLETION_E2E === "1"
+      ? completionServers
+      : process.env.LIVE_BOOKING_E2E === "1"
+        ? liveBookingServers
+        : servers
   ).map(({ command, port, reuseExistingServer }) => ({
     command,
     port,

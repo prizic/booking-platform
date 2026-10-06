@@ -6,6 +6,8 @@ export function getDashboardSiteOrigin(
 ): URL {
   return parsePublicSiteOrigin(
     configuredOrigin,
-    nodeEnvironment === "production" ? undefined : "http://localhost:3001",
+    nodeEnvironment === "production"
+      ? undefined
+      : `http://localhost:${process.env.PORT || "3001"}`,
   );
 }

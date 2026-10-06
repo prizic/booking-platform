@@ -5,6 +5,7 @@
 // 3 (adjacency), 4 (expiry racing creation), 5 (duplicate requests),
 // 8 (multi-resource contention), plus concurrent staff lifecycle edits.
 import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 const databaseUrl =
   process.env.SUPABASE_DB_URL ??
@@ -789,6 +790,74 @@ function noOverlapSurvives() {
   );
 }
 
+/** Two real RPC transactions cannot remove every administrator. */
+async function concurrentLastAdministrator() {
+  const tenant = "f0c00000-0000-4000-8000-000000000001";
+  const role = "f2c00000-0000-4000-8000-000000000001";
+  const actors = [
+    "a1000000-0000-0000-0000-000000000002",
+    "b1000000-0000-0000-0000-000000000001",
+  ];
+  const members = [
+    "f3c00000-0000-4000-8000-000000000001",
+    "f3c00000-0000-4000-8000-000000000002",
+  ];
+  runSql(`
+    insert into app.tenants(id,name) values('${tenant}','Synthetic administrator contention') on conflict do nothing;
+    insert into app.roles(id,tenant_id,key,location_scope_mode) values('${role}','${tenant}','tenant_admin','tenant') on conflict do nothing;
+    insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind) values('${tenant}','${role}','staff.manage','direct','tenant'),('${tenant}','${role}','tenant.owner_transfer','approval','tenant') on conflict do nothing;
+    insert into app.memberships(id,tenant_id,auth_user_id,role_id)
+      values('${members[0]}','${tenant}','${actors[0]}','${role}'),('${members[1]}','${tenant}','${actors[1]}','${role}')
+      on conflict(id) do update set status='active',revoked_at=null;
+  `);
+  const revisions = members.map((id) =>
+    Number(runSql(`select revision from app.memberships where id='${id}';`)),
+  );
+  const requests = members.map(() => randomUUID());
+  const at = fireAt();
+  const attempts = await Promise.all(
+    members.map((id, index) =>
+      attempt(
+        `
+    begin;
+    select set_config('request.jwt.claims',jsonb_build_object('sub','${actors[index]}','role','authenticated','aal','aal2','amr',jsonb_build_array(jsonb_build_object('method','totp','timestamp',extract(epoch from statement_timestamp())::bigint)))::text,true);
+    set local role authenticated;
+    select api_v1.change_staff_access_v1('${tenant}','${requests[index]}','revoke_membership','${id}',${revisions[index]});
+    commit;
+  `,
+        at,
+      ),
+    ),
+  );
+  report(
+    attempts.filter((x) => x.ok).length === 1,
+    "concurrent administrator revocations commit exactly one action",
+    attempts.map((x) => x.error || "committed").join(" | "),
+  );
+  report(
+    attempts
+      .filter((x) => !x.ok)
+      .every((x) => x.error === "last_administrator_required"),
+    "the losing revocation preserves the last administrator",
+    attempts
+      .filter((x) => !x.ok)
+      .map((x) => x.error)
+      .join(" | "),
+  );
+  report(
+    runSql(
+      `select count(*) from app.memberships where tenant_id='${tenant}' and status='active';`,
+    ) === "1",
+    "one active administrator survives contention",
+  );
+  report(
+    runSql(
+      `select count(*) from app.staff_access_events where tenant_id='${tenant}' and request_id in ('${requests[0]}','${requests[1]}');`,
+    ) === "1",
+    "one immutable access event records the committed revocation",
+  );
+}
+
 async function main() {
   requireConnectionHeadroom();
   setup();
@@ -804,6 +873,7 @@ async function main() {
     await concurrentPrivacyRequest(lifecycleId);
     await concurrentSettlement(slotAt("09:00"));
     await concurrentProvisioningStep();
+    await concurrentLastAdministrator();
     noOverlapSurvives();
   } finally {
     cleanup();

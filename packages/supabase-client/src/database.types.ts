@@ -2,11 +2,6 @@ export type Json =
   string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5";
-  };
   api_v1: {
     Tables: {
       [_ in never]: never;
@@ -15,6 +10,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      accept_staff_invitation_v1: {
+        Args: { p_invitation_id: string };
+        Returns: Json;
+      };
       act_on_management_link_v1: {
         Args: {
           p_action: string;
@@ -131,6 +130,15 @@ export type Database = {
           status: string;
         }[];
       };
+      authorize_payment_onboarding_v1: {
+        Args: {
+          p_hostname: string;
+          p_locale: string;
+          p_request_id: string;
+          p_tenant_id: string;
+        };
+        Returns: string;
+      };
       begin_checkout_v1: {
         Args: {
           p_application: string;
@@ -194,6 +202,19 @@ export type Database = {
           status: string;
         }[];
       };
+      change_staff_access_v1: {
+        Args: {
+          p_action: string;
+          p_email?: string;
+          p_expected_revision?: number;
+          p_location_ids?: string[];
+          p_request_id: string;
+          p_role_id?: string;
+          p_target_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
+      };
       claim_job_v1: {
         Args: { p_kinds?: string[]; p_lock_seconds?: number };
         Returns: {
@@ -221,6 +242,47 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      claim_provisioning_step_v1:
+        | {
+            Args: { p_lock_seconds?: number; p_run_id?: string };
+            Returns: {
+              attempt: number;
+              external_id: string;
+              idempotency_key: string;
+              instance_id: string;
+              provider: string;
+              request: Json;
+              resource_kind: string;
+              run_id: string;
+              slug: string;
+              step_id: string;
+              step_key: string;
+              step_order: number;
+              tenant_id: string;
+            }[];
+          }
+        | {
+            Args: {
+              p_lock_seconds?: number;
+              p_providers?: string[];
+              p_run_id?: string;
+            };
+            Returns: {
+              attempt: number;
+              external_id: string;
+              idempotency_key: string;
+              instance_id: string;
+              provider: string;
+              request: Json;
+              resource_kind: string;
+              run_id: string;
+              slug: string;
+              step_id: string;
+              step_key: string;
+              step_order: number;
+              tenant_id: string;
+            }[];
+          };
       claim_refund_batch_v1: {
         Args: { p_limit?: number; p_visibility_seconds?: number };
         Returns: {
@@ -233,6 +295,17 @@ export type Database = {
           provider_charge_reference: string;
           refund_id: string;
           tenant_id: string;
+        }[];
+      };
+      claim_staff_invitation_delivery_v1: {
+        Args: never;
+        Returns: {
+          attempt: number;
+          brand_name: string;
+          dashboard_hostname: string;
+          invitation_id: string;
+          job_id: string;
+          recipient_email: string;
         }[];
       };
       clear_entitlement_override_v1: {
@@ -249,6 +322,31 @@ export type Database = {
           job_id: string;
           status: string;
         }[];
+      };
+      complete_payment_onboarding_intent_v1: {
+        Args: { p_intent_id: string; p_succeeded: boolean };
+        Returns: undefined;
+      };
+      complete_provisioning_step_v1: {
+        Args: {
+          p_error_code?: string;
+          p_external_id?: string;
+          p_observed_state?: Json;
+          p_outcome: string;
+          p_retry_after?: string;
+          p_step_id: string;
+          p_waiting_reason?: string;
+        };
+        Returns: {
+          duplicate: boolean;
+          retry_at: string;
+          run_state: string;
+          step_status: string;
+        }[];
+      };
+      complete_staff_invitation_delivery_v1: {
+        Args: { p_attempt: number; p_job_id: string; p_sent: boolean };
+        Returns: boolean;
       };
       confirm_booking_v1: {
         Args: {
@@ -542,6 +640,10 @@ export type Database = {
           utc_offset_seconds: number;
         }[];
       };
+      get_booking_customer_v1: {
+        Args: { p_booking_id: string; p_tenant_id: string };
+        Returns: string;
+      };
       get_booking_detail_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
         Returns: {
@@ -600,6 +702,7 @@ export type Database = {
           window_start: string;
         }[];
       };
+      get_brand_editor_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_brand_presentation_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -611,6 +714,7 @@ export type Database = {
           presentation: string;
         }[];
       };
+      get_catalog_workspace_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_checkout_intent_v1: {
         Args: { p_payment_attempt_id: string; p_tenant_id: string };
         Returns: {
@@ -777,6 +881,10 @@ export type Database = {
         Args: { p_tenant_id: string };
         Returns: string;
       };
+      get_operational_choices_v1: {
+        Args: { p_locale?: string; p_tenant_id: string };
+        Returns: Json;
+      };
       get_operator_context_v1: {
         Args: never;
         Returns: {
@@ -799,6 +907,15 @@ export type Database = {
           provider_account_reference: string;
           requirements: Json;
           status: string;
+        }[];
+      };
+      get_payment_onboarding_intent_v1: {
+        Args: { p_intent_id: string };
+        Returns: {
+          account_reference: string;
+          idempotency_key: string;
+          refresh_url: string;
+          return_url: string;
         }[];
       };
       get_platform_notice_v1: {
@@ -922,6 +1039,11 @@ export type Database = {
         }[];
       };
       get_rollout_v1: { Args: { p_rollout_id: string }; Returns: Json };
+      get_schedule_choices_v1: { Args: { p_tenant_id: string }; Returns: Json };
+      get_schedule_editor_details_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
+      };
       get_schedule_workspace_v1: {
         Args: { p_location_id?: string; p_tenant_id: string };
         Returns: {
@@ -944,6 +1066,10 @@ export type Database = {
           time_zone: string;
           value: number;
         }[];
+      };
+      get_staff_access_workspace_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
       };
       get_staff_resource_choices_v1: {
         Args: { p_locale: string; p_tenant_id: string };
@@ -1049,6 +1175,15 @@ export type Database = {
           staff_id: string;
           staff_name: string;
           utilization_bps: number;
+        }[];
+      };
+      github_repository_for_run_v1: {
+        Args: { p_run_id: string };
+        Returns: {
+          default_branch: string;
+          repository_external_id: string;
+          repository_name: string;
+          repository_rest_id: number;
         }[];
       };
       issue_brand_preview_v1: {
@@ -1217,6 +1352,28 @@ export type Database = {
           starts_at: string;
           status: string;
         }[];
+      };
+      list_communication_queue_v1: {
+        Args: { p_limit?: number; p_status?: string; p_tenant_id: string };
+        Returns: {
+          booking_id: string;
+          created_at: string;
+          message_id: string;
+          public_reference: string;
+          service_name: string;
+          status: string;
+        }[];
+      };
+      list_dashboard_audit_v1: {
+        Args: {
+          p_actor?: string;
+          p_cursor?: Json;
+          p_from?: string;
+          p_stream?: string;
+          p_tenant_id: string;
+          p_to?: string;
+        };
+        Returns: Json;
       };
       list_domains_v1: {
         Args: {
@@ -1643,6 +1800,10 @@ export type Database = {
           publication_revision: number;
         }[];
       };
+      publish_catalog_workspace_v1: {
+        Args: { p_request_id: string; p_revisions: Json; p_tenant_id: string };
+        Returns: Json;
+      };
       reconcile_commerce_v1: {
         Args: { p_stale_minutes?: number; p_tenant_id?: string };
         Returns: {
@@ -1843,6 +2004,20 @@ export type Database = {
           contract_version: number;
           hold_id: string;
           state: string;
+        }[];
+      };
+      remove_schedule_record_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_expected_scope_revision: number;
+          p_kind: string;
+          p_request_id: string;
+          p_target_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          revision: number;
+          target_id: string;
         }[];
       };
       replay_booking_notification_v1: {
@@ -2054,11 +2229,7 @@ export type Database = {
         }[];
       };
       rollback_brand_v1: {
-        Args: {
-          p_brand_id: string;
-          p_tenant_id: string;
-          p_to_revision: number;
-        };
+        Args: { p_brand_id: string; p_tenant_id: string; p_to_revision: number };
         Returns: {
           brand_revision_id: string;
           contract_version: number;
@@ -2112,6 +2283,27 @@ export type Database = {
           contract_version: number;
           revision: number;
         }[];
+      };
+      save_brand_editor_v1: {
+        Args: {
+          p_brand_key: string;
+          p_config: Json;
+          p_content: Json;
+          p_expected_hash: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
+      };
+      save_catalog_entity_v1: {
+        Args: {
+          p_document: Json;
+          p_entity_id: string;
+          p_expected_revision: number;
+          p_kind: string;
+          p_request_id: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
       };
       save_integration_references_v1: {
         Args: { p_provider: string; p_secret_references: string[] };

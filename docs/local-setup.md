@@ -129,7 +129,7 @@ These belong to Platform Admin and the provisioning automation only. **A Client 
 5. **Reset from zero** — `pnpm db:reset` replays every central migration and `supabase/seed.sql`. It is deliberately local-only; never add `--linked` or a hosted database URL.
 6. **Run database checks** — `pnpm test:db` runs the pgTAP schema-boundary and complete tenant RLS matrix; `pnpm db:lint` runs the database linter.
 7. **Generate and verify database types** — with the reset local stack running, use `pnpm db:types` to atomically update `packages/supabase-client/src/database.types.ts`, then run `pnpm check:db-types`. Both commands are pinned to the local stack and the safe `api_v1` schema; neither requires a linked or hosted Supabase project. Generator diagnostics are suppressed so local credentials and connection details cannot enter logs.
-8. **Run the apps** — `pnpm dev` starts Client on 3000, Dashboard on 3001, and Platform Admin on 3002. The identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
+8. **Run the apps** — `pnpm dev` prefers Client on 3000, Dashboard on 3001, and Platform Admin on 3002. If a port is occupied, the launcher selects another available port without taking another app's preferred port and prints the resulting URLs before starting Turborepo. Shared package dependencies build before the apps start. The launcher never stops an existing server. Local URL fallbacks use the running server's port; an explicit `NEXT_PUBLIC_SITE_URL` still takes precedence. Direct app commands keep their default ports; override them with `CLIENT_PORT`, `DASHBOARD_PORT`, or `PLATFORM_ADMIN_PORT`. The identity shells work on localhost; after issue #6 connects tenant resolution, exercise Client through `LOCAL_TENANT_HOST` as well.
 9. **Verify** — run the gates in the next section before opening a pull request.
 10. **Stop the backend** — `pnpm supabase:stop` preserves local Docker state for the next run. A deliberate local volume wipe is safe only because local data is synthetic.
 
@@ -178,11 +178,11 @@ evidence.
 | pgTAP schema boundary and full tenant RLS matrix | `pnpm test:db` (`supabase test db --local`) | Available — issues #4 and #6; Docker required |
 | Generated `api_v1` database type drift | `pnpm check:db-types` | Available — issue #6; reset local stack and Docker required |
 | Contract tests | `pnpm test:contract` | Available — issue #4 |
-| Provider integration (email) | `pnpm test:unit` covers template rendering, webhook signature verification, the batch runner, and the Resend adapter's failure classification with an injected transport — issue #19. A send against the real provider is `N/A — not yet implemented, owned by issue #41`, because it needs provider credentials that never enter CI, and the Edge entry points that run the pipeline are `N/A — not yet implemented, owned by issue #101`. |
+| Provider integration (email) | `pnpm test:unit` covers rendering, signatures, batch dispatch and adapter failure classification. Central Edge entry points exist. Actual Resend sandbox delivery remains pending provider credentials and an authorized integration run; queue state does not prove delivery. |
 | Booking concurrency tests | `pnpm test:concurrency` | Available — issue #11; Docker, a reset local stack, `psql`, and more than 100 spare database connections required |
 | Build all apps and packages | `pnpm build` | Available — issue #3 |
-| Workspace Realtime broadcast | The broadcast trigger and its topic policy install themselves only where the Supabase realtime schema exists, so a stack without it installs nothing and no gate fails — issue #16. The local realtime container stays disabled because enabling it stopped `supabase start` from becoming ready; end-to-end coverage of the broadcast and its browser subscription is `N/A — not yet implemented, owned by issue #102`. |
-| E2E | `pnpm test:e2e` and `pnpm test:e2e:live` | Identity/release smoke available — issue #4; the no-payment booking journey (EN/AR × mobile/desktop, validation, duplicate submission, lost slot, payment refusal) available — issue #12; the request-to-book outcome and the customer proposal link available — issue #13; the guest manage-booking link, its refusal state, and its step-up available — issue #14; guest cancellation and its lost-race recovery available — issue #15. Issue #94 adds a separately seeded Tenant-C live Client → database → authenticated Dashboard tracer and keeps generated local Supabase values out of logs. Remaining journeys are `N/A — not yet implemented, owned by issues #16–#18`. |
+| Workspace Realtime broadcast | Database invalidation, private browser subscription, degraded status and authoritative refetch are implemented. The completion campaign enables Realtime only on its isolated stack and provisions its table-owner policy explicitly. Actor update/reconnect/revocation acceptance is tracked in the campaign report; issue #102 is not labelled passing from source alone. |
+| E2E | `pnpm test:e2e`, `pnpm test:e2e:live`, and the `dashboard-completion` Playwright project | Existing Client booking/request/manage/cancellation and Tenant-C tracers are available. The completion project adds real staff Auth, catalog, scheduling, lifecycle, privacy, Brand, communications and scoped refusal journeys. The campaign report records their executed results. |
 | Accessibility (+ RTL interaction) | `pnpm test:a11y` | Client/Dashboard EN/AR × mobile/desktop × brand matrix plus reduced motion available — issue #5; full journeys remain issue #40 |
 | Localization parity | `pnpm test:i18n` | Available — issue #5; includes locale rendering plus unit coverage for messages, formatting, and DST gaps/overlaps |
 | Visual regression | `pnpm test:visual` | Client/Dashboard EN/AR × mobile/desktop × brand pixel baselines available — issue #5; full journeys remain issue #40 |
@@ -254,6 +254,7 @@ evidence, not a claim that a screen-reader pass occurred.
 
 | Symptom | Likely cause |
 | ------- | ------------ |
+| Direct app startup fails with `EADDRINUSE` | Another process owns the requested port. Use root `pnpm dev` for automatic selection, or set the app's port variable for a direct command. If your local `NEXT_PUBLIC_SITE_URL` includes a port, update it to match the printed app URL. |
 | `supabase start` hangs or fails | Docker not running, or ports already held by another local stack |
 | App loads unbranded / 404 on the Client | Requested `localhost` instead of `LOCAL_TENANT_HOST`; tenant resolution found no verified domain row (§13.3) |
 | `supabase db reset` mentions a linked project | Stop. The repository wrapper is local-only; do not continue against hosted data. |
@@ -276,6 +277,50 @@ evidence, not a claim that a screen-reader pass occurred.
 - [upstream-updates.md](./upstream-updates.md) — instance CI and upgrade flow
 - [references.md](./references.md) — external documentation sources
 - [adr/README.md](./adr/README.md) — architecture decision records
+## Dashboard account flows
+
+Dashboard sign-in uses normal Supabase Auth credentials; active membership and
+the verified Dashboard hostname still determine workspace access. Recovery uses
+PKCE and `/auth/callback?locale=en` (or `ar`). The callback also accepts the SDK's
+optional `sb_flow_id`; it never carries a return destination. Open the link in
+the browser that requested it. Supabase consumes the code once.
+
+Set `DASHBOARD_RECOVERY_COOKIE_SECRET` in the Dashboard's server environment to
+a platform-provided random signing key of at least 32 characters. It is not a
+provider credential and must never use a `NEXT_PUBLIC_` name or enter Git. All
+Dashboard instances serving the same origin need the same key. Rotating it
+invalidates pending recovery receipts. Recovery fails closed when it is unset.
+The callback creates a 15-minute HttpOnly receipt bound to the verified Auth
+account/session. Password-only or unrelated OTP sessions cannot open the update
+screen. A successful password change clears the receipt and signs out.
+
+For the platform Auth mail hook, configure `DASHBOARD_AUTH_REDIRECT_ORIGINS` as
+the exact comma-separated HTTPS Dashboard origins. Recovery redirects must use
+`/auth/callback` with only `locale` and optional `sb_flow_id`. The allowlist never
+selects a tenant or brand. Local default Inbucket mail does not use this hook.
+The local redirect/TOTP configuration edits take effect only after a deliberate
+stack configuration reload; they have not yet been applied or verified against
+the retained running stack.
+
+Account security is at `/{locale}/auth/mfa`. Verify a code, return to the task,
+and submit its authoritative action again. Cancelling setup removes only an
+unverified factor. Removing a verified factor requires recent AAL2. Secrets and
+Auth callback URLs must be excluded from screenshots, traces, and ordinary logs.
+
+
+### Dashboard completion campaign
+
+Run `rtk node scripts/verify-dashboard-completion.mjs` with the pinned Node 22 toolchain. The runner creates the separate `dashboard-completion-20261005` Supabase project under ignored `.artifacts/dashboard-completion/isolated`, using ports 553xx, and resets only that campaign-owned stack. The retained `white-label-booking-platform` stack and demo booking are never reset. The isolated configuration enables Realtime for the acceptance tests.
+
+Reports and redacted logs live in `.artifacts/dashboard-completion/`. Runtime synthetic passwords stay in a mode-0600 credential file and never enter app environment variables, snapshots or traces. Use `--only gate,gate` for affected gate reruns; rerunning fresh replay resets the isolated fixtures. Run completion-fixture after a fresh replay before browser acceptance.
+
+Run the complete pgTAP suite immediately after fresh replay, before browser or contention fixtures populate the database. Rebuild exported shared packages before browser runs; `browser-contracts` covers the Dashboard and Client dependency closures. The `dashboard-workflows`, `dashboard-followthrough`, and `dashboard-realtime` gates are diagnostic subsets and never substitute for the full completion project. The local Auth mailbox is Mailpit behind the CLI’s inbucket-named service; its campaign UI/API port is explicitly 55324.
+
+The platform-managed `realtime.messages` table has a separate owner. Apply `supabase/realtime/tenant-workspace-policy.sql` through that infrastructure owner before enabling the browser subscription. The campaign does this only inside its named isolated database container. The policy checks both live tenant membership and equality between each message topic and the authorized channel topic; it grants no client write policy or table ownership.
+
+Set `DASHBOARD_RECOVERY_COOKIE_SECRET` in the Dashboard server secret store to an independently generated value of at least 32 characters. Keep it outside `NEXT_PUBLIC_*` configuration. Enable `NEXT_PUBLIC_DASHBOARD_REALTIME_ENABLED` only after tenant private-channel policies are provisioned.
+
+Staff invitation delivery and payment onboarding workers are central platform functions, excluded from instance distribution. Their internal invocation credential, service-role credential and Stripe/Resend credentials belong to the platform worker secret store. Invitation jobs must be claimed by the platform scheduler; queue acceptance alone does not prove dispatch or delivery. Provider sandbox readiness remains pending until an actual authorized integration run is recorded.
 
 ## Isolated Platform Admin
 

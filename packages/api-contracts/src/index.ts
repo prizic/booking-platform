@@ -1,5 +1,19 @@
 /** Version carried by the api_v1 DTOs in this module, not the deployed range. */
 export const apiV1ContractVersion = 1 as const;
+export {
+  parseCatalogWorkspaceV1,
+  type CatalogKindV1,
+  type CatalogEntityV1,
+  type CatalogMetadataV1,
+  type CatalogWorkspaceV1,
+} from "./catalog.js";
+export {
+  parseStaffAccessWorkspaceV1,
+  type BuiltInStaffRole,
+  type StaffAccessWorkspaceV1,
+  type StaffAccessMemberV1,
+  type StaffAccessInvitationV1,
+} from "./staff-access.js";
 export type BackendContractVersion = typeof apiV1ContractVersion;
 
 export type TenantId = string;
@@ -600,13 +614,10 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
         "serviceId",
         "serviceKey",
         "serviceName",
-        "serviceDescription",
         "canonicalPath",
         "locationId",
         "locationKey",
         "locationName",
-        "locationDescription",
-        "locationAddress",
         "locationTimeZone",
         "locationCanonicalPath",
         "cacheTag",
@@ -614,6 +625,13 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
       for (const key of stringKeys)
         if (key !== "locale" && (typeof item[key] !== "string" || item[key] === ""))
           throw new Error("Public catalog string is invalid");
+      for (const key of [
+        "serviceDescription",
+        "locationDescription",
+        "locationAddress",
+      ])
+        if (typeof item[key] !== "string")
+          throw new Error("Public catalog optional copy is invalid");
       if (item.locale !== "en" && item.locale !== "ar")
         throw new Error("Public catalog locale is invalid");
       if (item.categoryKey !== null && typeof item.categoryKey !== "string")

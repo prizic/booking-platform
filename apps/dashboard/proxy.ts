@@ -8,7 +8,7 @@ export async function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const policy = createContentSecurityPolicy(nonce, {
-    connectSources: supabaseUrl === undefined ? [] : [supabaseUrl],
+    connectSources: supabaseUrl ? [supabaseUrl] : [],
     development: process.env.NODE_ENV !== "production",
   });
   const requestHeaders = new Headers(request.headers);
@@ -18,7 +18,7 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request: { headers: requestHeaders } });
 
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (supabaseUrl !== undefined && publishableKey !== undefined) {
+  if (supabaseUrl && publishableKey) {
     const client = createRequestScopedSupabaseClient(
       { publishableKey, url: supabaseUrl },
       {

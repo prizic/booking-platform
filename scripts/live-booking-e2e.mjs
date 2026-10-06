@@ -63,10 +63,21 @@ export function createLiveBookingRunnerEnvironment(credentialFile) {
 }
 
 export function readLocalSupabaseEnvironment() {
-  const output = execFileSync("supabase", ["status", "--output", "env"], {
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const output = execFileSync(
+    "supabase",
+    [
+      "status",
+      "--output",
+      "env",
+      ...(process.env.WLBP_SUPABASE_WORKDIR
+        ? ["--workdir", process.env.WLBP_SUPABASE_WORKDIR]
+        : []),
+    ],
+    {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
   return parseSupabaseStatusEnvironment(output);
 }
 
@@ -159,7 +170,8 @@ function dashboardCredentialFileFromEnvironment() {
 function removeLiveBookingRunnerVariables(environment) {
   const result = { ...environment };
   for (const key of Object.keys(result)) {
-    if (key.startsWith("LIVE_BOOKING_")) delete result[key];
+    if (key.startsWith("LIVE_BOOKING_") || key.startsWith("DASHBOARD_COMPLETION_"))
+      delete result[key];
   }
   return result;
 }

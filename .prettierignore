@@ -1,5 +1,6 @@
 .git
 .next
+.next-*
 .next-warm-client
 .next-warm-dashboard
 .turbo
@@ -10,3 +11,6 @@ pnpm-lock.yaml
 AGENTS.md
 WHITE_LABEL_BOOKING_PLATFORM_PRODUCT_ARCHITECTURE.md
 docs/
+
+.artifacts
+.impeccable

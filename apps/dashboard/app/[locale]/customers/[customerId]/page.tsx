@@ -1,3 +1,4 @@
+import { workspaceStatus } from "../../../_lib/workspace-status";
 import { formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import Link from "next/link";
@@ -158,7 +159,8 @@ export default async function CustomerDetailPage({
                 <li key={booking.bookingId}>
                   <Link href={`/${locale}/bookings/${booking.bookingId}`}>
                     <bdi>{booking.publicReference}</bdi> · {booking.serviceName} ·{" "}
-                    {formatDateTime(booking.startAt, locale, "UTC")} · {booking.status}
+                    {formatDateTime(booking.startAt, locale, "UTC")} ·{" "}
+                    {workspaceStatus(locale, booking.status)}
                   </Link>
                   {/* The name the booking was made under, which a later
                       correction deliberately does not rewrite. */}

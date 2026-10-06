@@ -48,7 +48,11 @@ export async function runReportExportAction(formData: FormData): Promise<never> 
   try {
     const exportId = await request.source.runReportExport({
       from,
-      locationId: null,
+      locationId:
+        typeof formData.get("locationId") === "string" &&
+        /^[a-f0-9-]{36}$/iu.test(String(formData.get("locationId")))
+          ? String(formData.get("locationId"))
+          : null,
       reportKey: reportKey as ReportKey,
       tenantId: request.state.context.tenantId,
       timeZone,

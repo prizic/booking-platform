@@ -1,3 +1,8 @@
+import { BrandPublicationForm } from "./brand-publication-form";
+import { BrandForm } from "./brand-form";
+import { parseBrandEditor, brandChangedSections } from "./brand-fields";
+import { dashboardBrand } from "../../_lib/brand";
+import { workspaceStatus } from "../../_lib/workspace-status";
 import { formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 
@@ -8,11 +13,7 @@ import type {
 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
-import {
-  publishBrandAction,
-  rollbackBrandAction,
-  saveBrandDraftAction,
-} from "./actions";
+import { publishBrandAction, rollbackBrandAction, previewBrandAction } from "./actions";
 import { brandResultKeys, positiveBrandResults } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -34,10 +35,10 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
   const ready = request.source !== null && request.state.kind === "ready";
   const tenantId = ready ? request.state.context.tenantId : null;
 
-  const revisions: readonly BrandRevisionRowV1[] =
+  const revisions: readonly BrandRevisionRowV1[] | null =
     ready && tenantId !== null
-      ? ((await request.source?.listBrandRevisions?.({ tenantId }).catch(() => [])) ??
-        [])
+      ? ((await request.source?.listBrandRevisions?.({ tenantId }).catch(() => null)) ??
+        null)
       : [];
   const presentation: BrandPresentationV1 | null =
     ready && tenantId !== null
@@ -46,8 +47,14 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
           .catch(() => null)) ?? null)
       : null;
 
-  const draft = revisions.find((revision) => revision.state === "draft") ?? null;
-  const live = revisions.find((revision) => revision.state === "published") ?? null;
+  const editor =
+    ready && tenantId !== null
+      ? await request.source
+          ?.getBrandEditor?.(tenantId)
+          .then(parseBrandEditor)
+          .catch(() => undefined)
+      : undefined;
+  const draft = revisions?.find((revision) => revision.state === "draft") ?? null;
   const result = typeof query.result === "string" ? query.result : null;
   const resultKey =
     result !== null && result in brandResultKeys
@@ -112,70 +119,89 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
         <section aria-labelledby="brand-draft-title">
           <h2 id="brand-draft-title">{message("brandDraftTitle")}</h2>
           <p>{message("brandDraftHint")}</p>
-          <form action={saveBrandDraftAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <label htmlFor="brand-key">{message("brandKeyLabel")}</label>
-            <input
-              defaultValue={live?.brandKey ?? draft?.brandKey ?? ""}
-              id="brand-key"
-              name="brandKey"
-              required
-              type="text"
+          {editor === undefined ? (
+            <p role="alert">{message("requestsResultUnavailable")}</p>
+          ) : (
+            <BrandForm
+              locale={locale}
+              brandKey={editor?.brandKey ?? "default"}
+              contentHash={editor?.contentHash ?? null}
+              config={editor?.config ?? dashboardBrand}
+              content={editor?.content ?? {}}
             />
-            <label htmlFor="brand-config">{message("brandConfigLabel")}</label>
-            <textarea dir="ltr" id="brand-config" name="config" required rows={10} />
-            <label htmlFor="brand-content">{message("brandContentLabel")}</label>
-            <textarea dir="ltr" id="brand-content" name="content" required rows={6} />
-            <Button type="submit">{message("brandSaveAction")}</Button>
-          </form>
+          )}
         </section>
 
         {draft === null || draft.contentHash === null ? null : (
           <section aria-labelledby="brand-publish-title">
             <h2 id="brand-publish-title">{message("brandPublishTitle")}</h2>
             <p>{message("brandPublishHint")}</p>
-            <form action={publishBrandAction}>
-              <input type="hidden" name="locale" value={locale} />
+            <form action={previewBrandAction}>
+              <input name="locale" type="hidden" value={locale} />
               <input
-                type="hidden"
                 name="brandRevisionId"
+                type="hidden"
                 value={draft.brandRevisionId}
               />
-              {/* The hash the author reviewed travels with the request, so a
-                  draft somebody edited in between is refused rather than
-                  shipped under this person's name. */}
-              <input type="hidden" name="contentHash" value={draft.contentHash} />
-              <Button type="submit">{message("brandPublishAction")}</Button>
+              <Button type="submit" variant="secondary">
+                {message("brandPreviewAction")}
+              </Button>
             </form>
+            {editor ? (
+              <p>
+                {locale === "ar" ? "الأقسام المتغيرة: " : "Changed sections: "}
+                {brandChangedSections(editor)
+                  .map(
+                    (key) =>
+                      ({
+                        identity: locale === "ar" ? "الهوية" : "Identity",
+                        colors: locale === "ar" ? "الألوان" : "Colors",
+                        typography: locale === "ar" ? "الخطوط" : "Typography",
+                        assets: locale === "ar" ? "الصور" : "Assets",
+                        content: locale === "ar" ? "المحتوى" : "Content",
+                      })[key as "identity"],
+                  )
+                  .join(" · ") || (locale === "ar" ? "لا تغيير" : "No changes")}
+              </p>
+            ) : null}
+            <BrandPublicationForm
+              locale={locale}
+              action={publishBrandAction}
+              label={message("brandPublishAction")}
+              fields={{
+                brandRevisionId: draft.brandRevisionId,
+                contentHash: draft.contentHash,
+              }}
+            />
           </section>
         )}
 
         <section aria-labelledby="brand-history-title">
           <h2 id="brand-history-title">{message("brandHistoryTitle")}</h2>
-          {revisions.length === 0 ? (
+          {revisions === null ? (
+            <p role="alert">{message("requestsResultUnavailable")}</p>
+          ) : revisions.length === 0 ? (
             <p>{message("brandHistoryEmpty")}</p>
           ) : (
             <ul aria-label={message("brandHistoryTitle")}>
               {revisions.map((revision) => (
                 <li key={revision.brandRevisionId}>
-                  <bdi>{revision.brandKey}</bdi> v{revision.revision} · {revision.state}
+                  <bdi>{revision.brandKey}</bdi> v{revision.revision} ·{" "}
+                  {workspaceStatus(locale, revision.state)}
                   {revision.publishedAt === null
                     ? null
                     : ` · ${formatDateTime(revision.publishedAt, locale, "UTC")}`}
                   {revision.notes === null ? null : ` · ${revision.notes}`}
                   {revision.state === "retired" ? (
-                    <form action={rollbackBrandAction}>
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="brandId" value={revision.brandId} />
-                      <input
-                        type="hidden"
-                        name="toRevision"
-                        value={revision.revision}
-                      />
-                      <Button type="submit" variant="secondary">
-                        {message("brandRollbackAction")}
-                      </Button>
-                    </form>
+                    <BrandPublicationForm
+                      locale={locale}
+                      action={rollbackBrandAction}
+                      label={message("brandRollbackAction")}
+                      fields={{
+                        brandId: revision.brandId,
+                        toRevision: String(revision.revision),
+                      }}
+                    />
                   ) : null}
                 </li>
               ))}

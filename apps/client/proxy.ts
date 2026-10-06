@@ -5,7 +5,7 @@ export function proxy(request: NextRequest) {
   const nonce = btoa(crypto.randomUUID());
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const policy = createContentSecurityPolicy(nonce, {
-    connectSources: supabaseUrl === undefined ? [] : [supabaseUrl],
+    connectSources: supabaseUrl ? [supabaseUrl] : [],
     development: process.env.NODE_ENV !== "production",
   });
   const requestHeaders = new Headers(request.headers);

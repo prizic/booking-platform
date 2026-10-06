@@ -32,7 +32,10 @@ for (const profile of responsiveProfiles) {
           ).toBeVisible();
           await expect(
             page.getByRole("link", { name: language.switchLanguage }),
-          ).toHaveAttribute("href", language.locale === "en" ? "/ar" : "/en");
+          ).toHaveAttribute(
+            "href",
+            `${language.locale === "en" ? "/ar" : "/en"}${application.name === "dashboard" ? "/today" : ""}`,
+          );
 
           const horizontalOverflow = await page.evaluate(
             () =>

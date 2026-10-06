@@ -1,0 +1,5 @@
+# Staff booking contract refinement
+
+The existing on-behalf RPC delegates no-payment confirmation and approval-required requests to the same snapshot/allocation/outbox engine. The Dashboard offers these modes and preserves session and idempotency values across retries. Paid confirmation requires a succeeded payment attempt, which this RPC does not accept. Staff-hosted checkout therefore remains a bounded missing contract: authorize booking.create_on_behalf on the held location, create a payment attempt with immutable amount and verified return origin, call only the protected provider worker, and confirm through a verified payment result while recording member authorship exactly once. Required cases include revoked scope, same-attempt replay, failed provider, unsafe return, and forged payment result. No paid success is simulated.
+
+Published operational choices use a separate authenticated invoker API with live scope checks; catalog draft access is not reused for booking authorization. Provider credentials stay in platform workers.

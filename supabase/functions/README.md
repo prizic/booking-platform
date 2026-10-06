@@ -56,3 +56,12 @@ A checkout function never reads an amount from its caller, and a webhook
 function never treats a browser redirect as evidence. Both facts are enforced in
 the database, not here: `begin_checkout_v1` prices the attempt and
 `record_payment_event_v1` is the only path that can confirm a paid booking.
+
+## Dashboard account and integration workers
+
+| Function                  | Owner                             | Behavior                                                                                                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `staff-invitation-worker` | issue #102 / dashboard completion | Claims a bounded private invitation-delivery batch, asks Auth for an email-bound invitation or magic link, sends a bilingual Resend message, and records dispatch success or retry failure. Requires the existing internal-invocation guard, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `RESEND_API_KEY`, and `NOTIFICATION_SENDER`. Raw links and recipients never enter job or audit DTOs. |
+| `payment-onboarding`      | issue #102 / dashboard completion | Accepts a member-authorized intent ID, rechecks its private platform account/domain mapping through the service-only RPC, creates an idempotent Stripe hosted onboarding link, and records its outcome. Requires member Auth plus platform worker credentials and `STRIPE_SECRET_KEY`; return URLs are database owned. A return never implies account readiness.                               |
+
+Invitation dispatch is scheduled by the central platform using the same internal invocation credential as notification dispatch. Recovery redirects in `auth-mail-hook` must match the exact trusted HTTPS origins configured in `DASHBOARD_AUTH_REDIRECT_ORIGINS`; arbitrary Auth return URLs are refused. Sandbox dispatch/delivery and onboarding evidence remain separate from deterministic adapter tests.

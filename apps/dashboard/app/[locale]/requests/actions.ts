@@ -1,7 +1,7 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
@@ -44,6 +44,11 @@ export async function decideRequestAction(formData: FormData): Promise<never> {
       ? resolveProposedInstant(
           text("proposedStartAt"),
           typeof timeZone === "string" && timeZone !== "" ? timeZone : "UTC",
+          formData.get("fold") === "0"
+            ? "0"
+            : formData.get("fold") === "1"
+              ? "1"
+              : null,
         )
       : null;
   if (action === "propose" && proposedStartAt === null) {
@@ -53,9 +58,8 @@ export async function decideRequestAction(formData: FormData): Promise<never> {
   // The redirect stays outside the try: it signals by throwing, and a decision
   // that already committed must never be reported as a failure.
   let outcome: DecisionOutcome;
-  let token: string | undefined;
   try {
-    const decision = await request.source.decideBookingRequest({
+    await request.source.decideBookingRequest({
       action,
       bookingId,
       expectedRevision,
@@ -66,12 +70,11 @@ export async function decideRequestAction(formData: FormData): Promise<never> {
     });
     outcome =
       action === "accept" ? "accepted" : action === "reject" ? "rejected" : "proposed";
-    token = decision.proposalActionToken ?? undefined;
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
   if (outcome === "accepted" || outcome === "rejected" || outcome === "proposed") {
-    revalidatePath(`/${locale}/requests`);
+    refreshWorkspace(locale);
   }
-  redirect(decisionResultUrl(locale, outcome, token));
+  redirect(decisionResultUrl(locale, outcome));
 }

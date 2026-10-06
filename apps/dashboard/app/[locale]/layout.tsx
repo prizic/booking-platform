@@ -30,8 +30,9 @@ export async function generateMetadata({
 export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {
   const locale = requireLocale((await params).locale);
 
+  // Browser extensions can add attributes to the document root before hydration.
   return (
-    <html lang={locale} dir={getDirection(locale)}>
+    <html lang={locale} dir={getDirection(locale)} suppressHydrationWarning>
       <body>{children}</body>
     </html>
   );

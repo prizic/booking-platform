@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3002",
+    "dev": "next dev --port ${PLATFORM_ADMIN_PORT:-3002}",
     "build": "next build",
     "start": "next start --port 3002",
     "typecheck": "next typegen && tsc --noEmit",

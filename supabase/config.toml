@@ -47,6 +47,10 @@ enabled = false
 port = 54323
 api_url = "http://127.0.0.1"
 
+[inbucket]
+enabled = true
+port = 54324
+
 [storage]
 # Storage is not part of the issue #4 foundation schema. Keep the local service
 # off until an owning product issue introduces buckets, RLS, and access tests.
@@ -59,6 +63,8 @@ additional_redirect_urls = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3001",
   "http://127.0.0.1:3002",
+  "http://localhost:*/auth/callback**",
+  "http://127.0.0.1:*/auth/callback**",
 ]
 jwt_expiry = 3600
 enable_refresh_token_rotation = true
@@ -82,4 +88,15 @@ inspector_port = 8083
 # Resend cannot present a Supabase JWT. The function verifies Resend's Svix
 # signature over the raw request body before it reaches the private RPC.
 [functions.resend-webhook]
+verify_jwt = false
+
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+
+# These entry points enforce their caller in code and in authorized RPCs.
+[functions.payment-onboarding]
+verify_jwt = false
+
+[functions.staff-invitation-worker]
 verify_jwt = false

@@ -1,3 +1,4 @@
+import { workspaceStatus } from "../../_lib/workspace-status";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import Link from "next/link";
@@ -119,7 +120,7 @@ export default async function BookingsPage({
             <option value="">{message("bookingsStatusAll")}</option>
             {statuses.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {workspaceStatus(locale, status)}
               </option>
             ))}
           </select>
@@ -151,15 +152,15 @@ export default async function BookingsPage({
                     </div>
                     <div>
                       <dt>{message("bookingsStatusLabel")}</dt>
-                      <dd>{booking.status}</dd>
+                      <dd>{workspaceStatus(locale, booking.status)}</dd>
                     </div>
                     <div>
                       <dt>{message("detailPaymentLabel")}</dt>
-                      <dd>{booking.paymentStatus}</dd>
+                      <dd>{workspaceStatus(locale, booking.paymentStatus)}</dd>
                     </div>
                     <div>
                       <dt>{message("bookingsDeliveryLabel")}</dt>
-                      <dd>{booking.notificationStatus}</dd>
+                      <dd>{workspaceStatus(locale, booking.notificationStatus)}</dd>
                     </div>
                     <div>
                       <dt>{message("requestsCustomerLabel")}</dt>
@@ -197,6 +198,22 @@ export default async function BookingsPage({
                       name="locationTimeZone"
                       value={booking.locationTimeZone}
                     />
+                    <label>
+                      {locale === "ar"
+                        ? "وقوع الوقت عند تكراره"
+                        : "Occurrence for a repeated local time"}
+                      <select name="fold" defaultValue="">
+                        <option value="">
+                          {locale === "ar" ? "وقت غير مكرر" : "Unambiguous time"}
+                        </option>
+                        <option value="0">
+                          {locale === "ar" ? "الوقوع الأول" : "First occurrence"}
+                        </option>
+                        <option value="1">
+                          {locale === "ar" ? "الوقوع الثاني" : "Second occurrence"}
+                        </option>
+                      </select>
+                    </label>
                     <label htmlFor={`new-start-${booking.bookingId}`}>
                       {message("bookingsNewTimeLabel")}
                     </label>

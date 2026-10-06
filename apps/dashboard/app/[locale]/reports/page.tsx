@@ -57,7 +57,24 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
   const request = await loadDashboardRequestAccess(locale);
   const ready = request.source !== null && request.state.kind === "ready";
   const tenantId = ready ? request.state.context.tenantId : null;
-  const scope = { from, locationId: null, tenantId: tenantId ?? "", timeZone, to };
+  const choices =
+    ready && tenantId
+      ? await request.source
+          ?.getOperationalChoices?.(tenantId, locale)
+          .catch(() => null)
+      : null;
+  const locations = [
+    ...new Map(
+      (choices?.offers ?? []).map((o) => [
+        o.locationId,
+        { id: o.locationId, name: o.locationName },
+      ]),
+    ).values(),
+  ];
+  const locationId = locations.some((c) => c.id === single(query.location))
+    ? single(query.location)
+    : null;
+  const scope = { from, locationId, tenantId: tenantId ?? "", timeZone, to };
 
   // Each read is independent: a member who may run the day but not see the
   // money gets the operational panels and no revenue panel, rather than an
@@ -66,10 +83,11 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
     ready && tenantId !== null
       ? ((await request.source?.getBookingReport?.(scope).catch(() => null)) ?? null)
       : null;
-  const utilization: readonly UtilizationRowV1[] =
+  const utilization: readonly UtilizationRowV1[] | null =
     ready && tenantId !== null
-      ? ((await request.source?.getUtilizationReport?.(scope).catch(() => [])) ?? [])
-      : [];
+      ? ((await request.source?.getUtilizationReport?.(scope).catch(() => null)) ??
+        null)
+      : null;
   const revenue: RevenueReportV1 | null =
     ready && tenantId !== null
       ? ((await request.source?.getRevenueReport?.(scope).catch(() => null)) ?? null)
@@ -105,6 +123,19 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
           <input defaultValue={from} id="reports-from" name="from" type="date" />
           <label htmlFor="reports-to">{message("reportsToLabel")}</label>
           <input defaultValue={to} id="reports-to" name="to" type="date" />
+          <label htmlFor="reports-location">
+            {locale === "ar" ? "الموقع" : "Location"}
+          </label>
+          <select id="reports-location" name="location" defaultValue={locationId ?? ""}>
+            <option value="">
+              {locale === "ar" ? "كل المواقع المسموح بها" : "All permitted locations"}
+            </option>
+            {locations.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
           <label htmlFor="reports-tz">{message("reportsTimeZoneLabel")}</label>
           <input defaultValue={timeZone} id="reports-tz" name="tz" type="text" />
           <Button type="submit">{message("reportsApplyAction")}</Button>
@@ -165,7 +196,9 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
         <section aria-labelledby="reports-utilization-title">
           <h2 id="reports-utilization-title">{message("reportsUtilizationTitle")}</h2>
           <p>{message("reportsUtilizationNote")}</p>
-          {utilization.length === 0 ? (
+          {utilization === null ? (
+            <p role="alert">{message("reportsUnavailable")}</p>
+          ) : utilization.length === 0 ? (
             <p>{message("reportsUtilizationEmpty")}</p>
           ) : (
             <ul>
@@ -248,6 +281,7 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
             <input type="hidden" name="from" value={from} />
             <input type="hidden" name="to" value={to} />
             <input type="hidden" name="timeZone" value={timeZone} />
+            <input type="hidden" name="locationId" value={locationId ?? ""} />
             <label htmlFor="reports-export-key">{message("reportsExportWhich")}</label>
             <select defaultValue="bookings" id="reports-export-key" name="reportKey">
               <option value="bookings">{message("reportsBookingsTitle")}</option>

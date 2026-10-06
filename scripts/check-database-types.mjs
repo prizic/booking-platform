@@ -26,7 +26,19 @@ function normalizeNewlines(value) {
 
 const generated = spawnSync(
   "pnpm",
-  ["exec", "supabase", "gen", "types", "typescript", "--local", "--schema", "api_v1"],
+  [
+    "exec",
+    "supabase",
+    "gen",
+    "types",
+    "typescript",
+    "--local",
+    "--schema",
+    "api_v1",
+    ...(process.env.WLBP_SUPABASE_WORKDIR
+      ? ["--workdir", process.env.WLBP_SUPABASE_WORKDIR]
+      : []),
+  ],
   {
     cwd: repositoryRoot,
     encoding: "utf8",

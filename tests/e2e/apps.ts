@@ -19,8 +19,8 @@ export const tenantApplications = [
     name: "dashboard",
     origin: "http://localhost:41731",
     headings: {
-      en: "Today stays clear, even when the schedule is full.",
-      ar: "يبقى يومك واضحًا حتى عندما يمتلئ الجدول.",
+      en: "Today",
+      ar: "اليوم",
     },
   },
 ] as const;

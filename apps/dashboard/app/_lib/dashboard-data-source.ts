@@ -1,5 +1,8 @@
+import { parseOperationalChoices } from "./operational-choices";
 import {
   capabilityNames,
+  parseStaffAccessWorkspaceV1,
+  parseCatalogWorkspaceV1,
   normalizeAvailabilityV1TransportRow,
   parseAvailabilityV1Response,
   parseDashboardContextV1,
@@ -67,6 +70,11 @@ export class DashboardRpcError extends Error {
   }
 }
 
+function requireRow(value: unknown): Record<string, unknown> {
+  if (typeof value !== "object" || value === null || Array.isArray(value))
+    throw new Error("Invalid RPC row");
+  return value as Record<string, unknown>;
+}
 interface RpcSchema {
   rpc(name: string, args?: Readonly<Record<string, unknown>>): PromiseLike<RpcResult>;
 }
@@ -293,6 +301,7 @@ function toTodayItem(value: unknown): TodayItemV1 {
     publicReference: requireString(row.public_reference),
     queue: (todayQueues.has(queue) ? queue : "upcoming") as TodayItemV1["queue"],
     serviceName: requireString(row.service_name),
+    resourceId: typeof row.resource_id === "string" ? row.resource_id : null,
     staffId: typeof row.staff_id === "string" ? row.staff_id : null,
     startAt: new Date(String(row.starts_at)).toISOString(),
     status: requireString(row.status),
@@ -556,6 +565,124 @@ export function createDashboardDataSource(
   const api = client.schema("api_v1") as unknown as RpcSchema;
 
   return {
+    getOperationalChoices: async (tenantId, locale) =>
+      parseOperationalChoices(
+        assertRpc(
+          await api.rpc("get_operational_choices_v1", {
+            p_tenant_id: tenantId,
+            p_locale: locale,
+          }),
+        ),
+      ),
+    getBrandEditor: async (tenantId) =>
+      assertRpc(await api.rpc("get_brand_editor_v1", { p_tenant_id: tenantId })),
+    saveBrandEditor: async (request) =>
+      assertRpc(
+        await api.rpc("save_brand_editor_v1", {
+          p_tenant_id: request.tenantId,
+          p_brand_key: request.brandKey,
+          p_expected_hash: request.expectedHash,
+          p_config: request.config,
+          p_content: request.content,
+        }),
+      ),
+    redeemBrandPreview: async (hostname, token) =>
+      assertRpc(
+        await api.rpc("redeem_brand_preview_v1", {
+          p_hostname: hostname,
+          p_application: "dashboard",
+          p_token: token,
+        }),
+      ),
+    listCommunicationQueue: async (tenantId, status) => {
+      const rows = assertRpc(
+        await api.rpc("list_communication_queue_v1", {
+          p_tenant_id: tenantId,
+          p_status: status,
+          p_limit: 100,
+        }),
+      );
+      if (!Array.isArray(rows)) throw new Error("Invalid communication list");
+      return rows.map((entry) => {
+        const row = requireRow(entry);
+        return {
+          id: requireString(row.message_id),
+          bookingId: requireString(row.booking_id),
+          publicReference: requireString(row.public_reference),
+          serviceName: requireString(row.service_name),
+          status: requireString(row.status),
+          createdAt: new Date(String(row.created_at)).toISOString(),
+        };
+      });
+    },
+    getPaymentAccountStatus: async (tenantId) => {
+      const rows = assertRpc(
+        await api.rpc("get_payment_account_status_v1", { p_tenant_id: tenantId }),
+      );
+      if (!Array.isArray(rows)) throw new Error("Invalid account status");
+      return rows.map((entry) => {
+        const row = requireRow(entry);
+        if (
+          !Array.isArray(row.requirements) ||
+          row.requirements.some(
+            (v) => typeof v !== "string" || !/^[a-z0-9_.]{1,100}$/u.test(v),
+          ) ||
+          typeof row.charges_enabled !== "boolean" ||
+          typeof row.payouts_enabled !== "boolean"
+        )
+          throw new Error("Invalid account status");
+        return {
+          provider: requireString(row.provider),
+          accountReference: requireString(row.provider_account_reference),
+          status: requireString(row.status),
+          chargesEnabled: row.charges_enabled,
+          payoutsEnabled: row.payouts_enabled,
+          requirements: row.requirements as string[],
+        };
+      });
+    },
+    getCatalogWorkspace: async (tenantId) =>
+      parseCatalogWorkspaceV1(
+        assertRpc(await api.rpc("get_catalog_workspace_v1", { p_tenant_id: tenantId })),
+      ),
+    saveCatalogEntity: async (request) =>
+      assertRpc(
+        await api.rpc("save_catalog_entity_v1", {
+          p_tenant_id: request.tenantId,
+          p_request_id: request.requestId,
+          p_kind: request.kind,
+          p_entity_id: request.entityId,
+          p_expected_revision: request.expectedRevision,
+          p_document: request.document,
+        }),
+      ),
+    publishCatalogWorkspace: async (request) =>
+      assertRpc(
+        await api.rpc("publish_catalog_workspace_v1", {
+          p_tenant_id: request.tenantId,
+          p_request_id: request.requestId,
+          p_revisions: request.revisions,
+        }),
+      ),
+    getStaffAccessWorkspace: async (tenantId) =>
+      parseStaffAccessWorkspaceV1(
+        assertRpc(
+          await api.rpc("get_staff_access_workspace_v1", { p_tenant_id: tenantId }),
+        ),
+      ),
+    changeStaffAccess: async (request) =>
+      assertRpc(
+        await api.rpc("change_staff_access_v1", {
+          p_tenant_id: request.tenantId,
+          p_request_id: request.requestId,
+          p_action: request.action,
+          p_target_id: request.targetId,
+          p_expected_revision: request.expectedRevision,
+          p_role_id: request.roleId,
+          p_location_ids: request.locationIds,
+          p_email: request.email,
+        }),
+      ),
     getAvailability: async (hostname, request) => {
       const rows = assertRpc(
         await api.rpc("get_availability_v1", {
@@ -844,6 +971,61 @@ export function createDashboardDataSource(
       });
     },
 
+    getScheduleChoices: async (tenantId) => {
+      const value = assertRpc(
+        await api.rpc("get_schedule_choices_v1", { p_tenant_id: tenantId }),
+      );
+      if (!Array.isArray(value)) throw new Error("Schedule choices unavailable");
+      return value.map((entry: unknown) => {
+        const row = requireRow(entry);
+        if (
+          !["location", "staff", "resource", "service"].includes(String(row.kind)) ||
+          typeof row.id !== "string" ||
+          typeof row.name !== "string" ||
+          typeof row.locationId !== "string" ||
+          typeof row.timeZone !== "string"
+        )
+          throw new Error("Invalid schedule choice");
+        return {
+          kind: row.kind as "location" | "staff" | "resource" | "service",
+          id: row.id,
+          name: row.name,
+          locationId: row.locationId,
+          timeZone: row.timeZone,
+        };
+      });
+    },
+    getScheduleEditorDetails: async (tenantId) => {
+      const value = assertRpc(
+        await api.rpc("get_schedule_editor_details_v1", { p_tenant_id: tenantId }),
+      );
+      if (!Array.isArray(value)) throw new Error("Schedule details unavailable");
+      return value.map((entry: unknown) => {
+        const row = requireRow(entry);
+        if (
+          typeof row.id !== "string" ||
+          ![null, 0, 1].includes(row.fold as number | null) ||
+          (row.serviceId !== null && typeof row.serviceId !== "string")
+        )
+          throw new Error("Invalid schedule details");
+        return {
+          id: row.id,
+          fold: row.fold as 0 | 1 | null,
+          serviceId: row.serviceId as string | null,
+        };
+      });
+    },
+    removeScheduleRecord: async (request) =>
+      assertRpc(
+        await api.rpc("remove_schedule_record_v1", {
+          p_tenant_id: request.tenantId,
+          p_kind: request.kind,
+          p_target_id: request.targetId,
+          p_expected_revision: request.expectedRevision,
+          p_expected_scope_revision: request.expectedScopeRevision,
+          p_request_id: request.requestId,
+        }),
+      ),
     getScheduleWorkspace: async (tenantId, locationId) => {
       const rows = assertRpc(
         await api.rpc("get_schedule_workspace_v1", {
@@ -851,7 +1033,31 @@ export function createDashboardDataSource(
           ...(locationId === undefined ? {} : { p_location_id: locationId }),
         }),
       );
-      return parseScheduleWorkspaceV1(rows);
+      return parseScheduleWorkspaceV1(
+        (Array.isArray(rows) ? rows : []).map((entry) => {
+          const row = requireRow(entry);
+          return {
+            kind: row.kind,
+            id: row.id,
+            scopeId: row.scope_id,
+            locationId: row.location_id,
+            staffId: row.staff_id,
+            resourceId: row.resource_id,
+            localDate: row.local_date,
+            dayOfWeek: row.day_of_week,
+            startMinute: row.start_minute,
+            endMinute: row.end_minute,
+            startsAt: row.starts_at,
+            endsAt: row.ends_at,
+            exceptionKind: row.exception_kind,
+            timeZone: row.time_zone,
+            reason: row.reason || null,
+            policyKey: row.policy_key,
+            value: row.value === null ? null : Number(row.value),
+            revision: Number(row.revision),
+          };
+        }),
+      );
     },
 
     listBookingRequests: async (tenantId) => {
@@ -1002,6 +1208,15 @@ export function createDashboardDataSource(
       return (Array.isArray(rows) ? rows : []).map(toSearchRow);
     },
 
+    getBookingCustomer: async (tenantId, bookingId) => {
+      const value = assertRpc(
+        await api.rpc("get_booking_customer_v1", {
+          p_tenant_id: tenantId,
+          p_booking_id: bookingId,
+        }),
+      );
+      return typeof value === "string" ? value : null;
+    },
     getBookingDetail: async (request) => {
       const row = firstRow(
         assertRpc(
@@ -1497,7 +1712,7 @@ export function createDashboardDataSource(
             p_operation: request.operation,
             p_payload: request.payload,
             p_expected_revision: request.expectedRevision,
-            p_request_id: crypto.randomUUID(),
+            p_request_id: request.requestId ?? crypto.randomUUID(),
           }),
         ),
       );

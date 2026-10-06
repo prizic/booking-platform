@@ -20,7 +20,7 @@ The application, operator database boundaries and isolated synthetic demo are co
 - `scripts/platform-admin-local.mjs`, `scripts/totp.mjs` and their tests; `supabase/demo/platform-admin-demo.sql` and README; `tests/e2e/platform-admin-fixtures.ts`, `platform-admin.spec.ts`, scoped Playwright configuration and config-test registration.
 - Local fonts/licenses, font integrity checker, Markdown link checks outside fenced examples; setup, operations and architecture documentation.
 
-Existing Client/Dashboard and shared work remains in the working tree. Initial status, binary diff and shared-file snapshots are retained in `.artifacts/platform-admin/`. Selective shared-file blobs keep earlier unrelated changes out of this commit. No push or deployment is authorized.
+The Platform Admin implementation is committed as `be8b095`. Initial status, binary diff and shared-file snapshots are retained in `.artifacts/platform-admin/`; selective shared-file blobs preserved the earlier Client/Dashboard work during that implementation commit. On 2026-10-06, the user authorized committing and pushing all remaining source changes and opening a pull request for Sefi's review. This publication includes the existing Client/Dashboard and shared work. Deployment and remote database changes remain outside that authorization.
 
 ## Implementation corrections
 

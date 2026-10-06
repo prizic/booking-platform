@@ -23,10 +23,13 @@ const clientCopy = {
 const dashboardCopy = {
   en: {
     configurationTitle: "Workspace configuration unavailable",
+    configurationSummary:
+      "This private workspace is closed until its secure connection is configured.",
     privateStatus: "Private tenant view",
   },
   ar: {
     configurationTitle: "إعداد مساحة العمل غير متاح",
+    configurationSummary: "تظل مساحة العمل الخاصة مغلقة حتى يكتمل إعداد الاتصال الآمن.",
     privateStatus: "عرض خاص بالمستأجر",
   },
 } as const;
@@ -82,7 +85,9 @@ for (const profile of responsiveProfiles) {
         await expect(
           page.getByRole("heading", { level: 2, name: copy.configurationTitle }),
         ).toBeVisible();
-        await expect(page.getByText(copy.privateStatus, { exact: true })).toBeVisible();
+        await expect(
+          page.getByText(copy.configurationSummary, { exact: true }),
+        ).toBeVisible();
         await expect(page.getByRole("list")).toHaveCount(0);
       });
     }
@@ -132,7 +137,7 @@ for (const language of locales) {
       );
 
       const sidebarControls = page.locator(
-        ".dashboard-sidebar :is(a, button:not(:disabled))",
+        ".dashboard-sidebar :is(a, button:not(:disabled)):visible",
       );
       const controlCount = await sidebarControls.count();
       expect(controlCount).toBeGreaterThan(0);

@@ -1,3 +1,4 @@
+import { workspaceStatus } from "../../../_lib/workspace-status";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import Link from "next/link";
@@ -53,6 +54,13 @@ export default async function BookingDetailPage({
   const { bookingId, locale } = await params;
   const query = await searchParams;
   const booking = await loadDetail(locale, bookingId);
+  const access = await loadDashboardRequestAccess(locale);
+  const customerId =
+    booking && access.state.kind === "ready"
+      ? await access.source
+          ?.getBookingCustomer?.(access.state.context.tenantId, bookingId)
+          .catch(() => null)
+      : null;
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const result = typeof query.result === "string" ? query.result : null;
@@ -86,18 +94,43 @@ export default async function BookingDetailPage({
           <p>{message("detailUnavailable")}</p>
         ) : (
           <>
-            <dl>
+            <nav aria-label={locale === "ar" ? "صفحات مرتبطة" : "Related pages"}>
+              <ul className="workspace-related-links">
+                {customerId ? (
+                  <li>
+                    <Link href={`/${locale}/customers/${customerId}`}>
+                      {message("detailCustomerLabel")}
+                    </Link>
+                  </li>
+                ) : (
+                  <li>{message("detailContactHidden")}</li>
+                )}
+                <li>
+                  <Link href={`/${locale}/payments`}>
+                    {message("detailPaymentLabel")}
+                  </Link>
+                </li>
+                <li>
+                  <Link href={`/${locale}/communications`}>
+                    {message("navCommunications")}
+                  </Link>
+                </li>
+                <li>
+                  <a href="#detail-history">{message("detailHistoryTitle")}</a>
+                </li>
+              </ul>
+            </nav>
+            <dl className="workspace-record-facts">
               <div>
                 <dt>{message("bookingsWhenLabel")}</dt>
                 <dd>
-                  {formatDateTime(booking.startAt, locale, booking.locationTimeZone)}{" "}
-                  <bdi>({booking.locationTimeZone})</bdi>
+                  {formatDateTime(booking.startAt, locale, booking.locationTimeZone)}
                 </dd>
               </div>
               <div>
                 <dt>{message("bookingsStatusLabel")}</dt>
                 {/* Status is words, never colour alone. */}
-                <dd>{booking.status}</dd>
+                <dd>{workspaceStatus(locale, booking.status)}</dd>
               </div>
               <div>
                 <dt>{message("detailDurationLabel")}</dt>
@@ -105,11 +138,11 @@ export default async function BookingDetailPage({
               </div>
               <div>
                 <dt>{message("detailPaymentLabel")}</dt>
-                <dd>{booking.paymentStatus}</dd>
+                <dd>{workspaceStatus(locale, booking.paymentStatus)}</dd>
               </div>
               <div>
                 <dt>{message("bookingsDeliveryLabel")}</dt>
-                <dd>{booking.notificationStatus}</dd>
+                <dd>{workspaceStatus(locale, booking.notificationStatus)}</dd>
               </div>
               <div>
                 <dt>{message("detailPriceLabel")}</dt>
@@ -224,7 +257,10 @@ export default async function BookingDetailPage({
                 {booking.history.map((entry) => (
                   <li key={entry.sequence}>
                     <article>
-                      <h3>{entry.eventType}</h3>
+                      <h3>
+                        {locale === "ar" ? "تغيير في الحجز" : "Booking change"} ·{" "}
+                        <bdi>{entry.eventType}</bdi>
+                      </h3>
                       <dl>
                         <div>
                           <dt>{message("bookingsWhenLabel")}</dt>
@@ -238,7 +274,21 @@ export default async function BookingDetailPage({
                         </div>
                         <div>
                           <dt>{message("detailHistoryActorLabel")}</dt>
-                          <dd>{entry.actorKind}</dd>
+                          <dd>
+                            {locale === "ar"
+                              ? ({
+                                  staff: "موظف",
+                                  guest: "عميل",
+                                  system: "النظام",
+                                  worker: "عامل النظام",
+                                }[entry.actorKind as "staff"] ?? "فاعل")
+                              : ({
+                                  staff: "Staff",
+                                  guest: "Customer",
+                                  system: "System",
+                                  worker: "Worker",
+                                }[entry.actorKind as "staff"] ?? "Actor")}
+                          </dd>
                         </div>
                       </dl>
                       {entry.reason === null ? null : <p>{entry.reason}</p>}

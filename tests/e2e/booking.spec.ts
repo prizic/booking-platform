@@ -1,3 +1,5 @@
+// Live Auth credentials must not enter automatic failure snapshots.
+if (process.env.LIVE_BOOKING_E2E === "1") process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -475,7 +477,21 @@ test.describe("live database booking journey", () => {
     const dateInput = page.locator('input[name="date"]');
     await expect(dateInput).toBeEnabled();
     await dateInput.fill(futureDate(daysFromNow));
+    const availability = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/availability",
+    );
     await page.getByRole("button", { name: /find times/iu }).click();
+    let response = await availability;
+    if (response.status() === 503) {
+      // A cold local database may time out. Exercise the visible recovery path
+      // once; a second failure remains a failed journey.
+      const retry = page.waitForResponse(
+        (result) => new URL(result.url()).pathname === "/api/availability",
+      );
+      await page.getByRole("button", { name: "Try again", exact: true }).click();
+      response = await retry;
+    }
+    expect(response.status()).toBe(200);
     await page
       .getByRole("button", { name: /^select$/iu })
       .first()

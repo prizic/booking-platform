@@ -1,3 +1,5 @@
+import { calendarRange, civilDate } from "../calendar/calendar-range";
+import { workspaceStatus } from "../../_lib/workspace-status";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import Link from "next/link";
@@ -25,7 +27,12 @@ const queues = [
   { key: "upcoming", label: "todayQueueUpcoming", tone: "neutral" },
 ] as const;
 
-async function loadToday(locale: Locale): Promise<readonly TodayItemV1[] | null> {
+async function loadToday(locale: Locale): Promise<{
+  items: readonly TodayItemV1[];
+  date: string;
+  timeZone: string;
+  canCreate: boolean;
+} | null> {
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
@@ -34,22 +41,34 @@ async function loadToday(locale: Locale): Promise<readonly TodayItemV1[] | null>
   ) {
     return null;
   }
-  const now = new Date();
-  const endOfDay = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const choices = await request.source
+    .getOperationalChoices?.(request.state.context.tenantId, locale)
+    .catch(() => null);
+  const timeZone = choices?.offers[0]?.timeZone ?? "Asia/Riyadh";
+  const range = calendarRange(civilDate(new Date(), timeZone), timeZone);
   // A failed read shows the unavailable copy rather than an empty day, so
   // nobody reads "nothing waiting" as "nothing to do".
-  return request.source
+  const items = await request.source
     .getTodayWorkspace({
-      from: now.toISOString(),
+      from: range.from,
       tenantId: request.state.context.tenantId,
-      to: endOfDay.toISOString(),
+      to: range.to,
     })
     .catch(() => null);
+  return items === null
+    ? null
+    : {
+        items,
+        date: civilDate(new Date(), timeZone),
+        timeZone,
+        canCreate: choices?.offers.some((o) => o.canCreate) ?? false,
+      };
 }
 
 export default async function TodayPage({ params }: TodayPageProps) {
   const { locale } = await params;
-  const items = await loadToday(locale);
+  const loaded = await loadToday(locale);
+  const items = loaded?.items ?? null;
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const now = new Date().toISOString();
@@ -59,6 +78,22 @@ export default async function TodayPage({ params }: TodayPageProps) {
       <Surface as="section" className="requests-queue" labelledBy="today-title">
         <h1 id="today-title">{message("todayTitle")}</h1>
         <p>{message("todayIntro")}</p>
+        <p>
+          {locale === "ar"
+            ? "النطاق: اليوم المحلي الكامل للموقع الافتراضي؛ تظهر أوقات المواعيد حسب مواقعها."
+            : "Window: the default location’s full civil day; appointment times use their own locations."}
+        </p>
+        {loaded ? (
+          <p>
+            <time dateTime={loaded.date}>{loaded.date}</time> ·{" "}
+            <bdi>{loaded.timeZone}</bdi>
+          </p>
+        ) : null}
+        {loaded?.canCreate ? (
+          <Link href={`/${locale}/bookings/new`}>
+            {locale === "ar" ? "حجز جديد" : "New booking"}
+          </Link>
+        ) : null}
         {items === null ? (
           <p>{message("todayUnavailable")}</p>
         ) : items.length === 0 ? (
@@ -108,11 +143,13 @@ export default async function TodayPage({ params }: TodayPageProps) {
                             <div>
                               <dt>{message("bookingsStatusLabel")}</dt>
                               {/* Status is words, never colour alone. */}
-                              <dd>{item.status}</dd>
+                              <dd>{workspaceStatus(locale, item.status)}</dd>
                             </div>
                             <div>
                               <dt>{message("bookingsDeliveryLabel")}</dt>
-                              <dd>{item.notificationStatus}</dd>
+                              <dd>
+                                {workspaceStatus(locale, item.notificationStatus)}
+                              </dd>
                             </div>
                             <div>
                               <dt>{message("requestsCustomerLabel")}</dt>

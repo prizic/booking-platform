@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { DraftBrandPreview } from "../brand/draft-brand-preview";
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import {
   Badge,
@@ -19,6 +21,7 @@ import { getDashboardSiteOrigin } from "../../_lib/site-origin";
 
 type BrandPreviewPageProps = {
   params: Promise<{ locale: Locale }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export async function generateMetadata({
@@ -44,8 +47,18 @@ export async function generateMetadata({
   };
 }
 
-export default async function BrandPreviewPage({ params }: BrandPreviewPageProps) {
+export default async function BrandPreviewPage({
+  params,
+  searchParams,
+}: BrandPreviewPageProps) {
   const { locale } = await params;
+  if ((await searchParams).mode === "draft")
+    return (
+      <DraftBrandPreview
+        locale={locale}
+        token={(await cookies()).get("dashboard-brand-preview")?.value ?? null}
+      />
+    );
   const message = (key: Parameters<typeof getBrandPreviewMessage>[1]) =>
     getBrandPreviewMessage(locale, key);
   const calendarStates = [

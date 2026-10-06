@@ -1,6 +1,19 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "navServices"
+  | "navCategories"
+  | "navLocations"
+  | "navCommunications"
+  | "navIntegrations"
+  | "navAudit"
+  | "workspaceOperations"
+  | "workspaceCatalog"
+  | "workspaceAdministration"
+  | "workspaceMenu"
+  | "authSignIn"
+  | "authSignOut"
+  | "authAccount"
   | "todayTitle"
   | "todayIntro"
   | "todayUnavailable"
@@ -160,6 +173,7 @@ export type DashboardMessageKey =
   | "brandHistoryTitle"
   | "brandHistoryEmpty"
   | "brandRollbackAction"
+  | "brandPreviewAction"
   | "brandResultDrafted"
   | "brandResultPublished"
   | "brandResultRolledBack"
@@ -174,6 +188,8 @@ export type DashboardMessageKey =
   | "settingsPlanEmpty"
   | "settingsFeatureOn"
   | "settingsFeatureOff"
+  | "settingsFeatureGranted"
+  | "settingsFeatureUnavailable"
   | "settingsEditTitle"
   | "settingsEditHint"
   | "settingsDocumentLabel"
@@ -422,6 +438,20 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    navServices: "Services",
+    navCategories: "Categories",
+    navLocations: "Locations",
+    navCommunications: "Communications",
+    navIntegrations: "Integrations",
+    navAudit: "Audit",
+    workspaceOperations: "Operations",
+    workspaceCatalog: "Catalog",
+    workspaceAdministration: "Administration",
+    workspaceMenu: "Workspace navigation",
+    authSignIn: "Sign in",
+    authSignOut: "Sign out",
+    authAccount: "Account security",
+
     todayTitle: "Today",
     todayIntro: "Everything waiting on someone, in the order it needs attention.",
     todayUnavailable: "Today stays closed until the secure connection is complete.",
@@ -579,6 +609,8 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     settingsPlanEmpty: "No features are included yet.",
     settingsFeatureOn: "on",
     settingsFeatureOff: "off",
+    settingsFeatureGranted: "Included",
+    settingsFeatureUnavailable: "Not included",
     settingsEditTitle: "Edit",
     settingsEditHint:
       "Currency, locale, tax rate and reply-to are checked before saving. Navigation may only link to pages this product has, and must be labelled in both languages.",
@@ -616,11 +648,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     brandSaveAction: "Save draft",
     brandPublishTitle: "Publish",
     brandPublishHint:
-      "Publishing replaces the live brand in one step, so customers never load a page with no brand at all.",
+      "Publishing records the active revision. Client and Dashboard apply materialized branding after platform materialization and restart or redeployment.",
     brandPublishAction: "Publish this draft",
     brandHistoryTitle: "History",
     brandHistoryEmpty: "No brand revision has been created yet.",
     brandRollbackAction: "Roll back to this",
+    brandPreviewAction: "Preview saved draft",
     brandResultDrafted: "The draft was saved.",
     brandResultPublished:
       "The brand is live. Any preview links for it have been closed.",
@@ -900,6 +933,20 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    navServices: "الخدمات",
+    navCategories: "الفئات",
+    navLocations: "المواقع",
+    navCommunications: "الاتصالات",
+    navIntegrations: "التكاملات",
+    navAudit: "سجل التدقيق",
+    workspaceOperations: "العمليات",
+    workspaceCatalog: "الكتالوج",
+    workspaceAdministration: "الإدارة",
+    workspaceMenu: "تنقل مساحة العمل",
+    authSignIn: "تسجيل الدخول",
+    authSignOut: "تسجيل الخروج",
+    authAccount: "أمان الحساب",
+
     todayTitle: "اليوم",
     todayIntro: "كل ما ينتظر إجراءً، بالترتيب الذي يحتاج الانتباه فيه.",
     todayUnavailable: "تبقى صفحة اليوم مغلقة حتى يكتمل الاتصال الآمن.",
@@ -1050,6 +1097,8 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     settingsPlanEmpty: "لا توجد مزايا متضمَّنة بعد.",
     settingsFeatureOn: "مفعّل",
     settingsFeatureOff: "غير مفعّل",
+    settingsFeatureGranted: "متاح في الخطة",
+    settingsFeatureUnavailable: "غير متاح في الخطة",
     settingsEditTitle: "تعديل",
     settingsEditHint:
       "تُفحص العملة واللغة ونسبة الضريبة وعنوان الردّ قبل الحفظ. ولا يجوز أن يشير التنقّل إلا إلى صفحات موجودة في المنتج، مع تسمية بلغتين.",
@@ -1087,11 +1136,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     brandSaveAction: "حفظ المسوّدة",
     brandPublishTitle: "النشر",
     brandPublishHint:
-      "يستبدل النشر الهوية الحالية في خطوة واحدة، فلا يرى العملاء صفحة بلا هوية إطلاقاً.",
+      "يسجّل النشر النسخة المعتمدة. يطبّق موقع العميل ولوحة التحكم الهوية بعد تجهيزها على المنصة وإعادة التشغيل أو النشر.",
     brandPublishAction: "نشر هذه المسوّدة",
     brandHistoryTitle: "السجل",
     brandHistoryEmpty: "لم تُنشأ أي نسخة هوية بعد.",
     brandRollbackAction: "الرجوع إلى هذه",
+    brandPreviewAction: "معاينة المسودة المحفوظة",
     brandResultDrafted: "تم حفظ المسوّدة.",
     brandResultPublished: "الهوية منشورة الآن، وأُغلقت روابط المعاينة الخاصة بها.",
     brandResultRolledBack: "تم الرجوع. الهوية السابقة منشورة مجدداً كنسخة جديدة.",

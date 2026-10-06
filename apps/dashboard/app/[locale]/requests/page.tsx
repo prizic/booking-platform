@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import { Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import type { BookingRequestV1 } from "@wlbp/api-contracts";
@@ -59,10 +60,6 @@ export default async function RequestsPage({
     result !== null && result in resultKeys
       ? resultKeys[result as keyof typeof resultKeys]
       : null;
-  const proposalLink =
-    typeof query.link === "string" && /^[a-f0-9]{64}$/u.test(query.link)
-      ? query.link
-      : null;
 
   return (
     <WorkspaceShell current="requests" labelledBy="requests-title" locale={locale}>
@@ -81,22 +78,6 @@ export default async function RequestsPage({
               {message(resultKey)}
             </StatusMessage>
           )}
-          {proposalLink === null ? null : (
-            <div className="requests-queue__link">
-              <p>{message("requestsProposalLinkHint")}</p>
-              <label htmlFor="proposal-link">
-                {message("requestsProposalLinkLabel")}
-              </label>
-              <input
-                dir="ltr"
-                id="proposal-link"
-                name="proposalLink"
-                readOnly
-                value={`/${locale}/proposal?token=${proposalLink}`}
-              />
-            </div>
-          )}
-
           {requests === null ? (
             <p>{message("requestsUnavailable")}</p>
           ) : requests.length === 0 ? (
@@ -106,6 +87,9 @@ export default async function RequestsPage({
               {requests.map((booking) => (
                 <li key={booking.bookingId}>
                   <article aria-labelledby={`request-${booking.bookingId}`}>
+                    <Link href={`/${locale}/bookings/${booking.bookingId}`}>
+                      {message("calendarOpenBooking")}
+                    </Link>
                     <h2 id={`request-${booking.bookingId}`}>
                       {booking.serviceName} · <bdi>{booking.publicReference}</bdi>
                     </h2>
@@ -206,6 +190,22 @@ export default async function RequestsPage({
                         name="internalReason"
                         rows={2}
                       />
+                      <label>
+                        {locale === "ar"
+                          ? "وقوع الوقت عند تكراره"
+                          : "Occurrence for a repeated local time"}
+                        <select name="fold" defaultValue="">
+                          <option value="">
+                            {locale === "ar" ? "وقت غير مكرر" : "Unambiguous time"}
+                          </option>
+                          <option value="0">
+                            {locale === "ar" ? "الوقوع الأول" : "First occurrence"}
+                          </option>
+                          <option value="1">
+                            {locale === "ar" ? "الوقوع الثاني" : "Second occurrence"}
+                          </option>
+                        </select>
+                      </label>
                       <label htmlFor={`proposed-${booking.bookingId}`}>
                         {message("requestsProposeTimeLabel")}
                       </label>

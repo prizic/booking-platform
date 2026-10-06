@@ -1,11 +1,11 @@
 import type { Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import { Badge, StatusMessage, Surface } from "@wlbp/ui-foundation";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type { TenantConfigurationV1 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
-import { saveSettingsAction } from "./actions";
+import { SettingsForm } from "./settings-form";
 import { positiveSettingsResults, settingsResultKeys } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -72,18 +72,18 @@ export default async function SettingsPage({
                 <ul aria-label={message("settingsPlanTitle")}>
                   {entitlementKeys.map((key) => (
                     <li key={key}>
-                      <span dir="ltr">{key}</span>{" "}
+                      <bdi>{featureLabel(locale, key)}</bdi>{" "}
                       <Badge
                         tone={
-                          configuration.featureConfiguration[key]?.enabled === true
+                          configuration.entitlements[key] === true
                             ? "positive"
                             : "neutral"
                         }
                       >
                         {message(
-                          configuration.featureConfiguration[key]?.enabled === true
-                            ? "settingsFeatureOn"
-                            : "settingsFeatureOff",
+                          configuration.entitlements[key] === true
+                            ? "settingsFeatureGranted"
+                            : "settingsFeatureUnavailable",
                         )}
                       </Badge>
                     </li>
@@ -95,52 +95,7 @@ export default async function SettingsPage({
             <section aria-labelledby="settings-edit-title">
               <h2 id="settings-edit-title">{message("settingsEditTitle")}</h2>
               <p>{message("settingsEditHint")}</p>
-              <form action={saveSettingsAction}>
-                <input type="hidden" name="locale" value={locale} />
-                <input
-                  type="hidden"
-                  name="expectedRevision"
-                  value={configuration.revision}
-                />
-                <label htmlFor="settings-document">
-                  {message("settingsDocumentLabel")}
-                </label>
-                <textarea
-                  defaultValue={JSON.stringify(configuration.settings, null, 2)}
-                  dir="ltr"
-                  id="settings-document"
-                  name="settings"
-                  required
-                  rows={8}
-                />
-                <label htmlFor="settings-navigation">
-                  {message("settingsNavigationLabel")}
-                </label>
-                <textarea
-                  defaultValue={JSON.stringify(configuration.navigation, null, 2)}
-                  dir="ltr"
-                  id="settings-navigation"
-                  name="navigation"
-                  required
-                  rows={8}
-                />
-                <label htmlFor="settings-features">
-                  {message("settingsFeaturesLabel")}
-                </label>
-                <textarea
-                  defaultValue={JSON.stringify(
-                    configuration.featureConfiguration,
-                    null,
-                    2,
-                  )}
-                  dir="ltr"
-                  id="settings-features"
-                  name="featureConfiguration"
-                  required
-                  rows={6}
-                />
-                <Button type="submit">{message("settingsSaveAction")}</Button>
-              </form>
+              <SettingsForm locale={locale} configuration={configuration} />
             </section>
 
             <section aria-labelledby="settings-versions-title">
@@ -166,3 +121,4 @@ export default async function SettingsPage({
     </WorkspaceShell>
   );
 }
+import { featureLabel } from "./feature-label";

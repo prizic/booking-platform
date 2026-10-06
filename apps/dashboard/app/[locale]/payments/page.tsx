@@ -1,13 +1,10 @@
+import { workspaceStatus } from "../../_lib/workspace-status";
 import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
 import Link from "next/link";
 
 import { getDashboardMessage } from "../../_lib/copy";
-import type {
-  DeliveryHealthV1,
-  PaymentExceptionV1,
-  RefundRowV1,
-} from "../../_lib/dashboard-access";
+import type { PaymentExceptionV1, RefundRowV1 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { requestRefundAction, resolveExceptionAction } from "./actions";
@@ -36,9 +33,8 @@ async function load(
   locale: Locale,
   status: string | null,
 ): Promise<{
-  delivery: DeliveryHealthV1 | null;
   exceptions: readonly PaymentExceptionV1[];
-  refunds: readonly RefundRowV1[];
+  refunds: readonly RefundRowV1[] | null;
 } | null> {
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -58,12 +54,8 @@ async function load(
   const refunds =
     (await request.source
       .listRefunds?.({ bookingId: null, tenantId })
-      .catch(() => [])) ?? [];
-  // Issue #20. Mail that never arrived is an operational problem like any
-  // other, so it belongs on the page an operator already watches.
-  const delivery =
-    (await request.source.getDeliveryHealth?.({ tenantId }).catch(() => null)) ?? null;
-  return { delivery, exceptions, refunds };
+      .catch(() => null)) ?? null;
+  return { exceptions, refunds };
 }
 
 export default async function PaymentsPage({
@@ -131,7 +123,7 @@ export default async function PaymentsPage({
                           <Badge
                             tone={item.severity === "urgent" ? "warning" : "neutral"}
                           >
-                            {item.severity}
+                            {workspaceStatus(locale, item.severity)}
                           </Badge>
                         </h3>
                         <dl>
@@ -159,7 +151,8 @@ export default async function PaymentsPage({
                             <dt>{message("paymentsRaisedLabel")}</dt>
                             <dd>{formatDateTime(item.createdAt, locale, "UTC")}</dd>
                           </div>
-                          {item.publicReference === null ? null : (
+                          {item.publicReference === null ||
+                          item.bookingId === null ? null : (
                             <div>
                               <dt>{message("bookingsTitle")}</dt>
                               <dd>
@@ -175,7 +168,8 @@ export default async function PaymentsPage({
 
                         {item.status !== "open" ? (
                           <p>
-                            {message("paymentsResolvedAs")} {item.resolution}
+                            {message("paymentsResolvedAs")}{" "}
+                            {workspaceStatus(locale, item.resolution ?? "open")}
                           </p>
                         ) : (
                           <>
@@ -235,55 +229,24 @@ export default async function PaymentsPage({
               )}
             </section>
 
-            {loaded.delivery === null ? null : (
-              <section aria-labelledby="payments-delivery-title">
-                <h2 id="payments-delivery-title">{message("paymentsDeliveryTitle")}</h2>
-                {loaded.delivery.deadLettered > 0 ||
-                loaded.delivery.oldestQueuedMinutes > 60 ? (
-                  <StatusMessage tone="warning">
-                    {message("paymentsDeliveryStalled")}
-                  </StatusMessage>
-                ) : null}
-                <dl>
-                  <div>
-                    <dt>{message("paymentsDeliveryQueued")}</dt>
-                    <dd>{loaded.delivery.queued}</dd>
-                  </div>
-                  <div>
-                    <dt>{message("paymentsDeliveryOldest")}</dt>
-                    <dd>{loaded.delivery.oldestQueuedMinutes}</dd>
-                  </div>
-                  <div>
-                    <dt>{message("paymentsDeliveryFailed")}</dt>
-                    <dd>{loaded.delivery.failed}</dd>
-                  </div>
-                  <div>
-                    <dt>{message("paymentsDeliveryBounced")}</dt>
-                    <dd>{loaded.delivery.bounced + loaded.delivery.complained}</dd>
-                  </div>
-                  <div>
-                    <dt>{message("paymentsDeliverySuppressed")}</dt>
-                    <dd>{loaded.delivery.suppressed}</dd>
-                  </div>
-                  <div>
-                    <dt>{message("paymentsDeliveryDead")}</dt>
-                    <dd>{loaded.delivery.deadLettered}</dd>
-                  </div>
-                </dl>
-                <p>{message("paymentsDeliveryResendHint")}</p>
-              </section>
-            )}
+            <p>
+              <Link href={`/${locale}/communications`}>
+                {message("navCommunications")}
+              </Link>
+            </p>
 
             <section aria-labelledby="payments-refunds-title">
               <h2 id="payments-refunds-title">{message("paymentsRefundsTitle")}</h2>
-              {loaded.refunds.length === 0 ? (
+              {loaded.refunds === null ? (
+                <p role="alert">{message("paymentsUnavailable")}</p>
+              ) : loaded.refunds.length === 0 ? (
                 <p>{message("paymentsRefundsEmpty")}</p>
               ) : (
                 <ul aria-label={message("paymentsRefundsTitle")}>
                   {loaded.refunds.map((refund) => (
                     <li key={refund.refundId}>
                       {formatCurrency(refund.amountMinorUnits, refund.currency, locale)}{" "}
-                      · {refund.status}
+                      · {workspaceStatus(locale, refund.status)}
                       {refund.publicReference === null ? null : (
                         <>
                           {" "}

@@ -6,6 +6,8 @@ export function getClientSiteOrigin(
 ): URL {
   return parsePublicSiteOrigin(
     configuredOrigin,
-    nodeEnvironment === "production" ? undefined : "http://localhost:3000",
+    nodeEnvironment === "production"
+      ? undefined
+      : `http://localhost:${process.env.PORT || "3000"}`,
   );
 }

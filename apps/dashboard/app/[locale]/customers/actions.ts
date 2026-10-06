@@ -1,7 +1,7 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { PrivacyRequestKind } from "../../_lib/dashboard-access";
@@ -83,7 +83,7 @@ export async function correctCustomerAction(formData: FormData): Promise<never> 
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  if (outcome === "corrected") revalidatePath(`/${locale}/customers/${customerId}`);
+  if (outcome === "corrected") refreshWorkspace(locale);
   redirect(detailUrl(locale, customerId, outcome));
 }
 
@@ -135,7 +135,7 @@ export async function setCustomerFlagAction(formData: FormData): Promise<never> 
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  revalidatePath(`/${locale}/customers/${customerId}`);
+  refreshWorkspace(locale);
   redirect(detailUrl(locale, customerId, outcome));
 }
 
@@ -184,6 +184,6 @@ export async function runPrivacyRequestAction(formData: FormData): Promise<never
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  revalidatePath(`/${locale}/customers/${customerId}`);
+  refreshWorkspace(locale);
   redirect(detailUrl(locale, customerId, outcome));
 }

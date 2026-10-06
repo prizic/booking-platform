@@ -4,9 +4,13 @@ import type {
   ResourceTypeChoiceV1,
   StaffResourceChoiceV1,
   StaffResourceWorkspaceItemV1,
+  StaffAccessMemberV1,
 } from "@wlbp/api-contracts";
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import { Badge, Surface } from "@wlbp/ui-foundation";
+import Link from "next/link";
+import { authMessage } from "../../_lib/auth-copy";
+import { staffAccessMessage } from "./staff-access";
 
 import {
   getTeamResourcesMessage,
@@ -30,6 +34,7 @@ export interface TeamResourcesActions {
 }
 
 interface TeamResourcesViewProps {
+  readonly members?: readonly StaffAccessMemberV1[];
   readonly actions: TeamResourcesActions;
   readonly locale: Locale;
   readonly retry?: TeamResourcesRetry;
@@ -114,6 +119,11 @@ function UnavailableState({
       >
         <h2 id="team-step-up-title">{message("stepUpTitle")}</h2>
         <p>{message("stepUpSummary")}</p>
+        <Link
+          href={`/${locale}/auth/mfa?returnTo=${encodeURIComponent(`/${locale}/team-resources`)}`}
+        >
+          {authMessage(locale, "verify")}
+        </Link>
       </Surface>
     );
   }
@@ -181,38 +191,6 @@ function HiddenContext({
   );
 }
 
-function UuidField({
-  id,
-  label,
-  list,
-  name,
-  required = true,
-  value,
-}: {
-  readonly id: string;
-  readonly label: string;
-  readonly list?: string;
-  readonly name: string;
-  readonly required?: boolean;
-  readonly value?: string | undefined;
-}) {
-  return (
-    <label className="team-resource-field" htmlFor={id}>
-      <span>{label}</span>
-      <input
-        autoComplete="off"
-        className="wlbp-field__input"
-        defaultValue={value}
-        id={id}
-        {...(list === undefined ? {} : { list })}
-        name={name}
-        pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-        required={required}
-      />
-    </label>
-  );
-}
-
 function ChoiceField({
   choices,
   id,
@@ -270,11 +248,13 @@ function StaffForm({
   action,
   item,
   locale,
+  members = [],
   retry,
 }: {
   readonly action: ManagementAction;
   readonly item?: StaffResourceWorkspaceItemV1;
   readonly locale: Locale;
+  readonly members?: readonly StaffAccessMemberV1[];
   readonly retry: TeamResourcesRetry | undefined;
 }) {
   const message = (key: TeamResourcesMessageKey) =>
@@ -300,13 +280,28 @@ function StaffForm({
             required
           />
         </label>
-        <UuidField
-          id={`${prefix}-membership`}
-          label={message("membershipId")}
-          name="membershipId"
-          required={false}
-          value={item?.membershipId ?? undefined}
-        />
+        <label className="team-resource-field" htmlFor={`${prefix}-membership`}>
+          <span>{staffAccessMessage(locale, "account")}</span>
+          <select
+            className="wlbp-field__input"
+            id={`${prefix}-membership`}
+            name="membershipId"
+            defaultValue={item?.membershipId ?? ""}
+          >
+            <option value="">{staffAccessMessage(locale, "noAccount")}</option>
+            {item?.membershipId &&
+            !members.some((member) => member.id === item.membershipId) ? (
+              <option value={item.membershipId}>
+                {staffAccessMessage(locale, "currentAccount")}
+              </option>
+            ) : null}
+            {members.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.name} — {member.email}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="team-resource-field" htmlFor={`${prefix}-bio`}>
           <span>{message("publicBio")}</span>
           <textarea
@@ -712,6 +707,7 @@ function ItemList({
   emptyMessage,
   items,
   locale,
+  members = [],
   locations,
   resourceTypes,
   retry,
@@ -726,6 +722,7 @@ function ItemList({
   readonly emptyMessage: TeamResourcesMessageKey;
   readonly items: readonly StaffResourceWorkspaceItemV1[];
   readonly locale: Locale;
+  readonly members?: readonly StaffAccessMemberV1[];
   readonly locations: readonly StaffResourceChoiceV1[];
   readonly resourceTypes: readonly ResourceTypeChoiceV1[];
   readonly retry: TeamResourcesRetry | undefined;
@@ -760,6 +757,7 @@ function ItemList({
                 <StaffForm
                   action={editAction}
                   item={item}
+                  members={members}
                   locale={locale}
                   retry={retry}
                 />
@@ -823,6 +821,7 @@ function resultKey(
 export function TeamResourcesView({
   actions,
   locale,
+  members = [],
   result,
   retry,
   state,
@@ -865,6 +864,7 @@ export function TeamResourcesView({
           {canManageStaff ? (
             <StaffForm
               action={actions.saveStaffProfile}
+              members={members}
               locale={locale}
               retry={retry}
             />
@@ -918,6 +918,7 @@ export function TeamResourcesView({
             editAction={actions.saveStaffProfile}
             emptyMessage="staffEmpty"
             items={staff}
+            members={members}
             locale={locale}
             locations={state.workspace.locations}
             resourceTypes={state.workspace.resourceTypes}

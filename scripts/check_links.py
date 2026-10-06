@@ -15,7 +15,7 @@ def anchors(path):
 bad = 0
 # `dist-distribution` is the issue #29 export: build output, not source. Its
 # links are checked against the exported tree by the export itself.
-ignored_directories = {'.git', '.next', '.turbo', 'coverage', 'dist',
+ignored_directories = {'.artifacts', '.impeccable', '.git', '.next', '.turbo', 'coverage', 'dist',
                       'dist-distribution', 'node_modules'}
 
 for src in sorted(pathlib.Path('.').rglob('*.md')):

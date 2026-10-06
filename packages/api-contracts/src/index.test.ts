@@ -296,6 +296,17 @@ describe("tenant isolation DTOs", () => {
     ]);
     expect(item?.locale).toBe("ar");
     expect(item?.cacheTag).toBe("catalog:tenant-a:1:ar");
+    expect(
+      parsePublicCatalogV1([
+        {
+          ...item,
+          serviceDescription: "",
+          locationDescription: "",
+          locationAddress: "",
+        },
+      ]),
+    ).toHaveLength(1);
+    expect(() => parsePublicCatalogV1([{ ...item, serviceName: "" }])).toThrow();
   });
 
   it("parses a minimal tenant-safe Dashboard context", () => {

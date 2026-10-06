@@ -1,7 +1,7 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { PaymentExceptionResolution } from "../../_lib/dashboard-access";
@@ -73,7 +73,7 @@ export async function resolveExceptionAction(formData: FormData): Promise<never>
   } catch (error) {
     outcome = paymentOutcomeFor(error);
   }
-  if (outcome === "resolved") revalidatePath(`/${locale}/payments`);
+  if (outcome === "resolved") refreshWorkspace(locale);
   redirect(resultUrl(locale, outcome));
 }
 
@@ -111,6 +111,6 @@ export async function requestRefundAction(formData: FormData): Promise<never> {
   } catch (error) {
     outcome = paymentOutcomeFor(error);
   }
-  if (outcome === "refunded") revalidatePath(`/${locale}/payments`);
+  if (outcome === "refunded") refreshWorkspace(locale);
   redirect(resultUrl(locale, outcome));
 }

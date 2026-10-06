@@ -8,8 +8,10 @@
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["CLIENT_PORT", "DASHBOARD_PORT", "PLATFORM_ADMIN_PORT"]
     },
     "lint": {
       "dependsOn": ["^build"]

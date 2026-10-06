@@ -107,7 +107,9 @@ export default async function ClientPage({ params }: ClientPageProps) {
             <ul>
               {catalog.map((item) => (
                 <li key={`${item.serviceId}:${item.locationId}`}>
-                  <Link href={`/${locale}${item.canonicalPath}`}>
+                  <Link
+                    href={`/${locale}/book?service=${item.serviceId}&location=${item.locationId}`}
+                  >
                     <strong>{item.serviceName}</strong>
                   </Link>
                   <p>{item.serviceDescription}</p>

@@ -1,5 +1,8 @@
 "use server";
+import type { DashboardMessageKey } from "../../_lib/copy";
 
+import { mergeSettingsFields } from "./settings-fields";
+import { settingsResultKeys } from "./results";
 import type { Locale } from "@wlbp/i18n";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -75,4 +78,59 @@ export async function saveSettingsAction(formData: FormData): Promise<never> {
     revalidatePath(base);
   }
   redirect(`${base}?result=${outcome}`);
+}
+
+export interface SettingsFormResult {
+  readonly saved?: boolean;
+  readonly message?: DashboardMessageKey;
+  readonly field?: string;
+}
+export async function saveStructuredSettingsAction(
+  _state: SettingsFormResult,
+  form: FormData,
+): Promise<SettingsFormResult> {
+  const locale = form.get("locale") === "ar" ? "ar" : "en";
+  const expectedRevision = Number(form.get("expectedRevision"));
+  if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1)
+    return { message: "requestsResultInvalid" };
+  const request = await loadDashboardRequestAccess(locale);
+  if (
+    request.state.kind !== "ready" ||
+    !request.source?.getTenantConfiguration ||
+    !request.source.saveTenantSettings
+  )
+    return { message: "requestsResultNotAuthorized" };
+  try {
+    const current = await request.source.getTenantConfiguration({
+      tenantId: request.state.context.tenantId,
+    });
+    if (!current) return { message: "settingsUnavailable" };
+    let documents;
+    try {
+      documents = mergeSettingsFields(current, form);
+    } catch (error) {
+      return {
+        message: "settingsResultInvalid",
+        field: error instanceof Error ? error.message : "",
+      };
+    }
+    const ignored = await request.source.saveTenantSettings({
+      ...documents,
+      expectedRevision,
+      tenantId: request.state.context.tenantId,
+    });
+    revalidatePath(`/${locale}/settings`);
+    return {
+      saved: true,
+      message: ignored.length ? "settingsResultSavedPartial" : "settingsResultSaved",
+    };
+  } catch (error) {
+    const outcome = settingsOutcomeFor(error);
+    return {
+      message:
+        outcome in settingsResultKeys
+          ? settingsResultKeys[outcome as keyof typeof settingsResultKeys]
+          : "requestsResultUnavailable",
+    };
+  }
 }

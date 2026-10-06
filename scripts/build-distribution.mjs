@@ -119,6 +119,7 @@ const scannableExtensions =
 
 function isExcluded(relative, { allowTopLevel = false } = {}) {
   const normalized = `/${relative}`;
+  if (relative.split("/").some((segment) => segment.startsWith(".next-"))) return true;
   if (excludedSegments.some((segment) => normalized.includes(segment))) return true;
   // A directory named in `rootDirectories` is being copied deliberately, so the
   // blanket top-level exclusion must not veto it.

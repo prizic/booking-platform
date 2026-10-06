@@ -1,7 +1,7 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { BookingTransitionAction } from "../../_lib/dashboard-access";
@@ -99,9 +99,7 @@ export async function transitionBookingAction(formData: FormData): Promise<never
     outcome = detailOutcomeFor(error);
   }
   if (outcome === outcomeForAction[transition]) {
-    revalidatePath(`/${locale}/bookings/${bookingId}`);
-    revalidatePath(`/${locale}/today`);
-    revalidatePath(`/${locale}/calendar`);
+    refreshWorkspace(locale);
   }
   redirect(detailUrl(locale, bookingId, outcome));
 }
@@ -140,7 +138,7 @@ export async function addBookingNoteAction(formData: FormData): Promise<never> {
   } catch (error) {
     outcome = detailOutcomeFor(error);
   }
-  if (outcome === "note-added") revalidatePath(`/${locale}/bookings/${bookingId}`);
+  if (outcome === "note-added") refreshWorkspace(locale);
   redirect(detailUrl(locale, bookingId, outcome));
 }
 
@@ -177,7 +175,7 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
     } catch {
       resendOutcome = "resend-unavailable";
     }
-    if (resendOutcome === "resent") revalidatePath(`/${locale}/bookings`);
+    if (resendOutcome === "resent") refreshWorkspace(locale);
     redirect(resultUrl(locale, resendOutcome));
   }
   if (
@@ -193,6 +191,11 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
       ? resolveProposedInstant(
           trimmed(formData, "newStartAt"),
           typeof timeZone === "string" && timeZone !== "" ? timeZone : "UTC",
+          formData.get("fold") === "0"
+            ? "0"
+            : formData.get("fold") === "1"
+              ? "1"
+              : null,
         )
       : null;
   if (action === "reschedule" && newStartAt === null) {
@@ -217,7 +220,7 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
     outcome = decisionOutcomeFor(error);
   }
   if (outcome === "rejected" || outcome === "moved") {
-    revalidatePath(`/${locale}/bookings`);
+    refreshWorkspace(locale);
   }
   redirect(resultUrl(locale, outcome));
 }
