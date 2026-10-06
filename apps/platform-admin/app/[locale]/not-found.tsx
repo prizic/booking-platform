@@ -1,27 +1,29 @@
 import Link from "next/link";
-import { getAdminMessage } from "../_lib/copy";
+import { authCopy } from "../_lib/auth-copy";
 
 export default function NotFound() {
   return (
-    <main className="not-found" dir="auto">
-      <p>
-        <span lang="en">{getAdminMessage("en", "notFoundCode")}</span>
-        <span aria-hidden="true"> · </span>
-        <span lang="ar">{getAdminMessage("ar", "notFoundCode")}</span>
-      </p>
+    <main className="not-found">
       <h1>
-        <span lang="en">{getAdminMessage("en", "notFoundTitle")}</span>
+        <span lang="en">{authCopy.notFoundTitle[0]}</span>
         <span aria-hidden="true"> · </span>
-        <span lang="ar">{getAdminMessage("ar", "notFoundTitle")}</span>
+        <span lang="ar" dir="rtl">
+          {authCopy.notFoundTitle[1]}
+        </span>
       </h1>
-      <div>
+      <p lang="en">{authCopy.notFoundBody[0]}</p>
+      <p lang="ar" dir="rtl">
+        {authCopy.notFoundBody[1]}
+      </p>
+      <p>
         <Link href="/en" lang="en">
-          {getAdminMessage("en", "returnHome")}
+          {authCopy.returnHome[0]}
         </Link>
+        {" · "}
         <Link href="/ar" lang="ar">
-          {getAdminMessage("ar", "returnHome")}
+          {authCopy.returnHome[1]}
         </Link>
-      </div>
+      </p>
     </main>
   );
 }

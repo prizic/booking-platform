@@ -1,16 +1,11 @@
 "use client";
 
-import {
-  Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
-  TextField,
-} from "@wlbp/ui-foundation";
+import { Button, ErrorSummary, TextField } from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { getAdminMessage } from "../../_lib/copy";
+import { say } from "../../_lib/copy";
+import { authCopy } from "../../_lib/auth-copy";
 import {
   getPlatformAdminBrowserClient,
   verifyMfaCode,
@@ -20,8 +15,6 @@ type MfaEnrollPageProps = { params: Promise<{ locale: Locale }> };
 
 export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
   const { locale } = use(params);
-  const message = (key: Parameters<typeof getAdminMessage>[1]) =>
-    getAdminMessage(locale, key);
   const router = useRouter();
 
   const [factor, setFactor] = useState<{
@@ -60,7 +53,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
       });
       if (cancelled) return;
       if (enrollError) {
-        setError(enrollError.message);
+        setError(say(locale, authCopy.enrollFailed));
         return;
       }
       setFactor({ id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
@@ -70,7 +63,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
 
   async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,47 +76,56 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     const client = getPlatformAdminBrowserClient();
     const { error: verifyError } = await verifyMfaCode(client, factor.id, code);
     if (verifyError) {
-      setError(verifyError.message);
+      setError(say(locale, authCopy.invalidCode));
       setPending(false);
       return;
     }
-    router.push(`/${locale}`);
+    router.replace(`/${locale}`);
+    router.refresh();
   }
 
   return (
-    <main className="admin-shell">
-      <Surface as="section" className="fleet-panel" labelledBy="mfa-enroll-title">
-        <h1 id="mfa-enroll-title">{message("mfaEnrollTitle")}</h1>
-        <StatusMessage>{message("mfaEnrollInstructions")}</StatusMessage>
+    <main className="auth-shell">
+      <section className="auth-card" aria-labelledby="mfa-enroll-title">
+        <h1 id="mfa-enroll-title">{say(locale, authCopy.enrollTitle)}</h1>
+        <p>{say(locale, authCopy.enrollBody)}</p>
         {error === null ? null : (
-          <ErrorSummary title={message("mfaEnrollErrorTitle")}>{error}</ErrorSummary>
+          <ErrorSummary title={say(locale, authCopy.errorTitle)}>{error}</ErrorSummary>
         )}
+        {factor === null && error === null ? (
+          <p role="status">{say(locale, authCopy.preparing)}</p>
+        ) : null}
         {factor === null ? null : (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
-            <img alt="" height={200} src={factor.qrCode} width={200} />
+            <img
+              alt={say(locale, authCopy.enrollQr)}
+              height={200}
+              src={factor.qrCode}
+              width={200}
+            />
             <p>
-              <strong>{message("mfaEnrollSecretLabel")}:</strong>{" "}
-              <code>{factor.secret}</code>
+              <strong>{say(locale, authCopy.enrollKey)}:</strong>{" "}
+              <code dir="ltr">{factor.secret}</code>
             </p>
             <form onSubmit={handleVerify}>
               <TextField
                 autoComplete="one-time-code"
                 id="code"
                 inputMode="numeric"
-                label={message("mfaEnrollCodeLabel")}
+                label={say(locale, authCopy.code)}
                 maxLength={6}
                 minLength={6}
                 name="code"
                 required
               />
               <Button loading={pending} type="submit">
-                {message("mfaEnrollSubmit")}
+                {say(locale, authCopy.enrollSubmit)}
               </Button>
             </form>
           </>
         )}
-      </Surface>
+      </section>
     </main>
   );
 }

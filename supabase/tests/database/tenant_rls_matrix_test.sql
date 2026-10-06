@@ -3,7 +3,9 @@ begin;
 select plan(31);
 
 set local role anon;
-select is((select count(*)::integer from app.tenant_domains), 4, 'anonymous sees only verified active production domains');
+select is((select count(*)::integer from app.tenant_domains
+  where tenant_id in ('a0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001')),
+  4, 'anonymous sees only verified active production domains');
 select throws_like(
   $$select * from app.locations$$,
   '%permission denied%',

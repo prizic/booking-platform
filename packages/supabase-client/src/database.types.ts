@@ -1,10 +1,5 @@
 export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+  string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
   // Allows to automatically instantiate createClient with right options
@@ -43,6 +38,14 @@ export type Database = {
           status: string;
         }[];
       };
+      activate_provisioned_instance_v1: {
+        Args: { p_run_id: string };
+        Returns: {
+          activated: boolean;
+          blocked: string[];
+          run_state: string;
+        }[];
+      };
       add_booking_note_v1: {
         Args: {
           p_body: string;
@@ -57,12 +60,64 @@ export type Database = {
           visibility: string;
         }[];
       };
+      add_operator_v1: {
+        Args: {
+          p_email: string;
+          p_expires_at: string;
+          p_reason: string;
+          p_role: string;
+        };
+        Returns: {
+          operator_id: string;
+        }[];
+      };
+      add_tenant_domain_v1: {
+        Args: {
+          p_application: string;
+          p_hostname: string;
+          p_idempotency_key: string;
+          p_instance_id: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          domain_id: string;
+          job_id: string;
+        }[];
+      };
       advance_tenant_offboarding_v1: {
         Args: { p_phase: string; p_tenant_id: string };
         Returns: {
           blocked_reason: string;
           phase: string;
           status: string;
+        }[];
+      };
+      approve_operator_job_v1: {
+        Args: { p_job_id: string };
+        Returns: {
+          job_id: string;
+          status: string;
+        }[];
+      };
+      approve_support_access_v1: {
+        Args: { p_grant_id: string; p_minutes: number };
+        Returns: {
+          expires_at: string;
+          grant_id: string;
+          status: string;
+        }[];
+      };
+      assign_subscription_v1: {
+        Args: {
+          p_plan_key: string;
+          p_reason: string;
+          p_rollout_ring: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          granted: number;
+          plan_key: string;
+          tenant_id: string;
         }[];
       };
       attach_checkout_reference_v1: {
@@ -125,6 +180,31 @@ export type Database = {
           status: string;
         }[];
       };
+      cancel_job_v1: {
+        Args: { p_job_id: string; p_reason: string };
+        Returns: {
+          job_id: string;
+          status: string;
+        }[];
+      };
+      cancel_rollout_v1: {
+        Args: { p_reason: string; p_rollout_id: string };
+        Returns: {
+          rollout_id: string;
+          status: string;
+        }[];
+      };
+      claim_job_v1: {
+        Args: { p_kinds?: string[]; p_lock_seconds?: number };
+        Returns: {
+          attempt: number;
+          instance_id: string;
+          job_id: string;
+          kind: string;
+          parameters: Json;
+          tenant_id: string;
+        }[];
+      };
       claim_notification_batch_v1: {
         Args: { p_limit?: number; p_visibility_seconds?: number };
         Returns: {
@@ -153,6 +233,21 @@ export type Database = {
           provider_charge_reference: string;
           refund_id: string;
           tenant_id: string;
+        }[];
+      };
+      clear_entitlement_override_v1: {
+        Args: { p_feature_key: string; p_reason: string; p_tenant_id: string };
+        Returns: {
+          feature_key: string;
+          granted: boolean;
+          tenant_id: string;
+        }[];
+      };
+      complete_job_v1: {
+        Args: { p_error_code?: string; p_job_id: string; p_outcome: string };
+        Returns: {
+          job_id: string;
+          status: string;
         }[];
       };
       confirm_booking_v1: {
@@ -267,12 +362,42 @@ export type Database = {
           tax_rate_bps: number;
         }[];
       };
+      create_rollout_v1: {
+        Args: {
+          p_idempotency_key: string;
+          p_instance_ids: string[];
+          p_reason: string;
+          p_release_id: string;
+          p_rings: string[];
+        };
+        Returns: {
+          rollout_id: string;
+          skipped: number;
+          targets: number;
+        }[];
+      };
       create_tenant_v1: {
         Args: { p_brand_key: string; p_name: string };
         Returns: {
           brand_id: string;
           instance_id: string;
           tenant_id: string;
+        }[];
+      };
+      create_tenant_v2: {
+        Args: { p_brand_key: string; p_idempotency_key: string; p_name: string };
+        Returns: {
+          brand_id: string;
+          instance_id: string;
+          replayed: boolean;
+          tenant_id: string;
+        }[];
+      };
+      deactivate_provisioned_instance_v1: {
+        Args: { p_reason: string; p_run_id: string };
+        Returns: {
+          resources_deactivated: number;
+          run_state: string;
         }[];
       };
       deactivate_resource_v1: {
@@ -326,11 +451,52 @@ export type Database = {
           status: string;
         }[];
       };
+      disable_operator_v1: {
+        Args: { p_operator_id: string; p_reason: string };
+        Returns: {
+          disabled_at: string;
+          grants_revoked: number;
+          operator_id: string;
+        }[];
+      };
       dispatch_notifications_v1: {
         Args: { p_limit?: number; p_tenant_id?: string };
         Returns: {
           dispatched: number;
           suppressed: number;
+        }[];
+      };
+      enable_operator_v1: {
+        Args: { p_operator_id: string; p_reason: string };
+        Returns: {
+          operator_id: string;
+        }[];
+      };
+      export_audit_events_v1: {
+        Args: {
+          p_action?: string;
+          p_from?: string;
+          p_operator_id?: string;
+          p_outcome?: string;
+          p_search?: string;
+          p_tenant_id?: string;
+          p_to?: string;
+        };
+        Returns: {
+          action: string;
+          created_at: string;
+          detail: Json;
+          event_id: string;
+          instance_id: string;
+          operator_email: string;
+          operator_id: string;
+          outcome: string;
+          reason: string;
+          target_id: string;
+          target_kind: string;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
         }[];
       };
       get_assignment_candidates_v1: {
@@ -596,6 +762,8 @@ export type Database = {
           tax_rate_bps: number;
         }[];
       };
+      get_instance_v1: { Args: { p_instance_id: string }; Returns: Json };
+      get_job_v1: { Args: { p_job_id: string }; Returns: Json };
       get_lifecycle_analytics_v1: {
         Args: { p_from?: string; p_tenant_id: string; p_to?: string };
         Returns: {
@@ -609,6 +777,18 @@ export type Database = {
         Args: { p_tenant_id: string };
         Returns: string;
       };
+      get_operator_context_v1: {
+        Args: never;
+        Returns: {
+          aal2_age_seconds: number;
+          email: string;
+          expires_at: string;
+          operator_id: string;
+          role: string;
+          step_up_seconds: number;
+        }[];
+      };
+      get_overview_v1: { Args: never; Returns: Json };
       get_payment_account_status_v1: {
         Args: { p_tenant_id: string };
         Returns: {
@@ -645,6 +825,10 @@ export type Database = {
           status: string;
           steps: Json;
         }[];
+      };
+      get_provisioning_run_detail_v1: {
+        Args: { p_run_id: string };
+        Returns: Json;
       };
       get_public_catalog_v1: {
         Args: { p_hostname: string; p_locale?: string; p_service_key?: string };
@@ -701,6 +885,7 @@ export type Database = {
           revision: number;
         }[];
       };
+      get_release_v1: { Args: { p_release_id: string }; Returns: Json };
       get_report_export_v1: {
         Args: { p_export_id: string; p_tenant_id: string };
         Returns: {
@@ -736,6 +921,7 @@ export type Database = {
           unsettled_payments: number;
         }[];
       };
+      get_rollout_v1: { Args: { p_rollout_id: string }; Returns: Json };
       get_schedule_workspace_v1: {
         Args: { p_location_id?: string; p_tenant_id: string };
         Returns: {
@@ -818,6 +1004,7 @@ export type Database = {
           settings: Json;
         }[];
       };
+      get_tenant_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_today_workspace_v1: {
         Args: { p_from: string; p_tenant_id: string; p_to: string };
         Returns: {
@@ -873,6 +1060,47 @@ export type Database = {
         Returns: {
           expires_at: string;
           preview_token: string;
+        }[];
+      };
+      list_alerts_v1: {
+        Args: never;
+        Returns: {
+          code: string;
+          kind: string;
+          observed_at: string;
+          severity: string;
+          subject_id: string;
+          tenant_id: string;
+          tenant_name: string;
+        }[];
+      };
+      list_audit_events_v1: {
+        Args: {
+          p_action?: string;
+          p_from?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_operator_id?: string;
+          p_outcome?: string;
+          p_search?: string;
+          p_tenant_id?: string;
+          p_to?: string;
+        };
+        Returns: {
+          action: string;
+          created_at: string;
+          detail: Json;
+          event_id: string;
+          instance_id: string;
+          operator_email: string;
+          operator_id: string;
+          outcome: string;
+          reason: string;
+          target_id: string;
+          target_kind: string;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
         }[];
       };
       list_booking_notifications_v1: {
@@ -990,6 +1218,135 @@ export type Database = {
           status: string;
         }[];
       };
+      list_domains_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_status?: string;
+        };
+        Returns: {
+          active: boolean;
+          application: string;
+          certificate_observed_at: string;
+          certificate_status: string;
+          created_at: string;
+          domain_id: string;
+          hostname: string;
+          instance_id: string;
+          kind: string;
+          pending_job_id: string;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
+          verification_status: string;
+          verified_at: string;
+        }[];
+      };
+      list_health_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+          p_subject_kind?: string;
+        };
+        Returns: {
+          error_code: string;
+          freshness: string;
+          instance_id: string;
+          observed_at: string;
+          signal: string;
+          status: string;
+          subject_key: string;
+          subject_kind: string;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
+        }[];
+      };
+      list_instances_v1: {
+        Args: {
+          p_drift?: boolean;
+          p_limit?: number;
+          p_offset?: number;
+          p_ring?: string;
+          p_search?: string;
+          p_state?: string;
+        };
+        Returns: {
+          created_at: string;
+          current_release: string;
+          deployment_state: string;
+          desired_release: string;
+          health_observed_at: string;
+          health_status: string;
+          infrastructure_drifted: number;
+          infrastructure_failing: number;
+          infrastructure_total: number;
+          instance_id: string;
+          release_drifted: boolean;
+          rollout_ring: string;
+          tenant_id: string;
+          tenant_name: string;
+          tenant_status: string;
+          total_count: number;
+        }[];
+      };
+      list_integrations_v1: {
+        Args: never;
+        Returns: {
+          configured_reported_at: string;
+          last_check_at: string;
+          last_check_error_code: string;
+          last_check_outcome: string;
+          pending_check_job_id: string;
+          provider: string;
+          secret_references: string[];
+          status: string;
+          verified_at: string;
+        }[];
+      };
+      list_jobs_v1: {
+        Args: {
+          p_kind?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+          p_tenant_id?: string;
+        };
+        Returns: {
+          approved_by_email: string;
+          attempts: number;
+          completed_at: string;
+          created_at: string;
+          instance_id: string;
+          job_id: string;
+          kind: string;
+          last_error_code: string;
+          needs_approval: boolean;
+          requested_by_email: string;
+          status: string;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
+          updated_at: string;
+        }[];
+      };
+      list_operators_v1: {
+        Args: never;
+        Returns: {
+          created_at: string;
+          disabled_at: string;
+          email: string;
+          expires_at: string;
+          last_sign_in_at: string;
+          mfa_verified: boolean;
+          operator_id: string;
+          role: string;
+          updated_at: string;
+          usable_admin: boolean;
+        }[];
+      };
       list_payment_exceptions_v1: {
         Args: { p_limit?: number; p_status?: string; p_tenant_id: string };
         Returns: {
@@ -1010,6 +1367,31 @@ export type Database = {
           subject_kind: string;
         }[];
       };
+      list_plans_v1: {
+        Args: never;
+        Returns: {
+          active: boolean;
+          created_at: string;
+          entitlements: string[];
+          key: string;
+          name: string;
+          subscriber_count: number;
+        }[];
+      };
+      list_platform_flags_v1: {
+        Args: never;
+        Returns: {
+          enabled: boolean;
+          ends_at: string;
+          key: string;
+          kind: string;
+          message_ar: string;
+          message_en: string;
+          starts_at: string;
+          updated_at: string;
+          updated_by_email: string;
+        }[];
+      };
       list_privacy_requests_v1: {
         Args: { p_customer_id?: string; p_limit?: number; p_tenant_id: string };
         Returns: {
@@ -1022,6 +1404,33 @@ export type Database = {
           pending_steps: number;
           request_id: string;
           status: string;
+        }[];
+      };
+      list_provisioning_runs_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_search?: string;
+          p_state?: string;
+          p_tenant_id?: string;
+        };
+        Returns: {
+          created_at: string;
+          desired_release: string;
+          instance_id: string;
+          last_error_code: string;
+          plan_key: string;
+          run_id: string;
+          slug: string;
+          state: string;
+          steps_failed: number;
+          steps_succeeded: number;
+          steps_total: number;
+          tenant_id: string;
+          tenant_name: string;
+          total_count: number;
+          updated_at: string;
+          waiting_reason: string;
         }[];
       };
       list_refunds_v1: {
@@ -1040,6 +1449,32 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      list_releases_v1: {
+        Args: {
+          p_channel?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+        };
+        Returns: {
+          backend_contract_max: number;
+          backend_contract_min: number;
+          channel: string;
+          config_schema_version: number;
+          created_at: string;
+          git_commit: string;
+          instances_current: number;
+          instances_desired: number;
+          migration_ids: string[];
+          prerequisites: string[];
+          release_id: string;
+          reversible: boolean;
+          rollouts: number;
+          status: string;
+          total_count: number;
+          version: string;
+        }[];
+      };
       list_report_exports_v1: {
         Args: { p_limit?: number; p_tenant_id: string };
         Returns: {
@@ -1051,6 +1486,32 @@ export type Database = {
           status: string;
         }[];
       };
+      list_rollouts_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_release_id?: string;
+          p_status?: string;
+        };
+        Returns: {
+          created_at: string;
+          created_by_email: string;
+          finished_at: string;
+          reason: string;
+          release_id: string;
+          rollout_id: string;
+          started_at: string;
+          status: string;
+          target_rings: string[];
+          targets_failed: number;
+          targets_queued: number;
+          targets_skipped: number;
+          targets_succeeded: number;
+          targets_total: number;
+          total_count: number;
+          version: string;
+        }[];
+      };
       list_settings_events_v1: {
         Args: { p_limit?: number; p_tenant_id: string };
         Returns: {
@@ -1058,6 +1519,54 @@ export type Database = {
           changed: string[];
           created_at: string;
           revision: number;
+        }[];
+      };
+      list_subscriptions_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_plan_key?: string;
+          p_search?: string;
+          p_state?: string;
+        };
+        Returns: {
+          ends_at: string;
+          plan_key: string;
+          plan_name: string;
+          rollout_ring: string;
+          started_at: string;
+          state: string;
+          tenant_id: string;
+          tenant_name: string;
+          tenant_status: string;
+          total_count: number;
+          updated_at: string;
+        }[];
+      };
+      list_support_grants_v2: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+          p_tenant_id?: string;
+        };
+        Returns: {
+          approved_at: string;
+          approved_by_email: string;
+          expires_at: string;
+          grant_id: string;
+          location_id: string;
+          reason: string;
+          requested_at: string;
+          requested_by_email: string;
+          revoked_at: string;
+          revoked_by_email: string;
+          scope: string;
+          status: string;
+          tenant_id: string;
+          tenant_name: string;
+          ticket_reference: string;
+          total_count: number;
         }[];
       };
       list_tenant_choices_v1: {
@@ -1070,9 +1579,41 @@ export type Database = {
           tenant_name: string;
         }[];
       };
+      list_tenants_v1: {
+        Args: {
+          p_limit?: number;
+          p_offset?: number;
+          p_plan_key?: string;
+          p_search?: string;
+          p_sort?: string;
+          p_status?: string;
+        };
+        Returns: {
+          active_instances: number;
+          brand_keys: string;
+          created_at: string;
+          instance_count: number;
+          name: string;
+          plan_key: string;
+          provisioning_state: string;
+          status: string;
+          subscription_state: string;
+          tenant_id: string;
+          total_count: number;
+          updated_at: string;
+        }[];
+      };
       open_privacy_request_v1: {
         Args: { p_customer_id: string; p_kind: string; p_tenant_id: string };
         Returns: string;
+      };
+      pause_rollout_v1: {
+        Args: { p_reason: string; p_rollout_id: string };
+        Returns: {
+          rollout_id: string;
+          status: string;
+          unqueued: number;
+        }[];
       };
       publish_brand_revision_v1: {
         Args: {
@@ -1129,6 +1670,30 @@ export type Database = {
           outcome: string;
         }[];
       };
+      record_health_observation_v1: {
+        Args: {
+          p_detail: Json;
+          p_error_code: string;
+          p_instance_id: string;
+          p_observed_at: string;
+          p_signal: string;
+          p_status: string;
+          p_subject_key: string;
+          p_subject_kind: string;
+          p_tenant_id: string;
+        };
+        Returns: number;
+      };
+      record_integration_status_v1: {
+        Args: {
+          p_check_outcome: string;
+          p_error_code: string;
+          p_fingerprint: string;
+          p_provider: string;
+          p_verified: boolean;
+        };
+        Returns: undefined;
+      };
       record_notification_attempt_v1: {
         Args: {
           p_attempt: number;
@@ -1156,6 +1721,16 @@ export type Database = {
           applied: boolean;
           message_id: string;
         }[];
+      };
+      record_operator_failure_v1: {
+        Args: {
+          p_action: string;
+          p_error_code: string;
+          p_target_id?: string;
+          p_target_kind?: string;
+          p_tenant_id?: string;
+        };
+        Returns: undefined;
       };
       record_payment_event_v1: {
         Args: {
@@ -1239,6 +1814,24 @@ export type Database = {
           token_expires_at: string;
         }[];
       };
+      register_release_v1: {
+        Args: {
+          p_backend_max: number;
+          p_backend_min: number;
+          p_channel: string;
+          p_config_schema_version: number;
+          p_feature_notes: string[];
+          p_git_commit: string;
+          p_idempotency_key: string;
+          p_migration_ids: string[];
+          p_reversible: boolean;
+          p_upgrade_notes: string[];
+          p_version: string;
+        };
+        Returns: {
+          release_id: string;
+        }[];
+      };
       release_hold_v1: {
         Args: {
           p_application: string;
@@ -1264,6 +1857,30 @@ export type Database = {
         Returns: {
           contract_version: number;
           status: string;
+        }[];
+      };
+      report_rollout_target_v1: {
+        Args: {
+          p_error_code: string;
+          p_job_id: string;
+          p_observed_release: string;
+          p_outcome: string;
+        };
+        Returns: {
+          rollout_status: string;
+          target_status: string;
+        }[];
+      };
+      request_domain_verification_v1: {
+        Args: { p_domain_id: string };
+        Returns: {
+          job_id: string;
+        }[];
+      };
+      request_integration_check_v1: {
+        Args: { p_provider: string };
+        Returns: {
+          job_id: string;
         }[];
       };
       request_management_otp_v1: {
@@ -1308,6 +1925,30 @@ export type Database = {
           refund_id: string;
           replayed: boolean;
           status: string;
+        }[];
+      };
+      request_support_grant_v1: {
+        Args: {
+          p_location_id?: string;
+          p_minutes?: number;
+          p_reason: string;
+          p_tenant_id: string;
+          p_ticket_reference: string;
+        };
+        Returns: {
+          grant_id: string;
+          status: string;
+        }[];
+      };
+      request_tenant_closure_v1: {
+        Args: {
+          p_confirmation: string;
+          p_idempotency_key: string;
+          p_reason: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          job_ids: string[];
         }[];
       };
       reschedule_booking_v1: {
@@ -1384,6 +2025,34 @@ export type Database = {
           status: string;
         }[];
       };
+      retry_job_v1: {
+        Args: { p_job_id: string; p_reason: string };
+        Returns: {
+          job_id: string;
+          status: string;
+        }[];
+      };
+      retry_provisioning_run_v1: {
+        Args: { p_run_id: string };
+        Returns: {
+          run_state: string;
+          steps_reset: number;
+        }[];
+      };
+      retry_rollout_targets_v1: {
+        Args: { p_rollout_id: string };
+        Returns: {
+          retried: number;
+          rollout_id: string;
+        }[];
+      };
+      revoke_support_grant_v1: {
+        Args: { p_grant_id: string; p_reason?: string };
+        Returns: {
+          grant_id: string;
+          status: string;
+        }[];
+      };
       rollback_brand_v1: {
         Args: {
           p_brand_id: string;
@@ -1394,6 +2063,14 @@ export type Database = {
           brand_revision_id: string;
           contract_version: number;
           revision: number;
+        }[];
+      };
+      rollback_rollout_v1: {
+        Args: { p_reason: string; p_rollout_id: string };
+        Returns: {
+          rollout_id: string;
+          status: string;
+          targets: number;
         }[];
       };
       run_privacy_request_v1: {
@@ -1434,6 +2111,42 @@ export type Database = {
           content_hash: string;
           contract_version: number;
           revision: number;
+        }[];
+      };
+      save_integration_references_v1: {
+        Args: { p_provider: string; p_secret_references: string[] };
+        Returns: {
+          provider: string;
+        }[];
+      };
+      save_plan_v1: {
+        Args: {
+          p_active: boolean;
+          p_create: boolean;
+          p_entitlements: string[];
+          p_key: string;
+          p_name: string;
+          p_reason: string;
+        };
+        Returns: {
+          key: string;
+          subscribers_updated: number;
+        }[];
+      };
+      save_platform_flag_v1: {
+        Args: {
+          p_enabled: boolean;
+          p_ends_at: string;
+          p_key: string;
+          p_kind: string;
+          p_message_ar: string;
+          p_message_en: string;
+          p_reason: string;
+          p_starts_at: string;
+        };
+        Returns: {
+          enabled: boolean;
+          key: string;
         }[];
       };
       save_resource_type_v1: {
@@ -1585,6 +2298,20 @@ export type Database = {
           restricted: boolean;
         }[];
       };
+      set_entitlement_override_v1: {
+        Args: {
+          p_expires_at: string;
+          p_feature_key: string;
+          p_granted: boolean;
+          p_reason: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          feature_key: string;
+          granted: boolean;
+          tenant_id: string;
+        }[];
+      };
       set_legal_hold_v1: {
         Args: {
           p_customer_id: string;
@@ -1595,6 +2322,25 @@ export type Database = {
         Returns: {
           held: boolean;
           hold_id: string;
+        }[];
+      };
+      set_operator_role_v1: {
+        Args: {
+          p_expires_at: string;
+          p_operator_id: string;
+          p_reason: string;
+          p_role: string;
+        };
+        Returns: {
+          operator_id: string;
+          role: string;
+        }[];
+      };
+      set_release_status_v1: {
+        Args: { p_reason: string; p_release_id: string; p_status: string };
+        Returns: {
+          release_id: string;
+          status: string;
         }[];
       };
       set_resource_location_eligibility_v1: {
@@ -1644,6 +2390,28 @@ export type Database = {
           staff_id: string;
         }[];
       };
+      set_tenant_status_v1: {
+        Args: {
+          p_expected_status: string;
+          p_reason: string;
+          p_status: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          status: string;
+          tenant_id: string;
+          updated_at: string;
+        }[];
+      };
+      start_rollout_v1: {
+        Args: { p_rollout_id: string };
+        Returns: {
+          blocked: string[];
+          queued: number;
+          rollout_id: string;
+          status: string;
+        }[];
+      };
       transition_booking_v1: {
         Args: {
           p_action: string;
@@ -1660,6 +2428,32 @@ export type Database = {
           contract_version: number;
           replayed: boolean;
           status: string;
+        }[];
+      };
+      update_subscription_v1: {
+        Args: {
+          p_ends_at: string;
+          p_expected_updated_at: string;
+          p_reason: string;
+          p_rollout_ring: string;
+          p_state: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          state: string;
+          tenant_id: string;
+          updated_at: string;
+        }[];
+      };
+      update_tenant_v1: {
+        Args: {
+          p_expected_updated_at: string;
+          p_name: string;
+          p_tenant_id: string;
+        };
+        Returns: {
+          tenant_id: string;
+          updated_at: string;
         }[];
       };
       verify_management_otp_v1: {
@@ -1686,10 +2480,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">;
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<
-  keyof Database,
-  "public"
->];
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">];
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
@@ -1786,8 +2577,7 @@ export type Enums<
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
+    keyof DefaultSchema["CompositeTypes"] | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals;
   }

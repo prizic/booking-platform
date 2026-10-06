@@ -90,6 +90,20 @@ export default defineConfig({
         video: "off",
       },
     },
+    {
+      name: "platform-admin",
+      fullyParallel: false,
+      testMatch: /platform-admin\.spec\.ts$/u,
+      timeout: 180_000,
+      // Passwords, authenticator codes and session cookies must not enter artifacts.
+      use: {
+        screenshot: "off",
+        trace: "off",
+        video: "off",
+        actionTimeout: 30_000,
+        navigationTimeout: 60_000,
+      },
+    },
     { name: "component", testMatch: /interactions\.spec\.ts$/u },
     { name: "i18n", testMatch: /localization\.spec\.ts$/u },
     {
@@ -98,12 +112,22 @@ export default defineConfig({
     },
     { name: "visual", testMatch: /visual\.spec\.ts/u },
   ],
-  webServer: (process.env.LIVE_BOOKING_E2E === "1" ? liveBookingServers : servers).map(
-    ({ command, port, reuseExistingServer }) => ({
-      command,
-      port,
-      reuseExistingServer,
-      timeout: 120_000,
-    }),
-  ),
+  webServer: (process.env.PLATFORM_ADMIN_E2E === "1"
+    ? [
+        {
+          command:
+            "node scripts/platform-admin-local.mjs serve --port 41742 --foreground",
+          port: 41742,
+          reuseExistingServer: false,
+        },
+      ]
+    : process.env.LIVE_BOOKING_E2E === "1"
+      ? liveBookingServers
+      : servers
+  ).map(({ command, port, reuseExistingServer }) => ({
+    command,
+    port,
+    reuseExistingServer,
+    timeout: 120_000,
+  })),
 });

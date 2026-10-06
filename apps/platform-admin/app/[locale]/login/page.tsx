@@ -1,107 +1,118 @@
 "use client";
 
-import { Button, ErrorSummary, Surface, TextField } from "@wlbp/ui-foundation";
+import { Button, ErrorSummary, TextField } from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
-import { use, useState } from "react";
-import { getAdminMessage } from "../../_lib/copy";
+import { use, useEffect, useState } from "react";
+import { authCopy } from "../../_lib/auth-copy";
+import { say, type Copy } from "../../_lib/copy";
 import {
   getPlatformAdminBrowserClient,
   verifyMfaCode,
 } from "../../_lib/supabase-browser";
 
-type LoginPageProps = { params: Promise<{ locale: Locale }> };
+type Step = { kind: "credentials" } | { kind: "mfa"; factorId: string };
 
-type Step = { kind: "credentials" } | { kind: "mfa-challenge"; factorId: string };
-
-export default function LoginPage({ params }: LoginPageProps) {
+export default function LoginPage({ params }: { params: Promise<{ locale: Locale }> }) {
   const { locale } = use(params);
-  const message = (key: Parameters<typeof getAdminMessage>[1]) =>
-    getAdminMessage(locale, key);
   const router = useRouter();
-
   const [step, setStep] = useState<Step>({ kind: "credentials" });
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<Copy | null>(null);
   const [pending, setPending] = useState(false);
 
-  async function handleCredentials(event: React.FormEvent<HTMLFormElement>) {
+  // Signed in at aal1 with a verified factor (e.g. after the guard asked for a
+  // step-up): go straight to the code instead of asking for the password again.
+  useEffect(() => {
+    void (async () => {
+      const client = getPlatformAdminBrowserClient();
+      const { data } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+      if (data?.currentLevel === "aal1" && data.nextLevel === "aal2") {
+        const { data: factors } = await client.auth.mfa.listFactors();
+        const factor = factors?.totp.find((entry) => entry.status === "verified");
+        if (factor) setStep({ kind: "mfa", factorId: factor.id });
+      }
+    })();
+  }, []);
+
+  async function finish() {
+    router.replace(`/${locale}`);
+    router.refresh();
+  }
+
+  async function onCredentials(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setPending(true);
     const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") ?? "");
-    const password = String(form.get("password") ?? "");
-
     const client = getPlatformAdminBrowserClient();
     const { error: signInError } = await client.auth.signInWithPassword({
-      email,
-      password,
+      email: String(form.get("email") ?? ""),
+      password: String(form.get("password") ?? ""),
     });
     if (signInError) {
-      setError(signInError.message);
+      setError(
+        signInError.status === 400 ? authCopy.invalidCredentials : authCopy.unavailable,
+      );
       setPending(false);
       return;
     }
-
     const { data: aal } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
     if (aal?.nextLevel === "aal2" && aal.currentLevel !== "aal2") {
       const { data: factors } = await client.auth.mfa.listFactors();
       const factor = factors?.totp.find((entry) => entry.status === "verified");
+      setPending(false);
       if (!factor) {
-        setError(message("loginErrorTitle"));
-        setPending(false);
+        setError(authCopy.noFactor);
         return;
       }
-      setStep({ factorId: factor.id, kind: "mfa-challenge" });
-      setPending(false);
+      setStep({ kind: "mfa", factorId: factor.id });
       return;
     }
-
     if (aal?.nextLevel === "aal1") {
-      router.push(`/${locale}/mfa-enroll`);
+      router.replace(`/${locale}/mfa-enroll`);
       return;
     }
-
-    router.push(`/${locale}`);
+    await finish();
   }
 
-  async function handleMfaChallenge(
-    event: React.FormEvent<HTMLFormElement>,
-    factorId: string,
-  ) {
+  async function onCode(event: React.FormEvent<HTMLFormElement>, factorId: string) {
     event.preventDefault();
     setError(null);
     setPending(true);
-    const form = new FormData(event.currentTarget);
-    const code = String(form.get("code") ?? "");
-
-    const client = getPlatformAdminBrowserClient();
-    const { error: verifyError } = await verifyMfaCode(client, factorId, code);
+    const code = String(new FormData(event.currentTarget).get("code") ?? "");
+    const { error: verifyError } = await verifyMfaCode(
+      getPlatformAdminBrowserClient(),
+      factorId,
+      code,
+    );
     if (verifyError) {
-      setError(verifyError.message);
+      setError(authCopy.invalidCode);
       setPending(false);
       return;
     }
-    router.push(`/${locale}`);
+    await finish();
   }
 
   return (
-    <main className="admin-shell">
-      <Surface as="section" className="fleet-panel" labelledBy="login-title">
+    <main className="auth-shell">
+      <section className="auth-card" aria-labelledby="login-title">
         <h1 id="login-title">
-          {step.kind === "credentials"
-            ? message("loginTitle")
-            : message("loginMfaCodeLabel")}
+          {say(
+            locale,
+            step.kind === "credentials" ? authCopy.loginTitle : authCopy.mfaTitle,
+          )}
         </h1>
-        {error === null ? null : (
-          <ErrorSummary title={message("loginErrorTitle")}>{error}</ErrorSummary>
-        )}
+        {error ? (
+          <ErrorSummary title={say(locale, authCopy.errorTitle)}>
+            {say(locale, error)}
+          </ErrorSummary>
+        ) : null}
         {step.kind === "credentials" ? (
-          <form onSubmit={handleCredentials}>
+          <form key="credentials" onSubmit={onCredentials}>
             <TextField
               autoComplete="email"
               id="email"
-              label={message("loginEmailLabel")}
+              label={say(locale, authCopy.email)}
               name="email"
               required
               type="email"
@@ -109,33 +120,41 @@ export default function LoginPage({ params }: LoginPageProps) {
             <TextField
               autoComplete="current-password"
               id="password"
-              label={message("loginPasswordLabel")}
+              label={say(locale, authCopy.password)}
               name="password"
               required
               type="password"
             />
-            <Button loading={pending} type="submit">
-              {message("loginSubmit")}
+            <Button
+              loading={pending}
+              loadingLabel={say(locale, authCopy.signingIn)}
+              type="submit"
+            >
+              {say(locale, authCopy.signIn)}
             </Button>
           </form>
         ) : (
-          <form onSubmit={(event) => handleMfaChallenge(event, step.factorId)}>
+          <form key="mfa" onSubmit={(event) => onCode(event, step.factorId)}>
             <TextField
               autoComplete="one-time-code"
               id="code"
               inputMode="numeric"
-              label={message("loginMfaCodeLabel")}
+              label={say(locale, authCopy.code)}
               maxLength={6}
               minLength={6}
               name="code"
               required
             />
-            <Button loading={pending} type="submit">
-              {message("loginMfaSubmit")}
+            <Button
+              loading={pending}
+              loadingLabel={say(locale, authCopy.verifying)}
+              type="submit"
+            >
+              {say(locale, authCopy.verify)}
             </Button>
           </form>
         )}
-      </Surface>
+      </section>
     </main>
   );
 }

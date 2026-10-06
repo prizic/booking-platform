@@ -268,7 +268,8 @@ select * from control_plane.approve_support_grant_v1(current_setting('test.sa_gr
 select * from control_plane.revoke_support_grant_v1(current_setting('test.sa_grant')::uuid,'finished');
 
 select is((select count(*)::integer from control_plane.audit_events a
-  where a.action in ('support.requested','support.approved','support.revoked')),3,
+  where a.action in ('support.requested','support.approved','support.revoked')
+    and a.detail->>'grant_id'=current_setting('test.sa_grant')),3,
   'request, approval and revocation are each recorded');
 select ok((select bool_and(a.operator_id is not null) from control_plane.audit_events a),
   'each attributed to the operator who did it');

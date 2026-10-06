@@ -21,7 +21,8 @@ ignored_directories = {'.git', '.next', '.turbo', 'coverage', 'dist',
 for src in sorted(pathlib.Path('.').rglob('*.md')):
     if ignored_directories.intersection(src.parts):
         continue
-    for link in re.findall(r'\]\(([^)\s]+)\)', src.read_text()):
+    prose = re.sub(r'^([ \t]*)(`{3,}|~{3,})[^\n]*\n.*?^\1\2[ \t]*$', '', src.read_text(), flags=re.M | re.S)
+    for link in re.findall(r'\]\(([^)\s]+)\)', prose):
         if re.match(r'^(https?:|mailto:|tel:)', link):
             continue
         path, _, frag = link.partition('#')

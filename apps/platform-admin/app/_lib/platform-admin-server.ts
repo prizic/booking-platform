@@ -44,7 +44,11 @@ export async function createPlatformAdminRequestClient() {
       getAll: () => cookieStore.getAll(),
       setAll: async (values) => {
         for (const cookie of values) {
-          cookieStore.set(cookie.name, cookie.value, cookie.options);
+          try {
+            cookieStore.set(cookie.name, cookie.value, cookie.options);
+          } catch {
+            /* Server components read; proxy refreshes the cookies. */
+          }
         }
       },
     },

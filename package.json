@@ -17,7 +17,7 @@
     "test": "turbo run test:unit",
     "test:unit": "turbo run test:unit",
     "test:contract": "node scripts/check-release-contracts.mjs",
-    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs",
+    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs scripts/platform-admin-local.test.mjs scripts/totp.test.mjs",
     "test:component": "playwright test --project=component",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:live": "node scripts/live-booking-e2e.mjs pnpm exec playwright test --project=live-booking",

@@ -1,6 +1,6 @@
 begin;
 
-select plan(48);
+select plan(49);
 
 select has_table('app'::name, 'tenants'::name);
 select has_table('app'::name, 'permissions'::name);
@@ -64,16 +64,44 @@ select ok(
   'every app table has an explicit policy for every CRUD operation'
 );
 
+-- Definer rights on api_v1 are allowed for exactly two shapes: the reviewed
+-- public catalog, and a same-named pass-through into control_plane, which owns
+-- its own authorization (require_operator_v1 / is_worker_v1). Anything else —
+-- logic in the wrapper, a different target, a mutable search_path — fails here.
 select ok(
   not exists (
     select 1
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'api_v1'
-      and procedure.proname <> 'get_public_catalog_v1'
       and procedure.prosecdef
+      and procedure.oid::regprocedure::text <> 'api_v1.get_public_catalog_v1(text,text,text)'
+      and not (
+        procedure.prolang = (select oid from pg_language where lanname = 'sql')
+        and 'search_path=""' = any(procedure.proconfig)
+        and pg_catalog.btrim(procedure.prosrc, E' \n\t')
+          ~ ('^select (\* from )?control_plane\.' || procedure.proname || '\([^()]*\)\s*;?$')
+        and exists (
+          select 1 from pg_proc as inner_procedure
+          join pg_namespace as inner_namespace on inner_namespace.oid = inner_procedure.pronamespace
+          where inner_namespace.nspname = 'control_plane'
+            and inner_procedure.proname = procedure.proname)
+      )
   ),
-  'no exposed api_v1 function is SECURITY DEFINER'
+  'api_v1 definer functions are only the public catalog or same-named control_plane pass-throughs'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'api_v1'
+      and procedure.prosecdef
+      and procedure.oid::regprocedure::text <> 'api_v1.get_public_catalog_v1(text,text,text)'
+      and has_function_privilege('anon', procedure.oid, 'execute')
+  ),
+  'no control-plane pass-through is executable by anon'
 );
 
 -- Issue #101. The consequence of the rule above, which nothing checked until a

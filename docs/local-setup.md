@@ -276,3 +276,11 @@ evidence, not a claim that a screen-reader pass occurred.
 - [upstream-updates.md](./upstream-updates.md) — instance CI and upgrade flow
 - [references.md](./references.md) — external documentation sources
 - [adr/README.md](./adr/README.md) — architecture decision records
+
+## Isolated Platform Admin
+
+Use Node 22.13–22.x and run `node scripts/platform-admin-local.mjs start`, then `node scripts/platform-admin-local.mjs seed`, then `node scripts/platform-admin-local.mjs serve`. The helper creates only the named `platform-admin-20261006` Supabase project (API 56521, database 56522), verifies its identity, and injects its public connection settings into Platform Admin. It does not trust the repository's `.env.local`. Port 3002 uses a separate Next cache from browser tests on 41742.
+
+Open `http://localhost:3002/en` or `/ar`. Real synthetic Auth accounts and verified authenticator factors are recorded in ignored, owner-readable `.artifacts/platform-admin/credentials.json`. Use the admin account's email/password, then its six-digit authenticator code. `node scripts/platform-admin-local.mjs code admin` prints the current local code. The helper also creates viewer, operator and second-admin accounts for permission and two-person approval testing. Keep these files local. There is no authentication bypass.
+
+The repeatable seed creates explicitly synthetic control-plane records and retains existing local data. External resources are recorded as unverified or pending until an actual worker reports evidence. Run browser checks with `PLATFORM_ADMIN_E2E=1 pnpm exec playwright test --project=platform-admin --workers=1`; artifacts containing credentials and sessions are disabled. Do not run native sign-in concurrently with tests using the same authenticator factor.

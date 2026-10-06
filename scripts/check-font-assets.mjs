@@ -16,6 +16,7 @@ try {
 const distributions = [
   "apps/client/public/fonts",
   "apps/dashboard/public/fonts",
+  "apps/platform-admin/public/fonts",
   "instance-template/instance/assets/fonts",
 ];
 const expectedLicenses = [
