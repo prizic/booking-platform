@@ -85,6 +85,10 @@ export async function settleBrandRender(page: Page) {
     await Promise.all(
       document
         .getAnimations()
+        .filter((animation) => {
+          const endTime = animation.effect?.getComputedTiming().endTime;
+          return typeof endTime === "number" && Number.isFinite(endTime);
+        })
         .map((animation) => animation.finished.catch(() => undefined)),
     );
   });
