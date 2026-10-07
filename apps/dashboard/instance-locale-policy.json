@@ -1,4 +1,4 @@
 {
-  "defaultLocale": "en",
-  "supportedLocales": ["en", "ar"]
+  "defaultLocale": "ar",
+  "supportedLocales": ["ar", "en"]
 }

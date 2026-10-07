@@ -306,3 +306,13 @@ Every ratio KPI must have its denominator defined in the product, not left to th
 | Gross margin drivers | Hosting, database, email, build, support, provider costs |
 
 **Separation rule:** aggregate platform analytics are kept apart from tenant customer records. Finance and analyst roles do not automatically receive booking PII.
+
+## Platform Admin operations
+
+Platform Admin runs locally at `http://localhost:3002/en` (Arabic `/ar`) against the isolated project described in [local setup](local-setup.md#isolated-platform-admin). The overview links stored counts, failures and observations to filtered directories. Unknown observations remain unknown; timestamps expose stale evidence.
+
+Tenant suspension/reactivation, commercial changes, support grants, release targeting and privileged configuration require server-authorized operator RPCs. High-impact actions require recent AAL2 authentication and reasons; irreversible tenant closure queues an approval-required job and forbids requester self-approval. Never execute a queued provider operation manually by marking its job successful. The appropriate service-role worker must validate its claim and report actual observed results.
+
+Provider credentials, DNS/certificate observers, billing integration and deployment workers must be configured separately for live execution. Configuration metadata and secret references are safe to display; configured, reachable and verified are different states. Check queued jobs and sanitized failure codes, authorize retry/cancellation where offered, and use real observation timestamps to assess recovery. A lost response means an unconfirmed outcome: refresh persisted state before retrying. Payload-bound idempotency rejects changed requests under an existing key.
+
+Use scoped, expiring support grants with recorded reasons and revoke them when finished. Grants expose their explicit approved scope; they do not enable unrestricted impersonation or access to bookings/customers. Operator role changes preserve a usable administrator. Break-glass access expires and still requires MFA.

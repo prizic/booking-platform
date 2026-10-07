@@ -1,24 +1,28 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { PaymentExceptionResolution } from "../../_lib/dashboard-access";
 import { DashboardRpcError } from "../../_lib/dashboard-data-source";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
+import { textOrNull } from "../../_lib/form-schema";
 import { decisionOutcomeFor, type DecisionOutcome } from "../../_lib/request-decisions";
+import {
+  refundRetrySchema,
+  resolveExceptionSchema,
+  type RefundRetryInput,
+  type ResolveExceptionInput,
+} from "./payment-schema";
 
 type PaymentOutcome =
   DecisionOutcome | "already-resolved" | "not-eligible" | "refunded" | "resolved";
-
-const resolutions: readonly PaymentExceptionResolution[] = [
-  "contested",
-  "no_action_needed",
-  "reconciled",
-  "refunded",
-  "written_off",
-];
 
 function resultUrl(locale: Locale, outcome: PaymentOutcome): string {
   return `/${locale}/payments?result=${outcome}`;
@@ -36,21 +40,18 @@ function paymentOutcomeFor(error: unknown): PaymentOutcome {
   return decisionOutcomeFor(error);
 }
 
-function trimmed(formData: FormData, key: string): string | null {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
+/*
+ * A committed decision redirects to the queue with its outcome, as before. A
+ * refusal returns its outcome code, shown next to the form that caused it.
+ */
 
-export async function resolveExceptionAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const exceptionId = formData.get("exceptionId");
-  const resolution = formData.get("resolution");
-  if (
-    typeof exceptionId !== "string" ||
-    !resolutions.includes(resolution as PaymentExceptionResolution)
-  ) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
+export async function resolveExceptionAction(
+  input: ResolveExceptionInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(resolveExceptionSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { exceptionId, locale } = parsed.data;
+  const resolution: PaymentExceptionResolution = parsed.data.resolution;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -58,22 +59,23 @@ export async function resolveExceptionAction(formData: FormData): Promise<never>
     request.state.kind !== "ready" ||
     request.source.resolvePaymentException === undefined
   ) {
-    redirect(resultUrl(locale, "not-authorized"));
+    return actionError("not-authorized");
   }
 
   let outcome: PaymentOutcome;
   try {
     await request.source.resolvePaymentException({
       exceptionId,
-      note: trimmed(formData, "note"),
-      resolution: resolution as PaymentExceptionResolution,
+      note: textOrNull(parsed.data.note),
+      resolution,
       tenantId: request.state.context.tenantId,
     });
     outcome = "resolved";
   } catch (error) {
     outcome = paymentOutcomeFor(error);
   }
-  if (outcome === "resolved") revalidatePath(`/${locale}/payments`);
+  if (outcome !== "resolved") return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(resultUrl(locale, outcome));
 }
 
@@ -81,12 +83,12 @@ export async function resolveExceptionAction(formData: FormData): Promise<never>
  * Retrying a refund the provider refused. The amount is not re-proposed here:
  * the database reads what the cancellation already earned.
  */
-export async function requestRefundAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const bookingId = formData.get("bookingId");
-  if (typeof bookingId !== "string") {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
+export async function requestRefundAction(
+  input: RefundRetryInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(refundRetrySchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { bookingId, locale } = parsed.data;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -94,7 +96,7 @@ export async function requestRefundAction(formData: FormData): Promise<never> {
     request.state.kind !== "ready" ||
     request.source.requestRefund === undefined
   ) {
-    redirect(resultUrl(locale, "not-authorized"));
+    return actionError("not-authorized");
   }
 
   let outcome: PaymentOutcome;
@@ -111,6 +113,7 @@ export async function requestRefundAction(formData: FormData): Promise<never> {
   } catch (error) {
     outcome = paymentOutcomeFor(error);
   }
-  if (outcome === "refunded") revalidatePath(`/${locale}/payments`);
+  if (outcome !== "refunded") return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(resultUrl(locale, outcome));
 }

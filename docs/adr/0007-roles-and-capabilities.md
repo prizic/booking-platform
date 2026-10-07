@@ -176,3 +176,14 @@ Custom roles and approval workflows are **Phase 2, issue #50** (§8.2, [release 
 - Issue #50 — custom roles and approval workflows (Phase 2)
 - [Security and privacy](../security-and-privacy.md) · [Release scope](../release-scope.md) · [Architecture overview](../architecture.md) · [Glossary](../glossary.md)
 - [ADR index](./README.md) · [References](../references.md)
+
+## Amendment 2026-10-07 (ADR-0019)
+
+By owner decision, [ADR-0019: Tenant custom roles](./0019-tenant-custom-roles.md) brings custom roles forward from issue #50. The original decision above is kept as history; where they differ, ADR-0019 applies.
+
+- **Bundles are no longer only fixed.** Each tenant keeps the four built-in tenant roles (Tenant admin, Location manager, Scheduler, Staff) with exactly the grants in the matrix above, locked and not editable, and may add its own custom roles built from the same capability names. Customer, billing administrator, and the platform personas are unchanged.
+- **New capability `role.manage`.** Held only by the built-in Tenant admin as an approval grant at tenant scope: defining, editing, duplicating, or archiving a role requires recent MFA. It is not delegable.
+- **Reserved for built-ins:** `role.manage`, `billing.view`, `billing.change_plan`, `support.grant_access`, `tenant.owner_transfer`, `tenant.read_other_tenant`. A custom role can never hold them.
+- **No escalation.** Nobody may grant, through a role or an assignment, a capability at a wider scope or stronger kind than they hold themselves (ADR-0019 §5).
+- **Approval chains stay deferred.** Every `P` cell is still satisfied by step-up and the approver above it; there is still no configurable approval chain.
+- **Enforcement layers are unchanged.** UI, server, and RLS as above; capability checks still never compare a role name, except to identify built-ins for locking and labels.

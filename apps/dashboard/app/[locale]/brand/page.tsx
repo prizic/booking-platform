@@ -1,5 +1,27 @@
-import { formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import { BrandPreviewButton, BrandPublicationForm } from "./brand-publication-form";
+import { BrandForm } from "./brand-form";
+import { parseBrandEditor, brandChangedSections } from "./brand-document";
+import { dashboardBrand } from "../../_lib/brand";
+import { workspaceStatus } from "../../_lib/workspace-status";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import { formatWhen } from "../../_lib/booking-display";
+import {
+  Alert,
+  AlertDescription,
+  EmptyState,
+  Facts,
+  PageHeader,
+  ReferenceCode,
+  Section,
+  StatusStamp,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  type StampState,
+} from "@wlbp/ui-foundation";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type {
@@ -8,11 +30,6 @@ import type {
 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
-import {
-  publishBrandAction,
-  rollbackBrandAction,
-  saveBrandDraftAction,
-} from "./actions";
 import { brandResultKeys, positiveBrandResults } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -24,20 +41,28 @@ type BrandPageProps = {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
+function revisionStamp(state: string): StampState {
+  if (state === "draft") return "pending";
+  if (state === "published" || state === "active") return "confirmed";
+  if (state === "retired") return "completed";
+  return "neutral";
+}
+
 export default async function BrandPage({ params, searchParams }: BrandPageProps) {
   const { locale } = await params;
   const query = await searchParams;
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
+  const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
 
   const request = await loadDashboardRequestAccess(locale);
   const ready = request.source !== null && request.state.kind === "ready";
   const tenantId = ready ? request.state.context.tenantId : null;
 
-  const revisions: readonly BrandRevisionRowV1[] =
+  const revisions: readonly BrandRevisionRowV1[] | null =
     ready && tenantId !== null
-      ? ((await request.source?.listBrandRevisions?.({ tenantId }).catch(() => [])) ??
-        [])
+      ? ((await request.source?.listBrandRevisions?.({ tenantId }).catch(() => null)) ??
+        null)
       : [];
   const presentation: BrandPresentationV1 | null =
     ready && tenantId !== null
@@ -46,38 +71,53 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
           .catch(() => null)) ?? null)
       : null;
 
-  const draft = revisions.find((revision) => revision.state === "draft") ?? null;
-  const live = revisions.find((revision) => revision.state === "published") ?? null;
+  const editor =
+    ready && tenantId !== null
+      ? await request.source
+          ?.getBrandEditor?.(tenantId)
+          .then(parseBrandEditor)
+          .catch(() => undefined)
+      : undefined;
+  const draft = revisions?.find((revision) => revision.state === "draft") ?? null;
   const result = typeof query.result === "string" ? query.result : null;
   const resultKey =
     result !== null && result in brandResultKeys
       ? brandResultKeys[result as keyof typeof brandResultKeys]
       : null;
+  const yesNo = (value: boolean) => (
+    <StatusStamp state={value ? "confirmed" : "neutral"}>
+      {message(value ? "brandYes" : "brandNo")}
+    </StatusStamp>
+  );
 
   return (
     <WorkspaceShell current="brand" labelledBy="brand-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="brand-title">
-        <h1 id="brand-title">{message("brandTitle")}</h1>
-        <p>{message("brandSummary")}</p>
+      <div className="grid gap-10">
+        <PageHeader
+          titleId="brand-title"
+          title={message("brandTitle")}
+          description={message("brandSummary")}
+        />
         {resultKey === null ? null : (
-          <StatusMessage
-            tone={positiveBrandResults.has(result ?? "") ? "positive" : "warning"}
-          >
-            {message(resultKey)}
-          </StatusMessage>
+          <Alert tone={positiveBrandResults.has(result ?? "") ? "positive" : "warning"}>
+            <AlertDescription className="text-foreground">
+              {message(resultKey)}
+            </AlertDescription>
+          </Alert>
         )}
 
         {presentation === null ? null : (
-          <section aria-labelledby="brand-presentation-title">
-            <h2 id="brand-presentation-title">{message("brandPresentationTitle")}</h2>
-            {/* Decided from state, never from what anybody hopes. A tenant on a
-                platform domain with a platform sender is branded, and the
-                product says so rather than overclaiming. */}
-            <p>
-              <Badge
-                tone={
+          <Section
+            id="brand-presentation"
+            title={message("brandPresentationTitle")}
+            actions={
+              /* Decided from state, never from what anybody hopes. A tenant on a
+                 platform domain with a platform sender is branded, and the
+                 product says so rather than overclaiming. */
+              <StatusStamp
+                state={
                   presentation.presentation === "fully_white_label"
-                    ? "positive"
+                    ? "confirmed"
                     : "neutral"
                 }
               >
@@ -86,103 +126,192 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
                     ? "brandFullyWhiteLabel"
                     : "brandBranded",
                 )}
-              </Badge>
-            </p>
-            <ul>
-              <li>
-                {message("brandHasDomain")}:{" "}
-                {message(presentation.hasVerifiedDomain ? "brandYes" : "brandNo")}
-              </li>
-              <li>
-                {message("brandHasSender")}:{" "}
-                {message(presentation.hasTenantSender ? "brandYes" : "brandNo")}
-              </li>
-              <li>
-                {message("brandHasPublished")}:{" "}
-                {message(presentation.hasPublishedBrand ? "brandYes" : "brandNo")}
-              </li>
-              <li>
-                {message("brandHasLegal")}:{" "}
-                {message(presentation.hasLegalLinks ? "brandYes" : "brandNo")}
-              </li>
-            </ul>
-          </section>
+              </StatusStamp>
+            }
+          >
+            <Facts
+              columns={2}
+              items={[
+                {
+                  key: "domain",
+                  label: message("brandHasDomain"),
+                  value: yesNo(presentation.hasVerifiedDomain),
+                },
+                {
+                  key: "sender",
+                  label: message("brandHasSender"),
+                  value: yesNo(presentation.hasTenantSender),
+                },
+                {
+                  key: "published",
+                  label: message("brandHasPublished"),
+                  value: yesNo(presentation.hasPublishedBrand),
+                },
+                {
+                  key: "legal",
+                  label: message("brandHasLegal"),
+                  value: yesNo(presentation.hasLegalLinks),
+                },
+              ]}
+            />
+          </Section>
         )}
 
-        <section aria-labelledby="brand-draft-title">
-          <h2 id="brand-draft-title">{message("brandDraftTitle")}</h2>
-          <p>{message("brandDraftHint")}</p>
-          <form action={saveBrandDraftAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <label htmlFor="brand-key">{message("brandKeyLabel")}</label>
-            <input
-              defaultValue={live?.brandKey ?? draft?.brandKey ?? ""}
-              id="brand-key"
-              name="brandKey"
-              required
-              type="text"
+        <Section
+          id="brand-draft"
+          title={message("brandDraftTitle")}
+          description={
+            <>
+              {m(
+                "Your logo, colours and customer-facing text all come from here: what you save becomes a draft, and customers see it only after you publish.",
+                "من هنا يأتي شعارك وألوانك ونصوص العملاء: ما تحفظه يصبح مسودة، ولا يراه العملاء إلا بعد النشر.",
+              )}{" "}
+              {message("brandDraftHint")}
+            </>
+          }
+        >
+          {editor === undefined ? (
+            <Alert tone="danger">
+              <AlertDescription className="text-foreground">
+                {message("requestsResultUnavailable")}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <BrandForm
+              locale={locale}
+              brandKey={editor?.brandKey ?? "default"}
+              contentHash={editor?.contentHash ?? null}
+              config={editor?.config ?? dashboardBrand}
+              content={editor?.content ?? {}}
             />
-            <label htmlFor="brand-config">{message("brandConfigLabel")}</label>
-            <textarea dir="ltr" id="brand-config" name="config" required rows={10} />
-            <label htmlFor="brand-content">{message("brandContentLabel")}</label>
-            <textarea dir="ltr" id="brand-content" name="content" required rows={6} />
-            <Button type="submit">{message("brandSaveAction")}</Button>
-          </form>
-        </section>
+          )}
+        </Section>
 
         {draft === null || draft.contentHash === null ? null : (
-          <section aria-labelledby="brand-publish-title">
-            <h2 id="brand-publish-title">{message("brandPublishTitle")}</h2>
-            <p>{message("brandPublishHint")}</p>
-            <form action={publishBrandAction}>
-              <input type="hidden" name="locale" value={locale} />
-              <input
-                type="hidden"
-                name="brandRevisionId"
-                value={draft.brandRevisionId}
-              />
-              {/* The hash the author reviewed travels with the request, so a
-                  draft somebody edited in between is refused rather than
-                  shipped under this person's name. */}
-              <input type="hidden" name="contentHash" value={draft.contentHash} />
-              <Button type="submit">{message("brandPublishAction")}</Button>
-            </form>
-          </section>
+          <Section
+            id="brand-publish"
+            title={message("brandPublishTitle")}
+            description={message("brandPublishHint")}
+          >
+            <div className="grid gap-4 rounded-lg border bg-card p-5 md:p-6">
+              {editor ? (
+                <p className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold">
+                    {m("Changed sections:", "الأقسام المتغيرة:")}
+                  </span>
+                  {brandChangedSections(editor).length ? (
+                    brandChangedSections(editor).map((key) => (
+                      <StatusStamp key={key} state="active">
+                        {
+                          {
+                            identity: m("Identity", "الهوية"),
+                            colors: m("Colors", "الألوان"),
+                            typography: m("Typography", "الخطوط"),
+                            assets: m("Assets", "الصور"),
+                            content: m("Content", "المحتوى"),
+                          }[key as "identity"]
+                        }
+                      </StatusStamp>
+                    ))
+                  ) : (
+                    <span className="text-muted-foreground">
+                      {m("No changes", "لا تغيير")}
+                    </span>
+                  )}
+                </p>
+              ) : null}
+              <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
+                <BrandPreviewButton
+                  locale={locale}
+                  brandRevisionId={draft.brandRevisionId}
+                  label={message("brandPreviewAction")}
+                />
+                <BrandPublicationForm
+                  locale={locale}
+                  label={message("brandPublishAction")}
+                  title={m(
+                    "Publish this brand draft?",
+                    "هل تريد نشر مسودة العلامة هذه؟",
+                  )}
+                  change={{
+                    kind: "publish",
+                    brandRevisionId: draft.brandRevisionId,
+                    contentHash: draft.contentHash,
+                  }}
+                />
+              </div>
+            </div>
+          </Section>
         )}
 
-        <section aria-labelledby="brand-history-title">
-          <h2 id="brand-history-title">{message("brandHistoryTitle")}</h2>
-          {revisions.length === 0 ? (
-            <p>{message("brandHistoryEmpty")}</p>
+        <Section id="brand-history" title={message("brandHistoryTitle")}>
+          {revisions === null ? (
+            <Alert tone="danger">
+              <AlertDescription className="text-foreground">
+                {message("requestsResultUnavailable")}
+              </AlertDescription>
+            </Alert>
+          ) : revisions.length === 0 ? (
+            <EmptyState title={message("brandHistoryEmpty")} />
           ) : (
-            <ul aria-label={message("brandHistoryTitle")}>
-              {revisions.map((revision) => (
-                <li key={revision.brandRevisionId}>
-                  <bdi>{revision.brandKey}</bdi> v{revision.revision} · {revision.state}
-                  {revision.publishedAt === null
-                    ? null
-                    : ` · ${formatDateTime(revision.publishedAt, locale, "UTC")}`}
-                  {revision.notes === null ? null : ` · ${revision.notes}`}
-                  {revision.state === "retired" ? (
-                    <form action={rollbackBrandAction}>
-                      <input type="hidden" name="locale" value={locale} />
-                      <input type="hidden" name="brandId" value={revision.brandId} />
-                      <input
-                        type="hidden"
-                        name="toRevision"
-                        value={revision.revision}
-                      />
-                      <Button type="submit" variant="secondary">
-                        {message("brandRollbackAction")}
-                      </Button>
-                    </form>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+            <Table label={message("brandHistoryTitle")}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{m("Revision", "النسخة")}</TableHead>
+                  <TableHead>{m("State", "الحالة")}</TableHead>
+                  <TableHead>{m("Published (UTC)", "تاريخ النشر (UTC)")}</TableHead>
+                  <TableHead>{m("Notes", "ملاحظات")}</TableHead>
+                  <TableHead className="text-end">
+                    <span className="sr-only">{message("brandRollbackAction")}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {revisions.map((revision) => (
+                  <TableRow key={revision.brandRevisionId}>
+                    <TableCell>
+                      <ReferenceCode>
+                        {revision.brandKey} v{revision.revision}
+                      </ReferenceCode>
+                    </TableCell>
+                    <TableCell>
+                      <StatusStamp state={revisionStamp(revision.state)}>
+                        {workspaceStatus(locale, revision.state)}
+                      </StatusStamp>
+                    </TableCell>
+                    <TableCell>
+                      {revision.publishedAt === null
+                        ? "—"
+                        : formatWhen(revision.publishedAt, locale, "UTC")}
+                    </TableCell>
+                    <TableCell className="max-w-72 whitespace-normal text-muted-foreground">
+                      {revision.notes ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-end">
+                      {revision.state === "retired" ? (
+                        <BrandPublicationForm
+                          locale={locale}
+                          label={message("brandRollbackAction")}
+                          title={m(
+                            `Roll back to revision ${formatNumber(revision.revision, locale)}?`,
+                            `هل تريد الرجوع إلى النسخة ${formatNumber(revision.revision, locale)}؟`,
+                          )}
+                          variant="outline"
+                          change={{
+                            kind: "rollback",
+                            brandId: revision.brandId,
+                            toRevision: revision.revision,
+                          }}
+                        />
+                      ) : null}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </section>
-      </Surface>
+        </Section>
+      </div>
     </WorkspaceShell>
   );
 }

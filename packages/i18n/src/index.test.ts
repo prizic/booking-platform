@@ -10,6 +10,7 @@ import {
   formatNumber,
   formatPlural,
   formatTime,
+  formatTimeZone,
   formatValidationMessage,
   getDirection,
   isLocale,
@@ -81,6 +82,12 @@ describe("locale foundation", () => {
     expect(firstOccurrence).not.toBe(secondOccurrence);
     expect(firstOccurrence).toContain("GMT-04:00");
     expect(secondOccurrence).toContain("GMT-05:00");
+  });
+
+  it("renders zero offsets consistently for server and browser ICU versions", () => {
+    expect(formatTimeZone("2026-01-01T00:00:00Z", "en", "UTC")).toBe(
+      "GMT (\u2068UTC\u2069)",
+    );
   });
 
   it("rejects wall-clock strings that do not identify an instant", () => {

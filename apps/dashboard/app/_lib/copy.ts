@@ -1,6 +1,20 @@
 import type { Locale } from "@wlbp/i18n";
 
 export type DashboardMessageKey =
+  | "navServices"
+  | "navCategories"
+  | "navLocations"
+  | "navCommunications"
+  | "navIntegrations"
+  | "navAudit"
+  | "navRoles"
+  | "workspaceOperations"
+  | "workspaceCatalog"
+  | "workspaceAdministration"
+  | "workspaceMenu"
+  | "authSignIn"
+  | "authSignOut"
+  | "authAccount"
   | "todayTitle"
   | "todayIntro"
   | "todayUnavailable"
@@ -160,6 +174,7 @@ export type DashboardMessageKey =
   | "brandHistoryTitle"
   | "brandHistoryEmpty"
   | "brandRollbackAction"
+  | "brandPreviewAction"
   | "brandResultDrafted"
   | "brandResultPublished"
   | "brandResultRolledBack"
@@ -174,6 +189,8 @@ export type DashboardMessageKey =
   | "settingsPlanEmpty"
   | "settingsFeatureOn"
   | "settingsFeatureOff"
+  | "settingsFeatureGranted"
+  | "settingsFeatureUnavailable"
   | "settingsEditTitle"
   | "settingsEditHint"
   | "settingsDocumentLabel"
@@ -422,6 +439,21 @@ export type DashboardMessageKey =
 
 export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> = {
   en: {
+    navServices: "Services",
+    navCategories: "Categories",
+    navLocations: "Locations",
+    navCommunications: "Communications",
+    navIntegrations: "Integrations",
+    navAudit: "Audit",
+    navRoles: "Roles",
+    workspaceOperations: "Operations",
+    workspaceCatalog: "Catalog",
+    workspaceAdministration: "Administration",
+    workspaceMenu: "Workspace navigation",
+    authSignIn: "Sign in",
+    authSignOut: "Sign out",
+    authAccount: "Account security",
+
     todayTitle: "Today",
     todayIntro: "Everything waiting on someone, in the order it needs attention.",
     todayUnavailable: "Today stays closed until the secure connection is complete.",
@@ -443,7 +475,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     calendarViewLabel: "View",
     calendarViewDay: "Day",
     calendarViewWeek: "Week",
-    calendarViewResource: "By staff",
+    calendarViewResource: "By resource",
     calendarViewList: "List",
     calendarFilterLocation: "Location",
     calendarFilterStaff: "Staff",
@@ -579,6 +611,8 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     settingsPlanEmpty: "No features are included yet.",
     settingsFeatureOn: "on",
     settingsFeatureOff: "off",
+    settingsFeatureGranted: "Included",
+    settingsFeatureUnavailable: "Not included",
     settingsEditTitle: "Edit",
     settingsEditHint:
       "Currency, locale, tax rate and reply-to are checked before saving. Navigation may only link to pages this product has, and must be labelled in both languages.",
@@ -616,11 +650,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     brandSaveAction: "Save draft",
     brandPublishTitle: "Publish",
     brandPublishHint:
-      "Publishing replaces the live brand in one step, so customers never load a page with no brand at all.",
+      "Publishing records the active revision. Client and Dashboard apply materialized branding after platform materialization and restart or redeployment.",
     brandPublishAction: "Publish this draft",
     brandHistoryTitle: "History",
     brandHistoryEmpty: "No brand revision has been created yet.",
     brandRollbackAction: "Roll back to this",
+    brandPreviewAction: "Preview saved draft",
     brandResultDrafted: "The draft was saved.",
     brandResultPublished:
       "The brand is live. Any preview links for it have been closed.",
@@ -900,9 +935,24 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     availabilityCustomerTimeZone: "Customer timezone",
   },
   ar: {
+    navServices: "الخدمات",
+    navCategories: "الفئات",
+    navLocations: "المواقع",
+    navCommunications: "الاتصالات",
+    navIntegrations: "التكاملات",
+    navAudit: "سجل التدقيق",
+    navRoles: "الأدوار",
+    workspaceOperations: "العمليات",
+    workspaceCatalog: "الكتالوج",
+    workspaceAdministration: "الإدارة",
+    workspaceMenu: "تنقل مساحة العمل",
+    authSignIn: "تسجيل الدخول",
+    authSignOut: "تسجيل الخروج",
+    authAccount: "أمان الحساب",
+
     todayTitle: "اليوم",
     todayIntro: "كل ما ينتظر إجراءً، بالترتيب الذي يحتاج الانتباه فيه.",
-    todayUnavailable: "تبقى صفحة اليوم مغلقة حتى يكتمل الاتصال الآمن.",
+    todayUnavailable: "لا يمكن عرض مهام اليوم قبل اكتمال الاتصال الآمن.",
     todayEmpty: "لا شيء ينتظر إجراءً منك الآن.",
     todayNowLabel: "الوقت الحالي",
     todayQueueArrivals: "الوصول اليوم",
@@ -915,12 +965,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     calendarTitle: "التقويم",
     calendarSummary:
       "الحجوزات نفسها بعرض يومي أو أسبوعي أو حسب الموظف أو كقائمة. كل إجراء يعيد التحقق من السياسة على الخادم.",
-    calendarUnavailable: "يبقى التقويم مغلقًا حتى يكتمل الاتصال الآمن.",
+    calendarUnavailable: "لا يمكن عرض التقويم قبل اكتمال الاتصال الآمن.",
     calendarEmpty: "لا توجد حجوزات في هذا النطاق.",
     calendarViewLabel: "العرض",
     calendarViewDay: "يوم",
     calendarViewWeek: "أسبوع",
-    calendarViewResource: "حسب الموظف",
+    calendarViewResource: "حسب المورد",
     calendarViewList: "قائمة",
     calendarFilterLocation: "الموقع",
     calendarFilterStaff: "الموظف",
@@ -931,7 +981,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     calendarTimezoneNote: "تُعرض الأوقات بالمنطقة الزمنية للموقع.",
     calendarResourceUnassigned: "غير مُسند",
     calendarStatusLabel: "الحالة",
-    calendarOpenBooking: "فتح في الحجوزات",
+    calendarOpenBooking: "فتح الحجز",
     calendarListAlternative:
       "تحمل هذه القائمة الحجوزات نفسها الموجودة في عرض اليوم والأسبوع.",
     bookingsDeliveryLabel: "البريد",
@@ -943,7 +993,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     bookingsSummary:
       "انقل حجزًا أو ألغه. يُبلَّغ العميل في الحالتين، ويتبع أي استرداد السياسة التي تم الحجز وفقها.",
     bookingsEmpty: "لا توجد حجوزات قادمة.",
-    bookingsUnavailable: "تبقى الحجوزات مغلقة حتى يكتمل الاتصال الآمن.",
+    bookingsUnavailable: "لا يمكن عرض الحجوزات قبل اكتمال الاتصال الآمن.",
     bookingsListLabel: "الحجوزات القادمة",
     bookingsWhenLabel: "الموعد",
     bookingsStatusLabel: "الحالة",
@@ -957,7 +1007,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     requestsSummary:
       "تنتظر الطلبات قرارًا هنا. القبول يحجز الوقت، ويُبلَّغ العميل في الحالتين.",
     requestsEmpty: "لا توجد طلبات تنتظر قرارًا.",
-    requestsUnavailable: "تبقى الطلبات مغلقة حتى يكتمل الاتصال الآمن.",
+    requestsUnavailable: "لا يمكن عرض الطلبات قبل اكتمال الاتصال الآمن.",
     requestsQueueLabel: "طلبات تنتظر قرارًا",
     requestsRequestedAtLabel: "تاريخ الطلب",
     requestsDeadlineLabel: "الرد قبل",
@@ -1001,7 +1051,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     reportsTitle: "التقارير",
     reportsSummary:
       "كل رقم هنا محسوب من سجلات مثبتة — سجل الحجوزات والسجل المالي — وليس من أي شيء أبلغ عنه المتصفّح.",
-    reportsUnavailable: "تعذّر تحميل التقرير. هذا ليس أسبوعاً هادئاً.",
+    reportsUnavailable: "تعذّر تحميل التقرير، ولا يعني ذلك أن الفترة خلت من النشاط.",
     reportsFromLabel: "من",
     reportsToLabel: "إلى",
     reportsTimeZoneLabel: "المنطقة الزمنية",
@@ -1050,6 +1100,8 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     settingsPlanEmpty: "لا توجد مزايا متضمَّنة بعد.",
     settingsFeatureOn: "مفعّل",
     settingsFeatureOff: "غير مفعّل",
+    settingsFeatureGranted: "متاح في الخطة",
+    settingsFeatureUnavailable: "غير متاح في الخطة",
     settingsEditTitle: "تعديل",
     settingsEditHint:
       "تُفحص العملة واللغة ونسبة الضريبة وعنوان الردّ قبل الحفظ. ولا يجوز أن يشير التنقّل إلا إلى صفحات موجودة في المنتج، مع تسمية بلغتين.",
@@ -1087,11 +1139,12 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     brandSaveAction: "حفظ المسوّدة",
     brandPublishTitle: "النشر",
     brandPublishHint:
-      "يستبدل النشر الهوية الحالية في خطوة واحدة، فلا يرى العملاء صفحة بلا هوية إطلاقاً.",
+      "يسجّل النشر النسخة المعتمدة. يطبّق موقع العميل ولوحة التحكم الهوية بعد تجهيزها على المنصة وإعادة التشغيل أو النشر.",
     brandPublishAction: "نشر هذه المسوّدة",
     brandHistoryTitle: "السجل",
     brandHistoryEmpty: "لم تُنشأ أي نسخة هوية بعد.",
     brandRollbackAction: "الرجوع إلى هذه",
+    brandPreviewAction: "معاينة المسودة المحفوظة",
     brandResultDrafted: "تم حفظ المسوّدة.",
     brandResultPublished: "الهوية منشورة الآن، وأُغلقت روابط المعاينة الخاصة بها.",
     brandResultRolledBack: "تم الرجوع. الهوية السابقة منشورة مجدداً كنسخة جديدة.",
@@ -1111,7 +1164,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     paymentsDeliveryResendHint: "يمكن إعادة إرسال أي رسالة من الحجز التابعة له.",
     paymentsSummary:
       "المبالغ المستردة والنزاعات والتحويلات، وكل ما يختلف عليه مزوّد الدفع وهذه المنصّة. كل عنصر هنا مال يحتاج إلى قرار.",
-    paymentsUnavailable: "تعذّر تحميل قائمة المدفوعات. هذه ليست قائمة فارغة.",
+    paymentsUnavailable: "تعذّر تحميل قائمة المدفوعات، ولا يعني ذلك أنها فارغة.",
     paymentsStatusLabel: "العرض",
     paymentsStatusOpen: "مفتوح",
     paymentsStatusResolved: "تمت المعالجة",
@@ -1139,7 +1192,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     customersTitle: "العملاء",
     customersSummary:
       "كل من حجز لدى هذا النشاط، وحقوق الخصوصية التي يمكنه ممارستها. تُبنى الهوية من الحجوزات، وتصحيح السجل هنا لا يُعدّل الحجوزات السابقة.",
-    customersUnavailable: "تعذّر تحميل دليل العملاء. هذا ليس دليلاً فارغاً.",
+    customersUnavailable: "تعذّر تحميل دليل العملاء، ولا يعني ذلك أنه فارغ.",
     customersEmpty: "لا يوجد عميل مطابق لهذا البحث.",
     customersSearchLabel: "ابحث بالاسم أو البريد أو الهاتف",
     customersSearchAction: "بحث",
@@ -1228,7 +1281,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     todaySummary: "ملخص اليوم",
     notFoundTitle: "مساحة العمل غير موجودة",
     returnHome: "العودة إلى مساحة العمل",
-    privateStatus: "عرض خاص بالمستأجر",
+    privateStatus: "مساحة خاصة بالمنشأة",
     configurationTitle: "إعداد مساحة العمل غير متاح",
     configurationSummary: "تظل مساحة العمل الخاصة مغلقة حتى يكتمل إعداد الاتصال الآمن.",
     signInTitle: "تسجيل الدخول مطلوب",

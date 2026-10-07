@@ -24,7 +24,10 @@ Agents: read [`../AGENTS.md`](../AGENTS.md) first. It is the contract.
 | Identify an environment or release the shared backend | [environments.md](environments.md) |
 | Build UI, tokens, Arabic/RTL, accessibility | [design-system.md](design-system.md) |
 | Use pinned local web fonts and regenerate visual references | [fonts/README.md](fonts/README.md) |
+| Make Client or Dashboard installable, offline page, service-worker caching | [pwa.md](pwa.md) |
+| Set up or troubleshoot the optional WhatsApp notification channel | [whatsapp.md](whatsapp.md), [ADR-0018](adr/0018-whatsapp-notification-channel.md) |
 | Upgrade an older instance brand schema | [schema 1 → 2 brand tokens](config-migrations/0001-to-0002-brand-tokens.md), then [schema 2 → 3 validated PNG assets](config-migrations/0002-to-0003-raster-brand-assets.md) |
+| Define, assign, or troubleshoot tenant roles (built-in and custom) | [roles.md](roles.md), [ADR-0019](adr/0019-tenant-custom-roles.md) |
 | Know the security and privacy rules | [security-and-privacy.md](security-and-privacy.md) |
 | Know what a tenant may customize | [customization-boundaries.md](customization-boundaries.md) |
 | Ship a release or upgrade an instance | [upstream-updates.md](upstream-updates.md) |

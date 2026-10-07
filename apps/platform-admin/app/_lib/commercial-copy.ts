@@ -1,0 +1,56 @@
+export const commercialCopy = {
+  plans: {
+    title: ["Plans", "الخطط"],
+    description: [
+      "A plan is a named set of features. Changing a plan's features updates every tenant on it.",
+      "الخطة مجموعة مسمّاة من الميزات. تغيير ميزات خطة يحدّث كل مستأجر عليها.",
+    ],
+    create: ["Create plan", "إنشاء خطة"],
+    createTitle: ["Create a plan", "إنشاء خطة"],
+    edit: ["Edit", "تعديل"],
+    editTitle: ["Edit plan", "تعديل الخطة"],
+    editBody: [
+      "Saving re-applies the features to every tenant on this plan. Manual overrides are kept.",
+      "الحفظ يعيد تطبيق الميزات على كل مستأجر في هذه الخطة. تُحفظ التجاوزات اليدوية.",
+    ],
+    saved: ["Plan saved.", "تم حفظ الخطة."],
+    key: ["Key", "المفتاح"],
+    keyHint: [
+      "Lowercase, e.g. studio. Cannot be changed later.",
+      "بأحرف صغيرة، مثل studio. لا يمكن تغييره لاحقًا.",
+    ],
+    name: ["Name", "الاسم"],
+    features: ["Features", "الميزات"],
+    featuresHint: [
+      "One feature key per line, e.g. booking.online.",
+      "مفتاح ميزة في كل سطر، مثل booking.online.",
+    ],
+    knownFeatures: ["Feature keys in use: {keys}", "مفاتيح الميزات المستخدمة: {keys}"],
+    active: ["Available for new assignments", "متاحة للتعيينات الجديدة"],
+    subscribers: ["Tenants on plan", "المستأجرون على الخطة"],
+    status: ["Status", "الحالة"],
+    inactive: ["Inactive", "غير نشطة"],
+    created: ["Created", "تاريخ الإنشاء"],
+    empty: ["No plans exist yet.", "لا توجد خطط بعد."],
+  },
+  subscriptions: {
+    title: ["Subscriptions", "الاشتراكات"],
+    description: [
+      "Each tenant's plan, status and dates as recorded here.",
+      "خطة كل مستأجر وحالتها وتواريخها كما سُجّلت هنا.",
+    ],
+    billingNote: [
+      "These are administrative records. No payment provider is connected for platform subscriptions: nothing here charges, refunds or confirms a payment.",
+      "هذه سجلات إدارية. لا يوجد مزوّد دفع متصل باشتراكات المنصة: لا شيء هنا يحصّل مبلغًا أو يردّه أو يؤكد دفعًا.",
+    ],
+    search: ["Search by tenant", "ابحث بالمستأجر"],
+    tenant: ["Tenant", "المستأجر"],
+    plan: ["Plan", "الخطة"],
+    status: ["Status", "الحالة"],
+    ring: ["Ring", "الحلقة"],
+    started: ["Started", "البداية"],
+    ends: ["Ends", "النهاية"],
+    updated: ["Last changed", "آخر تعديل"],
+    actions: ["Actions", "الإجراءات"],
+  },
+} as const;

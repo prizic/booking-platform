@@ -20,6 +20,7 @@ afterEach(() => {
 });
 
 describe("Dashboard locale metadata", () => {
+  // Cold-imports the layout and the whole shared UI library on first run.
   it("uses the validated tenant origin for canonical and social URLs", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://dashboard.booking.example");
     vi.stubEnv("WLBP_BRAND_CONFIG_JSON", serializedBrand);
@@ -50,7 +51,7 @@ describe("Dashboard locale metadata", () => {
         },
       },
     });
-  });
+  }, 20_000);
 
   it("fails closed when a production build has no public origin", async () => {
     const { getDashboardSiteOrigin } = await import("../_lib/site-origin");

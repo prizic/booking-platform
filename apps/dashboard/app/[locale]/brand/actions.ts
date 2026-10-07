@@ -1,13 +1,29 @@
 "use server";
-
-import type { Locale } from "@wlbp/i18n";
-import { parseBrandConfig } from "@wlbp/white-label-ui";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import type { Locale } from "@wlbp/i18n";
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 
+import { dashboardBrand } from "../../_lib/brand";
 import { DashboardRpcError } from "../../_lib/dashboard-data-source";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { decisionOutcomeFor, type DecisionOutcome } from "../../_lib/request-decisions";
+import { brandDraft, parseBrandEditor } from "./brand-document";
+import {
+  brandEditorSchema,
+  brandPreviewSchema,
+  brandPublishSchema,
+  brandRollbackSchema,
+  type BrandEditorInput,
+  type BrandPreviewInput,
+  type BrandPublishInput,
+  type BrandRollbackInput,
+} from "./brand-schema";
 
 type BrandOutcome =
   | DecisionOutcome
@@ -17,6 +33,7 @@ type BrandOutcome =
   | "rolled-back"
   | "unsafe-content";
 
+/** Where a successful brand change is reported (the page's result banner). */
 function resultUrl(locale: Locale, outcome: BrandOutcome): string {
   return `/${locale}/brand?result=${outcome}`;
 }
@@ -33,120 +50,130 @@ function brandOutcomeFor(error: unknown): BrandOutcome {
   return decisionOutcomeFor(error);
 }
 
-function trimmed(formData: FormData, key: string): string | null {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
+type Destination = { readonly destination: string };
 
-export async function saveBrandDraftAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const brandKey = trimmed(formData, "brandKey");
-  const configRaw = trimmed(formData, "config");
-  const contentRaw = trimmed(formData, "content");
-  if (brandKey === null || configRaw === null || contentRaw === null) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
-
-  let config: unknown;
-  let content: unknown;
-  try {
-    // Tokens, contrast ratios, fonts and asset paths are validated here, by the
-    // same parser the renderer uses. Shipping a brand that fails contrast is a
-    // thing this refuses before the database is asked.
-    config = parseBrandConfig(JSON.parse(configRaw));
-    content = JSON.parse(contentRaw);
-    if (typeof content !== "object" || content === null || Array.isArray(content)) {
-      throw new Error("content must be an object");
-    }
-  } catch {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
-
-  const request = await loadDashboardRequestAccess(locale);
-  if (
-    request.source === null ||
-    request.state.kind !== "ready" ||
-    request.source.saveBrandDraft === undefined
-  ) {
-    redirect(resultUrl(locale, "not-authorized"));
-  }
-
-  let outcome: BrandOutcome;
-  try {
-    await request.source.saveBrandDraft({
-      brandKey,
-      config,
-      content,
-      tenantId: request.state.context.tenantId,
-    });
-    outcome = "drafted";
-  } catch (error) {
-    outcome = brandOutcomeFor(error);
-  }
-  if (outcome === "drafted") revalidatePath(`/${locale}/brand`);
-  redirect(resultUrl(locale, outcome));
-}
-
-export async function publishBrandAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const brandRevisionId = trimmed(formData, "brandRevisionId");
-  const expectedContentHash = trimmed(formData, "contentHash");
-  if (brandRevisionId === null || expectedContentHash === null) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
-
+export async function publishBrandAction(
+  input: BrandPublishInput,
+): Promise<ActionResult<Destination>> {
+  const parsed = parseActionInput(brandPublishSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, brandRevisionId, contentHash } = parsed.data;
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
     request.state.kind !== "ready" ||
     request.source.publishBrandRevision === undefined
-  ) {
-    redirect(resultUrl(locale, "not-authorized"));
-  }
-
-  let outcome: BrandOutcome;
+  )
+    return actionError("not-authorized");
   try {
     await request.source.publishBrandRevision({
       brandRevisionId,
-      expectedContentHash,
+      expectedContentHash: contentHash,
       tenantId: request.state.context.tenantId,
     });
-    outcome = "published";
   } catch (error) {
-    outcome = brandOutcomeFor(error);
+    return actionError(brandOutcomeFor(error));
   }
-  if (outcome === "published") revalidatePath(`/${locale}/brand`);
-  redirect(resultUrl(locale, outcome));
+  revalidatePath(`/${locale}`, "layout");
+  return actionOk({ destination: resultUrl(locale, "published") });
 }
 
-export async function rollbackBrandAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const brandId = trimmed(formData, "brandId");
-  const toRevision = Number(formData.get("toRevision"));
-  if (brandId === null || !Number.isSafeInteger(toRevision)) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
-
+export async function rollbackBrandAction(
+  input: BrandRollbackInput,
+): Promise<ActionResult<Destination>> {
+  const parsed = parseActionInput(brandRollbackSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, brandId, toRevision } = parsed.data;
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
     request.state.kind !== "ready" ||
     request.source.rollbackBrand === undefined
-  ) {
-    redirect(resultUrl(locale, "not-authorized"));
-  }
-
-  let outcome: BrandOutcome;
+  )
+    return actionError("not-authorized");
   try {
     await request.source.rollbackBrand({
       brandId,
       tenantId: request.state.context.tenantId,
       toRevision,
     });
-    outcome = "rolled-back";
   } catch (error) {
-    outcome = brandOutcomeFor(error);
+    return actionError(brandOutcomeFor(error));
   }
-  if (outcome === "rolled-back") revalidatePath(`/${locale}/brand`);
-  redirect(resultUrl(locale, outcome));
+  revalidatePath(`/${locale}`, "layout");
+  return actionOk({ destination: resultUrl(locale, "rolled-back") });
+}
+
+/**
+ * Saves the structured brand editor as the draft. Tokens, contrast ratios,
+ * fonts and asset paths are validated by the renderer's own parser before the
+ * database is asked; shipping a brand that fails contrast is refused here.
+ */
+export async function saveStructuredBrandAction(
+  input: BrandEditorInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(brandEditorSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, brandKey, contentHash } = parsed.data;
+  const request = await loadDashboardRequestAccess(locale);
+  if (
+    request.state.kind !== "ready" ||
+    !request.source?.getBrandEditor ||
+    !request.source.saveBrandEditor
+  )
+    return actionError("not-authorized");
+  try {
+    const current = parseBrandEditor(
+      await request.source.getBrandEditor(request.state.context.tenantId),
+    );
+    let draft;
+    try {
+      draft = brandDraft(
+        current ?? { config: dashboardBrand, content: {} },
+        parsed.data,
+      );
+    } catch {
+      return actionError("brand_review");
+    }
+    await request.source.saveBrandEditor({
+      tenantId: request.state.context.tenantId,
+      brandKey,
+      expectedHash: contentHash || null,
+      ...draft,
+    });
+    revalidatePath(`/${locale}/brand`);
+    return actionOk(undefined, "drafted");
+  } catch (error) {
+    return actionError(brandOutcomeFor(error));
+  }
+}
+
+/** Issues a private preview of the saved draft and opens it. */
+export async function previewBrandAction(
+  input: BrandPreviewInput,
+): Promise<ActionResult<Destination>> {
+  const parsed = parseActionInput(brandPreviewSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, brandRevisionId } = parsed.data;
+  const request = await loadDashboardRequestAccess(locale);
+  if (request.state.kind !== "ready" || !request.source?.issueBrandPreview)
+    return actionError("not-authorized");
+  let preview;
+  try {
+    preview = await request.source.issueBrandPreview({
+      tenantId: request.state.context.tenantId,
+      brandRevisionId,
+    });
+  } catch (error) {
+    return actionError(brandOutcomeFor(error));
+  }
+  const store = await cookies();
+  store.set("dashboard-brand-preview", preview.previewToken, {
+    httpOnly: true,
+    secure: process.env.WLBP_RUNTIME_ENV !== "local",
+    sameSite: "lax",
+    path: "/",
+    expires: new Date(preview.expiresAt),
+  });
+  return actionOk({ destination: `/${locale}/brand-preview?mode=draft` });
 }

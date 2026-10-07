@@ -1,3 +1,6 @@
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+
+import { checkoutStatusSchema } from "../../../[locale]/book/booking-schema";
 import {
   ClientBookingError,
   createClientBookingDataSource,
@@ -19,10 +22,9 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const context = await createPublicApiContext();
     if (context === null) return contractErrorResponse("availability_unavailable", 503);
-    const body = (await request.json()) as { holdId?: unknown; sessionToken?: unknown };
-    if (typeof body.holdId !== "string" || typeof body.sessionToken !== "string") {
-      return contractErrorResponse("invalid_request", 400);
-    }
+    const input = parseActionInput(checkoutStatusSchema, await request.json());
+    if (!input.ok) return contractErrorResponse("invalid_request", 400);
+    const body = input.data;
     const status = await createClientBookingDataSource(
       context.api,
       context.hostname,

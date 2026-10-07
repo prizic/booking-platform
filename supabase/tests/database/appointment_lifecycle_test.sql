@@ -253,8 +253,9 @@ rollback to savepoint lc_cancel_not_correctable;
 -- ---------------------------------------------------------------------------
 savepoint lc_window;
 -- A member granted check-in but not the override cannot check anyone in
--- outside the booking's own snapshotted window.
-update app.role_permissions set scope_kind='tenant'
+-- outside the booking's own snapshotted window. (Staff is an assigned-mode
+-- role, so the widened grant is location-scoped: their location is A1.)
+update app.role_permissions set scope_kind='location'
 where tenant_id='a0000000-0000-0000-0000-000000000001'
   and role_id='a2000000-0000-0000-0000-000000000001'
   and permission_key='booking.check_in';
@@ -268,7 +269,7 @@ reset role;
 select set_config('request.jwt.claims',null,true);
 insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
 values ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001',
-  'booking.check_in_override','direct','tenant');
+  'booking.check_in_override','direct','location');
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 select is((select t.status from api_v1.transition_booking_v1(

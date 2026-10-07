@@ -8,7 +8,8 @@
     "node": ">=22.13.0 <23"
   },
   "scripts": {
-    "dev": "turbo run dev --parallel",
+    "dev": "node scripts/dev.mjs",
+    "demo:local": "node scripts/demo-local.mjs",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "eslint . --max-warnings=0 && pnpm check:boundaries",
@@ -17,7 +18,7 @@
     "test": "turbo run test:unit",
     "test:unit": "turbo run test:unit",
     "test:contract": "node scripts/check-release-contracts.mjs",
-    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs",
+    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs scripts/dev.test.mjs scripts/platform-admin-local.test.mjs scripts/totp.test.mjs",
     "test:component": "playwright test --project=component",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:live": "node scripts/live-booking-e2e.mjs pnpm exec playwright test --project=live-booking",
@@ -29,9 +30,9 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "db:reset": "supabase db reset --local",
-    "db:lint": "supabase db lint --local --level error --fail-on error",
+    "db:lint": "node scripts/supabase-local.mjs db lint --local --level error --fail-on error",
     "db:types": "node scripts/check-database-types.mjs --write",
-    "test:db": "supabase test db --local",
+    "test:db": "node scripts/supabase-local.mjs test db --local",
     "test:concurrency": "node tests/concurrency/run.mjs",
     "test:github-app": "node scripts/test-github-app.mjs",
     "test:vercel": "node scripts/test-vercel.mjs",
@@ -53,7 +54,7 @@
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:distribution": "node --test scripts/build-distribution.test.mjs",
     "bundle:edge": "node scripts/bundle-edge-shared.mjs",
-    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs && deno test --allow-env supabase/functions/_shared/rpc.test.ts"
+    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs && deno test --allow-env supabase/functions/_shared/rpc.test.ts && deno test supabase/functions/payment-onboarding/provider.test.ts supabase/functions/auth-mail-hook/redirect.test.ts supabase/functions/whatsapp-worker/worker.test.ts supabase/functions/whatsapp-webhook/handler.test.ts supabase/functions/email-preview/request.test.ts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

@@ -3,13 +3,17 @@
 import { parseProposalResponseV1, type ProposalResponseV1 } from "@wlbp/api-contracts";
 import { formatDateTime, type Locale } from "@wlbp/i18n";
 import {
-  Badge,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
+  PageHeader,
+  ReferenceCode,
 } from "@wlbp/ui-foundation";
-import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+
+import { errorCodeOf, postJson } from "../../_lib/client-api";
+import { proposalResponseSchema, type ProposalResponseInput } from "./proposal-schema";
 
 interface ProposalResponseProps {
   readonly actionToken: string | null;
@@ -25,100 +29,95 @@ export function ProposalResponse({
   timeZone,
 }: ProposalResponseProps) {
   const message = (key: string) => copy[key] ?? key;
-  const [result, setResult] = useState<ProposalResponseV1 | null>(null);
-  const [busy, setBusy] = useState<"accept" | "decline" | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const respond = useMutation({
+    // The same schema the route applies: a well formed token and one answer.
+    mutationFn: async (input: ProposalResponseInput) =>
+      parseProposalResponseV1(
+        await postJson("/api/proposals", proposalResponseSchema.parse(input)),
+      ),
+    retry: false,
+  });
+  const result: ProposalResponseV1 | null = respond.data ?? null;
+  const errorCode = respond.isError ? errorCodeOf(respond.error) : null;
+  const busy = respond.isPending ? (respond.variables?.action ?? null) : null;
 
-  async function respond(action: "accept" | "decline") {
+  function answer(action: "accept" | "decline") {
     if (actionToken === null) return;
-    setBusy(action);
-    setErrorCode(null);
-    try {
-      const response = await fetch("/api/proposals", {
-        body: JSON.stringify({ action, actionToken }),
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        const body: unknown = await response.json().catch(() => null);
-        const code =
-          typeof body === "object" && body !== null
-            ? ((body as { error?: { code?: unknown } }).error?.code ?? null)
-            : null;
-        setErrorCode(typeof code === "string" ? code : "availability_unavailable");
-        return;
-      }
-      setResult(parseProposalResponseV1(await response.json()));
-    } catch {
-      setErrorCode("availability_unavailable");
-    } finally {
-      setBusy(null);
-    }
+    respond.mutate({ action, actionToken });
   }
 
   if (result !== null) {
     const accepted = result.proposalState === "accepted";
     return (
-      <Surface as="section" className="booking-confirmed" labelledBy="proposal-result">
-        <Badge tone={accepted ? "positive" : "neutral"}>{result.publicReference}</Badge>
-        <h1 id="proposal-result">
-          {accepted
-            ? message("proposalAcceptedTitle")
-            : message("proposalDeclinedTitle")}
-        </h1>
-        <p>
-          {accepted
-            ? message("proposalAcceptedSummary")
-            : message("proposalDeclinedSummary")}
-        </p>
+      <section aria-labelledby="proposal-result" className="grid gap-6">
+        <PageHeader
+          title={
+            accepted
+              ? message("proposalAcceptedTitle")
+              : message("proposalDeclinedTitle")
+          }
+          titleId="proposal-result"
+          description={
+            accepted
+              ? message("proposalAcceptedSummary")
+              : message("proposalDeclinedSummary")
+          }
+          meta={<ReferenceCode>{result.publicReference}</ReferenceCode>}
+        />
         {accepted ? (
-          <StatusMessage tone="positive">
+          <Alert tone="positive">
             {formatDateTime(result.startAt, locale, timeZone)}
-          </StatusMessage>
+          </Alert>
         ) : null}
-      </Surface>
+      </section>
     );
   }
 
   return (
-    <Surface as="section" className="booking-flow" labelledBy="proposal-title">
-      <h1 id="proposal-title">{message("proposalTitle")}</h1>
-      <p>{message("proposalSummary")}</p>
+    <section aria-labelledby="proposal-title" className="grid gap-6">
+      <PageHeader
+        title={message("proposalTitle")}
+        titleId="proposal-title"
+        description={message("proposalSummary")}
+      />
       {errorCode === null ? null : (
-        <ErrorSummary
-          focusTarget
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="proposal-error"
-          title={message("proposalErrorTitle")}
+          tabIndex={-1}
+          tone="danger"
         >
-          <p>
+          <AlertTitle>{message("proposalErrorTitle")}</AlertTitle>
+          <AlertDescription>
             {errorCode === "revision_conflict" || errorCode === "slot_unavailable"
               ? message("proposalErrorExpired")
               : message("proposalErrorUnavailable")}
-          </p>
-        </ErrorSummary>
+          </AlertDescription>
+        </Alert>
       )}
       {actionToken === null ? (
-        <p>{message("proposalMissingToken")}</p>
+        <Alert tone="info">{message("proposalMissingToken")}</Alert>
       ) : (
-        <div className="booking-flow__actions">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             loading={busy === "accept"}
             loadingLabel={message("proposalAccepting")}
-            onClick={() => void respond("accept")}
+            onClick={() => answer("accept")}
+            size="lg"
           >
             {message("proposalAccept")}
           </Button>
           <Button
             loading={busy === "decline"}
             loadingLabel={message("proposalDeclining")}
-            onClick={() => void respond("decline")}
-            variant="secondary"
+            onClick={() => answer("decline")}
+            size="lg"
+            variant="outline"
           >
             {message("proposalDecline")}
           </Button>
         </div>
       )}
-    </Surface>
+    </section>
   );
 }

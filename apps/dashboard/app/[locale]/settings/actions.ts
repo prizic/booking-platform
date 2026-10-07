@@ -1,12 +1,18 @@
 "use server";
-
-import type { Locale } from "@wlbp/i18n";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
-
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
+import type { DashboardMessageKey } from "../../_lib/copy";
 import { DashboardRpcError } from "../../_lib/dashboard-data-source";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { decisionOutcomeFor, type DecisionOutcome } from "../../_lib/request-decisions";
+import { SettingsFieldError, mergeSettings } from "./settings-document";
+import { settingsResultKeys } from "./results";
+import { settingsSchema, type SettingsInput } from "./settings-schema";
 
 type SettingsOutcome =
   DecisionOutcome | "invalid" | "saved" | "saved-partial" | "unsafe-content";
@@ -18,61 +24,56 @@ function settingsOutcomeFor(error: unknown): SettingsOutcome {
   return decisionOutcomeFor(error);
 }
 
-export async function saveSettingsAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const base = `/${locale}/settings`;
-  const expectedRevision = Number(formData.get("expectedRevision"));
-  const raw = {
-    featureConfiguration: formData.get("featureConfiguration"),
-    navigation: formData.get("navigation"),
-    settings: formData.get("settings"),
-  };
-  if (
-    !Number.isSafeInteger(expectedRevision) ||
-    typeof raw.settings !== "string" ||
-    typeof raw.navigation !== "string" ||
-    typeof raw.featureConfiguration !== "string"
-  ) {
-    redirect(`${base}?result=invalid-request`);
-  }
-
-  let settings: unknown;
-  let navigation: unknown;
-  let featureConfiguration: unknown;
-  try {
-    settings = JSON.parse(raw.settings);
-    navigation = JSON.parse(raw.navigation);
-    featureConfiguration = JSON.parse(raw.featureConfiguration);
-  } catch {
-    redirect(`${base}?result=invalid-request`);
-  }
-
+/**
+ * Saves the structured settings editor. Failures carry a dashboard message
+ * key as the form error; success carries the saved (or partially saved)
+ * message key, because saying "saved" when the plan dropped part of the
+ * request would be the one thing this surface must not do.
+ */
+export async function saveStructuredSettingsAction(
+  input: SettingsInput,
+): Promise<ActionResult<{ readonly message: DashboardMessageKey }>> {
+  const parsed = parseActionInput(settingsSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, expectedRevision } = parsed.data;
   const request = await loadDashboardRequestAccess(locale);
   if (
-    request.source === null ||
     request.state.kind !== "ready" ||
-    request.source.saveTenantSettings === undefined
-  ) {
-    redirect(`${base}?result=not-authorized`);
-  }
-
-  let outcome: SettingsOutcome;
+    !request.source?.getTenantConfiguration ||
+    !request.source.saveTenantSettings
+  )
+    return actionError("requestsResultNotAuthorized");
   try {
-    const ignored = await request.source.saveTenantSettings({
-      expectedRevision,
-      featureConfiguration,
-      navigation,
-      settings,
+    const current = await request.source.getTenantConfiguration({
       tenantId: request.state.context.tenantId,
     });
-    // The save succeeded either way; saying "saved" when part of it was
-    // silently dropped would be the one thing this surface must not do.
-    outcome = ignored.length > 0 ? "saved-partial" : "saved";
+    if (!current) return actionError("settingsUnavailable");
+    let documents;
+    try {
+      documents = mergeSettings(current, parsed.data);
+    } catch (error) {
+      return actionError(
+        "settingsResultInvalid",
+        error instanceof SettingsFieldError
+          ? { [error.field]: ["invalid"] }
+          : undefined,
+      );
+    }
+    const ignored = await request.source.saveTenantSettings({
+      ...documents,
+      expectedRevision,
+      tenantId: request.state.context.tenantId,
+    });
+    revalidatePath(`/${locale}/settings`);
+    return actionOk({
+      message: ignored.length ? "settingsResultSavedPartial" : "settingsResultSaved",
+    });
   } catch (error) {
-    outcome = settingsOutcomeFor(error);
+    const outcome = settingsOutcomeFor(error);
+    return actionError(
+      outcome in settingsResultKeys
+        ? settingsResultKeys[outcome as keyof typeof settingsResultKeys]
+        : "requestsResultUnavailable",
+    );
   }
-  if (outcome === "saved" || outcome === "saved-partial") {
-    revalidatePath(base);
-  }
-  redirect(`${base}?result=${outcome}`);
 }

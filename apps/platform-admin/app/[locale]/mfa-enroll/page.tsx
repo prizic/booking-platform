@@ -1,27 +1,32 @@
 "use client";
 
 import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
-  TextField,
+  Form,
+  FormRootError,
+  Skeleton,
+  useActionMutation,
+  useZodForm,
 } from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
-import { getAdminMessage } from "../../_lib/copy";
-import {
-  getPlatformAdminBrowserClient,
-  verifyMfaCode,
-} from "../../_lib/supabase-browser";
+import { use, useEffect, useMemo, useState } from "react";
+import { verifyFactorCode } from "../../_lib/auth-flow";
+import { say } from "../../_lib/copy";
+import { authCopy } from "../../_lib/auth-copy";
+import { authFormMessages } from "../../_lib/form-messages";
+import { totpCodeSchema, type TotpCodeInput } from "../../_lib/schemas/auth";
+import { getPlatformAdminBrowserClient } from "../../_lib/supabase-browser";
+import { AuthFrame } from "../../_lib/ui/auth-frame";
+import { TextFormField } from "../../_lib/ui/form-fields";
 
 type MfaEnrollPageProps = { params: Promise<{ locale: Locale }> };
 
 export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
   const { locale } = use(params);
-  const message = (key: Parameters<typeof getAdminMessage>[1]) =>
-    getAdminMessage(locale, key);
   const router = useRouter();
 
   const [factor, setFactor] = useState<{
@@ -30,7 +35,6 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     secret: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,7 +64,7 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
       });
       if (cancelled) return;
       if (enrollError) {
-        setError(enrollError.message);
+        setError(say(locale, authCopy.enrollFailed));
         return;
       }
       setFactor({ id: data.id, qrCode: data.totp.qr_code, secret: data.totp.secret });
@@ -70,60 +74,116 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!factor) return;
-    setError(null);
-    setPending(true);
-    const form = new FormData(event.currentTarget);
-    const code = String(form.get("code") ?? "");
-
-    const client = getPlatformAdminBrowserClient();
-    const { error: verifyError } = await verifyMfaCode(client, factor.id, code);
-    if (verifyError) {
-      setError(verifyError.message);
-      setPending(false);
-      return;
-    }
-    router.push(`/${locale}`);
-  }
+  }, [locale]);
 
   return (
-    <main className="admin-shell">
-      <Surface as="section" className="fleet-panel" labelledBy="mfa-enroll-title">
-        <h1 id="mfa-enroll-title">{message("mfaEnrollTitle")}</h1>
-        <StatusMessage>{message("mfaEnrollInstructions")}</StatusMessage>
-        {error === null ? null : (
-          <ErrorSummary title={message("mfaEnrollErrorTitle")}>{error}</ErrorSummary>
-        )}
-        {factor === null ? null : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
-            <img alt="" height={200} src={factor.qrCode} width={200} />
-            <p>
-              <strong>{message("mfaEnrollSecretLabel")}:</strong>{" "}
-              <code>{factor.secret}</code>
-            </p>
-            <form onSubmit={handleVerify}>
-              <TextField
-                autoComplete="one-time-code"
-                id="code"
-                inputMode="numeric"
-                label={message("mfaEnrollCodeLabel")}
-                maxLength={6}
-                minLength={6}
-                name="code"
-                required
+    <AuthFrame
+      locale={locale}
+      titleId="mfa-enroll-title"
+      title={say(locale, authCopy.enrollTitle)}
+      description={say(locale, authCopy.enrollBody)}
+    >
+      {error === null ? null : (
+        <Alert tone="danger">
+          <AlertTitle>{say(locale, authCopy.errorTitle)}</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {factor === null && error === null ? (
+        <div className="grid justify-items-center gap-3">
+          <Skeleton className="size-[200px]" />
+          <p role="status" className="text-sm text-muted-foreground">
+            {say(locale, authCopy.preparing)}
+          </p>
+        </div>
+      ) : null}
+      {factor === null ? null : (
+        <>
+          <div className="grid justify-items-center gap-4">
+            {/* A QR code needs a light quiet zone to scan, in the dark theme too. */}
+            <div className="rounded-lg border bg-white p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
+              <img
+                alt={say(locale, authCopy.enrollQr)}
+                height={200}
+                src={factor.qrCode}
+                width={200}
               />
-              <Button loading={pending} type="submit">
-                {message("mfaEnrollSubmit")}
-              </Button>
-            </form>
-          </>
-        )}
-      </Surface>
-    </main>
+            </div>
+            <div className="grid w-full gap-1 text-center">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {say(locale, authCopy.enrollKey)}
+              </p>
+              <code
+                dir="ltr"
+                className="rounded-md bg-muted px-3 py-2 font-latin text-sm font-semibold tracking-[0.12em] break-all select-all"
+              >
+                {factor.secret}
+              </code>
+            </div>
+          </div>
+          <VerifyForm
+            locale={locale}
+            factorId={factor.id}
+            onVerified={() => {
+              router.replace(`/${locale}`);
+              router.refresh();
+            }}
+          />
+        </>
+      )}
+    </AuthFrame>
+  );
+}
+
+function VerifyForm({
+  locale,
+  factorId,
+  onVerified,
+}: {
+  locale: Locale;
+  factorId: string;
+  onVerified: () => void;
+}) {
+  const form = useZodForm(totpCodeSchema, { defaultValues: { code: "" } });
+  const messages = useMemo(() => authFormMessages(locale), [locale]);
+  const mutation = useActionMutation(
+    (input: TotpCodeInput) => verifyFactorCode(factorId, input),
+    { refresh: false, onSuccess: () => onVerified() },
+  );
+  const failed =
+    mutation.data && !mutation.data.ok ? mutation.data.formError : undefined;
+  // Stays busy after success while the console loads.
+  const busy = mutation.isPending || mutation.data?.ok === true;
+  return (
+    <Form form={form} locale={locale} messages={messages}>
+      <FormRootError code={failed} />
+      {mutation.isError ? <FormRootError code="auth_unavailable" /> : null}
+      <form
+        noValidate
+        onSubmit={(event) =>
+          void form.handleSubmit(() =>
+            mutation.mutate(form.getValues() as TotpCodeInput),
+          )(event)
+        }
+        className="grid gap-5"
+      >
+        <TextFormField
+          autoComplete="one-time-code"
+          id="code"
+          inputMode="numeric"
+          label={say(locale, authCopy.code)}
+          maxLength={6}
+          minLength={6}
+          name="code"
+          required
+          dir="ltr"
+          className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.4em]"
+        />
+        <Button block loading={busy} type="submit">
+          {say(locale, authCopy.enrollSubmit)}
+        </Button>
+      </form>
+    </Form>
   );
 }

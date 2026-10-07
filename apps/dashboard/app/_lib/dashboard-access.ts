@@ -1,3 +1,4 @@
+import type { OperationalChoices } from "./operational-choices";
 import {
   parseDashboardContextV1,
   parseTenantChoicesV1,
@@ -9,11 +10,118 @@ import {
   type DashboardContextV1,
   type ResolvePublicTenantV1Response,
   type TenantChoiceV1,
+  type RoleCatalogV1,
+  type RolesV1,
+  type SaveRoleV1Input,
 } from "@wlbp/api-contracts";
 import type { VerifiedIdentity } from "@wlbp/auth";
+import type { StaffAccessWorkspaceV1 } from "@wlbp/api-contracts";
+import type { CatalogWorkspaceV1, CatalogKindV1 } from "@wlbp/api-contracts";
+import type {
+  MyNotificationPreferencesV1,
+  NotificationMutationV1,
+  NotificationSettingsV1,
+  NotificationTemplateKeyV1,
+  SaveMyNotificationPreferencesV1Input,
+  SaveNotificationSettingsV1Input,
+  SaveWhatsAppConfigV1Input,
+  StaffNotificationPreferencesV1,
+  TestNotificationV1,
+  WhatsAppConfigV1,
+} from "@wlbp/api-contracts";
 import { buildTenantCacheKey, normalizeHostname } from "@wlbp/tenant-resolution";
 
+export interface ScheduleChoice {
+  readonly kind: "location" | "staff" | "resource" | "service";
+  readonly id: string;
+  readonly name: string;
+  readonly locationId: string;
+  readonly timeZone: string;
+}
 export interface DashboardDataSource {
+  listCommunicationQueue?: (
+    tenantId: string,
+    status: string | null,
+  ) => Promise<
+    readonly {
+      id: string;
+      bookingId: string;
+      publicReference: string;
+      serviceName: string;
+      status: string;
+      createdAt: string;
+    }[]
+  >;
+  getPaymentAccountStatus?: (tenantId: string) => Promise<
+    readonly {
+      provider: string;
+      accountReference: string;
+      status: string;
+      chargesEnabled: boolean;
+      payoutsEnabled: boolean;
+      requirements: readonly string[];
+    }[]
+  >;
+  getBrandEditor?: (tenantId: string) => Promise<unknown>;
+  saveBrandEditor?: (request: {
+    tenantId: string;
+    brandKey: string;
+    expectedHash: string | null;
+    config: unknown;
+    content: unknown;
+  }) => Promise<unknown>;
+  redeemBrandPreview?: (hostname: string, token: string) => Promise<unknown>;
+  getBookingCustomer?: (tenantId: string, bookingId: string) => Promise<string | null>;
+  getOperationalChoices?: (
+    tenantId: string,
+    locale: "en" | "ar",
+  ) => Promise<OperationalChoices>;
+  getScheduleChoices?: (tenantId: string) => Promise<readonly ScheduleChoice[]>;
+  getScheduleEditorDetails?: (
+    tenantId: string,
+  ) => Promise<readonly { id: string; fold: 0 | 1 | null; serviceId: string | null }[]>;
+  removeScheduleRecord?: (request: {
+    tenantId: string;
+    kind: string;
+    targetId: string;
+    expectedRevision: number;
+    expectedScopeRevision: number | null;
+    requestId: string;
+  }) => Promise<unknown>;
+  getCatalogWorkspace?: (tenantId: string) => Promise<CatalogWorkspaceV1>;
+  saveCatalogEntity?: (request: {
+    tenantId: string;
+    requestId: string;
+    kind: CatalogKindV1;
+    entityId: string | null;
+    expectedRevision: number | null;
+    document: Readonly<Record<string, unknown>>;
+  }) => Promise<unknown>;
+  publishCatalogWorkspace?: (request: {
+    tenantId: string;
+    requestId: string;
+    revisions: Readonly<Record<string, number>>;
+  }) => Promise<unknown>;
+  getStaffAccessWorkspace?: (tenantId: string) => Promise<StaffAccessWorkspaceV1>;
+  getRoleCatalog?: (tenantId: string) => Promise<RoleCatalogV1>;
+  listRoles?: (tenantId: string) => Promise<RolesV1>;
+  saveRole?: (input: SaveRoleV1Input) => Promise<unknown>;
+  archiveRole?: (input: {
+    tenantId: string;
+    requestId: string;
+    roleId: string;
+    expectedRevision: number;
+  }) => Promise<unknown>;
+  changeStaffAccess?: (request: {
+    tenantId: string;
+    requestId: string;
+    action: string;
+    targetId: string | null;
+    expectedRevision: number | null;
+    roleId: string | null;
+    locationIds: readonly string[];
+    email: string | null;
+  }) => Promise<unknown>;
   getDashboardContext(tenantId: string): Promise<unknown>;
   getVerifiedIdentity(): Promise<VerifiedIdentity | null>;
   listTenantChoices(): Promise<unknown>;
@@ -24,6 +132,7 @@ export interface DashboardDataSource {
     request: AvailabilityV1Request,
   ) => Promise<AvailabilityV1Response>;
   saveScheduleConfig?: (request: {
+    requestId?: string;
     tenantId: string;
     operation: string;
     payload: Readonly<Record<string, unknown>>;
@@ -174,6 +283,30 @@ export interface DashboardDataSource {
   getDeliveryHealth?: (request: {
     tenantId: string;
   }) => Promise<DeliveryHealthV1 | null>;
+  /* Notification settings, staff preferences, test send and WhatsApp. */
+  getNotificationSettings?: (tenantId: string) => Promise<NotificationSettingsV1>;
+  saveNotificationSettings?: (
+    input: SaveNotificationSettingsV1Input,
+  ) => Promise<NotificationMutationV1>;
+  getMyNotificationPreferences?: (
+    tenantId: string,
+  ) => Promise<MyNotificationPreferencesV1>;
+  saveMyNotificationPreferences?: (
+    input: SaveMyNotificationPreferencesV1Input,
+  ) => Promise<NotificationMutationV1>;
+  listStaffNotificationPreferences?: (
+    tenantId: string,
+  ) => Promise<StaffNotificationPreferencesV1>;
+  enqueueTestNotification?: (input: {
+    tenantId: string;
+    templateKey: NotificationTemplateKeyV1;
+    locale: "ar" | "en";
+    requestId: string;
+  }) => Promise<TestNotificationV1>;
+  getWhatsAppConfig?: (tenantId: string) => Promise<WhatsAppConfigV1>;
+  saveWhatsAppConfig?: (
+    input: SaveWhatsAppConfigV1Input,
+  ) => Promise<NotificationMutationV1>;
   listPaymentExceptions?: (request: {
     status: string | null;
     tenantId: string;
@@ -523,6 +656,7 @@ export interface BookingDetailV1 {
 
 /** One item of work in a Today queue (issue #16). */
 export interface TodayItemV1 {
+  readonly resourceId?: string | null;
   readonly approvalDeadline: string | null;
   readonly bookingId: string;
   readonly bookingRevision: number;

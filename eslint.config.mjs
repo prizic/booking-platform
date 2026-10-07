@@ -7,7 +7,10 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   globalIgnores([
-    "**/.next/**",
+    "**/.next*/**",
+    "dist-distribution/**",
+    ".artifacts/**",
+    ".impeccable/**",
     "**/.next-warm/**",
     // Playwright starts brand-fixture dev servers with their own dist dirs.
     "**/.next-warm-*/**",

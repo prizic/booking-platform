@@ -30,10 +30,8 @@ describe("booking request decisions", () => {
     );
   });
 
-  it("carries the one-time customer link back to the deciding member", () => {
-    expect(decisionResultUrl("ar", "proposed", "a".repeat(64))).toBe(
-      `/ar/requests?result=proposed&link=${"a".repeat(64)}`,
-    );
+  it("keeps bearer material out of the deciding member redirect", () => {
+    expect(decisionResultUrl("ar", "proposed")).toBe("/ar/requests?result=proposed");
     expect(decisionResultUrl("en", "accepted")).toBe("/en/requests?result=accepted");
   });
 
@@ -65,9 +63,10 @@ describe("proposed civil time near a timezone change", () => {
     expect(resolveProposedInstant("2026-03-08T02:30", "America/New_York")).toBeNull();
   });
 
-  it("resolves a duplicated fall-back time to the earlier instant", () => {
+  it("requires an explicit occurrence for duplicated fall-back time", () => {
     // 2026-11-01 01:30 happens twice in New York.
-    expect(resolveProposedInstant("2026-11-01T01:30", "America/New_York")).toBe(
+    expect(resolveProposedInstant("2026-11-01T01:30", "America/New_York")).toBeNull();
+    expect(resolveProposedInstant("2026-11-01T01:30", "America/New_York", "0")).toBe(
       "2026-11-01T05:30:00.000Z",
     );
   });

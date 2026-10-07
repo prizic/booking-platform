@@ -296,6 +296,17 @@ describe("tenant isolation DTOs", () => {
     ]);
     expect(item?.locale).toBe("ar");
     expect(item?.cacheTag).toBe("catalog:tenant-a:1:ar");
+    expect(
+      parsePublicCatalogV1([
+        {
+          ...item,
+          serviceDescription: "",
+          locationDescription: "",
+          locationAddress: "",
+        },
+      ]),
+    ).toHaveLength(1);
+    expect(() => parsePublicCatalogV1([{ ...item, serviceName: "" }])).toThrow();
   });
 
   it("parses a minimal tenant-safe Dashboard context", () => {
@@ -347,6 +358,41 @@ describe("tenant isolation DTOs", () => {
         rawCustomerEmail: "must-not-pass",
       }),
     ).toThrow("Dashboard context");
+  });
+
+  it("skips well-formed grants for capabilities a newer backend added", () => {
+    const context = {
+      aal2: false,
+      brandId: "brand-a",
+      tenantId: "tenant-a",
+      instanceId: "instance-a",
+      dashboardHostname: "dashboard.tenant.example",
+      defaultLocale: "en",
+      tenantName: "Tenant A",
+      membershipId: "membership-a",
+      roleKey: "tenant_admin",
+      locationIds: [],
+      locationScope: { kind: "all" },
+      publishedBrandRevision: 2,
+      configRevision: 3,
+      featureRevision: 4,
+    } as const;
+    const parsed = parseDashboardContextV1({
+      ...context,
+      grants: [
+        { capability: "future.capability_x", requiresApproval: true, scope: "tenant" },
+        { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
+      ],
+    });
+    expect(parsed.grants.map((grant) => grant.capability)).toEqual(["staff.manage"]);
+    for (const capability of ["future", "Future.Key", "future..key", "future.key "]) {
+      expect(() =>
+        parseDashboardContextV1({
+          ...context,
+          grants: [{ capability, requiresApproval: false, scope: "tenant" }],
+        }),
+      ).toThrow("Capability grant is invalid");
+    }
   });
 
   it("requires canonical tenant choices", () => {

@@ -19,8 +19,8 @@ export const tenantApplications = [
     name: "dashboard",
     origin: "http://localhost:41731",
     headings: {
-      en: "Today stays clear, even when the schedule is full.",
-      ar: "يبقى يومك واضحًا حتى عندما يمتلئ الجدول.",
+      en: "Today",
+      ar: "اليوم",
     },
   },
 ] as const;
@@ -48,13 +48,18 @@ export const locales = [
     locale: "en",
     direction: "ltr",
     languageNavigation: "Language",
-    switchLanguage: "Arabic",
+    // Language links carry each language's own name, marked with its `lang`.
+    currentLanguage: "English",
+    switchLanguage: "العربية",
+    switchLocale: "ar",
   },
   {
     locale: "ar",
     direction: "rtl",
     languageNavigation: "اللغة",
-    switchLanguage: "الإنجليزية",
+    currentLanguage: "العربية",
+    switchLanguage: "English",
+    switchLocale: "en",
   },
 ] as const;
 

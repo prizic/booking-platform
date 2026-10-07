@@ -15,17 +15,17 @@ describe("Dashboard sitemap", () => {
     const entries = sitemap();
 
     expect(entries.map(({ url }) => url)).toEqual([
-      "https://dashboard.booking.example/en",
       "https://dashboard.booking.example/ar",
-      "https://dashboard.booking.example/en/brand-preview",
+      "https://dashboard.booking.example/en",
       "https://dashboard.booking.example/ar/brand-preview",
-      "https://dashboard.booking.example/en/team-resources",
+      "https://dashboard.booking.example/en/brand-preview",
       "https://dashboard.booking.example/ar/team-resources",
+      "https://dashboard.booking.example/en/team-resources",
     ]);
-    expect(entries.at(-1)?.alternates?.languages).toEqual({
+    expect(entries.at(-2)?.alternates?.languages).toEqual({
       ar: "https://dashboard.booking.example/ar/team-resources",
       en: "https://dashboard.booking.example/en/team-resources",
-      "x-default": "https://dashboard.booking.example/en/team-resources",
+      "x-default": "https://dashboard.booking.example/ar/team-resources",
     });
   });
 });

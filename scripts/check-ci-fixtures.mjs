@@ -26,7 +26,9 @@ try {
     "dist",
     "node_modules",
   ]);
-  const filter = (source) => !ignoredNames.has(path.basename(source));
+  const filter = (source) =>
+    !ignoredNames.has(path.basename(source)) &&
+    !path.basename(source).startsWith(".next-");
 
   await Promise.all([
     cp(path.join(repositoryRoot, "apps"), path.join(fixtureRoot, "apps"), {
@@ -182,6 +184,17 @@ try {
         .join("\n")
         .trim()}`,
     );
+  }
+
+  const fixtureFetch = spawnSync("pnpm", ["fetch", "--frozen-lockfile"], {
+    cwd: instanceRoot,
+    encoding: "utf8",
+  });
+  if (fixtureFetch.status !== 0) {
+    errors.push(
+      `sanitized fixture dependency fetch failed: ${fixtureFetch.stderr || fixtureFetch.stdout}`,
+    );
+    failCheck("CI and distribution fixtures fail closed", errors);
   }
 
   const fixtureInstall = spawnSync(
@@ -421,6 +434,8 @@ try {
   }
   await rename(hiddenConfigurationPath, instanceConfigurationPath);
 
+  if (errors.length) failCheck("CI and distribution fixtures fail closed", errors);
+
   const instanceConfigPath = path.join(
     instanceTestingPath,
     "playwright.instance.config.mjs",
@@ -455,7 +470,7 @@ try {
     }
 
     const listResult = spawnSync(
-      path.join(instanceRoot, "node_modules", ".bin", "playwright"),
+      path.join(instanceTestingPath, "node_modules", ".bin", "playwright"),
       ["test", "--config", instanceConfigPath, "--list"],
       { cwd: instanceRoot, encoding: "utf8" },
     );

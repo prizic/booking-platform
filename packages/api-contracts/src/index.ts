@@ -1,5 +1,118 @@
+import {
+  capabilityNames,
+  type CapabilityName,
+  type CapabilityScope,
+} from "./capabilities.js";
+
 /** Version carried by the api_v1 DTOs in this module, not the deployed range. */
 export const apiV1ContractVersion = 1 as const;
+export {
+  parseCatalogWorkspaceV1,
+  type CatalogKindV1,
+  type CatalogEntityV1,
+  type CatalogMetadataV1,
+  type CatalogWorkspaceV1,
+} from "./catalog.js";
+export {
+  parseStaffAccessWorkspaceV1,
+  parseStaffAccessWorkspaceV2,
+  type BuiltInStaffRole,
+  type StaffRoleV2,
+  type StaffAccessWorkspaceV2,
+  type StaffAccessWorkspaceV1,
+  type StaffAccessMemberV1,
+  type StaffAccessInvitationV1,
+} from "./staff-access.js";
+export {
+  actorCanGrant,
+  buildArchiveRoleV1Request,
+  buildSaveRoleV1Request,
+  builtInRoleKeys,
+  customRoleKeyPattern,
+  dominates,
+  grantCovers,
+  grantKindsV1,
+  grantScopeAllowedInMode,
+  grantScopesV1,
+  isReservedPermissionV1,
+  parseArchiveRoleResultV1,
+  parseRoleCatalogV1,
+  parseRoleMutationErrorV1,
+  parseRolesV1,
+  parseSaveRoleResultV1,
+  permissionGroupsV1,
+  reservedPermissionKeysV1,
+  roleDescriptionMaxLengthV1,
+  roleGrantLimitV1,
+  roleModesV1,
+  roleMutationErrorCodesV1,
+  roleNameMaxLengthV1,
+  uncoveredGrants,
+  validateCustomRoleGrantsV1,
+  type ArchiveRoleResultV1,
+  type BuiltInRoleKey,
+  type BuiltInRoleV1,
+  type CustomRoleV1,
+  type GrantActorV1,
+  type GrantKindV1,
+  type GrantScopeV1,
+  type GrantTargetV1,
+  type PermissionGroupV1,
+  type PermissionMetaV1,
+  type RoleCatalogV1,
+  type RoleGrantInputV1,
+  type RoleGrantIssueCodeV1,
+  type RoleGrantIssueV1,
+  type RoleGrantV1,
+  type RoleModeV1,
+  type RoleMutationErrorCodeV1,
+  type RoleMutationErrorV1,
+  type RolesV1,
+  type RoleV1,
+  type SaveRoleResultV1,
+  type SaveRoleV1Input,
+} from "./roles.js";
+export {
+  builtInRoleTemplateGrants,
+  roleCoverageCases,
+  type RoleCoverageCase,
+} from "./roles.fixtures.js";
+export {
+  buildEnqueueTestNotificationV1Request,
+  buildSaveMyNotificationPreferencesV1Request,
+  buildSaveNotificationSettingsV1Request,
+  buildSaveWhatsAppConfigV1Request,
+  buildWhatsAppOptInV1,
+  isE164PhoneNumber,
+  isValidReminderOffsetsV1,
+  notificationTemplateKeysV1,
+  parseMyNotificationPreferencesV1,
+  parseNotificationBrandV2,
+  parseNotificationMutationV1,
+  parseNotificationSettingsV1,
+  parsePublicWhatsAppAvailabilityV1,
+  parseStaffNotificationPreferencesV1,
+  parseTestNotificationV1,
+  parseWhatsAppConfigV1,
+  reminderOffsetBoundsV1,
+  staffPreferenceKeysV1,
+  type MyNotificationPreferencesV1,
+  type NotificationBrandV2,
+  type NotificationLocaleV1,
+  type NotificationMutationV1,
+  type NotificationSettingItemV1,
+  type NotificationSettingsV1,
+  type NotificationTemplateKeyV1,
+  type SaveMyNotificationPreferencesV1Input,
+  type SaveNotificationSettingsV1Input,
+  type SaveWhatsAppConfigV1Input,
+  type StaffNotificationPreferencesV1,
+  type StaffPreferenceKeyV1,
+  type TestNotificationV1,
+  type WhatsAppConfigV1,
+  type WhatsAppOptInV1,
+  type WhatsAppTemplateRefV1,
+} from "./notifications.js";
 export type BackendContractVersion = typeof apiV1ContractVersion;
 
 export type TenantId = string;
@@ -10,42 +123,13 @@ export type BookingId = string;
 export type IdempotencyKey = string;
 export type ContractLocale = "en" | "ar";
 
-export const capabilityNames = [
-  "booking.view.own",
-  "booking.view.any",
-  "booking.create_on_behalf",
-  "booking.approve",
-  "booking.reschedule",
-  "booking.cancel",
-  "refund.issue",
-  "booking.check_in",
-  "booking.check_in_override",
-  "booking.mark_no_show",
-  "booking.complete",
-  "booking.correct_status",
-  "catalog.edit",
-  "schedule.edit",
-  "staff.manage",
-  "policy.edit",
-  "customer.pii.view",
-  "customer.data.export",
-  "customer.data.export_on_behalf",
-  "customer.data.correct",
-  "customer.data.delete",
-  "customer.data.restrict",
-  "brand.manage",
-  "integration.manage",
-  "billing.view",
-  "billing.change_plan",
-  "support.grant_access",
-  "audit.read",
-  "instance.request_update",
-  "tenant.owner_transfer",
-  "tenant.read_other_tenant",
-] as const;
-
-export type CapabilityName = (typeof capabilityNames)[number];
-export type CapabilityScope = "location" | "own" | "tenant";
+export {
+  capabilityKeyPattern,
+  capabilityNames,
+  isKnownCapability,
+  type CapabilityName,
+  type CapabilityScope,
+} from "./capabilities.js";
 
 export interface CapabilityGrantDto {
   readonly capability: CapabilityName;
@@ -600,13 +684,10 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
         "serviceId",
         "serviceKey",
         "serviceName",
-        "serviceDescription",
         "canonicalPath",
         "locationId",
         "locationKey",
         "locationName",
-        "locationDescription",
-        "locationAddress",
         "locationTimeZone",
         "locationCanonicalPath",
         "cacheTag",
@@ -614,6 +695,13 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
       for (const key of stringKeys)
         if (key !== "locale" && (typeof item[key] !== "string" || item[key] === ""))
           throw new Error("Public catalog string is invalid");
+      for (const key of [
+        "serviceDescription",
+        "locationDescription",
+        "locationAddress",
+      ])
+        if (typeof item[key] !== "string")
+          throw new Error("Public catalog optional copy is invalid");
       if (item.locale !== "en" && item.locale !== "ar")
         throw new Error("Public catalog locale is invalid");
       if (item.categoryKey !== null && typeof item.categoryKey !== "string")
@@ -2040,7 +2128,13 @@ function requirePositiveRevision(value: unknown): number {
   return value;
 }
 
-function parseGrant(value: unknown): CapabilityGrantDto {
+/**
+ * Parses one grant. A well-formed grant for a capability this release does not
+ * know yet (added by a newer backend) is skipped rather than
+ * failing the whole context: N-1 clients ignore permissions they cannot use.
+ * Malformed grants still fail closed.
+ */
+function parseGrant(value: unknown): CapabilityGrantDto | null {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, ["capability", "requiresApproval", "scope"])
@@ -2049,12 +2143,13 @@ function parseGrant(value: unknown): CapabilityGrantDto {
   }
   if (
     typeof value.capability !== "string" ||
-    !capabilityNames.includes(value.capability as CapabilityName) ||
+    !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u.test(value.capability) ||
     typeof value.requiresApproval !== "boolean" ||
     (value.scope !== "tenant" && value.scope !== "location" && value.scope !== "own")
   ) {
     throw new Error("Capability grant is invalid");
   }
+  if (!capabilityNames.includes(value.capability as CapabilityName)) return null;
   return Object.freeze({
     capability: value.capability as CapabilityName,
     requiresApproval: value.requiresApproval,
@@ -2150,7 +2245,11 @@ export function parseDashboardContextV1(value: unknown): DashboardContextV1 {
     dashboardHostname: requireNonEmptyString(value.dashboardHostname),
     defaultLocale: value.defaultLocale,
     featureRevision: requirePositiveRevision(value.featureRevision),
-    grants: Object.freeze(value.grants.map(parseGrant)),
+    grants: Object.freeze(
+      value.grants
+        .map(parseGrant)
+        .filter((grant): grant is CapabilityGrantDto => grant !== null),
+    ),
     instanceId: requireNonEmptyString(value.instanceId),
     locationIds: Object.freeze(locationIds),
     locationScope: parseLocationScope(value.locationScope),

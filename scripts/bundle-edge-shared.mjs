@@ -36,13 +36,30 @@ const contractsSource = path.join(
 const bundles = [
   {
     directory: "email",
-    modules: ["templates.ts", "webhook.ts", "worker.ts"],
+    modules: [
+      "brand.ts",
+      "digest.ts",
+      "layout.ts",
+      "payload.ts",
+      "samples.ts",
+      "templates.ts",
+      "webhook.ts",
+      "worker.ts",
+    ],
     package: "packages/email",
   },
   {
     directory: "integrations",
     modules: ["stripe.ts"],
     package: "packages/integrations",
+  },
+  // ADR-0018. The WhatsApp adapter lives in its own directory of the same
+  // package, so it gets its own vendored directory and barrel.
+  {
+    directory: "whatsapp",
+    modules: ["classify.ts", "payload.ts", "send.ts", "webhook.ts"],
+    package: "packages/integrations",
+    source: "src/whatsapp",
   },
 ];
 
@@ -96,14 +113,16 @@ export async function buildBundle(bundle) {
   const wanted = new Set();
 
   for (const moduleName of bundle.modules) {
+    const sourceDirectory = bundle.source ?? "src";
     const source = await readFile(
-      path.join(repositoryRoot, bundle.package, "src", moduleName),
+      path.join(repositoryRoot, bundle.package, sourceDirectory, moduleName),
       "utf8",
     );
     for (const name of contractImports(source)) wanted.add(name);
     files.set(
       moduleName,
-      banner(`${bundle.package}/src/${moduleName}`) + rewriteSpecifiers(source),
+      banner(`${bundle.package}/${sourceDirectory}/${moduleName}`) +
+        rewriteSpecifiers(source),
     );
   }
 
@@ -129,7 +148,7 @@ export async function buildBundle(bundle) {
 
   files.set(
     "mod.ts",
-    banner(`${bundle.package}/src`) +
+    banner(`${bundle.package}/${bundle.source ?? "src"}`) +
       bundle.modules
         .map((moduleName) => `export * from "./${moduleName}";`)
         .join("\n") +

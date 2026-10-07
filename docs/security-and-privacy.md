@@ -90,6 +90,19 @@ Applies to Client, Dashboard, and Platform Admin unless noted.
 - Append-only application audit events carrying: actor, effective actor, tenant, action, target, outcome, reason, request ID, timestamp, redacted diff.
 - Selective pgAudit for privileged, DDL, and sensitive operations. Do not enable global statement logging that would capture raw sensitive parameters.
 
+### 4.1 Tenant role administration
+
+Tenants define their own Dashboard roles under [ADR-0019](./adr/0019-tenant-custom-roles.md); operator guidance is in [roles.md](./roles.md). Every rule below is enforced in the database, and the Dashboard only mirrors it to disable choices.
+
+- **Tenant-local.** Custom roles and their grants carry `tenant_id`, are RLS-isolated, and are never visible to or assignable in another tenant. There is no Platform Admin roles feature.
+- **Who may define roles.** Only a member holding `role.manage` (the built-in Tenant admin) with recent MFA. `role.manage` is not delegable.
+- **Built-ins are locked.** The four built-in roles match the platform template exactly; they can be duplicated, never edited or archived.
+- **Reserved permissions.** `role.manage`, `billing.view`, `billing.change_plan`, `support.grant_access`, `tenant.owner_transfer`, and `tenant.read_other_tenant` can never be attached to a custom role, enforced by a trigger as well as the RPC.
+- **No escalation.** Role save and duplicate, invitation, and membership edits require the actor to dominate every grant involved — same permission, scope at least as wide (tenant > location > own), kind at least as strong (direct covers approval, not the reverse) — and, for non-tenant-scoped actor grants, the target member's locations must be within the actor's. This applies to the member's current role too, so nobody can demote someone above them.
+- **Location scope fails closed.** An assigned-mode member with no location rows has no location access.
+- **Administrator is a capability.** The last-administrator guard and the administrator step-up rule test for `role.manage` at tenant scope, never the key `tenant_admin`.
+- **Evidence and freshness.** Role mutations lock the tenant row, are idempotent on a request id, check an expected revision, append to `app.role_change_events`, and broadcast `authorization_changed` so open Dashboard tabs re-authorize immediately.
+
 ---
 
 ## 5. Secret handling

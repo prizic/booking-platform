@@ -1,121 +1,85 @@
-import type { AvailabilitySlotV1, AvailabilityV1Response } from "@wlbp/api-contracts";
+import type { AvailabilitySlotV1 } from "@wlbp/api-contracts";
+import { resolveZonedLocalDateTime, type Locale } from "@wlbp/i18n";
 
+import { availabilityQuerySchema } from "./availability-schema";
+
+/** The filters one availability search was submitted with. */
 export interface AvailabilityQuerySnapshot {
   readonly date: string;
   readonly partySize: number;
   readonly timeZone: string;
 }
 
+export interface AvailabilityTarget {
+  readonly locale: Locale;
+  readonly locationId: string;
+  readonly serviceId: string;
+}
+
 export function availabilitySlotIdentity(slot: AvailabilitySlotV1): string {
   return JSON.stringify([slot.startAt, slot.endAt, slot.allocationKind, slot.staffId]);
 }
 
-export interface AvailabilityPickerState {
-  readonly activeRequestId: number | null;
-  readonly activeSnapshot: AvailabilityQuerySnapshot | null;
-  readonly failed: boolean;
-  readonly filters: AvailabilityQuerySnapshot;
-  readonly loading: boolean;
-  readonly result:
-    | Readonly<{
-        response: AvailabilityV1Response;
-        snapshot: AvailabilityQuerySnapshot;
-      }>
-    | undefined;
-  readonly selected: AvailabilitySlotV1 | undefined;
+/**
+ * One cache entry per submitted search. Results are only ever rendered under
+ * the key they were fetched for, so a changed filter can never show the times
+ * (or the selection) of an earlier search, and a slow earlier response can
+ * never land in a newer search.
+ */
+export function availabilityQueryKey(
+  target: AvailabilityTarget,
+  snapshot: AvailabilityQuerySnapshot,
+) {
+  return [
+    "availability",
+    target.serviceId,
+    target.locationId,
+    snapshot.date,
+    snapshot.timeZone,
+    snapshot.partySize,
+    target.locale,
+  ] as const;
 }
 
-export function initialAvailabilityPickerState(
-  timeZone: string,
-): AvailabilityPickerState {
-  return {
-    activeRequestId: null,
-    activeSnapshot: null,
-    failed: false,
-    filters: { date: "", partySize: 1, timeZone },
-    loading: false,
-    result: undefined,
-    selected: undefined,
+function localMidnight(localDate: string, timeZone: string): string {
+  const [year, month, day] = localDate.split("-").map(Number);
+  const resolution = resolveZonedLocalDateTime(
+    { year: year!, month: month!, day: day!, hour: 0, minute: 0 },
+    timeZone,
+  );
+  if (resolution.kind === "gap") throw new Error("Invalid local date");
+  return resolution.instants[0];
+}
+
+function addCalendarDays(localDate: string, days: number): string {
+  const [year, month, day] = localDate.split("-").map(Number);
+  const date = new Date(Date.UTC(year!, month! - 1, day! + days));
+  return [
+    date.getUTCFullYear().toString().padStart(4, "0"),
+    (date.getUTCMonth() + 1).toString().padStart(2, "0"),
+    date.getUTCDate().toString().padStart(2, "0"),
+  ].join("-");
+}
+
+/**
+ * The seven-day window starting at local midnight of the chosen day, in the
+ * chosen zone, as the query string the availability route validates. Throws
+ * when the day cannot be resolved; the search then shows its error state.
+ */
+export function availabilitySearchParams(
+  target: AvailabilityTarget,
+  snapshot: AvailabilityQuerySnapshot,
+): URLSearchParams {
+  const query = {
+    endBefore: localMidnight(addCalendarDays(snapshot.date, 7), snapshot.timeZone),
+    locale: target.locale,
+    locationId: target.locationId,
+    partySize: String(snapshot.partySize),
+    serviceId: target.serviceId,
+    startAfter: localMidnight(snapshot.date, snapshot.timeZone),
+    timeZone: snapshot.timeZone,
   };
-}
-
-export type AvailabilityPickerAction =
-  | {
-      readonly field: "date" | "timeZone";
-      readonly type: "filterChanged";
-      readonly value: string;
-    }
-  | {
-      readonly field: "partySize";
-      readonly type: "filterChanged";
-      readonly value: number;
-    }
-  | {
-      readonly requestId: number;
-      readonly snapshot: AvailabilityQuerySnapshot;
-      readonly type: "submitted";
-    }
-  | {
-      readonly requestId: number;
-      readonly response: AvailabilityV1Response;
-      readonly type: "resolved";
-    }
-  | { readonly requestId: number; readonly type: "rejected" }
-  | { readonly slot: AvailabilitySlotV1; readonly type: "selected" };
-
-export function availabilityPickerReducer(
-  state: AvailabilityPickerState,
-  action: AvailabilityPickerAction,
-): AvailabilityPickerState {
-  switch (action.type) {
-    case "filterChanged":
-      return {
-        ...state,
-        activeRequestId: null,
-        activeSnapshot: null,
-        failed: false,
-        filters: { ...state.filters, [action.field]: action.value },
-        loading: false,
-        result: undefined,
-        selected: undefined,
-      };
-    case "submitted":
-      return {
-        ...state,
-        activeRequestId: action.requestId,
-        activeSnapshot: Object.freeze({ ...action.snapshot }),
-        failed: false,
-        loading: true,
-        result: undefined,
-        selected: undefined,
-      };
-    case "resolved":
-      if (action.requestId !== state.activeRequestId || state.activeSnapshot === null) {
-        return state;
-      }
-      return {
-        ...state,
-        activeRequestId: null,
-        activeSnapshot: null,
-        failed: false,
-        loading: false,
-        result: {
-          response: action.response,
-          snapshot: state.activeSnapshot,
-        },
-      };
-    case "rejected":
-      if (action.requestId !== state.activeRequestId) return state;
-      return {
-        ...state,
-        activeRequestId: null,
-        activeSnapshot: null,
-        failed: true,
-        loading: false,
-        result: undefined,
-        selected: undefined,
-      };
-    case "selected":
-      return state.result === undefined ? state : { ...state, selected: action.slot };
-  }
+  // The same schema the route applies, so a request it would refuse is never sent.
+  availabilityQuerySchema.parse(query);
+  return new URLSearchParams(query);
 }

@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Owner:** @SEIFSEIF4
 - **Date:** 2026-09-04
-- **Supersedes / Superseded by:** —
+- **Supersedes / Superseded by:** — (WhatsApp row amended 2026-10-07 by [ADR-0018](./0018-whatsapp-notification-channel.md))
 
 ## Context
 
@@ -34,7 +34,7 @@ We ship the MVP in [release scope](../release-scope.md) §2 and defer everything
 | Packages and memberships | Phase 2 (M7) | #48 | Entitlement balances, expiry, and proration are a commerce subsystem, and recurring charges change the merchant-of-record analysis | Balance ledgers, "credits remaining" on a customer, membership tiers, or recurring charges against a tenant's customers |
 | Coupons, gift cards, and credits | Phase 2 (M7) | #49 | Redeemable value is fraud-sensitive and needs atomic redemption, partial refunds against redeemed value, and its own audit | Discount codes, gift-card balances, or a redemption field on checkout — including a "promo code" input that does nothing |
 | Custom roles and approval workflows | Phase 2 (M7) | #50 | [ADR-0007](./0007-roles-and-capabilities.md) fixes a small set of roles so the RLS matrix is finite and testable. Tenant-defined roles make the matrix unbounded | A role editor, per-tenant capability rows, or approval chains beyond the single request-to-book approval step in MVP |
-| SMS and WhatsApp notifications | Phase 2 (M7) | #51 | Per-market consent, sender registration, and template approval are legal work per market, not an adapter | Phone-number-as-channel, opt-in capture for messaging, or a second notification transport in the outbox |
+| SMS notifications | Phase 2 (M7) | #51 | Per-market consent, sender registration, and template approval are legal work per market, not an adapter | An SMS transport, SMS opt-in capture, or SMS sender registration. **WhatsApp was moved forward by owner decision on 2026-10-07 as an optional, off-by-default channel — see [ADR-0018](./0018-whatsapp-notification-channel.md). SMS stays deferred.** |
 | Public tenant API and outbound webhooks | Phase 2 (M7) | #52 | A public contract is permanent. API keys, scopes, quotas, versioning, and outbound delivery guarantees are a product, not an endpoint | Tenant API keys, a `/v1/public` surface, outbound webhook registrations, or "temporary" unauthenticated integration endpoints |
 | Advanced and scheduled analytics | Phase 2 (M7) | #53 | MVP ships the defined metrics in [ADR-0009](./0009-analytics-definitions.md) plus CSV export. Scheduled delivery and a warehouse pipeline add a data-egress and PII-separation surface | A warehouse pipeline, scheduled email exports, custom report builders, or any analytics store that joins to customer contact rows |
 | Tenant-owned sending domains | Phase 2 (M7) | #54 | §30 locks MVP to a **platform fallback sending domain**. Per-tenant domains add DNS verification, warm-up, and per-tenant deliverability reputation to operate | Per-tenant DKIM/SPF provisioning, domain-verification flows, or per-tenant sender reputation handling |
@@ -60,7 +60,7 @@ Each seam is cheap now and removes a migration later. Building more than the sea
 - **Calendars (#46/#47):** provider connection and external-event identity are their own tables from day one, and the MVP one-way `.ics` path writes nothing into them. Booking essentials are never derived from external calendar state.
 - **Commerce (#48/#49):** money is integer minor units with an ISO currency, and the payment ledger is append-only per [ADR-0002](./0002-region-currency-and-money-representation.md) and [ADR-0003](./0003-merchant-of-record-and-payments.md). Balances and redemptions become new ledger entry types, not a new money model.
 - **Roles (#50):** roles are already bundles of named capabilities ([ADR-0007](./0007-roles-and-capabilities.md)). Checks are written against capabilities, never against a role string, so custom roles later are new bundles rather than new call sites.
-- **Messaging (#51):** the transactional outbox is channel-agnostic. Email is one channel implementation; a second registers alongside it.
+- **Messaging (#51):** the transactional outbox is channel-agnostic. Email is one channel implementation; a second registers alongside it. WhatsApp now uses this seam ([ADR-0018](./0018-whatsapp-notification-channel.md)); SMS will too.
 - **Public API (#52):** all application reads go through versioned `api_v1` views and RPCs behind a data-access layer. A public API later exposes an existing contract instead of inventing one.
 - **Analytics (#53):** the event catalog, correlation identifiers, and denominators in [ADR-0009](./0009-analytics-definitions.md) are defined now, so a warehouse later ingests defined events rather than re-deriving metrics.
 - **Sending domains (#54):** the sending identity is resolved per tenant at send time, with the platform fallback as the resolved value in MVP. Adding a verified tenant domain changes the resolution result, not the send path.
@@ -97,7 +97,7 @@ Rules for the register:
 
 ### Positive
 
-- The MVP test surface stays finite: one booking shape, one notification channel, one brand, one calendar direction.
+- The MVP test surface stays finite: one booking shape, one required notification channel (email; WhatsApp is optional and off by default per ADR-0018), one brand, one calendar direction.
 - Every deferred item has a named owning issue, so "is this in scope?" is answered by a link rather than by a meeting.
 - The seams mean each deferral is additive later rather than a migration against production booking data.
 - The right-hand column gives reviewers a concrete rejection reason for scope that arrives disguised as a small change.
@@ -130,4 +130,13 @@ Rules for the register:
 - [Runbooks](../runbooks.md) — backup, restore drills, object-backup freshness
 - [ADR-0008: Privacy, retention, and support access](./0008-privacy-retention-and-support-access.md) — the attachments gate
 - [ADR-0009: Analytics definitions](./0009-analytics-definitions.md)
+- [ADR-0018: WhatsApp notification channel](./0018-whatsapp-notification-channel.md) — amends the SMS/WhatsApp row
 - [References](../references.md)
+
+## Amendment 2026-10-07 (ADR-0019)
+
+By owner decision, the **custom roles** half of the "Custom roles and approval workflows" row (#50) moves forward under [ADR-0019: Tenant custom roles](./0019-tenant-custom-roles.md). The table and seams above are kept as history; read them with these changes:
+
+- **Now built:** a tenant-local role editor in the Dashboard, per-tenant custom role rows over the existing capability vocabulary, and the `role.manage` capability. Built-in roles stay fixed and locked. There is no Platform Admin roles feature.
+- **Still deferred to #50:** approval chains beyond the single request-to-book approval step and the step-up that satisfies approval grants. Do not build configurable approvers, multi-step approval queues, or delegated approval rules.
+- **The roles seam held.** Checks were already written against capabilities, so custom roles reuse every existing check. The unbounded-matrix concern is answered by testing grant shapes (permission × scope × kind) with a data-driven pgTAP matrix and a shared truth table, plus server-side dominance, reserved-permission, and scope rules (ADR-0019 Consequences).

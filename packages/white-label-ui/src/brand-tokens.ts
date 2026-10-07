@@ -1,4 +1,8 @@
+export type BrandColors = BrandTokens["color"];
+
 export interface BrandTokens {
+  /** Optional dark palette, validated with the same contrast floor as `color`. */
+  readonly colorDark?: BrandTokens["color"];
   readonly color: {
     readonly background: string;
     readonly surface: string;
@@ -304,6 +308,7 @@ function validateContrast(
   background: string,
   minimum: number,
   issues: string[],
+  label = "color",
 ): void {
   const foregroundValue = colors[foreground];
   const backgroundValue = colors[background];
@@ -319,23 +324,31 @@ function validateContrast(
   const ratio = rawContrastRatio(foregroundValue, backgroundValue);
   if (ratio < minimum) {
     issues.push(
-      `color.${foreground} on color.${background} has contrast ${ratio.toFixed(2)}:1; minimum is ${minimum}:1`,
+      `${label}.${foreground} on ${label}.${background} has contrast ${ratio.toFixed(2)}:1; minimum is ${minimum}:1`,
     );
   }
 }
 
 export function validateBrandTokens(value: unknown): readonly string[] {
   const issues: string[] = [];
-  if (!validateExactRecord(value, tokenKeys, "tokens", issues)) {
+  const hasDark = isRecord(value) && Object.hasOwn(value, "colorDark");
+  const withoutDark = hasDark
+    ? Object.fromEntries(Object.entries(value).filter(([key]) => key !== "colorDark"))
+    : value;
+  if (!validateExactRecord(withoutDark, tokenKeys, "tokens", issues)) {
     return Object.freeze(issues);
   }
+  validateColorGroup(withoutDark.color, "color", issues);
+  if (hasDark) validateColorGroup(value.colorDark, "colorDark", issues);
+  return validateNonColorTokens(withoutDark, issues);
+}
 
-  const colors = value.color;
-  if (validateExactRecord(colors, colorKeys, "color", issues)) {
+function validateColorGroup(colors: unknown, label: string, issues: string[]): void {
+  if (validateExactRecord(colors, colorKeys, label, issues)) {
     validateStringValues(
       colors,
       colorKeys,
-      "color",
+      label,
       (candidate) => hexColorPattern.test(candidate),
       "an opaque hexadecimal color (#RRGGBB)",
       issues,
@@ -360,10 +373,15 @@ export function validateBrandTokens(value: unknown): readonly string[] {
       ["focus", "background", 3],
       ["focus", "surface", 3],
     ] as const) {
-      validateContrast(colors, foreground, background, minimum, issues);
+      validateContrast(colors, foreground, background, minimum, issues, label);
     }
   }
+}
 
+function validateNonColorTokens(
+  value: Record<string, unknown>,
+  issues: string[],
+): readonly string[] {
   const typography = value.typography;
   if (validateExactRecord(typography, typographyKeys, "typography", issues)) {
     validateStringValues(
@@ -534,6 +552,9 @@ export function parseBrandTokens(value: unknown): BrandTokens {
 
   const tokens = value as BrandTokens;
   return Object.freeze({
+    ...(tokens.colorDark === undefined
+      ? {}
+      : { colorDark: Object.freeze({ ...tokens.colorDark }) }),
     color: Object.freeze({ ...tokens.color }),
     typography: Object.freeze({
       ...tokens.typography,

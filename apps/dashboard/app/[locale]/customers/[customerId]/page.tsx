@@ -1,5 +1,21 @@
-import { formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import { workspaceStatus } from "../../../_lib/workspace-status";
+import type { Locale } from "@wlbp/i18n";
+import {
+  Badge,
+  EmptyState,
+  Facts,
+  PageHeader,
+  ReferenceCode,
+  Section,
+  StatusStamp,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@wlbp/ui-foundation";
+import { ArrowLeft, CalendarX } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -11,11 +27,14 @@ import type {
 } from "../../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../../_lib/workspace-shell";
-import {
-  correctCustomerAction,
-  runPrivacyRequestAction,
-  setCustomerFlagAction,
-} from "../actions";
+import { formatCount, formatWhen, stampStateFor } from "../../../_lib/booking-display";
+import { RecordCard, RecordCards, TableFrame } from "../../../_lib/ui/record-cards";
+import { ServiceDye } from "../../../_lib/ui/service-dye";
+import { ZoneNote } from "../../../_lib/ui/zone-note";
+import { countLabel, workspaceMessage } from "../../../_lib/workspace-copy";
+import { ResultAlert } from "../../../_lib/ui/result-alert";
+import { textLinkClass } from "../../../_lib/ui/text-link";
+import { CustomerCorrectionForm, CustomerRightsForms } from "./customer-forms";
 import { customerResultKeys, positiveCustomerResults } from "../results";
 
 export const dynamic = "force-dynamic";
@@ -91,248 +110,380 @@ export default async function CustomerDetailPage({
 
   return (
     <WorkspaceShell current="customers" labelledBy="customer-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="customer-title">
-        <h1 id="customer-title">
-          {customer.fullName ?? message("customersErasedName")}
-        </h1>
-        {resultKey === null ? null : (
-          <StatusMessage
-            tone={positiveCustomerResults.has(result ?? "") ? "positive" : "warning"}
-          >
-            {message(resultKey)}
-          </StatusMessage>
-        )}
-        <p>
-          {customer.erased ? <Badge>{message("customersBadgeErased")}</Badge> : null}
-          {customer.legalHold ? <Badge>{message("customersBadgeHold")}</Badge> : null}
-          {customer.restricted ? (
-            <Badge>{message("customersBadgeRestricted")}</Badge>
-          ) : null}
-          {customer.suppressed ? (
-            <Badge>{message("customersBadgeSuppressed")}</Badge>
-          ) : null}
-        </p>
+      <div className="grid gap-4">
+        <Link
+          className={`${textLinkClass} inline-flex w-fit items-center gap-1.5 text-sm`}
+          href={`/${locale}/customers`}
+        >
+          <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          {message("customersListLabel")}
+        </Link>
+        <PageHeader
+          titleId="customer-title"
+          title={customer.fullName ?? message("customersErasedName")}
+          meta={
+            customer.erased ||
+            customer.legalHold ||
+            customer.restricted ||
+            customer.suppressed ? (
+              <>
+                {customer.erased ? (
+                  <Badge tone="neutral">{message("customersBadgeErased")}</Badge>
+                ) : null}
+                {customer.legalHold ? (
+                  <Badge tone="warning">{message("customersBadgeHold")}</Badge>
+                ) : null}
+                {customer.restricted ? (
+                  <Badge tone="danger">{message("customersBadgeRestricted")}</Badge>
+                ) : null}
+                {customer.suppressed ? (
+                  <Badge tone="neutral">{message("customersBadgeSuppressed")}</Badge>
+                ) : null}
+                <ZoneNote locale={locale} timeZone="UTC" />
+              </>
+            ) : (
+              <ZoneNote locale={locale} timeZone="UTC" />
+            )
+          }
+        />
+      </div>
+      {resultKey === null ? null : (
+        <ResultAlert positive={positiveCustomerResults.has(result ?? "")}>
+          {message(resultKey)}
+        </ResultAlert>
+      )}
 
-        <dl>
-          <div>
-            <dt>{message("customersEmailLabel")}</dt>
-            <dd>
-              <bdi>{customer.email ?? message("customersErasedValue")}</bdi>
-            </dd>
-          </div>
-          <div>
-            <dt>{message("customersPhoneLabel")}</dt>
-            <dd>
-              <bdi>{customer.phone ?? message("customersNoPhone")}</bdi>
-            </dd>
-          </div>
-          <div>
-            <dt>{message("customersSinceLabel")}</dt>
-            <dd>{formatDateTime(customer.createdAt, locale, "UTC")}</dd>
-          </div>
-          {/* Counts, never contents. Reading a sensitive note happens on the
-              booking it belongs to, where the capability is already enforced. */}
-          <div>
-            <dt>{message("customersSensitiveNotesLabel")}</dt>
-            <dd>{customer.sensitiveNoteCount}</dd>
-          </div>
-          <div>
-            <dt>{message("customersIntakeLabel")}</dt>
-            <dd>{customer.intakeCount}</dd>
-          </div>
-          {customer.restrictionReason === null ? null : (
-            <div>
-              <dt>{message("customersRestrictionReasonLabel")}</dt>
-              <dd>{customer.restrictionReason}</dd>
-            </div>
-          )}
-        </dl>
+      <Facts
+        columns={3}
+        className="rounded-lg border bg-card p-5"
+        items={[
+          {
+            key: "email",
+            label: message("customersEmailLabel"),
+            value: <bdi>{customer.email ?? message("customersErasedValue")}</bdi>,
+          },
+          {
+            key: "phone",
+            label: message("customersPhoneLabel"),
+            value: <bdi>{customer.phone ?? message("customersNoPhone")}</bdi>,
+          },
+          {
+            key: "since",
+            label: message("customersSinceLabel"),
+            value: formatWhen(customer.createdAt, locale, "UTC"),
+          },
+          // Counts, never contents. Reading a sensitive note happens on the
+          // booking it belongs to, where the capability is already enforced.
+          {
+            key: "sensitive",
+            label: message("customersSensitiveNotesLabel"),
+            value: formatCount(customer.sensitiveNoteCount, locale),
+          },
+          {
+            key: "intake",
+            label: message("customersIntakeLabel"),
+            value: formatCount(customer.intakeCount, locale),
+          },
+          ...(customer.restrictionReason === null
+            ? []
+            : [
+                {
+                  key: "restriction",
+                  label: message("customersRestrictionReasonLabel"),
+                  value: customer.restrictionReason,
+                },
+              ]),
+        ]}
+      />
 
-        <section aria-labelledby="customer-bookings-title">
-          <h2 id="customer-bookings-title">{message("customersBookingsTitle")}</h2>
-          {customer.bookings.length === 0 ? (
-            <p>{message("customersNoBookings")}</p>
-          ) : (
-            <ul>
+      <Section id="customer-bookings" title={message("customersBookingsTitle")}>
+        {customer.bookings.length === 0 ? (
+          <EmptyState
+            icon={<CalendarX aria-hidden="true" />}
+            title={message("customersNoBookings")}
+          />
+        ) : (
+          <>
+            <TableFrame>
+              <Table label={message("customersBookingsTitle")}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{workspaceMessage(locale, "reference")}</TableHead>
+                    <TableHead>{workspaceMessage(locale, "service")}</TableHead>
+                    <TableHead>{message("bookingsWhenLabel")}</TableHead>
+                    <TableHead>{message("bookingsStatusLabel")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {customer.bookings.map((booking) => (
+                    <TableRow key={booking.bookingId}>
+                      <TableCell>
+                        <Link
+                          className={textLinkClass}
+                          href={`/${locale}/bookings/${booking.bookingId}`}
+                        >
+                          <ReferenceCode className="text-primary">
+                            {booking.publicReference}
+                          </ReferenceCode>
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <ServiceDye name={booking.serviceName} />
+                        {/* The name the booking was made under, which a later
+                        correction deliberately does not rewrite. */}
+                        {booking.contactName === null ||
+                        booking.contactName === customer.fullName ? null : (
+                          <span className="block text-xs text-muted-foreground">
+                            {message("customersBookedAs")} {booking.contactName}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-44">
+                        {formatWhen(booking.startAt, locale, "UTC")}
+                      </TableCell>
+                      <TableCell>
+                        <StatusStamp state={stampStateFor(booking.status)}>
+                          {workspaceStatus(locale, booking.status)}
+                        </StatusStamp>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableFrame>
+            <RecordCards label={message("customersBookingsTitle")}>
               {customer.bookings.map((booking) => (
-                <li key={booking.bookingId}>
-                  <Link href={`/${locale}/bookings/${booking.bookingId}`}>
-                    <bdi>{booking.publicReference}</bdi> · {booking.serviceName} ·{" "}
-                    {formatDateTime(booking.startAt, locale, "UTC")} · {booking.status}
-                  </Link>
-                  {/* The name the booking was made under, which a later
-                      correction deliberately does not rewrite. */}
-                  {booking.contactName === null ||
-                  booking.contactName === customer.fullName ? null : (
-                    <span>
-                      {" "}
-                      · {message("customersBookedAs")} {booking.contactName}
-                    </span>
-                  )}
-                </li>
+                <RecordCard
+                  key={booking.bookingId}
+                  title={
+                    <>
+                      <Link
+                        className={textLinkClass}
+                        href={`/${locale}/bookings/${booking.bookingId}`}
+                      >
+                        <ReferenceCode className="text-primary">
+                          {booking.publicReference}
+                        </ReferenceCode>
+                      </Link>
+                      <span className="font-semibold">
+                        <ServiceDye name={booking.serviceName} />
+                      </span>
+                      {booking.contactName === null ||
+                      booking.contactName === customer.fullName ? null : (
+                        <span className="text-xs text-muted-foreground">
+                          {message("customersBookedAs")} {booking.contactName}
+                        </span>
+                      )}
+                    </>
+                  }
+                  aside={
+                    <StatusStamp state={stampStateFor(booking.status)}>
+                      {workspaceStatus(locale, booking.status)}
+                    </StatusStamp>
+                  }
+                  facts={[
+                    {
+                      key: "when",
+                      label: message("bookingsWhenLabel"),
+                      value: formatWhen(booking.startAt, locale, "UTC"),
+                    },
+                  ]}
+                />
               ))}
-            </ul>
-          )}
-        </section>
+            </RecordCards>
+          </>
+        )}
+      </Section>
 
-        <section aria-labelledby="customer-consents-title">
-          <h2 id="customer-consents-title">{message("customersConsentsTitle")}</h2>
-          {customer.consents.length === 0 ? (
-            <p>{message("customersNoConsents")}</p>
-          ) : (
-            <ul>
-              {customer.consents.map((consent) => (
-                <li key={`${consent.policyKey}-${consent.acceptedAt}`}>
-                  {consent.policyKey} v{consent.policyVersion} ·{" "}
-                  {formatDateTime(consent.acceptedAt, locale, "UTC")} · {consent.source}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+      <Section id="customer-consents" title={message("customersConsentsTitle")}>
+        {customer.consents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {message("customersNoConsents")}
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border bg-card">
+            {customer.consents.map((consent) => (
+              <li
+                key={`${consent.policyKey}-${consent.acceptedAt}`}
+                className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-sm"
+              >
+                <bdi dir="ltr" className="font-latin font-semibold">
+                  {consent.policyKey} v{consent.policyVersion}
+                </bdi>
+                <span className="text-muted-foreground">
+                  {formatWhen(consent.acceptedAt, locale, "UTC")}
+                </span>
+                <bdi dir="ltr" className="font-latin text-muted-foreground">
+                  {consent.source}
+                </bdi>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
 
+      <div className="grid items-start gap-8 lg:grid-cols-2">
         {customer.erased ? null : (
-          <section aria-labelledby="customer-correct-title">
-            <h2 id="customer-correct-title">{message("customersCorrectTitle")}</h2>
-            <form action={correctCustomerAction}>
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="customerId" value={customer.customerId} />
-              <input type="hidden" name="expectedRevision" value={customer.revision} />
-              <label htmlFor="correct-name">{message("customersNameLabel")}</label>
-              <input
-                defaultValue={customer.fullName ?? ""}
-                id="correct-name"
-                maxLength={160}
-                name="fullName"
-                required
-                type="text"
-              />
-              <label htmlFor="correct-email">{message("customersEmailLabel")}</label>
-              <input
-                defaultValue={customer.email ?? ""}
-                id="correct-email"
-                maxLength={320}
-                name="email"
-                required
-                type="email"
-              />
-              <label htmlFor="correct-phone">{message("customersPhoneLabel")}</label>
-              <input
-                defaultValue={customer.phone ?? ""}
-                id="correct-phone"
-                maxLength={40}
-                name="phone"
-                type="tel"
-              />
-              <label htmlFor="correct-tags">{message("customersTagsLabel")}</label>
-              <input
-                defaultValue={customer.tags.join(", ")}
-                id="correct-tags"
-                maxLength={400}
-                name="tags"
-                type="text"
-              />
-              <p>{message("customersCorrectHint")}</p>
-              <Button type="submit">{message("customersCorrectAction")}</Button>
-            </form>
-          </section>
+          <Section id="customer-correct" title={message("customersCorrectTitle")}>
+            <CustomerCorrectionForm
+              locale={locale}
+              customerId={customer.customerId}
+              revision={customer.revision}
+              fullName={customer.fullName ?? ""}
+              email={customer.email ?? ""}
+              phone={customer.phone ?? ""}
+              tags={customer.tags.join(", ")}
+            />
+          </Section>
         )}
 
-        <section aria-labelledby="customer-rights-title">
-          <h2 id="customer-rights-title">{message("customersRightsTitle")}</h2>
+        <Section id="customer-rights" title={message("customersRightsTitle")}>
           {/* Every control is offered. The database decides which one this
               record can actually accept; hiding a button is presentation, and
               presentation is never authorization. */}
-          <form action={setCustomerFlagAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="customerId" value={customer.customerId} />
-            <label htmlFor="flag-reason">{message("customersReasonLabel")}</label>
-            <textarea id="flag-reason" maxLength={500} name="reason" rows={2} />
-            <div className="requests-actions">
-              <Button
-                name="action"
-                type="submit"
-                value={customer.restricted ? "unrestrict" : "restrict"}
-                variant="secondary"
-              >
-                {message(
-                  customer.restricted
-                    ? "customersUnrestrictAction"
-                    : "customersRestrictAction",
-                )}
-              </Button>
-              <Button
-                name="action"
-                type="submit"
-                value={customer.legalHold ? "release" : "hold"}
-                variant="secondary"
-              >
-                {message(
-                  customer.legalHold
-                    ? "customersReleaseHoldAction"
-                    : "customersPlaceHoldAction",
-                )}
-              </Button>
-            </div>
-          </form>
+          <CustomerRightsForms
+            key={customer.customerId}
+            locale={locale}
+            customerId={customer.customerId}
+            restricted={customer.restricted}
+            legalHold={customer.legalHold}
+          />
+        </Section>
+      </div>
 
-          <form action={runPrivacyRequestAction}>
-            <input type="hidden" name="locale" value={locale} />
-            <input type="hidden" name="customerId" value={customer.customerId} />
-            <p>{message("customersJobsHint")}</p>
-            <div className="requests-actions">
-              <Button name="kind" type="submit" value="export">
-                {message("customersExportAction")}
-              </Button>
-              <Button name="kind" type="submit" value="deletion" variant="secondary">
-                {message("customersDeleteAction")}
-              </Button>
-            </div>
-          </form>
-        </section>
+      {exported === null || exported.artifact === null ? null : (
+        <Section
+          id="customer-export"
+          title={message("customersExportTitle")}
+          description={`${message("customersExportExpires")} ${
+            exported.artifactExpiresAt === null
+              ? message("customersErasedValue")
+              : `${formatWhen(exported.artifactExpiresAt, locale, "UTC")} (UTC)`
+          }`}
+        >
+          {/* ponytail: the artifact is disclosed here, inside a closed
+              disclosure, because there is nowhere to put a file yet: Postgres
+              PITR does not restore deleted Storage objects, so an export
+              written to Storage would have no restore story. Issue #39 brings
+              object backup and a restore drill; this becomes a signed
+              download then. */}
+          <details className="group rounded-lg border bg-card">
+            <summary className="flex min-h-11 cursor-pointer items-center px-4 text-sm font-semibold text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+              {message("customersExportReveal")}
+            </summary>
+            <pre
+              dir="ltr"
+              className="max-h-96 overflow-auto border-t bg-neutral-1 p-4 text-start font-latin text-xs leading-relaxed"
+            >
+              {JSON.stringify(exported.artifact, null, 2)}
+            </pre>
+          </details>
+        </Section>
+      )}
 
-        {exported === null || exported.artifact === null ? null : (
-          <section aria-labelledby="customer-export-title">
-            <h2 id="customer-export-title">{message("customersExportTitle")}</h2>
-            <p>
-              {message("customersExportExpires")}{" "}
-              {exported.artifactExpiresAt === null
-                ? message("customersErasedValue")
-                : formatDateTime(exported.artifactExpiresAt, locale, "UTC")}
-            </p>
-            {/* ponytail: the artifact is disclosed here, inside a closed
-                disclosure, because there is nowhere to put a file yet: Postgres
-                PITR does not restore deleted Storage objects, so an export
-                written to Storage would have no restore story. Issue #39 brings
-                object backup and a restore drill; this becomes a signed
-                download then. */}
-            <details>
-              <summary>{message("customersExportReveal")}</summary>
-              <pre>{JSON.stringify(exported.artifact, null, 2)}</pre>
-            </details>
-          </section>
-        )}
-
-        <section aria-labelledby="customer-jobs-title">
-          <h2 id="customer-jobs-title">{message("customersJobsTitle")}</h2>
-          {jobs.length === 0 ? (
-            <p>{message("customersNoJobs")}</p>
-          ) : (
-            <ul>
+      <Section id="customer-jobs" title={message("customersJobsTitle")}>
+        {jobs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{message("customersNoJobs")}</p>
+        ) : (
+          <>
+            <TableFrame>
+              <Table label={message("customersJobsTitle")}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{workspaceMessage(locale, "jobKind")}</TableHead>
+                    <TableHead>{message("bookingsStatusLabel")}</TableHead>
+                    <TableHead>{workspaceMessage(locale, "jobCreated")}</TableHead>
+                    <TableHead>{workspaceMessage(locale, "jobProgress")}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {jobs.map((job) => (
+                    <TableRow key={job.requestId}>
+                      <TableCell>
+                        {job.kind === "export"
+                          ? workspaceMessage(locale, "jobExport")
+                          : job.kind === "deletion"
+                            ? workspaceMessage(locale, "jobDeletion")
+                            : job.kind}
+                      </TableCell>
+                      <TableCell>
+                        <StatusStamp state={stampStateFor(job.status)}>
+                          {workspaceStatus(locale, job.status)}
+                        </StatusStamp>
+                        {job.blockedReason === null ? null : (
+                          <bdi
+                            dir="ltr"
+                            className="mt-1 block font-latin text-xs text-muted-foreground"
+                          >
+                            {job.blockedReason}
+                          </bdi>
+                        )}
+                      </TableCell>
+                      <TableCell className="min-w-44">
+                        {formatWhen(job.createdAt, locale, "UTC")}
+                      </TableCell>
+                      <TableCell>
+                        {job.pendingSteps > 0
+                          ? countLabel(locale, "openSteps", job.pendingSteps)
+                          : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableFrame>
+            <RecordCards label={message("customersJobsTitle")}>
               {jobs.map((job) => (
-                <li key={job.requestId}>
-                  {job.kind} · {job.status}
-                  {job.blockedReason === null ? null : ` · ${job.blockedReason}`} ·{" "}
-                  {formatDateTime(job.createdAt, locale, "UTC")}
-                  {job.pendingSteps > 0
-                    ? ` · ${job.pendingSteps} ${message("customersPendingSteps")}`
-                    : null}
-                </li>
+                <RecordCard
+                  key={job.requestId}
+                  title={
+                    <span className="font-semibold">
+                      {job.kind === "export"
+                        ? workspaceMessage(locale, "jobExport")
+                        : job.kind === "deletion"
+                          ? workspaceMessage(locale, "jobDeletion")
+                          : job.kind}
+                    </span>
+                  }
+                  aside={
+                    <StatusStamp state={stampStateFor(job.status)}>
+                      {workspaceStatus(locale, job.status)}
+                    </StatusStamp>
+                  }
+                  facts={[
+                    {
+                      key: "created",
+                      label: workspaceMessage(locale, "jobCreated"),
+                      value: formatWhen(job.createdAt, locale, "UTC"),
+                    },
+                    {
+                      key: "progress",
+                      label: workspaceMessage(locale, "jobProgress"),
+                      value:
+                        job.pendingSteps > 0
+                          ? countLabel(locale, "openSteps", job.pendingSteps)
+                          : "—",
+                    },
+                    ...(job.blockedReason === null
+                      ? []
+                      : [
+                          {
+                            key: "blocked",
+                            label: message("bookingsStatusLabel"),
+                            value: (
+                              <bdi dir="ltr" className="font-latin text-xs break-all">
+                                {job.blockedReason}
+                              </bdi>
+                            ),
+                          },
+                        ]),
+                  ]}
+                />
               ))}
-            </ul>
-          )}
-        </section>
-      </Surface>
+            </RecordCards>
+          </>
+        )}
+      </Section>
     </WorkspaceShell>
   );
 }

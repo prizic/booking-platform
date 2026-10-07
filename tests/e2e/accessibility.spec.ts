@@ -17,6 +17,7 @@ import {
   requested,
   stubBookingApi,
 } from "./booking-fixtures";
+import { completionOrigin, signInCompletion } from "./dashboard-completion-fixtures";
 
 for (const profile of responsiveProfiles) {
   test.describe(`${profile.name} tenant accessibility`, () => {
@@ -245,6 +246,88 @@ for (const language of locales) {
       `${clientOrigin}/${language.locale}/manage?token=${"e".repeat(64)}`,
     );
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+      .analyze();
+    expect(results.violations).toEqual([]);
+  });
+}
+
+// PWA. The install instructions and the offline fallback are public pages of
+// both tenant apps; the service worker serves the offline page without a
+// network, so it must stand on its own. Each is scanned at both widths.
+for (const profile of responsiveProfiles) {
+  test.describe(`${profile.name} PWA pages accessibility`, () => {
+    test.use({ viewport: profile.viewport });
+
+    for (const application of applicationOrigins.filter(
+      (candidate) => candidate.name !== "platform-admin",
+    )) {
+      for (const language of locales) {
+        for (const route of ["install", "offline"] as const) {
+          test(`${application.name} ${route} ${language.locale} has no automated WCAG A/AA violations`, async ({
+            page,
+          }) => {
+            await page.goto(`${application.origin}/${language.locale}/${route}`);
+            await expect(page.locator("html")).toHaveAttribute("lang", language.locale);
+            await expect(page.locator("html")).toHaveAttribute(
+              "dir",
+              language.direction,
+            );
+            await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+            await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+            await expect(page.locator("main")).toHaveCount(1);
+            expect(
+              await page.evaluate(
+                () => document.documentElement.scrollWidth <= innerWidth + 1,
+              ),
+            ).toBe(true);
+
+            const results = await new AxeBuilder({ page })
+              .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+              .analyze();
+            expect(results.violations).toEqual([]);
+          });
+        }
+      }
+    }
+  });
+}
+
+// Promise toasts. A Dashboard save answers with a toast in the operator's
+// language within two seconds; toast content never takes role="status" (the
+// on-page status message owns it), and the page stays free of automated
+// WCAG A/AA violations while the toast is open. Needs a signed-in member, so
+// it runs against the dashboard completion campaign's credential fixture.
+for (const language of locales) {
+  test(`dashboard save toast ${language.locale} is announced without role=status and has no automated WCAG A/AA violations`, async ({
+    page,
+  }) => {
+    test.skip(
+      !process.env.DASHBOARD_COMPLETION_CREDENTIAL_FILE,
+      "Needs the dashboard completion campaign credential fixture.",
+    );
+    const save = language.locale === "ar" ? "حفظ تفضيلاتي" : "Save my preferences";
+    await signInCompletion(page, "admin", language.locale);
+    await page.goto(
+      `${completionOrigin}/${language.locale}/communications/preferences`,
+    );
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    // A click before hydration submits nothing.
+    await page.waitForLoadState("networkidle");
+    await page.getByRole("button", { name: save, exact: true }).click();
+
+    const toast = page.locator("[data-sonner-toaster] [data-sonner-toast]").first();
+    await expect(toast).toBeVisible({ timeout: 2_000 });
+    // Hovering pauses the toast's timer while it is scanned.
+    await toast.hover();
+    await expect(page.locator("[data-sonner-toaster]")).toHaveAttribute(
+      "dir",
+      language.locale === "ar" ? "rtl" : "ltr",
+    );
+    await expect(page.locator("[data-sonner-toaster] [role=status]")).toHaveCount(0);
+    await expect(page.locator("main [data-sonner-toaster]")).toHaveCount(0);
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])

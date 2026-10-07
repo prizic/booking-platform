@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { locales, responsiveProfiles, tenantApplications } from "./apps";
 
 for (const profile of responsiveProfiles) {
@@ -25,14 +25,42 @@ for (const profile of responsiveProfiles) {
               name: application.headings[language.locale],
             }),
           ).toBeVisible();
-          await expect(
-            page.getByRole("navigation", {
-              name: language.languageNavigation,
-            }),
-          ).toBeVisible();
-          await expect(
-            page.getByRole("link", { name: language.switchLanguage }),
-          ).toHaveAttribute("href", language.locale === "en" ? "/ar" : "/en");
+          // Below the desktop rail the Dashboard keeps its language switch in
+          // the navigation sheet, one keyboard-operable button away.
+          let languageScope: Page | Locator = page;
+          if (application.name === "dashboard" && profile.name === "mobile") {
+            await page
+              .getByRole("button", {
+                name:
+                  language.locale === "ar"
+                    ? "افتح قائمة التنقل"
+                    : "Open navigation menu",
+                exact: true,
+              })
+              .click();
+            languageScope = page.getByRole("dialog");
+            await expect(languageScope).toBeVisible();
+          }
+          const languageNavigation = languageScope.getByRole("navigation", {
+            name: language.languageNavigation,
+          });
+          await expect(languageNavigation).toBeVisible();
+          const switchLink = languageNavigation.getByRole("link", {
+            name: language.switchLanguage,
+            exact: true,
+          });
+          await expect(switchLink).toHaveAttribute(
+            "href",
+            `/${language.switchLocale}${application.name === "dashboard" ? "/today" : ""}`,
+          );
+          await expect(switchLink).toHaveAttribute("lang", language.switchLocale);
+          await expect(switchLink).not.toHaveAttribute("aria-current", "true");
+          const currentLink = languageNavigation.getByRole("link", {
+            name: language.currentLanguage,
+            exact: true,
+          });
+          await expect(currentLink).toHaveAttribute("aria-current", "true");
+          await expect(currentLink).toHaveAttribute("lang", language.locale);
 
           const horizontalOverflow = await page.evaluate(
             () =>
@@ -119,11 +147,11 @@ async function getCompositionBoxes(
   const leading =
     application === "client"
       ? page.locator(".client-intro")
-      : page.locator(".dashboard-sidebar");
+      : page.getByRole("complementary");
   const trailing =
     application === "client"
-      ? page.locator(".booking-preview")
-      : page.locator(".dashboard-main");
+      ? page.locator(".client-hero-actions")
+      : page.getByRole("main");
   const [leadingBox, trailingBox] = await Promise.all([
     leading.boundingBox(),
     trailing.boundingBox(),

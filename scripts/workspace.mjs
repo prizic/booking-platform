@@ -152,6 +152,8 @@ export function allDeclaredDependencies(member) {
 }
 
 const ignoredDirectoryNames = new Set([
+  ".artifacts",
+  ".impeccable",
   ".git",
   ".next",
   ".next-warm",
@@ -175,7 +177,11 @@ export async function walkFiles(startPath, options = {}) {
   async function visit(currentPath) {
     const entries = await readdir(currentPath, { withFileTypes: true });
     for (const entry of entries) {
-      if (entry.isDirectory() && ignoredDirectoryNames.has(entry.name)) continue;
+      if (
+        entry.isDirectory() &&
+        (ignoredDirectoryNames.has(entry.name) || entry.name.startsWith(".next-"))
+      )
+        continue;
 
       const absolutePath = path.join(currentPath, entry.name);
       if (entry.isDirectory()) {

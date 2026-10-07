@@ -1,9 +1,11 @@
 begin;
 
-select plan(31);
+select plan(42);
 
 set local role anon;
-select is((select count(*)::integer from app.tenant_domains), 4, 'anonymous sees only verified active production domains');
+select is((select count(*)::integer from app.tenant_domains
+  where tenant_id in ('a0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000001')),
+  4, 'anonymous sees only verified active production domains');
 select throws_like(
   $$select * from app.locations$$,
   '%permission denied%',
@@ -153,6 +155,53 @@ select throws_like(
   '%permission denied%',
   'future workers require a narrow audited surface instead of RLS bypass access'
 );
+
+reset role;
+-- Custom roles (ADR-0019) are read through the same policies as built-ins.
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values
+  ('00000000-0000-0000-0000-000000000000', 'e1f00000-0000-4000-8000-000000000001', 'authenticated', 'authenticated', 'rls-viewer@example.invalid', '', now(), '{}', '{}', now(), now()),
+  ('00000000-0000-0000-0000-000000000000', 'e1f00000-0000-4000-8000-000000000002', 'authenticated', 'authenticated', 'rls-desk@example.invalid', '', now(), '{}', '{}', now(), now());
+insert into app.roles (id, tenant_id, key, location_scope_mode, name_en, name_ar)
+values
+  ('aaf00000-0000-4000-8000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'custom_00000000000000f1', 'tenant', 'Viewer', 'مشاهد'),
+  ('aaf00000-0000-4000-8000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'custom_00000000000000f2', 'assigned', 'Desk', 'مكتب');
+insert into app.role_permissions (tenant_id, role_id, permission_key, grant_kind, scope_kind)
+values
+  ('a0000000-0000-0000-0000-000000000001', 'aaf00000-0000-4000-8000-000000000001', 'booking.view.any', 'direct', 'tenant'),
+  ('a0000000-0000-0000-0000-000000000001', 'aaf00000-0000-4000-8000-000000000002', 'booking.view.any', 'direct', 'location');
+insert into app.memberships (id, tenant_id, auth_user_id, role_id)
+values
+  ('a3f00000-0000-4000-8000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'e1f00000-0000-4000-8000-000000000001', 'aaf00000-0000-4000-8000-000000000001'),
+  ('a3f00000-0000-4000-8000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'e1f00000-0000-4000-8000-000000000002', 'aaf00000-0000-4000-8000-000000000002');
+insert into app.membership_location_scopes (tenant_id, membership_id, location_id)
+values ('a0000000-0000-0000-0000-000000000001', 'a3f00000-0000-4000-8000-000000000002', 'a5000000-0000-0000-0000-000000000002');
+
+select set_config('request.jwt.claims', '{"sub":"e1f00000-0000-4000-8000-000000000001","role":"authenticated","aal":"aal1"}', true);
+set local role authenticated;
+select is((select count(*)::integer from app.locations), 2, 'a tenant-mode custom member sees every location of its tenant');
+select is((select count(*)::integer from app.locations where tenant_id = 'b0000000-0000-0000-0000-000000000001'), 0, 'and none of another tenant');
+select is((select count(*)::integer from app.roles), 6, 'a member reads its tenant''s built-in and custom roles');
+select is((select count(*)::integer from app.role_permissions where role_id = 'aaf00000-0000-4000-8000-000000000001'), 1, 'and their grants');
+select is((select count(*)::integer from app.memberships), 1, 'a custom member without staff.manage sees only itself');
+select is((select count(*)::integer from app.invitations), 0, 'and no invitation');
+select is((select count(*)::integer from app.role_change_events), 0, 'and no role ledger without audit.read');
+select throws_like(
+  $$insert into app.role_permissions (tenant_id, role_id, permission_key, grant_kind, scope_kind) values ('a0000000-0000-0000-0000-000000000001', 'aaf00000-0000-4000-8000-000000000001', 'staff.manage', 'direct', 'tenant')$$,
+  '%permission denied%',
+  'nobody grants themselves a permission beneath the RPCs'
+);
+
+reset role;
+select set_config('request.jwt.claims', '{"sub":"e1f00000-0000-4000-8000-000000000002","role":"authenticated","aal":"aal1"}', true);
+set local role authenticated;
+select is((select array_agg(id)::text from app.locations), '{a5000000-0000-0000-0000-000000000002}', 'an assigned custom member sees exactly its location');
+
+reset role;
+select set_config('request.jwt.claims', '{"sub":"b1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal1"}', true);
+set local role authenticated;
+select is((select count(*)::integer from app.roles where tenant_id = 'a0000000-0000-0000-0000-000000000001'), 0, 'Tenant B cannot read Tenant A''s custom roles');
+select is((select count(*)::integer from app.role_permissions where tenant_id = 'a0000000-0000-0000-0000-000000000001'), 0, 'nor their grants');
 
 reset role;
 select * from finish();

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --port 3002",
+    "dev": "next dev --port ${PLATFORM_ADMIN_PORT:-3002}",
     "build": "next build",
     "start": "next start --port 3002",
     "typecheck": "next typegen && tsc --noEmit",
@@ -11,21 +11,29 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@hookform/resolvers": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "@wlbp/auth": "workspace:*",
     "@wlbp/config": "workspace:*",
     "@wlbp/i18n": "workspace:*",
     "@wlbp/supabase-client": "workspace:*",
     "@wlbp/ui-foundation": "workspace:*",
+    "lucide-react": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-hook-form": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "wlbp": {
     "distribution": "platform-only"

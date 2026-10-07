@@ -1,4 +1,7 @@
 import { parseCreateHoldV1Request } from "@wlbp/api-contracts";
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+
+import { createHoldSchema } from "../../[locale]/book/booking-schema";
 
 import {
   ClientBookingError,
@@ -16,7 +19,10 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const context = await createPublicApiContext();
     if (context === null) return contractErrorResponse("availability_unavailable", 503);
-    const hold = parseCreateHoldV1Request(await request.json());
+    // The schema the browser built this body with, then the shared contract.
+    const input = parseActionInput(createHoldSchema, await request.json());
+    if (!input.ok) return contractErrorResponse("invalid_request", 400);
+    const hold = parseCreateHoldV1Request(input.data);
     const source = createClientBookingDataSource(context.api, context.hostname);
     const data = await source.createHold(hold);
     // The details step needs the consent text and intake questions from the

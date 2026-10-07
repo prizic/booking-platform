@@ -1,39 +1,31 @@
 "use server";
 
-import type { Locale } from "@wlbp/i18n";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { redirect } from "next/navigation";
 
 import type { ReportKey } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { decisionOutcomeFor } from "../../_lib/request-decisions";
-
-const reportKeys: readonly ReportKey[] = [
-  "bookings",
-  "customers",
-  "revenue",
-  "utilization",
-];
+import { reportExportSchema, type ReportExportInput } from "./report-export-schema";
 
 /**
  * Queues an export and sends the operator to it. The rows are computed under
  * the caller's own row level security, so a location-limited member exports
- * their locations and nobody else's.
+ * their locations and nobody else's. A refusal returns its outcome code to the
+ * form instead of leaving the page.
  */
-export async function runReportExportAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const reportKey = formData.get("reportKey");
-  const from = formData.get("from");
-  const to = formData.get("to");
-  const timeZone = formData.get("timeZone");
+export async function runReportExportAction(
+  input: ReportExportInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(reportExportSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { from, locale, timeZone, to } = parsed.data;
+  const reportKey: ReportKey = parsed.data.reportKey;
   const base = `/${locale}/reports`;
-  if (
-    !reportKeys.includes(reportKey as ReportKey) ||
-    typeof from !== "string" ||
-    typeof to !== "string" ||
-    typeof timeZone !== "string"
-  ) {
-    redirect(`${base}?result=invalid-request`);
-  }
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -41,24 +33,25 @@ export async function runReportExportAction(formData: FormData): Promise<never> 
     request.state.kind !== "ready" ||
     request.source.runReportExport === undefined
   ) {
-    redirect(`${base}?result=not-authorized`);
+    return actionError("not-authorized");
   }
 
   const query = `from=${from}&to=${to}&tz=${encodeURIComponent(timeZone)}`;
+  let exportId: string;
   try {
-    const exportId = await request.source.runReportExport({
+    exportId = await request.source.runReportExport({
       from,
-      locationId: null,
-      reportKey: reportKey as ReportKey,
+      locationId: /^[a-f0-9-]{36}$/iu.test(parsed.data.locationId)
+        ? parsed.data.locationId
+        : null,
+      reportKey,
       tenantId: request.state.context.tenantId,
       timeZone,
       to,
     });
-    redirect(`${base}?${query}&export=${exportId}&result=exported`);
   } catch (error) {
-    // `redirect` throws by design, so a redirect must not be mistaken for a
-    // failed export.
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-    redirect(`${base}?${query}&result=${decisionOutcomeFor(error)}`);
+    return actionError(decisionOutcomeFor(error));
   }
+  // The redirect stays outside the try: it signals by throwing.
+  redirect(`${base}?${query}&export=${exportId}&result=exported`);
 }

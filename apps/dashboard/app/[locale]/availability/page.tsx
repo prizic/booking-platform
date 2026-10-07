@@ -1,339 +1,195 @@
-import { formatDateTime, type Locale } from "@wlbp/i18n";
+import { parseScheduleWorkspaceV1 } from "@wlbp/api-contracts";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import { formatWhen } from "../../_lib/booking-display";
 import {
-  parseAvailabilityV1Request,
-  parseScheduleWorkspaceV1,
-  type AvailabilityV1Response,
-} from "@wlbp/api-contracts";
-import {
-  extractRequestHostname,
-  type RuntimeEnvironment,
-} from "@wlbp/tenant-resolution";
-import { Surface } from "@wlbp/ui-foundation";
-import { headers } from "next/headers";
-
-import { getDashboardMessage } from "../../_lib/copy";
-import { createDashboardRequestDataSource } from "../../_lib/dashboard-server";
-import { loadDashboardAccess } from "../../_lib/dashboard-access";
-import { saveSchedule } from "../actions";
-
+  Alert,
+  AlertDescription,
+  EmptyState,
+  PageHeader,
+  Section,
+  StatusStamp,
+} from "@wlbp/ui-foundation";
+import { CalendarClock, ChevronDown } from "lucide-react";
+import { WorkspaceShell } from "../../_lib/workspace-shell";
+import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
+import { DashboardAccessPanel } from "../../_lib/dashboard-access-panel";
+import { ScheduleForm, ScheduleRemove } from "./schedule-form";
+import { scopeName } from "./schedule-scope";
+import { scheduleMessage } from "./schedule-copy";
 export const dynamic = "force-dynamic";
 
-type Props = {
-  params: Promise<{ locale: Locale }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-};
+function clock(minute: number) {
+  return minute === 1440
+    ? "24:00"
+    : `${String(Math.floor(minute / 60)).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
+}
 
-export default async function AvailabilityPage({ params, searchParams }: Props) {
+export default async function AvailabilityPage({
+  params,
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
   const { locale } = await params;
-  const query = await searchParams;
-  const source = await createDashboardRequestDataSource();
-  const identity = source === null ? null : await source.getVerifiedIdentity();
-  const configured = process.env.WLBP_RUNTIME_ENV;
-  const runtimeEnvironment: RuntimeEnvironment =
-    configured === "local" ||
-    configured === "test" ||
-    configured === "development" ||
-    configured === "preview" ||
-    configured === "production"
-      ? configured
-      : process.env.NODE_ENV === "production"
-        ? "production"
-        : "development";
-  let tenant: string | null = null;
-  let requestHostname: string | null = null;
-  try {
-    const hostname = extractRequestHostname(await headers(), {
-      runtimeEnvironment,
-      ...(process.env.LOCAL_TENANT_HOST
-        ? { localFallback: process.env.LOCAL_TENANT_HOST }
-        : {}),
-    });
-    requestHostname = hostname;
-    const access = await loadDashboardAccess({ hostname, locale }, source!);
-    if (access.kind === "ready") tenant = access.context.tenantId;
-  } catch {
-    /* the unavailable copy is intentionally non-disclosing */
-  }
-  const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
-    getDashboardMessage(locale, key);
-  const rows =
-    source?.getScheduleWorkspace && tenant && identity
-      ? parseScheduleWorkspaceV1(
-          await source.getScheduleWorkspace(tenant).catch(() => []),
-        )
-      : [];
-  const scope = rows.find((row) => row.kind === "scope");
-  let availability: AvailabilityV1Response | null = null;
-  let availabilityError = false;
-  const queryValue = (key: string) =>
-    typeof query[key] === "string" ? query[key] : undefined;
-  if (
-    source?.getAvailability &&
-    tenant &&
-    identity &&
-    requestHostname &&
-    queryValue("serviceId") &&
-    queryValue("locationId") &&
-    queryValue("startAfter") &&
-    queryValue("endBefore")
-  ) {
-    try {
-      availability = await source.getAvailability(
-        requestHostname,
-        parseAvailabilityV1Request({
-          endBefore: queryValue("endBefore"),
-          locale,
-          locationId: queryValue("locationId"),
-          partySize: Number(queryValue("partySize") ?? "1"),
-          serviceId: queryValue("serviceId"),
-          staffPreferenceId: queryValue("staffPreferenceId") || null,
-          startAfter: queryValue("startAfter"),
-          timeZone: queryValue("timeZone") ?? "UTC",
-        }),
-      );
-    } catch {
-      availabilityError = true;
-    }
-  }
-  const error = typeof query.error === "string" ? query.error : null;
-  const noSlotsMessage =
-    availability?.noSlotReason === "capacity_unavailable"
-      ? message("availabilityNoSlotsCapacity")
-      : availability?.noSlotReason === "outside_booking_window"
-        ? message("availabilityNoSlotsWindow")
-        : availability?.noSlotReason === "policy_restricted"
-          ? message("availabilityNoSlotsPolicy")
-          : message("availabilityNoSlots");
-  return (
-    <main className="dashboard-main" dir={locale === "ar" ? "rtl" : "ltr"}>
-      <header className="dashboard-intro">
-        <p>{message("eyebrow")}</p>
-        <h1>{message("availabilityTitle")}</h1>
-        <p>{message("availabilitySummary")}</p>
-      </header>
-      <Surface
-        as="section"
-        className="access-panel"
-        aria-labelledby="schedule-editor-title"
-      >
-        <h2 id="schedule-editor-title">{message("scheduleEditorTitle")}</h2>
-        {error ? <p role="alert">{message("scheduleSaveError")}</p> : null}
-        {query.saved === "1" ? <p role="status">{message("scheduleSaved")}</p> : null}
-        {!tenant || !identity ? (
-          <p>{message("scheduleUnavailable")}</p>
-        ) : (
-          <form action={saveSchedule} className="schedule-editor">
-            <input name="locale" type="hidden" value={locale} />
-            <input name="tenantId" type="hidden" value={tenant} />
-            <label>
-              {message("scheduleOperationLabel")}
-              <select defaultValue="weekly" name="operation">
-                <option value="scope">{message("scheduleScopeOption")}</option>
-                <option value="weekly">{message("scheduleWeeklyOption")}</option>
-                <option value="break">{message("scheduleBreakOption")}</option>
-                <option value="exception">{message("scheduleExceptionOption")}</option>
-                <option value="time_off">{message("scheduleTimeOffOption")}</option>
-                <option value="holiday">{message("scheduleHolidayOption")}</option>
-                <option value="blackout">{message("scheduleBlackoutOption")}</option>
-                <option value="maintenance">
-                  {message("scheduleMaintenanceOption")}
-                </option>
-                <option value="policy">{message("schedulePolicyOption")}</option>
-              </select>
-            </label>
-            <label>
-              {message("scheduleScopeLabel")}
-              <select name="scopeId" defaultValue={scope?.id ?? ""}>
-                <option value="">{message("scheduleNewScopeOption")}</option>
-                {rows
-                  .filter((row) => row.kind === "scope")
-                  .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {row.id} · {row.timeZone}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <input
-              name="expectedRevision"
-              type="hidden"
-              value={scope?.revision ?? ""}
-            />
-            <label>
-              {message("scheduleScopeKindLabel")}
-              <select defaultValue="location" name="scopeKind">
-                <option value="location">{message("scheduleLocationOption")}</option>
-                <option value="staff">{message("scheduleStaffOption")}</option>
-                <option value="resource">{message("scheduleResourceOption")}</option>
-              </select>
-            </label>
-            <label>
-              {message("scheduleLocationIdLabel")}
-              <input name="locationId" />
-            </label>
-            <label>
-              {message("scheduleStaffIdLabel")}
-              <input name="staffId" />
-            </label>
-            <label>
-              {message("scheduleResourceIdLabel")}
-              <input name="resourceId" />
-            </label>
-            <label>
-              {message("scheduleServiceIdLabel")}
-              <input name="serviceId" />
-            </label>
-            <label>
-              {message("scheduleDayLabel")}
-              <input min="0" max="6" name="dayOfWeek" required type="number" />
-            </label>
-            <label>
-              {message("scheduleStartLabel")}
-              <input min="0" max="1439" name="startMinute" required type="number" />
-            </label>
-            <label>
-              {message("scheduleEndLabel")}
-              <input min="1" max="1440" name="endMinute" required type="number" />
-            </label>
-            <label>
-              {message("timeZoneLabel")}
-              <input defaultValue={scope?.timeZone ?? "UTC"} name="timeZone" required />
-            </label>
-            <label>
-              {message("scheduleDateLabel")}
-              <input name="localDate" type="date" />
-            </label>
-            <label>
-              {message("scheduleExceptionKindLabel")}
-              <select defaultValue="closed" name="exceptionKind">
-                <option value="closed">{message("scheduleClosedOption")}</option>
-                <option value="override">{message("scheduleOverrideOption")}</option>
-              </select>
-            </label>
-            <label>
-              {message("scheduleStartsAtLabel")}
-              <input name="startsAt" type="datetime-local" />
-            </label>
-            <label>
-              {message("scheduleEndsAtLabel")}
-              <input name="endsAt" type="datetime-local" />
-            </label>
-            <label>
-              {message("scheduleNameLabel")}
-              <input name="name" />
-            </label>
-            <label>
-              {message("scheduleReasonLabel")}
-              <input name="reason" />
-            </label>
-            <label>
-              {message("schedulePolicyKeyLabel")}
-              <input name="policyKey" />
-            </label>
-            <label>
-              {message("schedulePolicyValueLabel")}
-              <input name="value" type="number" />
-            </label>
-            <button className="wlbp-button" type="submit">
-              {message("scheduleSave")}
-            </button>
-          </form>
-        )}
-      </Surface>
-      <Surface
-        as="section"
-        className="access-panel"
-        aria-labelledby="availability-preview-title"
-      >
-        <h2 id="availability-preview-title">{message("availabilityPreviewTitle")}</h2>
-        <p>{message("availabilityPreviewSummary")}</p>
-        <form className="schedule-editor" method="get">
-          <label>
-            {message("scheduleServiceIdLabel")}
-            <input defaultValue={queryValue("serviceId")} name="serviceId" required />
-          </label>
-          <label>
-            {message("scheduleLocationIdLabel")}
-            <input defaultValue={queryValue("locationId")} name="locationId" required />
-          </label>
-          <label>
-            {message("availabilityStaffPreferenceLabel")}
-            <input
-              defaultValue={queryValue("staffPreferenceId")}
-              name="staffPreferenceId"
-            />
-          </label>
-          <label>
-            {message("availabilityWindowStartLabel")}
-            <input
-              defaultValue={queryValue("startAfter")}
-              name="startAfter"
-              required
-              type="text"
-            />
-          </label>
-          <label>
-            {message("availabilityWindowEndLabel")}
-            <input
-              defaultValue={queryValue("endBefore")}
-              name="endBefore"
-              required
-              type="text"
-            />
-          </label>
-          <label>
-            {message("availabilityPartySizeLabel")}
-            <input
-              defaultValue={queryValue("partySize") ?? "1"}
-              min="1"
-              name="partySize"
-              required
-              type="number"
-            />
-          </label>
-          <label>
-            {message("availabilityCustomerTimeZone")}
-            <input
-              defaultValue={queryValue("timeZone") ?? "UTC"}
-              name="timeZone"
-              required
-            />
-          </label>
-          <button className="wlbp-button" type="submit">
-            {message("availabilityPreviewAction")}
-          </button>
-        </form>
-        {availabilityError ? (
-          <p role="alert">{message("availabilityPreviewError")}</p>
-        ) : null}
-        {availability ? (
-          <div aria-live="polite">
-            <p>
-              {message("availabilityCustomerTimeZone")}: {availability.displayTimeZone}{" "}
-              · {message("availabilityLocationTimeZone")}:{" "}
-              {availability.locationTimeZone}
-            </p>
-            <p>{message("availabilityAdvisory")}</p>
-            {availability.slots.length === 0 ? (
-              <p>{noSlotsMessage}</p>
+  const message = (key: Parameters<typeof scheduleMessage>[1]) =>
+    scheduleMessage(locale, key);
+  const unavailable = (
+    <Alert tone="danger">
+      <AlertDescription className="text-foreground">
+        {message("unavailable")}
+      </AlertDescription>
+    </Alert>
+  );
+  const request = await loadDashboardRequestAccess(locale);
+  let body;
+  if (request.state.kind !== "ready")
+    body = <DashboardAccessPanel locale={locale} state={request.state} />;
+  else if (
+    !request.source?.getScheduleWorkspace ||
+    !request.source.getScheduleChoices ||
+    !request.source.getScheduleEditorDetails
+  )
+    body = unavailable;
+  else {
+    const context = request.state.context;
+    const { getScheduleWorkspace, getScheduleChoices, getScheduleEditorDetails } =
+      request.source;
+    const loaded = await (async () => {
+      try {
+        const tenant = context.tenantId;
+        const [raw, choices, details] = await Promise.all([
+          getScheduleWorkspace(tenant),
+          getScheduleChoices(tenant),
+          getScheduleEditorDetails(tenant),
+        ]);
+        const rows = parseScheduleWorkspaceV1(raw).map((row) => ({
+          ...row,
+          ...details.find((d) => d.id === row.id),
+        }));
+        return { rows, choices };
+      } catch {
+        return null;
+      }
+    })();
+    if (loaded) {
+      const { rows, choices } = loaded;
+      body = (
+        <>
+          <Section id="schedule-create" title={message("create")}>
+            {choices.length ? (
+              <div className="rounded-lg border bg-card p-5 md:p-6">
+                <ScheduleForm
+                  locale={locale}
+                  choices={choices}
+                  rows={rows}
+                  attempt={crypto.randomUUID()}
+                />
+              </div>
             ) : (
-              <ul className="schedule-items">
-                {availability.slots.map((slot) => (
-                  <li key={`${slot.startAt}:${slot.staffId ?? "automatic"}`}>
-                    <time dateTime={slot.startAt}>
-                      {formatDateTime(
-                        slot.startAt,
-                        locale,
-                        availability.displayTimeZone,
-                      )}
-                    </time>
+              <Alert tone="warning">
+                <AlertDescription className="text-foreground">
+                  {message("denied")}
+                </AlertDescription>
+              </Alert>
+            )}
+          </Section>
+          <Section id="schedule-current" title={message("existing")}>
+            {rows.length ? (
+              <ul className="grid divide-y rounded-lg border bg-card">
+                {rows.map((row) => (
+                  <li key={row.id}>
+                    <article className="grid gap-3 p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="grid gap-1">
+                          <h3 className="text-base font-semibold text-foreground">
+                            {message(row.kind)} · {scopeName(row, choices)}
+                          </h3>
+                          <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                            {row.localDate ? <bdi>{row.localDate}</bdi> : null}
+                            {row.timeZone ? <bdi>{row.timeZone}</bdi> : null}
+                          </p>
+                        </div>
+                        <StatusStamp state="neutral">
+                          {message("revision")} {formatNumber(row.revision, locale)}
+                        </StatusStamp>
+                      </div>
+                      {row.startsAt ? (
+                        <p className="text-sm font-medium [font-variant-numeric:tabular-nums]">
+                          {formatWhen(
+                            row.startsAt,
+                            locale,
+                            row.timeZone ?? "Asia/Riyadh",
+                          )}{" "}
+                          –{" "}
+                          {formatWhen(
+                            row.endsAt!,
+                            locale,
+                            row.timeZone ?? "Asia/Riyadh",
+                          )}
+                        </p>
+                      ) : null}
+                      {row.startMinute !== null ? (
+                        <p className="text-sm font-medium">
+                          <bdi dir="ltr" className="font-latin tabular-nums">
+                            {clock(row.startMinute)} – {clock(row.endMinute!)}
+                          </bdi>
+                        </p>
+                      ) : null}
+                      <details className="group border-t">
+                        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 py-2 text-sm font-semibold text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+                          {message("edit")}
+                          <ChevronDown
+                            aria-hidden="true"
+                            className="size-4 text-muted-foreground transition-transform group-open:rotate-180"
+                          />
+                        </summary>
+                        <div className="pt-2 pb-2">
+                          <ScheduleForm
+                            locale={locale}
+                            record={row}
+                            rows={rows}
+                            choices={choices}
+                            attempt={crypto.randomUUID()}
+                          />
+                        </div>
+                      </details>
+                      <ScheduleRemove
+                        locale={locale}
+                        record={row}
+                        scopeRevision={
+                          row.kind !== "scope" && row.scopeId
+                            ? (rows.find((s) => s.id === row.scopeId)?.revision ?? null)
+                            : null
+                        }
+                        attempt={crypto.randomUUID()}
+                      />
+                    </article>
                   </li>
                 ))}
               </ul>
+            ) : (
+              <EmptyState icon={<CalendarClock />} title={message("empty")} />
             )}
-          </div>
-        ) : null}
-      </Surface>
-    </main>
+          </Section>
+        </>
+      );
+    } else {
+      body = unavailable;
+    }
+  }
+  return (
+    <WorkspaceShell
+      locale={locale}
+      current="availability"
+      labelledBy="availability-title"
+    >
+      <div className="grid gap-8">
+        <PageHeader
+          titleId="availability-title"
+          title={message("title")}
+          description={message("summary")}
+        />
+        {body}
+      </div>
+    </WorkspaceShell>
   );
 }

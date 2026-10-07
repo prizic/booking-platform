@@ -1,12 +1,27 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { PrivacyRequestKind } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
+import { textOrNull } from "../../_lib/form-schema";
 import { decisionOutcomeFor, type DecisionOutcome } from "../../_lib/request-decisions";
+import {
+  customerCorrectionSchema,
+  customerFlagSchema,
+  privacyRequestSchema,
+  splitTags,
+  type CustomerCorrectionInput,
+  type CustomerFlagInput,
+  type PrivacyRequestInput,
+} from "./customer-schema";
 
 type CustomerOutcome =
   | DecisionOutcome
@@ -27,34 +42,23 @@ function detailUrl(
   return `/${locale}/customers/${customerId}?result=${outcome}`;
 }
 
-function trimmed(formData: FormData, key: string): string | null {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
-
-function localeOf(formData: FormData): Locale {
-  return formData.get("locale") === "ar" ? "ar" : "en";
-}
+/*
+ * A call that completed redirects to its outcome on the customer, as the page
+ * has always reported it. A refusal returns the outcome code instead, so the
+ * form keeps what the operator typed and says why next to it.
+ */
 
 /**
  * Correcting identity. The booking snapshots are untouched by design: a past
  * booking keeps the contact details it was actually made under, which is what
  * makes it evidence rather than a mutable opinion about who someone is.
  */
-export async function correctCustomerAction(formData: FormData): Promise<never> {
-  const locale = localeOf(formData);
-  const customerId = formData.get("customerId");
-  const fullName = trimmed(formData, "fullName");
-  const email = trimmed(formData, "email");
-  const expectedRevision = Number(formData.get("expectedRevision"));
-  if (
-    typeof customerId !== "string" ||
-    fullName === null ||
-    email === null ||
-    !Number.isSafeInteger(expectedRevision)
-  ) {
-    redirect(`/${locale}/customers?result=invalid-request`);
-  }
+export async function correctCustomerAction(
+  input: CustomerCorrectionInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(customerCorrectionSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { customerId, email, expectedRevision, fullName, locale } = parsed.data;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -62,7 +66,7 @@ export async function correctCustomerAction(formData: FormData): Promise<never> 
     request.state.kind !== "ready" ||
     request.source.correctCustomer === undefined
   ) {
-    redirect(detailUrl(locale, customerId, "not-authorized"));
+    return actionError("not-authorized");
   }
 
   let outcome: CustomerOutcome;
@@ -72,42 +76,33 @@ export async function correctCustomerAction(formData: FormData): Promise<never> 
       email,
       expectedRevision,
       fullName,
-      phone: trimmed(formData, "phone"),
-      tags: (trimmed(formData, "tags") ?? "")
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag !== ""),
+      phone: textOrNull(parsed.data.phone),
+      tags: splitTags(parsed.data.tags),
       tenantId: request.state.context.tenantId,
     });
     outcome = "corrected";
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  if (outcome === "corrected") revalidatePath(`/${locale}/customers/${customerId}`);
+  if (outcome !== "corrected") return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(detailUrl(locale, customerId, outcome));
 }
 
 /** Restriction and legal hold: both reversible, both recorded, both audited. */
-export async function setCustomerFlagAction(formData: FormData): Promise<never> {
-  const locale = localeOf(formData);
-  const customerId = formData.get("customerId");
-  const action = formData.get("action");
-  if (
-    typeof customerId !== "string" ||
-    (action !== "restrict" &&
-      action !== "unrestrict" &&
-      action !== "hold" &&
-      action !== "release")
-  ) {
-    redirect(`/${locale}/customers?result=invalid-request`);
-  }
+export async function setCustomerFlagAction(
+  input: CustomerFlagInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(customerFlagSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { action, customerId, locale } = parsed.data;
 
   const request = await loadDashboardRequestAccess(locale);
   if (request.source === null || request.state.kind !== "ready") {
-    redirect(detailUrl(locale, customerId, "not-authorized"));
+    return actionError("not-authorized");
   }
   const tenantId = request.state.context.tenantId;
-  const reason = trimmed(formData, "reason");
+  const reason = textOrNull(parsed.data.reason);
 
   let outcome: CustomerOutcome;
   try {
@@ -135,7 +130,14 @@ export async function setCustomerFlagAction(formData: FormData): Promise<never> 
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  revalidatePath(`/${locale}/customers/${customerId}`);
+  refreshWorkspace(locale);
+  if (
+    outcome !== "restricted" &&
+    outcome !== "unrestricted" &&
+    outcome !== "held" &&
+    outcome !== "released"
+  )
+    return actionError(outcome);
   redirect(detailUrl(locale, customerId, outcome));
 }
 
@@ -144,13 +146,12 @@ export async function setCustomerFlagAction(formData: FormData): Promise<never> 
  * operator intent, so the action does both: a job left open and unrun would
  * look to the operator like nothing happened.
  */
-export async function runPrivacyRequestAction(formData: FormData): Promise<never> {
-  const locale = localeOf(formData);
-  const customerId = formData.get("customerId");
-  const kind = formData.get("kind");
-  if (typeof customerId !== "string" || (kind !== "export" && kind !== "deletion")) {
-    redirect(`/${locale}/customers?result=invalid-request`);
-  }
+export async function runPrivacyRequestAction(
+  input: PrivacyRequestInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(privacyRequestSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { customerId, kind, locale } = parsed.data;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -159,7 +160,7 @@ export async function runPrivacyRequestAction(formData: FormData): Promise<never
     request.source.openPrivacyRequest === undefined ||
     request.source.runPrivacyRequest === undefined
   ) {
-    redirect(detailUrl(locale, customerId, "not-authorized"));
+    return actionError("not-authorized");
   }
   const tenantId = request.state.context.tenantId;
 
@@ -167,7 +168,7 @@ export async function runPrivacyRequestAction(formData: FormData): Promise<never
   try {
     const requestId = await request.source.openPrivacyRequest({
       customerId,
-      kind: kind as PrivacyRequestKind,
+      kind: kind satisfies PrivacyRequestKind,
       tenantId,
     });
     await request.source.runPrivacyRequest({ requestId, tenantId });
@@ -184,6 +185,9 @@ export async function runPrivacyRequestAction(formData: FormData): Promise<never
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  revalidatePath(`/${locale}/customers/${customerId}`);
+  refreshWorkspace(locale);
+  // A blocked deletion is a recorded job, reported on the page like any other.
+  if (outcome !== "exported" && outcome !== "deleted" && outcome !== "deletion-blocked")
+    return actionError(outcome);
   redirect(detailUrl(locale, customerId, outcome));
 }

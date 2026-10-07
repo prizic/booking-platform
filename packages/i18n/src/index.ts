@@ -239,7 +239,10 @@ export function formatTimeZone(
     throw new RangeError("Unable to format the IANA timezone offset");
   }
 
-  return `${offset} (${isolateBidi(canonicalTimeZone)})`;
+  // ICU versions disagree on whether zero is rendered as GMT or GMT+00:00.
+  // Normalize that equivalent suffix so server and browser markup agree.
+  const stableOffset = offset.replace(/[+−-][0٠]{2}:[0٠]{2}$/u, "");
+  return `${stableOffset} (${isolateBidi(canonicalTimeZone)})`;
 }
 
 export function resolveZonedLocalDateTime(
@@ -432,4 +435,26 @@ export function formatCurrency(
   const exponent = formatter.resolvedOptions().maximumFractionDigits ?? 0;
 
   return formatter.format(minorUnits / 10 ** exponent);
+}
+/** Exact decimal input to the same ISO currency exponent used for display. */
+export function parseCurrencyMinorUnits(
+  value: string,
+  currency: string,
+): number | null {
+  if (!/^[A-Z]{3}$/u.test(currency) || value.length > 30) return null;
+  const normalized = value
+    .trim()
+    .replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x660))
+    .replace(/[۰-۹]/gu, (digit) => String(digit.charCodeAt(0) - 0x6f0))
+    .replace(/٫/gu, ".");
+  if (!/^\d+(?:\.\d+)?$/u.test(normalized)) return null;
+  const exponent =
+    new Intl.NumberFormat("en", { style: "currency", currency }).resolvedOptions()
+      .maximumFractionDigits ?? 0;
+  const [whole, fraction = ""] = normalized.split(".");
+  if (fraction.length > exponent) return null;
+  const amount =
+    BigInt(whole!) * 10n ** BigInt(exponent) +
+    BigInt(fraction.padEnd(exponent, "0") || "0");
+  return amount <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(amount) : null;
 }

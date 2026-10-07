@@ -78,3 +78,11 @@ The first tenant-isolation slice must establish a durable model without pulling 
 - [Security and privacy](../security-and-privacy.md)
 - [Engineering rules](../engineering-rules.md)
 - [ADR index](./README.md)
+
+## Amendment 2026-10-07 (ADR-0019)
+
+[ADR-0019: Tenant custom roles](./0019-tenant-custom-roles.md) changes three statements above. The original text is kept as history; where they differ, ADR-0019 applies.
+
+- **§3 Live membership — "fixed capability grants".** Grants now come from the member's role, built-in or custom, still read from current database state at the point of use. Location scope fails closed: a `tenant`-mode role reaches every location; an `assigned`-mode role reaches only the member's location rows, and **zero rows means no location access**. The migration gives every active assigned-mode member without location rows a row for each active location, so effective access is unchanged on the day it ships. Support access is unaffected.
+- **§4 Tenant ownership — "fixed v1 roles … not tenant-editable".** Built-in roles remain per-tenant copies that tenants cannot edit, now installed from platform templates by `private.install_builtin_roles_v1`, called by `control_plane.create_tenant_v1` and backfilled once for existing tenants. Tenants may add custom roles as further tenant-owned rows; membership references are unchanged, which the revisit trigger anticipated.
+- **Live re-authorization.** Role and staff-access mutations broadcast `authorization_changed` on the tenant topic, and the Dashboard refuses and refreshes when the actor's effective-access fingerprint (capabilities, scope mode, locations, role) changes, not only on revocation.

@@ -5,7 +5,7 @@ import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server"
 import { getVerifiedIdentity, type VerifiedIdentity } from "@wlbp/auth";
 import { cookies } from "next/headers";
 
-function runtimeEnvironment(): RuntimeEnvironment {
+export function runtimeEnvironment(): RuntimeEnvironment {
   const configured = process.env.WLBP_RUNTIME_ENV;
   if (
     configured === "local" ||
@@ -44,7 +44,11 @@ export async function createPlatformAdminRequestClient() {
       getAll: () => cookieStore.getAll(),
       setAll: async (values) => {
         for (const cookie of values) {
-          cookieStore.set(cookie.name, cookie.value, cookie.options);
+          try {
+            cookieStore.set(cookie.name, cookie.value, cookie.options);
+          } catch {
+            /* Server components read; proxy refreshes the cookies. */
+          }
         }
       },
     },

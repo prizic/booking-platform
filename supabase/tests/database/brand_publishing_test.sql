@@ -12,10 +12,10 @@ do $$ begin
 end $$;
 
 select set_config('test.br_config',
-  '{"name":"Tenant A Salon","assets":{"logoLight":"/assets/logo.svg","icon":"/assets/icon.svg","favicon":"/assets/favicon.ico","socialImage":"/assets/social.png"},"tokens":{}}',
+  '{"name":"Tenant A Salon","assets":{"logoLight":"/assets/logo-light.png","logoDark":"/assets/logo-dark.png","icon":"/assets/icon.png","favicon":"/assets/favicon.png","socialImage":"/assets/social.png"},"tokens":{"color":{"background":"#f3efe5","surface":"#fffdf8","text":"#17332e","muted":"#50645f","border":"#747d78","primary":"#106b5a","onPrimary":"#ffffff","success":"#137333","onSuccess":"#ffffff","warning":"#7a4300","onWarning":"#ffffff","danger":"#9f251d","onDanger":"#ffffff","focus":"#9b3d0c"},"typography":{"bodyFamily":"Inter, \"Noto Sans Arabic\", sans-serif","displayFamily":"Inter, \"Noto Sans Arabic\", sans-serif","arabicBodyFamily":"\"Noto Sans Arabic\", sans-serif","arabicDisplayFamily":"\"Noto Naskh Arabic\", sans-serif","size":{"caption":"0.75rem","body":"1rem","label":"0.875rem","title":"1.5rem","display":"4.5rem"},"weight":{"regular":"400","medium":"500","semibold":"600","bold":"700"},"lineHeight":{"compact":"1.2","body":"1.55","relaxed":"1.7"}},"radius":{"control":"1.5rem","surface":"1.75rem","pill":"999rem"},"borderWidth":{"default":"0.0625rem","strong":"0.125rem"},"spacing":{"xxs":"0.25rem","xs":"0.5rem","sm":"0.75rem","md":"1rem","lg":"1.5rem","xl":"2rem","xxl":"3rem"},"contentWidth":{"form":"40rem","reading":"70ch","wide":"78rem"},"motion":{"fast":"120ms","standard":"180ms","slow":"300ms","reducedFast":"0ms","reduced":"0ms","reducedSlow":"0ms","easingStandard":"cubic-bezier(0.16, 1, 0.3, 1)","easingExit":"ease-in"}}}',
   true);
 select set_config('test.br_content',
-  '{"legal":{"privacyUrl":"https://tenant-a.example.invalid/privacy","termsUrl":"https://tenant-a.example.invalid/terms"},"contact":{"email":"hello@tenant-a.example.invalid"}}',
+  '{"title":{"en":"Tenant A Salon","ar":"\u0635\u0627\u0644\u0648\u0646 \u0627\u0644\u0645\u0633\u062a\u0623\u062c\u0631 \u0623"},"legal":{"privacyUrl":"https://tenant-a.example.invalid/privacy","termsUrl":"https://tenant-a.example.invalid/terms"},"contact":{"email":"hello@tenant-a.example.invalid"}}',
   true);
 
 -- ---------------------------------------------------------------------------

@@ -1,9 +1,14 @@
 "use server";
 
-import type { Locale } from "@wlbp/i18n";
-import { revalidatePath } from "next/cache";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
+import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
+import { foldValue, textOrNull, zoneOrUtc } from "../../_lib/form-schema";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import {
   decisionOutcomeFor,
@@ -11,67 +16,65 @@ import {
   resolveProposedInstant,
   type DecisionOutcome,
 } from "../../_lib/request-decisions";
+import {
+  requestDecisionSchema,
+  type RequestDecisionInput,
+} from "./request-decision-schema";
 
-export async function decideRequestAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
+/**
+ * A committed decision redirects to the queue with its outcome, as before. A
+ * refusal returns its outcome code instead, so the operator keeps what they
+ * typed (a stale revision is the common case) and reads why in the form.
+ */
+export async function decideRequestAction(
+  input: RequestDecisionInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(requestDecisionSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { action, bookingId, expectedRevision, locale } = parsed.data;
+
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
     request.state.kind !== "ready" ||
     request.source.decideBookingRequest === undefined
   ) {
-    redirect(decisionResultUrl(locale, "not-authorized"));
+    return actionError("not-authorized");
   }
 
-  const action = formData.get("action");
-  const bookingId = formData.get("bookingId");
-  const expectedRevision = Number(formData.get("expectedRevision"));
-  if (
-    (action !== "accept" && action !== "propose" && action !== "reject") ||
-    typeof bookingId !== "string" ||
-    !Number.isSafeInteger(expectedRevision)
-  ) {
-    redirect(decisionResultUrl(locale, "invalid-request"));
-  }
-
-  const text = (key: string) => {
-    const value = formData.get(key);
-    return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-  };
-  const timeZone = formData.get("locationTimeZone");
   const proposedStartAt =
     action === "propose"
       ? resolveProposedInstant(
-          text("proposedStartAt"),
-          typeof timeZone === "string" && timeZone !== "" ? timeZone : "UTC",
+          parsed.data.proposedStartAt,
+          zoneOrUtc(parsed.data.locationTimeZone),
+          foldValue(parsed.data.fold),
         )
       : null;
   if (action === "propose" && proposedStartAt === null) {
-    redirect(decisionResultUrl(locale, "invalid-request"));
+    return actionError("invalid-request");
   }
 
   // The redirect stays outside the try: it signals by throwing, and a decision
   // that already committed must never be reported as a failure.
   let outcome: DecisionOutcome;
-  let token: string | undefined;
   try {
-    const decision = await request.source.decideBookingRequest({
+    await request.source.decideBookingRequest({
       action,
       bookingId,
       expectedRevision,
-      internalReason: text("internalReason"),
+      internalReason: textOrNull(parsed.data.internalReason),
       proposedStartAt,
-      publicReason: text("publicReason"),
+      publicReason: textOrNull(parsed.data.publicReason),
       tenantId: request.state.context.tenantId,
     });
     outcome =
       action === "accept" ? "accepted" : action === "reject" ? "rejected" : "proposed";
-    token = decision.proposalActionToken ?? undefined;
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  if (outcome === "accepted" || outcome === "rejected" || outcome === "proposed") {
-    revalidatePath(`/${locale}/requests`);
+  if (outcome !== "accepted" && outcome !== "rejected" && outcome !== "proposed") {
+    return actionError(outcome);
   }
-  redirect(decisionResultUrl(locale, outcome, token));
+  refreshWorkspace(locale);
+  redirect(decisionResultUrl(locale, outcome));
 }

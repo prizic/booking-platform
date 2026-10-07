@@ -248,7 +248,8 @@ select is((select a.status from control_plane.approve_job_v1(
 select isnt((select j.approved_by from control_plane.jobs j
   where j.id=current_setting('test.cp_job')::uuid),null,'and the approval is attributed');
 select is((select count(*)::integer from control_plane.audit_events a
-  where a.action in ('job.enqueued','job.approved')),2,
+  where a.action in ('job.enqueued','job.approved')
+    and a.detail->>'job_id'=current_setting('test.cp_job')),2,
   'both halves are in the audit trail');
 
 select throws_ok(

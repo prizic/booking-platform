@@ -28,3 +28,12 @@ apps/*/public/assets/
 *.log
 pnpm-debug.log*
 dist-distribution/
+
+# Local design-review captures and decision-page state (not source).
+.impeccable/review/
+.impeccable/questions/
+.impeccable/mocks/
+.impeccable/build/
+
+# Git Bash crash dumps
+*.stackdump

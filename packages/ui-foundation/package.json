@@ -3,25 +3,63 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "sideEffects": false,
+  "sideEffects": [
+    "**/*.css"
+  ],
   "files": [
-    "dist"
+    "dist",
+    "src/theme.css"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./actions": {
+      "types": "./dist/forms/index.d.ts",
+      "import": "./dist/forms/index.js"
+    },
+    "./preferences": {
+      "types": "./dist/preferences.d.ts",
+      "import": "./dist/preferences.js"
+    },
+    "./theme.css": "./src/theme.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "test:unit": "vitest run"
   },
   "peerDependencies": {
-    "react": "catalog:"
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "next": "catalog:"
   },
   "wlbp": {
     "distribution": "distributed"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "catalog:",
+    "@tanstack/react-query": "catalog:",
+    "class-variance-authority": "catalog:",
+    "clsx": "catalog:",
+    "date-fns": "catalog:",
+    "lucide-react": "catalog:",
+    "radix-ui": "catalog:",
+    "react-day-picker": "catalog:",
+    "react-hook-form": "catalog:",
+    "sonner": "catalog:",
+    "tailwind-merge": "catalog:",
+    "tw-animate-css": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "vitest": "catalog:",
+    "next": "catalog:"
   }
 }

@@ -225,7 +225,7 @@ rollback to savepoint rc_cancel;
 savepoint rc_cancel_cutoff;
 update app.catalog_service_revisions
 set policy=jsonb_build_object('consent_version','1','consent_text','Terms.',
-  'cancellation_cutoff_minutes',20160)
+  'cancellation_cutoff_minutes',ceil(extract(epoch from (pg_temp.rc_time('15:00')-statement_timestamp()))/60)::integer+1)
 where tenant_id='a0000000-0000-0000-0000-000000000001' and service_id='a7200000-0000-0000-0000-000000000001';
 select set_config('test.hold_three',(select h.hold_id::text from api_v1.create_hold_v1(
   'client.tenant-a.example.invalid','client','a7200000-0000-0000-0000-000000000001',
@@ -236,6 +236,7 @@ select set_config('test.booking_three',(select b.booking_id::text from api_v1.co
   'session-token-cccc-0001','confirm-key-cccc-0001',
   '{"fullName":"Guest C","email":"guest.c@example.invalid"}'::jsonb,
   '1','en','{}'::jsonb,'Asia/Riyadh') b),true);
+select ok((select starts_at-make_interval(mins=>(policy_snapshot->>'cancellation_cutoff_minutes')::integer)<=statement_timestamp() from app.bookings where id=current_setting('test.booking_three')::uuid),'fixture is inside the persisted cutoff regardless of weekday');
 select throws_ok(
   format($$select * from private.cancel_booking_v1('a0000000-0000-0000-0000-000000000001',%L,1,'guest')$$,
     current_setting('test.booking_three')),

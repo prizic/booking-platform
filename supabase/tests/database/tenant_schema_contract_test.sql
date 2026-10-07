@@ -1,6 +1,6 @@
 begin;
 
-select plan(48);
+select plan(53);
 
 select has_table('app'::name, 'tenants'::name);
 select has_table('app'::name, 'permissions'::name);
@@ -16,6 +16,8 @@ select has_table('app'::name, 'memberships'::name);
 select has_table('app'::name, 'membership_location_scopes'::name);
 select has_table('app'::name, 'invitations'::name);
 select has_table('app'::name, 'invitation_location_scopes'::name);
+select has_table('app'::name, 'permission_meta'::name);
+select has_table('app'::name, 'role_change_events'::name);
 
 select col_not_null('app'::name, 'brands'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'brand_revisions'::name, 'tenant_id'::name);
@@ -29,6 +31,8 @@ select col_not_null('app'::name, 'memberships'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'membership_location_scopes'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'invitations'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'invitation_location_scopes'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'role_change_events'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'roles'::name, 'revision'::name);
 
 select ok(
   not exists (
@@ -64,16 +68,44 @@ select ok(
   'every app table has an explicit policy for every CRUD operation'
 );
 
+-- Definer rights on api_v1 are allowed for exactly two shapes: the reviewed
+-- public catalog, and a same-named pass-through into control_plane, which owns
+-- its own authorization (require_operator_v1 / is_worker_v1). Anything else —
+-- logic in the wrapper, a different target, a mutable search_path — fails here.
 select ok(
   not exists (
     select 1
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
     where namespace.nspname = 'api_v1'
-      and procedure.proname <> 'get_public_catalog_v1'
       and procedure.prosecdef
+      and procedure.oid::regprocedure::text <> 'api_v1.get_public_catalog_v1(text,text,text)'
+      and not (
+        procedure.prolang = (select oid from pg_language where lanname = 'sql')
+        and 'search_path=""' = any(procedure.proconfig)
+        and pg_catalog.btrim(procedure.prosrc, E' \n\t')
+          ~ ('^select (\* from )?control_plane\.' || procedure.proname || '\([^()]*\)\s*;?$')
+        and exists (
+          select 1 from pg_proc as inner_procedure
+          join pg_namespace as inner_namespace on inner_namespace.oid = inner_procedure.pronamespace
+          where inner_namespace.nspname = 'control_plane'
+            and inner_procedure.proname = procedure.proname)
+      )
   ),
-  'no exposed api_v1 function is SECURITY DEFINER'
+  'api_v1 definer functions are only the public catalog or same-named control_plane pass-throughs'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_proc as procedure
+    join pg_namespace as namespace on namespace.oid = procedure.pronamespace
+    where namespace.nspname = 'api_v1'
+      and procedure.prosecdef
+      and procedure.oid::regprocedure::text <> 'api_v1.get_public_catalog_v1(text,text,text)'
+      and has_function_privilege('anon', procedure.oid, 'execute')
+  ),
+  'no control-plane pass-through is executable by anon'
 );
 
 -- Issue #101. The consequence of the rule above, which nothing checked until a
@@ -145,11 +177,14 @@ select is(
       and procedure.proname <> 'broadcast_booking_change_v1'
   ),
   array[
+    'private.accept_staff_invitation_v1(uuid)',
     'private.act_on_management_link_v1(text,text,text,text,bigint,timestamp with time zone,text)',
     'private.active_support_grant_v1(uuid)',
     'private.add_booking_note_v1(uuid,uuid,text,text,uuid)',
     'private.advance_tenant_offboarding_v1(uuid,text)',
+    'private.archive_role_v1(uuid,uuid,uuid,bigint)',
     'private.attach_checkout_reference_v1(uuid,uuid,text)',
+    'private.authorize_payment_onboarding_v1(uuid,text,text,uuid)',
     'private.begin_checkout_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text)',
     'private.build_customer_export_v1(uuid,uuid)',
     'private.bump_availability_revision()',
@@ -160,8 +195,15 @@ select is(
     'private.can_manage_schedule_scope(uuid,uuid,uuid,uuid)',
     'private.can_manage_staff(uuid,uuid)',
     'private.cancel_booking_v1(uuid,uuid,bigint,text,text,text,uuid,text)',
+    'private.catalog_entity_document_v1(uuid,text,uuid)',
+    'private.change_staff_access_v1(uuid,uuid,text,uuid,bigint,uuid,uuid[],text)',
     'private.claim_notification_batch_v1(integer,integer)',
     'private.claim_refund_batch_v1(integer,integer)',
+    'private.claim_staff_invitation_delivery_v1()',
+    'private.claim_whatsapp_batch_v1(integer,integer)',
+    'private.complete_payment_onboarding_intent_v1(uuid,boolean)',
+    'private.complete_staff_invitation_delivery_v1(uuid,integer,boolean)',
+    'private.confirm_booking_engine_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text,uuid)',
     'private.confirm_booking_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text,uuid)',
     'private.correct_customer_v1(uuid,uuid,bigint,text,text,text,text,text[])',
     'private.create_booking_on_behalf_v1(uuid,text,uuid,text,text,jsonb,text,text,jsonb,text,uuid)',
@@ -172,29 +214,45 @@ select is(
     'private.decide_booking_request_v1(uuid,uuid,text,bigint,text,text,timestamp with time zone,uuid)',
     'private.dispatch_notifications_v1(uuid,integer)',
     'private.enqueue_staff_alert_v1(uuid,uuid,text,text)',
+    'private.enqueue_staff_daily_digests_v1(integer)',
+    'private.enqueue_test_notification_v1(uuid,text,text,uuid)',
     'private.erase_customer_records_v1(uuid,uuid,uuid)',
     'private.expire_booking_requests_v1(uuid,integer)',
     'private.expire_holds_v1(uuid,integer)',
     'private.expire_management_links_v1(uuid,integer)',
     'private.get_assignment_candidates_v1(uuid,uuid)',
     'private.get_availability_v1(text,text,uuid,uuid,uuid,timestamp with time zone,timestamp with time zone,integer,text)',
+    'private.get_brand_editor_v1(uuid)',
     'private.get_brand_presentation_v1(uuid)',
+    'private.get_catalog_workspace_v1(uuid)',
     'private.get_checkout_intent_v1(uuid,uuid)',
     'private.get_checkout_status_v1(text,text,uuid,text)',
     'private.get_commerce_health_v1()',
     'private.get_customer_report_v1(uuid,date,date,text)',
     'private.get_hold_form_v1(text,text,uuid,text,text)',
+    'private.get_my_notification_preferences_v1(uuid)',
     'private.get_notification_brand_v1(uuid)',
+    'private.get_notification_brand_v2(uuid)',
+    'private.get_notification_settings_v1(uuid)',
+    'private.get_operational_choices_v1(uuid,text)',
+    'private.get_payment_onboarding_intent_v1(uuid)',
     'private.get_platform_notice_v1()',
     'private.get_privacy_request_v1(uuid,uuid)',
     'private.get_public_navigation_v1(text,text)',
+    'private.get_public_whatsapp_availability_v1(text,text)',
     'private.get_published_brand_v1(text,text)',
     'private.get_report_export_v1(uuid,uuid)',
     'private.get_revenue_report_v1(uuid,date,date,text)',
+    'private.get_role_catalog_v1(uuid)',
     'private.get_runtime_entitlements_v1(uuid)',
+    'private.get_schedule_choices_v1(uuid)',
+    'private.get_staff_access_workspace_v1(uuid)',
+    'private.get_staff_access_workspace_v2(uuid)',
     'private.get_staff_resource_choices_v1(uuid,text)',
     'private.get_support_context_v1()',
     'private.get_tenant_configuration_v1(uuid)',
+    'private.get_whatsapp_config_v1(uuid)',
+    'private.guard_last_tenant_administrator()',
     'private.has_direct_capability(uuid,text)',
     'private.has_legal_hold_v1(uuid,uuid)',
     'private.initialize_availability_revision()',
@@ -204,11 +262,15 @@ select is(
     'private.issue_brand_preview_v1(uuid,uuid,integer)',
     'private.issue_management_token_v1(uuid,uuid,text,uuid)',
     'private.link_booking_contact_customer()',
+    'private.list_dashboard_audit_v1(uuid,text,timestamp with time zone,timestamp with time zone,uuid,jsonb)',
+    'private.list_roles_v1(uuid)',
+    'private.list_staff_notification_preferences_v1(uuid)',
     'private.mint_management_otp_code_v1(uuid)',
     'private.offered_minutes_v1(uuid,timestamp with time zone,timestamp with time zone,uuid,uuid)',
     'private.open_privacy_request_v1(uuid,uuid,text)',
     'private.persist_report_export_v1(uuid,text,jsonb,jsonb)',
     'private.publish_brand_revision_v1(uuid,uuid,text)',
+    'private.publish_catalog_workspace_v1(uuid,uuid,jsonb)',
     'private.raise_payment_exception_v1(uuid,text,text,uuid,text,uuid,bigint,character,text,text)',
     'private.reconcile_commerce_v1(uuid,integer)',
     'private.record_commerce_event_v1(uuid,text,text,text,text,text,text,bigint,text,timestamp with time zone,text)',
@@ -216,10 +278,13 @@ select is(
     'private.record_notification_event_v1(text,text,text,timestamp with time zone,text)',
     'private.record_payment_event_v1(uuid,text,text,text,text,text,bigint,text,text,timestamp with time zone)',
     'private.record_refund_result_v1(uuid,uuid,text,text,text)',
+    'private.record_whatsapp_attempt_v1(uuid,integer,text,timestamp with time zone,text,text)',
+    'private.record_whatsapp_provider_event_v1(text,text,timestamp with time zone,text,text,text)',
     'private.recover_stuck_notifications_v1(integer)',
     'private.redeem_brand_preview_v1(text,text,text)',
     'private.redeem_management_token_v1(text,text,text,text)',
     'private.release_hold_v1(text,text,uuid,text)',
+    'private.remove_schedule_record_v1(uuid,text,uuid,bigint,bigint,uuid)',
     'private.replay_notification_v1(uuid,uuid)',
     'private.request_booking_v1(uuid,app.booking_holds,app.catalog_service_revisions,uuid,uuid,timestamp with time zone)',
     'private.request_management_otp_v1(text,text,text)',
@@ -235,11 +300,17 @@ select is(
     'private.rollback_brand_v1(uuid,uuid,bigint)',
     'private.run_privacy_request_v1(uuid,uuid)',
     'private.save_brand_draft_v1(uuid,text,jsonb,jsonb,bigint,text)',
+    'private.save_brand_editor_v1(uuid,text,text,jsonb,jsonb)',
+    'private.save_catalog_entity_v1(uuid,uuid,text,uuid,bigint,jsonb)',
+    'private.save_my_notification_preferences_v1(uuid,jsonb,uuid)',
+    'private.save_notification_settings_v1(uuid,jsonb,integer[],bigint,uuid)',
     'private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text)',
     'private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text)',
+    'private.save_role_v1(uuid,uuid,uuid,bigint,uuid,text,text,text,text,text,jsonb)',
     'private.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)',
     'private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text)',
     'private.save_tenant_settings_v1(uuid,jsonb,jsonb,jsonb,bigint)',
+    'private.save_whatsapp_config_v1(uuid,jsonb,bigint,uuid)',
     'private.schedule_booking_reminders_v1(uuid,integer)',
     'private.set_customer_restriction_v1(uuid,uuid,boolean,text)',
     'private.set_legal_hold_v1(uuid,uuid,boolean,text)',
@@ -249,7 +320,10 @@ select is(
     'private.settle_payment_v1(uuid,uuid,text,text,bigint,text)',
     'private.settle_refund_ledger_v1(uuid,uuid)',
     'private.sync_booking_notification_status_v1(uuid)',
+    'private.sync_published_brand_pointer_v1()',
     'private.transition_booking_v1(uuid,uuid,text,bigint,text,uuid,text)',
+    'private.validate_brand_publication_v1()',
+    'private.validate_catalog_publication_v1(uuid,uuid[],uuid[],uuid[])',
     'private.verify_management_otp_v1(text,text,text,text)'
   ]::text[],
   'private SECURITY DEFINER helper identities exactly match the approved inventory'

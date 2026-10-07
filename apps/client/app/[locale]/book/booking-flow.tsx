@@ -10,21 +10,69 @@ import {
   type CreateHoldV1Response,
   type HoldFormV1,
 } from "@wlbp/api-contracts";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
+import { formatCurrency, formatNumber, formatTimeZone, type Locale } from "@wlbp/i18n";
 import {
-  Badge,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
-  TextField,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Facts,
+  FieldLegend,
+  FieldSet,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  Label,
+  PageHeader,
+  ReferenceCode,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
+  StatusStamp,
+  cn,
+  formErrorMessage,
+  useZodForm,
 } from "@wlbp/ui-foundation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 
+import { errorCodeOf, postJson } from "../../_lib/client-api";
+import { formatWallDateTime } from "../../_lib/wall-time";
+import type { WhatsAppConsentContent } from "../../_lib/whatsapp-consent";
+import {
+  dialCodeForRegion,
+  e164Pattern,
+  normalizeWhatsAppNumber,
+  whatsAppCountries,
+  whatsAppRegionForTimeZone,
+} from "../../_lib/whatsapp-phone";
 import {
   AvailabilityPicker,
   type AvailabilityPickerCopy,
 } from "../availability-picker";
+import {
+  bookingDetailsFormSchema,
+  bookingFormCodes,
+  type BookingDetailsValues,
+  type CheckoutStatusInput,
+  type CreateHoldInput,
+} from "./booking-schema";
 
 export interface BookingFlowCopy {
   readonly availability: AvailabilityPickerCopy;
@@ -37,12 +85,27 @@ interface BookingFlowProps {
   readonly locationId: string | null;
   readonly locationTimeZone: string;
   readonly serviceId: string | null;
+  /**
+   * The WhatsApp opt-in text from instance content, or null when the tenant
+   * does not offer the channel right now, in which case nothing about
+   * WhatsApp is rendered.
+   */
+  readonly whatsApp: WhatsAppConsentContent | null;
 }
 
 interface HeldSlot {
   readonly form: HoldFormV1;
   readonly hold: CreateHoldV1Response;
 }
+
+interface OpenedCheckout {
+  readonly checkout: { balanceMinor: number; currency: string; dueMinor: number };
+  readonly redirectUrl: string | null;
+}
+
+type Confirmation =
+  | { readonly kind: "booking"; readonly booking: ConfirmBookingV1Response }
+  | { readonly kind: "checkout"; readonly opened: OpenedCheckout };
 
 /**
  * One opaque identity per browser tab. It exists so the platform can bound
@@ -65,17 +128,18 @@ function customerTimeZone(fallback: string): string {
   }
 }
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    const code =
-      typeof body === "object" && body !== null
-        ? ((body as { error?: { code?: unknown } }).error?.code ?? null)
-        : null;
-    return typeof code === "string" ? code : "availability_unavailable";
-  } catch {
-    return "availability_unavailable";
-  }
+/**
+ * Coming back from the provider. The URL says only which hold to ask about;
+ * everything the customer is then told comes from our own records.
+ */
+function returnedHoldId(): string | null {
+  if (typeof window === "undefined") return null;
+  const parameters = new URLSearchParams(window.location.search);
+  const returned = parameters.get("checkout");
+  const holdId = parameters.get("hold");
+  return (returned === "return" || returned === "cancelled") && holdId !== null
+    ? holdId
+    : null;
 }
 
 const errorCopyKeys: Readonly<Record<string, string>> = {
@@ -89,27 +153,89 @@ const errorCopyKeys: Readonly<Record<string, string>> = {
   slot_unavailable: "bookingErrorSlotUnavailable",
 };
 
+/** Domain validation codes and the copy that explains each. */
+const formCodeCopyKeys: Readonly<Record<string, string>> = {
+  [bookingFormCodes.consentRequired]: "bookingConsentRequired",
+  [bookingFormCodes.emailRequired]: "bookingEmailRequired",
+  [bookingFormCodes.fieldRequired]: "bookingFieldRequired",
+  [bookingFormCodes.nameRequired]: "bookingNameRequired",
+  [bookingFormCodes.whatsAppPhoneInvalid]: "bookingWhatsAppPhoneInvalid",
+  [bookingFormCodes.whatsAppPhoneRequired]: "bookingWhatsAppPhoneRequired",
+};
+
+const whatsAppPhonePath = "contact.whatsappOptIn.phoneE164" as const;
+
+type Step = 1 | 2 | 3;
+
+function StepIndicator({
+  current,
+  label,
+  locale,
+  steps,
+}: {
+  current: Step;
+  label: string;
+  locale: Locale;
+  steps: readonly [string, string, string];
+}) {
+  return (
+    <nav aria-label={label}>
+      <ol className="grid grid-cols-3 gap-2">
+        {steps.map((name, index) => {
+          const number = (index + 1) as Step;
+          const done = number < current;
+          const active = number === current;
+          return (
+            <li
+              key={name}
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                "grid gap-2 border-t-2 pt-3 text-sm",
+                active || done ? "border-primary" : "border-border",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold",
+                    active && "bg-primary text-primary-foreground",
+                    done && "bg-primary-soft text-primary-ink",
+                    !active && !done && "bg-neutral-2 text-muted-foreground",
+                  )}
+                >
+                  {done ? <Check className="size-3.5" /> : formatNumber(number, locale)}
+                </span>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {name}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 export function BookingFlow({
   copy,
   locale,
   locationId,
   locationTimeZone,
   serviceId,
+  whatsApp,
 }: BookingFlowProps) {
   const message = (key: string) => copy.booking[key] ?? key;
+  const queryClient = useQueryClient();
   const [slot, setSlot] = useState<AvailabilitySlotV1 | null>(null);
   const [held, setHeld] = useState<HeldSlot | null>(null);
   const [booking, setBooking] = useState<ConfirmBookingV1Response | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<readonly string[]>([]);
-  // Answers survive every failure: a lost slot never costs the customer the
-  // details they already typed.
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [consented, setConsented] = useState(false);
-  const [intake, setIntake] = useState<Record<string, string>>({});
   // Issue #22. A payment in flight and, after the customer comes back, what our
   // own records say happened to it. The return URL itself proves nothing.
   const [checkout, setCheckout] = useState<{
@@ -118,164 +244,267 @@ export function BookingFlow({
     dueMinor: number;
     redirectUrl: string | null;
   } | null>(null);
-  const [settlement, setSettlement] = useState<CheckoutStatusV1Response | null>(null);
+  const [returnHold, setReturnHold] = useState<string | null>(returnedHoldId);
+  const [summaryFocus, setSummaryFocus] = useState(0);
 
+  const formMessages = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(formCodeCopyKeys).map(([code, key]) => [
+          code,
+          copy.booking[key] ?? key,
+        ]),
+      ),
+    [copy.booking],
+  );
+  // Answers survive every failure: the form outlives each hold, so a lost slot
+  // never costs the customer the details they already typed.
+  // The WhatsApp country starts at the location's country when its time zone
+  // names one, otherwise the instance default.
+  const [whatsAppRegion, setWhatsAppRegion] = useState(() =>
+    whatsAppRegionForTimeZone(locationTimeZone),
+  );
+  const whatsAppDialCode = dialCodeForRegion(whatsAppRegion);
+  const detailsSchema = useMemo(
+    () => bookingDetailsFormSchema(held?.form.fields ?? [], { whatsAppDialCode }),
+    [held, whatsAppDialCode],
+  );
+  const form = useZodForm(detailsSchema, {
+    defaultValues: {
+      consent: false,
+      consentVersion: "",
+      contact: { email: "", fullName: "", phone: "", whatsappOptIn: null },
+      customerTimeZone: locationTimeZone,
+      holdId: "",
+      idempotencyKey: "",
+      intake: {},
+      locale,
+      sessionToken: "",
+    },
+    // The error summary takes focus instead, then links to each field.
+    shouldFocusError: false,
+  });
+
+  // A changed country changes what a national number means, so a number the
+  // customer already left is checked again against the new country.
   useEffect(() => {
-    if (errorCode !== null || fieldErrors.length > 0) {
-      document.querySelector<HTMLElement>("#booking-error")?.focus();
+    if (form.getFieldState(whatsAppPhonePath).isTouched) {
+      void form.trigger(whatsAppPhonePath);
     }
-  }, [errorCode, fieldErrors]);
+  }, [form, whatsAppDialCode]);
+  const whatsAppOptedIn = form.watch("contact.whatsappOptIn") != null;
+  const whatsAppPhone = form.watch(whatsAppPhonePath);
+  const whatsAppPreview =
+    typeof whatsAppPhone === "string"
+      ? normalizeWhatsAppNumber(whatsAppPhone, whatsAppDialCode)
+      : "";
+  const regionNames = useMemo(
+    () => new Intl.DisplayNames([locale], { type: "region" }),
+    [locale],
+  );
 
-  // Coming back from the provider. The URL says only which hold to ask about;
-  // everything the customer is then told comes from our own records.
-  useEffect(() => {
-    const parameters = new URLSearchParams(window.location.search);
-    const returned = parameters.get("checkout");
-    const holdId = parameters.get("hold");
-    if ((returned !== "return" && returned !== "cancelled") || holdId === null) return;
-    let abandoned = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/checkout/status", {
-          body: JSON.stringify({ holdId, sessionToken: sessionToken() }),
-          credentials: "omit",
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        if (abandoned) return;
-        if (!response.ok) {
-          setErrorCode(await readError(response));
-          return;
-        }
-        setSettlement((await response.json()) as CheckoutStatusV1Response);
-      } catch {
-        if (!abandoned) setErrorCode("availability_unavailable");
-      }
-    })();
-    return () => {
-      abandoned = true;
-    };
-  }, []);
+  const settlementQuery = useQuery({
+    enabled: returnHold !== null,
+    queryKey: ["checkout-status", returnHold],
+    queryFn: async () =>
+      (await postJson("/api/checkout/status", {
+        holdId: returnHold!,
+        sessionToken: sessionToken(),
+      } satisfies CheckoutStatusInput)) as CheckoutStatusV1Response,
+    // Our records are read once per return; the customer restarts explicitly.
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const settlement: CheckoutStatusV1Response | null =
+    returnHold === null ? null : (settlementQuery.data ?? null);
 
-  async function hold() {
-    if (slot === null || serviceId === null || locationId === null) return;
-    setBusy(true);
-    setErrorCode(null);
-    try {
-      const response = await fetch("/api/holds", {
-        body: JSON.stringify({
-          expectedCacheTag: null,
-          idempotencyKey: `hold-${slot.startAt}-${sessionToken().slice(0, 24)}`,
-          locale,
-          locationId,
-          partySize: 1,
-          serviceId,
-          sessionToken: sessionToken(),
-          staffPreferenceId: null,
-          startAt: slot.startAt,
-        }),
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        setErrorCode(await readError(response));
-        return;
-      }
-      const payload = (await response.json()) as { form: unknown; hold: unknown };
-      setHeld({
+  const holdMutation = useMutation({
+    mutationFn: async (input: CreateHoldInput): Promise<HeldSlot> => {
+      const payload = (await postJson("/api/holds", input)) as {
+        form: unknown;
+        hold: unknown;
+      };
+      return {
         form: parseHoldFormV1(payload.form),
         hold: parseCreateHoldV1Response(payload.hold),
-      });
-    } catch {
-      setErrorCode("availability_unavailable");
-    } finally {
-      setBusy(false);
-    }
-  }
+      };
+    },
+    onSuccess: (next) => {
+      // The hold decides the technical half of the details form.
+      form.setValue("consentVersion", next.form.consentVersion);
+      form.setValue("customerTimeZone", customerTimeZone(locationTimeZone));
+      form.setValue("holdId", next.hold.holdId);
+      // Derived from the hold, so a double submission is the same key and the
+      // database replays the one booking it already committed.
+      form.setValue("idempotencyKey", `confirm-${next.hold.holdId}`);
+      form.setValue("sessionToken", sessionToken());
+      setHeld(next);
+      void queryClient.invalidateQueries({ queryKey: ["availability"] });
+    },
+    retry: false,
+  });
 
-  async function confirm(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (held === null) return;
-    const problems: string[] = [];
-    if (fullName.trim().length === 0) problems.push(message("bookingNameRequired"));
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email.trim())) {
-      problems.push(message("bookingEmailRequired"));
-    }
-    for (const field of held.form.fields) {
-      if (field.required && (intake[field.key] ?? "").trim().length === 0) {
-        problems.push(`${field.label}: ${message("bookingFieldRequired")}`);
-      }
-    }
-    if (!consented) problems.push(message("bookingConsentRequired"));
-    setFieldErrors(problems);
-    if (problems.length > 0) return;
-
-    setBusy(true);
-    setErrorCode(null);
-    try {
-      const answers = Object.fromEntries(
-        held.form.fields
-          .map((field) => [field.key, (intake[field.key] ?? "").trim()] as const)
-          .filter(([, answer]) => answer.length > 0),
-      );
-      const paid = held.form.paymentMode !== "none";
-      const response = await fetch(paid ? "/api/checkout" : "/api/bookings", {
-        body: JSON.stringify({
-          consentVersion: held.form.consentVersion,
-          contact: {
-            email: email.trim().toLowerCase(),
-            fullName: fullName.trim(),
-            phone: phone.trim() === "" ? null : phone.trim(),
-          },
-          customerTimeZone: customerTimeZone(locationTimeZone),
-          holdId: held.hold.holdId,
-          // Derived from the hold, so a double submission is the same key and
-          // the database replays the one booking it already committed.
-          idempotencyKey: `confirm-${held.hold.holdId}`,
-          intake: answers,
-          locale,
-          sessionToken: sessionToken(),
-        }),
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        setErrorCode(await readError(response));
+  const confirmMutation = useMutation({
+    mutationFn: async ({
+      body,
+      paid,
+    }: {
+      body: BookingDetailsValues;
+      paid: boolean;
+    }): Promise<Confirmation> => {
+      const result = await postJson(paid ? "/api/checkout" : "/api/bookings", body);
+      return paid
+        ? { kind: "checkout", opened: result as OpenedCheckout }
+        : { kind: "booking", booking: parseConfirmBookingV1Response(result) };
+    },
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["availability"] });
+      if (result.kind === "booking") {
+        setBooking(result.booking);
         return;
       }
-      if (paid) {
-        const opened = (await response.json()) as {
-          checkout: { balanceMinor: number; currency: string; dueMinor: number };
-          redirectUrl: string | null;
-        };
-        if (opened.redirectUrl !== null) {
-          // The provider page is the next step. Nothing is confirmed until a
-          // signed event says the money moved.
-          window.location.assign(opened.redirectUrl);
-          return;
-        }
-        // No redirect means the provider or its function is unreachable. The
-        // attempt is priced and resumable, so the customer sees that rather
-        // than a dead end.
-        setCheckout({ ...opened.checkout, redirectUrl: null });
+      if (result.opened.redirectUrl !== null) {
+        // The provider page is the next step. Nothing is confirmed until a
+        // signed event says the money moved.
+        window.location.assign(result.opened.redirectUrl);
         return;
       }
-      setBooking(parseConfirmBookingV1Response(await response.json()));
-    } catch {
-      setErrorCode("availability_unavailable");
-    } finally {
-      setBusy(false);
+      // No redirect means the provider or its function is unreachable. The
+      // attempt is priced and resumable, so the customer sees that rather than
+      // a dead end.
+      setCheckout({ ...result.opened.checkout, redirectUrl: null });
+    },
+    retry: false,
+  });
+
+  const errorCode = holdMutation.isError
+    ? errorCodeOf(holdMutation.error)
+    : confirmMutation.isError
+      ? errorCodeOf(confirmMutation.error)
+      : settlementQuery.isError
+        ? errorCodeOf(settlementQuery.error)
+        : null;
+
+  useEffect(() => {
+    if (errorCode !== null) {
+      document.querySelector<HTMLElement>("#booking-error")?.focus();
     }
+  }, [errorCode]);
+
+  useEffect(() => {
+    if (summaryFocus > 0) {
+      document.querySelector<HTMLElement>("#booking-error")?.focus();
+    }
+  }, [summaryFocus]);
+
+  function hold() {
+    if (slot === null || serviceId === null || locationId === null) return;
+    holdMutation.mutate({
+      expectedCacheTag: null,
+      idempotencyKey: `hold-${slot.startAt}-${sessionToken().slice(0, 24)}`,
+      locale,
+      locationId,
+      partySize: 1,
+      serviceId,
+      sessionToken: sessionToken(),
+      staffPreferenceId: null,
+      startAt: slot.startAt,
+    });
   }
+
+  const confirm = form.handleSubmit(
+    (values) => {
+      if (held === null) return;
+      confirmMutation.mutate({ body: values, paid: held.form.paymentMode !== "none" });
+    },
+    () => setSummaryFocus((count) => count + 1),
+  );
 
   function chooseAnotherTime() {
     setHeld(null);
     setSlot(null);
-    setErrorCode(null);
-    setFieldErrors([]);
+    setCheckout(null);
+    setReturnHold(null);
+    holdMutation.reset();
+    confirmMutation.reset();
+    form.clearErrors();
   }
+
+  // Each problem names the control it belongs to, so the summary can link to
+  // it and the control carries its own message.
+  const { formState } = form;
+  const problemText = (path: string) => {
+    const code = form.getFieldState(
+      path as Parameters<typeof form.getFieldState>[0],
+      formState,
+    ).error?.message;
+    return formErrorMessage(
+      typeof code === "string" ? code : undefined,
+      locale,
+      formMessages,
+    );
+  };
+  // The hold supplies these; a problem with one is not something the customer
+  // can fix in a field, so it reads as a request to check and try again.
+  const technicalProblem =
+    formState.submitCount > 0 &&
+    (
+      [
+        "consentVersion",
+        "customerTimeZone",
+        "holdId",
+        "idempotencyKey",
+        "locale",
+        "sessionToken",
+      ] as const
+    ).some((path) => form.getFieldState(path, formState).error !== undefined);
+  const problems =
+    formState.submitCount === 0
+      ? []
+      : [
+          { id: "booking-full-name", text: problemText("contact.fullName") },
+          { id: "booking-email", text: problemText("contact.email") },
+          { id: "booking-phone", text: problemText("contact.phone") },
+          { id: "booking-whatsapp-phone", text: problemText(whatsAppPhonePath) },
+          ...(held?.form.fields ?? []).map((field) => {
+            const text = problemText(`intake.${field.key}`);
+            return {
+              id: `booking-intake-${field.key}`,
+              text: text === undefined ? undefined : `${field.label}: ${text}`,
+            };
+          }),
+          { id: "booking-consent", text: problemText("consent") },
+        ].filter((problem): problem is { id: string; text: string } =>
+          Boolean(problem.text),
+        );
+
+  const step: Step =
+    settlement !== null || checkout !== null || booking !== null
+      ? 3
+      : held === null
+        ? 1
+        : 2;
+
+  const header = (
+    <div className="grid gap-8">
+      <PageHeader
+        title={message("bookingTitle")}
+        titleId="booking-title"
+        description={message("bookingSummary")}
+      />
+      <StepIndicator
+        current={step}
+        label={message("bookingStepsLabel")}
+        locale={locale}
+        steps={[
+          message("bookingStepSlot"),
+          message("bookingStepDetails"),
+          message("bookingStepConfirmed"),
+        ]}
+      />
+    </div>
+  );
 
   if (settlement !== null) {
     // Every state a payment can land in has a sentence and a way forward. A
@@ -287,111 +516,147 @@ export function BookingFlow({
       settlement.status === "failed" ||
       settlement.status === "cancelled";
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-payment-title"
-      >
-        <Badge tone={settled ? "positive" : failed ? "warning" : "neutral"}>
-          {message(
-            settled
-              ? "bookingStepConfirmed"
-              : failed
-                ? "bookingPaymentProblemStatus"
-                : "bookingPaymentPendingStatus",
-          )}
-        </Badge>
-        <h2 id="booking-payment-title">
-          {message(
-            settled
-              ? "bookingSuccessTitle"
-              : settlement.exceptionCode !== null
-                ? "bookingPaymentExceptionTitle"
-                : failed
-                  ? "bookingPaymentFailedTitle"
-                  : "bookingPaymentPendingTitle",
-          )}
-        </h2>
-        <p>
-          {message(
-            settled
-              ? "bookingSuccessSummary"
-              : settlement.exceptionCode !== null
-                ? "bookingPaymentExceptionSummary"
-                : failed
-                  ? "bookingPaymentFailedSummary"
-                  : "bookingPaymentPendingSummary",
-          )}
-        </p>
-        <dl className="booking-confirmed__facts">
-          {settlement.publicReference === null ? null : (
-            <div>
-              <dt>{message("bookingReferenceLabel")}</dt>
-              <dd dir="ltr">{settlement.publicReference}</dd>
-            </div>
-          )}
-          <div>
-            <dt>{message("bookingPaidTodayLabel")}</dt>
-            <dd>{formatCurrency(settlement.dueMinor, settlement.currency, locale)}</dd>
-          </div>
-          {settlement.balanceMinor === 0 ? null : (
-            <div>
-              <dt>{message("bookingBalanceDueLabel")}</dt>
-              <dd>
-                {formatCurrency(settlement.balanceMinor, settlement.currency, locale)}
-              </dd>
-            </div>
-          )}
-        </dl>
-        {settled ? (
-          <StatusMessage tone="positive">
-            {message("bookingNotificationQueued")}
-          </StatusMessage>
-        ) : (
-          <StatusMessage tone="warning">
-            {message(
-              settlement.exceptionCode === null
-                ? "bookingPaymentRetryHint"
-                : "bookingPaymentRefundHint",
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-payment-title" role="region">
+          <CardHeader>
+            <StatusStamp state={settled ? "confirmed" : failed ? "failed" : "pending"}>
+              {message(
+                settled
+                  ? "bookingStepConfirmed"
+                  : failed
+                    ? "bookingPaymentProblemStatus"
+                    : "bookingPaymentPendingStatus",
+              )}
+            </StatusStamp>
+            <CardTitle id="booking-payment-title" className="text-xl">
+              {message(
+                settled
+                  ? "bookingSuccessTitle"
+                  : settlement.exceptionCode !== null
+                    ? "bookingPaymentExceptionTitle"
+                    : failed
+                      ? "bookingPaymentFailedTitle"
+                      : "bookingPaymentPendingTitle",
+              )}
+            </CardTitle>
+            <CardDescription>
+              {message(
+                settled
+                  ? "bookingSuccessSummary"
+                  : settlement.exceptionCode !== null
+                    ? "bookingPaymentExceptionSummary"
+                    : failed
+                      ? "bookingPaymentFailedSummary"
+                      : "bookingPaymentPendingSummary",
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            {settlement.publicReference === null ? null : (
+              <div className="grid gap-1">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {message("bookingReferenceLabel")}
+                </p>
+                <ReferenceCode size="lg">{settlement.publicReference}</ReferenceCode>
+              </div>
             )}
-          </StatusMessage>
-        )}
-        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
-          {message("bookingChooseAnotherTime")}
-        </Button>
-      </Surface>
+            <Facts
+              items={[
+                {
+                  key: "paid",
+                  label: message("bookingPaidTodayLabel"),
+                  value: formatCurrency(
+                    settlement.dueMinor,
+                    settlement.currency,
+                    locale,
+                  ),
+                },
+                ...(settlement.balanceMinor === 0
+                  ? []
+                  : [
+                      {
+                        key: "balance",
+                        label: message("bookingBalanceDueLabel"),
+                        value: formatCurrency(
+                          settlement.balanceMinor,
+                          settlement.currency,
+                          locale,
+                        ),
+                      },
+                    ]),
+              ]}
+            />
+            {settled ? (
+              <Alert tone="positive">{message("bookingNotificationQueued")}</Alert>
+            ) : (
+              <Alert tone="warning">
+                {message(
+                  settlement.exceptionCode === null
+                    ? "bookingPaymentRetryHint"
+                    : "bookingPaymentRefundHint",
+                )}
+              </Alert>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button onClick={chooseAnotherTime} type="button" variant="outline">
+              {message("bookingRestart")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </section>
     );
   }
 
   if (checkout !== null) {
     // The attempt is priced and resumable; only the provider hand-off failed.
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-checkout-title"
-      >
-        <Badge tone="warning">{message("bookingPaymentProblemStatus")}</Badge>
-        <h2 id="booking-checkout-title">{message("bookingPaymentUnavailableTitle")}</h2>
-        <p>{message("bookingPaymentUnavailableSummary")}</p>
-        <dl className="booking-confirmed__facts">
-          <div>
-            <dt>{message("bookingDueTodayLabel")}</dt>
-            <dd>{formatCurrency(checkout.dueMinor, checkout.currency, locale)}</dd>
-          </div>
-          {checkout.balanceMinor === 0 ? null : (
-            <div>
-              <dt>{message("bookingBalanceDueLabel")}</dt>
-              <dd>
-                {formatCurrency(checkout.balanceMinor, checkout.currency, locale)}
-              </dd>
-            </div>
-          )}
-        </dl>
-        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
-          {message("bookingChooseAnotherTime")}
-        </Button>
-      </Surface>
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-checkout-title" role="region">
+          <CardHeader>
+            <StatusStamp state="failed">
+              {message("bookingPaymentProblemStatus")}
+            </StatusStamp>
+            <CardTitle id="booking-checkout-title" className="text-xl">
+              {message("bookingPaymentUnavailableTitle")}
+            </CardTitle>
+            <CardDescription>
+              {message("bookingPaymentUnavailableSummary")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Facts
+              items={[
+                {
+                  key: "due",
+                  label: message("bookingDueTodayLabel"),
+                  value: formatCurrency(checkout.dueMinor, checkout.currency, locale),
+                },
+                ...(checkout.balanceMinor === 0
+                  ? []
+                  : [
+                      {
+                        key: "balance",
+                        label: message("bookingBalanceDueLabel"),
+                        value: formatCurrency(
+                          checkout.balanceMinor,
+                          checkout.currency,
+                          locale,
+                        ),
+                      },
+                    ]),
+              ]}
+            />
+          </CardContent>
+          <CardFooter>
+            <Button onClick={chooseAnotherTime} type="button" variant="outline">
+              {message("bookingRestart")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </section>
     );
   }
 
@@ -400,117 +665,155 @@ export function BookingFlow({
     // customer is told exactly that rather than being shown a booked time.
     const pending = booking.status === "requested";
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-confirmed-title"
-      >
-        <Badge tone={pending ? "warning" : "positive"}>
-          {pending
-            ? message("bookingRequestedStatus")
-            : message("bookingStepConfirmed")}
-        </Badge>
-        <h2 id="booking-confirmed-title">
-          {pending ? message("bookingRequestedTitle") : message("bookingSuccessTitle")}
-        </h2>
-        <p>
-          {pending
-            ? message("bookingRequestedSummary")
-            : message("bookingSuccessSummary")}
-        </p>
-        <dl className="booking-confirmed__facts">
-          <div>
-            <dt>{message("bookingReferenceLabel")}</dt>
-            <dd dir="ltr">{booking.publicReference}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingServiceLabel")}</dt>
-            <dd>{booking.serviceName}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingLocationLabel")}</dt>
-            <dd>{booking.locationName}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingWhenLabel")}</dt>
-            <dd>
-              {formatDateTime(booking.startAt, locale, booking.customerTimeZone)}{" "}
-              <span dir="ltr">({booking.customerTimeZone})</span>
-            </dd>
-          </div>
-          <div>
-            <dt>{message("bookingTotalLabel")}</dt>
-            <dd>
-              {formatCurrency(booking.price.minorUnits, booking.price.currency, locale)}
-            </dd>
-          </div>
-          <div>
-            <dt>{message("bookingStatusLabel")}</dt>
-            <dd>
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-confirmed-title" role="region">
+          <CardHeader>
+            <StatusStamp state={pending ? "requested" : "confirmed"}>
               {pending
                 ? message("bookingRequestedStatus")
-                : message("bookingStatusConfirmed")}
-            </dd>
-          </div>
-          {booking.approvalDeadline === null ? null : (
-            <div>
-              <dt>{message("bookingDecisionDueLabel")}</dt>
-              <dd>
-                {formatDateTime(
-                  booking.approvalDeadline,
-                  locale,
-                  booking.customerTimeZone,
-                )}
-              </dd>
+                : message("bookingStepConfirmed")}
+            </StatusStamp>
+            <CardTitle id="booking-confirmed-title" className="text-xl">
+              {pending
+                ? message("bookingRequestedTitle")
+                : message("bookingSuccessTitle")}
+            </CardTitle>
+            <CardDescription>
+              {pending
+                ? message("bookingRequestedSummary")
+                : message("bookingSuccessSummary")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <div className="grid gap-1">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {message("bookingReferenceLabel")}
+              </p>
+              <ReferenceCode size="lg">{booking.publicReference}</ReferenceCode>
             </div>
-          )}
-          <div>
-            <dt>{message("bookingConsentVersionLabel")}</dt>
-            <dd dir="ltr">{booking.consentVersion}</dd>
-          </div>
-        </dl>
-        <StatusMessage tone="positive">
-          {message("bookingNotificationQueued")}
-        </StatusMessage>
-        <p>
-          {pending ? message("bookingRequestedNextSteps") : message("bookingNextSteps")}
-        </p>
-      </Surface>
+            <Facts
+              items={[
+                {
+                  key: "service",
+                  label: message("bookingServiceLabel"),
+                  value: booking.serviceName,
+                },
+                {
+                  key: "location",
+                  label: message("bookingLocationLabel"),
+                  value: booking.locationName,
+                },
+                {
+                  key: "when",
+                  label: message("bookingWhenLabel"),
+                  value: formatWallDateTime(
+                    booking.startAt,
+                    locale,
+                    booking.customerTimeZone,
+                  ),
+                },
+                {
+                  key: "zone",
+                  label: message("bookingTimeZoneLabel"),
+                  value: formatTimeZone(
+                    booking.startAt,
+                    locale,
+                    booking.customerTimeZone,
+                  ),
+                },
+                {
+                  key: "total",
+                  label: message("bookingTotalLabel"),
+                  value: formatCurrency(
+                    booking.price.minorUnits,
+                    booking.price.currency,
+                    locale,
+                  ),
+                },
+                {
+                  key: "status",
+                  label: message("bookingStatusLabel"),
+                  value: pending
+                    ? message("bookingRequestedStatus")
+                    : message("bookingStatusConfirmed"),
+                },
+                ...(booking.approvalDeadline === null
+                  ? []
+                  : [
+                      {
+                        key: "deadline",
+                        label: message("bookingDecisionDueLabel"),
+                        value: formatWallDateTime(
+                          booking.approvalDeadline,
+                          locale,
+                          booking.customerTimeZone,
+                        ),
+                      },
+                    ]),
+                {
+                  key: "consent",
+                  label: message("bookingConsentVersionLabel"),
+                  value: <bdi dir="ltr">{booking.consentVersion}</bdi>,
+                },
+              ]}
+            />
+            <Alert tone="positive">{message("bookingNotificationQueued")}</Alert>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {pending
+                ? message("bookingRequestedNextSteps")
+                : message("bookingNextSteps")}
+            </p>
+          </CardContent>
+        </Card>
+      </section>
     );
   }
 
   return (
-    <section aria-labelledby="booking-title" className="booking-flow">
-      <h1 id="booking-title">{message("bookingTitle")}</h1>
-      <p>{message("bookingSummary")}</p>
+    <section aria-labelledby="booking-title" className="grid gap-8">
+      {header}
 
-      {errorCode === null && fieldErrors.length === 0 ? null : (
-        <ErrorSummary
-          focusTarget
+      {errorCode === null && problems.length === 0 && !technicalProblem ? null : (
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="booking-error"
-          title={message("bookingErrorTitle")}
+          tabIndex={-1}
+          tone="danger"
         >
-          {errorCode === null ? null : (
-            <p>{message(errorCopyKeys[errorCode] ?? "bookingErrorUnavailable")}</p>
-          )}
-          {fieldErrors.length === 0 ? null : (
-            <ul>
-              {fieldErrors.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          )}
-          {held === null ? null : (
-            <Button onClick={chooseAnotherTime} variant="secondary">
-              {message("bookingRestart")}
-            </Button>
-          )}
-        </ErrorSummary>
+          <AlertTitle>{message("bookingErrorTitle")}</AlertTitle>
+          <AlertDescription className="grid justify-items-start gap-3">
+            {errorCode === null ? null : (
+              <p>{message(errorCopyKeys[errorCode] ?? "bookingErrorUnavailable")}</p>
+            )}
+            {technicalProblem && errorCode === null ? (
+              <p>{message("bookingErrorInvalidRequest")}</p>
+            ) : null}
+            {problems.length === 0 ? null : (
+              <ul className="grid list-disc gap-1 ps-5">
+                {problems.map((problem) => (
+                  <li key={problem.id}>
+                    <a
+                      className="font-semibold text-destructive underline underline-offset-4"
+                      href={`#${problem.id}`}
+                    >
+                      {problem.text}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {held === null ? null : (
+              <Button onClick={chooseAnotherTime} variant="outline">
+                {message("bookingRestart")}
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       {held === null ? (
-        <>
-          <h2>{message("bookingStepSlot")}</h2>
+        <div className="grid gap-4">
           <AvailabilityPicker
             copy={copy.availability}
             locale={locale}
@@ -521,171 +824,407 @@ export function BookingFlow({
           />
           {slot === null ? null : (
             <Button
-              loading={busy}
+              className="justify-self-end"
+              loading={holdMutation.isPending}
               loadingLabel={message("bookingHolding")}
-              onClick={() => void hold()}
+              onClick={hold}
+              size="lg"
             >
               {message("bookingContinue")}
             </Button>
           )}
-        </>
+        </div>
       ) : (
-        <form noValidate onSubmit={confirm}>
-          <h2>{message("bookingStepDetails")}</h2>
-          <StatusMessage>
-            {message("bookingHoldExpires").replace(
-              "{time}",
-              formatDateTime(
-                held.hold.expiresAt,
-                locale,
-                customerTimeZone(locationTimeZone),
-              ),
-            )}
-          </StatusMessage>
-          <dl className="booking-flow__review">
-            <div>
-              <dt>{message("bookingServiceLabel")}</dt>
-              <dd>{held.form.serviceName}</dd>
-            </div>
-            <div>
-              <dt>{message("bookingLocationLabel")}</dt>
-              <dd>{held.form.locationName}</dd>
-            </div>
-            <div>
-              <dt>{message("bookingWhenLabel")}</dt>
-              <dd>
-                {formatDateTime(
-                  held.hold.slotStart,
-                  locale,
-                  customerTimeZone(locationTimeZone),
-                )}
-              </dd>
-            </div>
-            <div>
-              <dt>{message("bookingTotalLabel")}</dt>
-              <dd>
-                {formatCurrency(
-                  held.hold.price.minorUnits,
-                  held.hold.price.currency,
-                  locale,
-                )}
-              </dd>
-            </div>
-          </dl>
-
-          <TextField
-            autoComplete="name"
-            description={message("bookingNameDescription")}
-            id="booking-full-name"
-            label={message("bookingNameLabel")}
-            maxLength={160}
-            name="fullName"
-            onChange={(event) => setFullName(event.currentTarget.value)}
-            required
-            value={fullName}
-          />
-          <TextField
-            autoComplete="email"
-            description={message("bookingEmailDescription")}
-            id="booking-email"
-            label={message("bookingEmailLabel")}
-            maxLength={320}
-            name="email"
-            onChange={(event) => setEmail(event.currentTarget.value)}
-            required
-            type="email"
-            value={email}
-          />
-          <TextField
-            autoComplete="tel"
-            description={message("bookingPhoneDescription")}
-            id="booking-phone"
-            label={message("bookingPhoneLabel")}
-            maxLength={40}
-            name="phone"
-            onChange={(event) => setPhone(event.currentTarget.value)}
-            type="tel"
-            value={phone}
-          />
-
-          {held.form.fields.length === 0 ? null : (
-            <fieldset>
-              <legend>{message("bookingIntakeLegend")}</legend>
-              {held.form.fields.map((field) => (
-                <TextField
-                  id={`booking-intake-${field.key}`}
-                  key={field.key}
-                  label={field.label}
-                  maxLength={field.maxLength}
-                  name={`intake.${field.key}`}
-                  onChange={(event) => {
-                    // Read the value before the updater runs: React clears
-                    // currentTarget once the event handler returns.
-                    const answer = event.currentTarget.value;
-                    setIntake((current) => ({ ...current, [field.key]: answer }));
-                  }}
-                  required={field.required}
-                  value={intake[field.key] ?? ""}
-                />
-              ))}
-            </fieldset>
-          )}
-
-          {held.form.consentText === "" ? null : <p>{held.form.consentText}</p>}
-          <label className="booking-flow__consent" htmlFor="booking-consent">
-            <input
-              checked={consented}
-              id="booking-consent"
-              name="consent"
-              onChange={(event) => setConsented(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>{message("bookingConsentLabel")}</span>
-          </label>
-
-          {/* Issue #22. What this will cost, stated before the customer is sent
-              anywhere, and taken from the server's own figures. */}
-          {held.form.paymentMode === "none" ? null : (
-            <dl className="booking-confirmed__facts">
-              <div>
-                <dt>{message("bookingDueTodayLabel")}</dt>
-                <dd>
-                  {formatCurrency(held.form.dueMinor, held.hold.price.currency, locale)}
-                </dd>
-              </div>
-              {held.form.balanceMinor === 0 ? null : (
-                <div>
-                  <dt>{message("bookingBalanceDueLabel")}</dt>
-                  <dd>
-                    {formatCurrency(
-                      held.form.balanceMinor,
-                      held.hold.price.currency,
+        <Card aria-labelledby="booking-details-title" role="region">
+          <CardHeader>
+            <CardTitle id="booking-details-title">
+              {message("bookingStepDetails")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Form form={form} locale={locale} messages={formMessages}>
+              <form
+                noValidate
+                onSubmit={(event) => void confirm(event)}
+                className="grid gap-6"
+              >
+                <Alert tone="info">
+                  {message("bookingHoldExpires").replace(
+                    "{time}",
+                    formatWallDateTime(
+                      held.hold.expiresAt,
                       locale,
-                    )}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          )}
-          {held.form.paymentMode === "deposit" ? (
-            <StatusMessage tone="neutral">
-              {message("bookingDepositNotice")}
-            </StatusMessage>
-          ) : null}
+                      customerTimeZone(locationTimeZone),
+                    ),
+                  )}
+                </Alert>
+                <Facts
+                  items={[
+                    {
+                      key: "service",
+                      label: message("bookingServiceLabel"),
+                      value: held.form.serviceName,
+                    },
+                    {
+                      key: "location",
+                      label: message("bookingLocationLabel"),
+                      value: held.form.locationName,
+                    },
+                    {
+                      key: "when",
+                      label: message("bookingWhenLabel"),
+                      value: formatWallDateTime(
+                        held.hold.slotStart,
+                        locale,
+                        customerTimeZone(locationTimeZone),
+                      ),
+                    },
+                    {
+                      key: "zone",
+                      label: message("bookingTimeZoneLabel"),
+                      value: formatTimeZone(
+                        held.hold.slotStart,
+                        locale,
+                        customerTimeZone(locationTimeZone),
+                      ),
+                    },
+                    {
+                      key: "total",
+                      label: message("bookingTotalLabel"),
+                      value: formatCurrency(
+                        held.hold.price.minorUnits,
+                        held.hold.price.currency,
+                        locale,
+                      ),
+                    },
+                  ]}
+                />
 
-          <Button
-            loading={busy}
-            loadingLabel={message("bookingSubmitting")}
-            type="submit"
-          >
-            {message(
-              held.form.paymentMode === "none" ? "bookingSubmit" : "bookingPayAction",
-            )}
-          </Button>
-          <Button onClick={chooseAnotherTime} variant="secondary">
-            {message("bookingRestart")}
-          </Button>
-        </form>
+                <Separator />
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="contact.fullName"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel htmlFor="booking-full-name" required>
+                          {message("bookingNameLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingNameDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="name"
+                            id="booking-full-name"
+                            maxLength={160}
+                            name="fullName"
+                            required
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="contact.email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor="booking-email" required>
+                          {message("bookingEmailLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingEmailDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="email"
+                            dir="ltr"
+                            id="booking-email"
+                            maxLength={320}
+                            name="email"
+                            required
+                            type="email"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="contact.phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor="booking-phone">
+                          {message("bookingPhoneLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingPhoneDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="tel"
+                            dir="ltr"
+                            id="booking-phone"
+                            maxLength={40}
+                            name="phone"
+                            type="tel"
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {whatsApp === null ? null : (
+                  <div className="grid gap-4">
+                    <FormField
+                      control={form.control}
+                      name="contact.whatsappOptIn"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-start gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value != null}
+                                className="mt-0.5"
+                                id="booking-whatsapp-opt-in"
+                                name="whatsappOptIn"
+                                onBlur={field.onBlur}
+                                onCheckedChange={(checked) => {
+                                  if (checked === true) {
+                                    // Exactly the words shown here, in this
+                                    // language, are what the server stores.
+                                    field.onChange({
+                                      consentText: whatsApp.consentText,
+                                      consentVersion: whatsApp.consentVersion,
+                                      phoneE164: "",
+                                    });
+                                    return;
+                                  }
+                                  field.onChange(null);
+                                  form.clearErrors("contact.whatsappOptIn");
+                                }}
+                                ref={field.ref}
+                              />
+                            </FormControl>
+                            <FormLabel
+                              htmlFor="booking-whatsapp-opt-in"
+                              className="font-medium"
+                            >
+                              {whatsApp.label}
+                            </FormLabel>
+                          </div>
+                          <FormDescription className="ps-7">
+                            {whatsApp.consentText}
+                          </FormDescription>
+                          <p className="ps-7 text-sm text-muted-foreground">
+                            {message("bookingWhatsAppEmailNote")}
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+                    {whatsAppOptedIn ? (
+                      <div className="grid gap-5 ps-7 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+                        <div className="grid content-start gap-2">
+                          <Label htmlFor="booking-whatsapp-country">
+                            {message("bookingWhatsAppCountryLabel")}
+                          </Label>
+                          <Select
+                            name="whatsappCountry"
+                            onValueChange={setWhatsAppRegion}
+                            value={whatsAppRegion}
+                          >
+                            <SelectTrigger id="booking-whatsapp-country">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {whatsAppCountries.map((country) => (
+                                <SelectItem key={country.region} value={country.region}>
+                                  {regionNames.of(country.region) ?? country.region}{" "}
+                                  <bdi className="text-muted-foreground" dir="ltr">
+                                    +{country.dialCode}
+                                  </bdi>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name={whatsAppPhonePath}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel htmlFor="booking-whatsapp-phone" required>
+                                {message("bookingWhatsAppPhoneLabel")}
+                              </FormLabel>
+                              <FormDescription>
+                                {message("bookingWhatsAppPhoneDescription")}
+                              </FormDescription>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  autoComplete="tel"
+                                  dir="ltr"
+                                  id="booking-whatsapp-phone"
+                                  inputMode="tel"
+                                  maxLength={32}
+                                  name="whatsappPhone"
+                                  required
+                                  type="tel"
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                              {e164Pattern.test(whatsAppPreview) ? (
+                                <p className="text-sm text-muted-foreground">
+                                  {message("bookingWhatsAppPhonePreview")}{" "}
+                                  <bdi
+                                    className="font-semibold text-foreground"
+                                    dir="ltr"
+                                  >
+                                    {whatsAppPreview}
+                                  </bdi>
+                                </p>
+                              ) : null}
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+
+                {held.form.fields.length === 0 ? null : (
+                  <FieldSet>
+                    <FieldLegend>{message("bookingIntakeLegend")}</FieldLegend>
+                    {held.form.fields.map((question) => (
+                      <FormField
+                        control={form.control}
+                        key={question.key}
+                        name={`intake.${question.key}`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel
+                              htmlFor={`booking-intake-${question.key}`}
+                              required={question.required}
+                            >
+                              {question.label}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                id={`booking-intake-${question.key}`}
+                                maxLength={question.maxLength}
+                                name={`intake.${question.key}`}
+                                required={question.required}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </FieldSet>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="consent"
+                  render={({ field }) => (
+                    <FormItem>
+                      {held.form.consentText === "" ? null : (
+                        <p className="rounded-md bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                          {held.form.consentText}
+                        </p>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value === true}
+                            className="mt-0.5"
+                            id="booking-consent"
+                            name="consent"
+                            onBlur={field.onBlur}
+                            onCheckedChange={(checked) =>
+                              field.onChange(checked === true)
+                            }
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="booking-consent" className="font-medium">
+                          {message("bookingConsentLabel")}
+                        </FormLabel>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* Issue #22. What this will cost, stated before the customer is sent
+                    anywhere, and taken from the server's own figures. */}
+                {held.form.paymentMode === "none" ? null : (
+                  <Facts
+                    items={[
+                      {
+                        key: "due",
+                        label: message("bookingDueTodayLabel"),
+                        value: formatCurrency(
+                          held.form.dueMinor,
+                          held.hold.price.currency,
+                          locale,
+                        ),
+                      },
+                      ...(held.form.balanceMinor === 0
+                        ? []
+                        : [
+                            {
+                              key: "balance",
+                              label: message("bookingBalanceDueLabel"),
+                              value: formatCurrency(
+                                held.form.balanceMinor,
+                                held.hold.price.currency,
+                                locale,
+                              ),
+                            },
+                          ]),
+                    ]}
+                  />
+                )}
+                {held.form.paymentMode === "deposit" ? (
+                  <Alert tone="info">{message("bookingDepositNotice")}</Alert>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    loading={confirmMutation.isPending}
+                    loadingLabel={message("bookingSubmitting")}
+                    size="lg"
+                    type="submit"
+                  >
+                    {message(
+                      held.form.paymentMode === "none"
+                        ? "bookingSubmit"
+                        : "bookingPayAction",
+                    )}
+                  </Button>
+                  <Button onClick={chooseAnotherTime} size="lg" variant="ghost">
+                    {message("bookingRestart")}
+                  </Button>
+                </div>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
       )}
     </section>
   );

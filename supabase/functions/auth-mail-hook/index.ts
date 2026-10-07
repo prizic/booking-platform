@@ -16,6 +16,7 @@ import {
 } from "../_shared/email/templates.ts";
 import { verifyResendWebhook } from "../_shared/email/webhook.ts";
 import { callRpc, json, platformConfigured, unconfigured } from "../_shared/rpc.ts";
+import { recoveryRedirect } from "./redirect.ts";
 
 // Supabase names six actions; this product sends three messages. A type we do
 // not recognise is refused rather than mailed under a guessed heading.
@@ -100,11 +101,20 @@ Deno.serve(async (request: Request): Promise<Response> => {
       : platformName;
 
   // The link is built from the platform's own verification endpoint and the
-  // token hash, never from a redirect the payload asked for.
+  // token hash. Recovery may return only to a platform-allowlisted Dashboard
+  // callback; that destination has no influence on tenant or brand resolution.
   const siteUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const destination =
+    action === "recovery"
+      ? recoveryRedirect(
+          hook.email_data?.redirect_to,
+          Deno.env.get("DASHBOARD_AUTH_REDIRECT_ORIGINS") ?? "",
+        )
+      : null;
   const link =
     `${siteUrl}/auth/v1/verify?token=${encodeURIComponent(tokenHash)}` +
-    `&type=${encodeURIComponent(action)}`;
+    `&type=${encodeURIComponent(action)}` +
+    (destination === null ? "" : `&redirect_to=${encodeURIComponent(destination)}`);
 
   // Both languages, in one message. The hook carries no locale and the
   // recipient may have no account yet, so guessing would be worse than sending

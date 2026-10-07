@@ -223,6 +223,7 @@ begin
         for select to authenticated
         using (
           realtime.messages.extension = 'broadcast'
+          and realtime.messages.topic = realtime.topic()
           and exists (
             select 1 from app.tenants t
             where realtime.topic() = 'tenant:'||t.id::text
