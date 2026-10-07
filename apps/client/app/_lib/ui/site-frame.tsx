@@ -141,9 +141,17 @@ export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrame
           </div>
         </div>
         <div className="border-t">
-          <p className={`${containerClass} py-4 text-xs text-muted-foreground`}>
-            {text("footer.rights", { name: brandName, year })}
-          </p>
+          <div
+            className={`${containerClass} flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-4 text-xs text-muted-foreground`}
+          >
+            <p>{text("footer.rights", { name: brandName, year })}</p>
+            <Link
+              href={`/${locale}/install`}
+              className="inline-flex min-h-6 items-center rounded-sm font-semibold underline-offset-4 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {text("footer.installApp")}
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

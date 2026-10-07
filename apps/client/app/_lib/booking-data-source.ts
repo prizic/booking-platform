@@ -1,4 +1,5 @@
 import {
+  buildWhatsAppOptInV1,
   parseBeginCheckoutV1Request,
   parseConfirmBookingV1Request,
   parseConfirmBookingV1Response,
@@ -16,6 +17,7 @@ import {
   type CreateHoldV1Response,
   type HoldFormV1,
   type ProposalResponseV1,
+  type WhatsAppOptInV1,
 } from "@wlbp/api-contracts";
 
 interface RpcResult {
@@ -75,6 +77,31 @@ export function mapBookingRpcError(
     default:
       return "availability_unavailable";
   }
+}
+
+/**
+ * The `p_contact` both booking RPCs take. A WhatsApp opt-in rides inside it,
+ * which is how it survives the paid path: checkout stores the contact on the
+ * draft and settlement replays it through confirmation.
+ */
+function rpcContact(
+  contact: ConfirmBookingV1Request["contact"],
+  whatsappOptIn: WhatsAppOptInV1 | null,
+): Record<string, unknown> {
+  let optIn: WhatsAppOptInV1 | null = null;
+  if (whatsappOptIn !== null) {
+    try {
+      optIn = buildWhatsAppOptInV1(whatsappOptIn);
+    } catch {
+      throw new ClientBookingError("invalid_request");
+    }
+  }
+  return {
+    email: contact.email,
+    fullName: contact.fullName,
+    ...(contact.phone === null ? {} : { phone: contact.phone }),
+    ...(optIn === null ? {} : { whatsappOptIn: optIn }),
+  };
 }
 
 function firstRow(value: unknown): Record<string, unknown> {
@@ -168,16 +195,13 @@ export function createClientBookingDataSource(
 
     async confirmBooking(
       request: ConfirmBookingV1Request,
+      whatsappOptIn: WhatsAppOptInV1 | null = null,
     ): Promise<ConfirmBookingV1Response> {
       const parsed = parseConfirmBookingV1Request(request);
       const result = await api.rpc("confirm_booking_v1", {
         p_application: "client",
         p_consent_version: parsed.consentVersion,
-        p_contact: {
-          email: parsed.contact.email,
-          fullName: parsed.contact.fullName,
-          ...(parsed.contact.phone === null ? {} : { phone: parsed.contact.phone }),
-        },
+        p_contact: rpcContact(parsed.contact, whatsappOptIn),
         p_customer_time_zone: parsed.customerTimeZone,
         p_hold_id: parsed.holdId,
         p_hostname: trustedHostname,
@@ -232,16 +256,13 @@ export function createClientBookingDataSource(
      */
     async beginCheckout(
       request: BeginCheckoutV1Request,
+      whatsappOptIn: WhatsAppOptInV1 | null = null,
     ): Promise<BeginCheckoutV1Response> {
       const parsed = parseBeginCheckoutV1Request(request);
       const result = await api.rpc("begin_checkout_v1", {
         p_application: "client",
         p_consent_version: parsed.consentVersion,
-        p_contact: {
-          email: parsed.contact.email,
-          fullName: parsed.contact.fullName,
-          ...(parsed.contact.phone === null ? {} : { phone: parsed.contact.phone }),
-        },
+        p_contact: rpcContact(parsed.contact, whatsappOptIn),
         p_customer_time_zone: parsed.customerTimeZone,
         p_hold_id: parsed.holdId,
         p_hostname: trustedHostname,

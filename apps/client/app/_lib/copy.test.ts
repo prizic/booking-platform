@@ -26,6 +26,14 @@ const clientInstanceKeys = [
   "footer.contact.title",
   "footer.contact.body",
   "footer.rights",
+  "footer.installApp",
+  "pwa.offline.title",
+  "pwa.offline.body",
+  "pwa.install.title",
+  "pwa.install.intro",
+  "whatsapp.optIn.label",
+  "whatsapp.optIn.consent",
+  "whatsapp.optIn.consentVersion",
 ] as const;
 
 function readInstanceContent(locale: "en" | "ar"): Record<string, string> {

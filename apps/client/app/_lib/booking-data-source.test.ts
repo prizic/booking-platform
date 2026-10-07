@@ -96,6 +96,66 @@ describe("Client booking data source", () => {
     });
   });
 
+  it("carries a WhatsApp opt-in inside the contact on confirm and on checkout", async () => {
+    const calls: [string, Record<string, unknown>][] = [];
+    const source = createClientBookingDataSource(
+      {
+        rpc: async (name, args) => {
+          calls.push([name, args as Record<string, unknown>]);
+          return {
+            data: [
+              name === "begin_checkout_v1"
+                ? { currency: "SAR", payment_attempt_id: "attempt", status: "open" }
+                : committedRow,
+            ],
+            error: null,
+          };
+        },
+      },
+      "book.tenant.example",
+    );
+    const optIn = {
+      consentText: "I agree to WhatsApp updates.",
+      consentVersion: "1",
+      phoneE164: "+966512345678",
+    };
+
+    await source.confirmBooking(confirmation, optIn);
+    await source.beginCheckout(confirmation, optIn);
+    for (const [, args] of calls) {
+      expect(args.p_contact).toEqual({
+        email: "guest@example.invalid",
+        fullName: "Test Guest",
+        whatsappOptIn: optIn,
+      });
+    }
+    expect(calls.map(([name]) => name)).toEqual([
+      "confirm_booking_v1",
+      "begin_checkout_v1",
+    ]);
+  });
+
+  it("refuses a malformed WhatsApp opt-in before any database call", async () => {
+    let called = false;
+    const source = createClientBookingDataSource(
+      {
+        rpc: async () => {
+          called = true;
+          return { data: [committedRow], error: null };
+        },
+      },
+      "book.tenant.example",
+    );
+    await expect(
+      source.confirmBooking(confirmation, {
+        consentText: "I agree.",
+        consentVersion: "1",
+        phoneE164: "0512345678",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_request" });
+    expect(called).toBe(false);
+  });
+
   it("maps every stable database error without disclosing the conflict", async () => {
     for (const [message, code, expected] of [
       ["slot_unavailable", "23P01", "slot_unavailable"],

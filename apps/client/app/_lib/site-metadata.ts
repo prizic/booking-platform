@@ -3,6 +3,7 @@ import type { Locale } from "@wlbp/i18n";
 import { clientBrand } from "./brand";
 import { instanceText } from "./instance-text";
 import { instanceLocalePolicy } from "./locale-policy";
+import { pwaAppleTouchIcon } from "./pwa-icons";
 import { getClientSiteOrigin } from "./site-origin";
 
 export function getClientLocaleMetadata(locale: Locale): Metadata {
@@ -15,8 +16,10 @@ export function getClientLocaleMetadata(locale: Locale): Metadata {
     description: text("site.description"),
     icons: {
       icon: clientBrand.assets.favicon,
-      apple: clientBrand.assets.icon,
+      // Opaque 180 px icon generated from the brand icon (iOS shows transparent areas as black).
+      apple: pwaAppleTouchIcon,
     },
+    manifest: "/manifest.webmanifest",
     openGraph: {
       images: [new URL(clientBrand.assets.socialImage, siteOrigin)],
       siteName: text("brand.name"),

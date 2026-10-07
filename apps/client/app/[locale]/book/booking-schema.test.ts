@@ -6,6 +6,7 @@ import {
   bookingDetailsSchema,
   checkoutStatusSchema,
   createHoldSchema,
+  splitBookingDetails,
   type BookingDetailsInput,
 } from "./booking-schema";
 
@@ -104,6 +105,104 @@ describe("booking details schema", () => {
     expect(bookingDetailsSchema.safeParse({ ...details, locale: "fr" }).success).toBe(
       false,
     );
+  });
+});
+
+describe("booking details schema: WhatsApp opt-in", () => {
+  const optIn = {
+    consentText: " I agree to WhatsApp updates. ",
+    consentVersion: "1",
+    phoneE164: "05 1234 5678",
+  };
+  const saudi = { whatsAppDialCode: "966" };
+
+  function withOptIn(value: unknown) {
+    return { ...details, contact: { ...details.contact, whatsappOptIn: value } };
+  }
+
+  it("is optional: absent or unticked (null) sends no opt-in at all", () => {
+    for (const input of [details, withOptIn(null), withOptIn(undefined)]) {
+      const values = bookingDetailsFormSchema(questions, saudi).parse(input);
+      expect(values.contact.whatsappOptIn).toBeUndefined();
+      const { request, whatsappOptIn } = splitBookingDetails(values);
+      expect(whatsappOptIn).toBeNull();
+      expect(Object.keys(request.contact).sort()).toEqual([
+        "email",
+        "fullName",
+        "phone",
+      ]);
+      expect(() => parseConfirmBookingV1Request(request)).not.toThrow();
+    }
+  });
+
+  it("normalizes a ticked national number to E.164 for the chosen country", () => {
+    const values = bookingDetailsFormSchema(questions, saudi).parse(withOptIn(optIn));
+    expect(values.contact.whatsappOptIn).toEqual({
+      consentText: "I agree to WhatsApp updates.",
+      consentVersion: "1",
+      phoneE164: "+966512345678",
+    });
+    // The route has no country, and still accepts the browser's output unchanged.
+    expect(bookingDetailsSchema.parse(values)).toEqual(values);
+    const { request, whatsappOptIn } = splitBookingDetails(values);
+    expect(whatsappOptIn?.phoneE164).toBe("+966512345678");
+    expect(() => parseConfirmBookingV1Request(request)).not.toThrow();
+  });
+
+  it.each([
+    ["+971 50 123 4567", "+971501234567"],
+    ["00971501234567", "+971501234567"],
+    ["٠٥١٢٣٤٥٦٧٨", "+966512345678"],
+    ["(051) 234-5678", "+966512345678"],
+  ])("reads %s as %s", (typed, expected) => {
+    const values = bookingDetailsFormSchema(questions, saudi).parse(
+      withOptIn({ ...optIn, phoneE164: typed }),
+    );
+    expect(values.contact.whatsappOptIn?.phoneE164).toBe(expected);
+  });
+
+  it("requires the phone only once the box is ticked", () => {
+    expect(
+      codes(
+        withOptIn({ ...optIn, phoneE164: "  " }),
+        bookingDetailsFormSchema(questions, saudi),
+      ),
+    ).toEqual({ "contact.whatsappOptIn.phoneE164": "booking_whatsapp_phone_required" });
+    expect(codes(withOptIn(null), bookingDetailsFormSchema(questions, saudi))).toEqual(
+      {},
+    );
+  });
+
+  it.each(["12", "+0512345678", "+9665123456789012", "call me", "05123x5678"])(
+    "refuses the invalid number %s",
+    (phoneE164) => {
+      expect(
+        codes(
+          withOptIn({ ...optIn, phoneE164 }),
+          bookingDetailsFormSchema(questions, saudi),
+        )["contact.whatsappOptIn.phoneE164"],
+      ).toBe("booking_whatsapp_phone_invalid");
+    },
+  );
+
+  it("accepts only E.164 on the route, where no country is known", () => {
+    expect(bookingDetailsSchema.safeParse(withOptIn(optIn)).success).toBe(false);
+    expect(
+      bookingDetailsSchema.safeParse(
+        withOptIn({ ...optIn, phoneE164: "+966512345678" }),
+      ).success,
+    ).toBe(true);
+  });
+
+  it("refuses a malformed opt-in object the database would refuse", () => {
+    for (const value of [
+      { ...optIn, consentText: "" },
+      { ...optIn, consentVersion: "v 1" },
+      { ...optIn, extra: "field" },
+      "yes",
+    ]) {
+      expect(bookingDetailsSchema.safeParse(withOptIn(value)).success).toBe(false);
+    }
   });
 });
 

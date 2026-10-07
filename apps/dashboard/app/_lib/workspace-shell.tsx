@@ -8,6 +8,7 @@ import {
 } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import {
+  BellRing,
   CalendarClock,
   CalendarDays,
   ChartColumn,
@@ -56,6 +57,7 @@ import {
 } from "./dashboard-server";
 import { DashboardAccessPanel } from "./dashboard-access-panel";
 import { countLabel, workspaceMessage } from "./workspace-copy";
+import { notificationText } from "./notification-copy";
 
 const sectionIcons: Record<WorkspaceSection, LucideIcon> = {
   today: CalendarClock,
@@ -137,6 +139,7 @@ export async function WorkspaceShell({
     darkAvailable,
   );
   const brandName = instanceText(locale)("brand.name");
+  const preferencesLabel = notificationText(locale, "commsNavPreferences");
 
   const groups: ShellNavGroup[] = (["operations", "catalog", "administration"] as const)
     .map((group) => ({
@@ -248,6 +251,12 @@ export async function WorkspaceShell({
               {message("authAccount")}
             </Link>
           </Button>
+          <Button asChild variant="rail" block>
+            <Link href={`/${locale}/communications/preferences`}>
+              <BellRing aria-hidden="true" />
+              {preferencesLabel}
+            </Link>
+          </Button>
           {/* Signing out stays a POST so a prefetch or a crawler can never do it. */}
           <form action={`/${locale}/auth/sign-out`} method="post">
             <Button type="submit" variant="rail" block>
@@ -297,6 +306,15 @@ export async function WorkspaceShell({
       </Suspense>
       {authenticated ? (
         <div className="hidden items-center gap-1 lg:flex">
+          <Button asChild variant="ghost" size="icon">
+            <Link
+              href={`/${locale}/communications/preferences`}
+              aria-label={preferencesLabel}
+              title={preferencesLabel}
+            >
+              <BellRing aria-hidden="true" />
+            </Link>
+          </Button>
           <Button asChild variant="ghost" size="icon">
             <Link
               href={`/${locale}/auth/mfa`}

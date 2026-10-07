@@ -233,9 +233,11 @@ export type Database = {
           booking_id: string;
           booking_revision: number;
           correlation_id: string;
+          is_test: boolean;
           message_id: string;
           payload: Json;
           recipient_email: string;
+          recipient_kind: string;
           template_key: string;
           template_locale: string;
           template_version: number;
@@ -306,6 +308,25 @@ export type Database = {
           invitation_id: string;
           job_id: string;
           recipient_email: string;
+        }[];
+      };
+      claim_whatsapp_batch_v1: {
+        Args: { p_limit?: number; p_visibility_seconds?: number };
+        Returns: {
+          access_token_secret_ref: string;
+          attempt: number;
+          booking_id: string;
+          booking_revision: number;
+          correlation_id: string;
+          message_id: string;
+          payload: Json;
+          phone_number_id: string;
+          recipient_phone_e164: string;
+          template_key: string;
+          template_language: string;
+          template_locale: string;
+          template_name: string;
+          tenant_id: string;
         }[];
       };
       clear_entitlement_override_v1: {
@@ -569,6 +590,21 @@ export type Database = {
         Returns: {
           operator_id: string;
         }[];
+      };
+      enqueue_staff_daily_digests_v1: {
+        Args: { p_limit?: number };
+        Returns: {
+          enqueued: number;
+        }[];
+      };
+      enqueue_test_notification_v1: {
+        Args: {
+          p_locale: string;
+          p_request_id: string;
+          p_template_key: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
       };
       export_audit_events_v1: {
         Args: {
@@ -877,9 +913,32 @@ export type Database = {
           event_type: string;
         }[];
       };
+      get_my_notification_preferences_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
+      };
       get_notification_brand_v1: {
         Args: { p_tenant_id: string };
         Returns: string;
+      };
+      get_notification_brand_v2: {
+        Args: { p_tenant_id: string };
+        Returns: {
+          client_origin: string;
+          dashboard_origin: string;
+          default_locale: string;
+          icon_url: string;
+          logo_url: string;
+          name_ar: string;
+          name_en: string;
+          on_primary_color: string;
+          primary_color: string;
+          support_email: string;
+        }[];
+      };
+      get_notification_settings_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
       };
       get_operational_choices_v1: {
         Args: { p_locale?: string; p_tenant_id: string };
@@ -989,6 +1048,10 @@ export type Database = {
           default_locale: string;
           navigation: Json;
         }[];
+      };
+      get_public_whatsapp_availability_v1: {
+        Args: { p_application: string; p_hostname: string };
+        Returns: Json;
       };
       get_published_brand_v1: {
         Args: { p_application: string; p_hostname: string };
@@ -1177,6 +1240,7 @@ export type Database = {
           utilization_bps: number;
         }[];
       };
+      get_whatsapp_config_v1: { Args: { p_tenant_id: string }; Returns: Json };
       github_repository_for_run_v1: {
         Args: { p_run_id: string };
         Returns: {
@@ -1678,6 +1742,10 @@ export type Database = {
           revision: number;
         }[];
       };
+      list_staff_notification_preferences_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
+      };
       list_subscriptions_v1: {
         Args: {
           p_limit?: number;
@@ -1926,6 +1994,35 @@ export type Database = {
         Returns: {
           refund_id: string;
           status: string;
+        }[];
+      };
+      record_whatsapp_attempt_v1: {
+        Args: {
+          p_attempt: number;
+          p_error_code?: string;
+          p_message_id: string;
+          p_outcome: string;
+          p_provider_reference?: string;
+          p_started_at: string;
+        };
+        Returns: {
+          dead_lettered: boolean;
+          next_attempt_at: string;
+          status: string;
+        }[];
+      };
+      record_whatsapp_provider_event_v1: {
+        Args: {
+          p_error_code?: string;
+          p_occurred_at: string;
+          p_phone_number_id: string;
+          p_provider_event_reference: string;
+          p_provider_message_reference: string;
+          p_status: string;
+        };
+        Returns: {
+          applied: boolean;
+          message_id: string;
         }[];
       };
       redeem_brand_preview_v1: {
@@ -2311,6 +2408,20 @@ export type Database = {
           provider: string;
         }[];
       };
+      save_my_notification_preferences_v1: {
+        Args: { p_preferences: Json; p_request_id: string; p_tenant_id: string };
+        Returns: Json;
+      };
+      save_notification_settings_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_reminder_offsets: number[];
+          p_request_id: string;
+          p_settings: Json;
+          p_tenant_id: string;
+        };
+        Returns: Json;
+      };
       save_plan_v1: {
         Args: {
           p_active: boolean;
@@ -2419,6 +2530,15 @@ export type Database = {
           ignored_features: string[];
           revision: number;
         }[];
+      };
+      save_whatsapp_config_v1: {
+        Args: {
+          p_config: Json;
+          p_expected_revision: number;
+          p_request_id: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
       };
       schedule_booking_reminders_v1: {
         Args: { p_limit?: number; p_tenant_id?: string };

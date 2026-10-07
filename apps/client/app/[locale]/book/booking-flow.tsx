@@ -34,8 +34,14 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Label,
   PageHeader,
   ReferenceCode,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
   Separator,
   StatusStamp,
   cn,
@@ -48,6 +54,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import { errorCodeOf, postJson } from "../../_lib/client-api";
 import { formatWallDateTime } from "../../_lib/wall-time";
+import type { WhatsAppConsentContent } from "../../_lib/whatsapp-consent";
+import {
+  dialCodeForRegion,
+  e164Pattern,
+  normalizeWhatsAppNumber,
+  whatsAppCountries,
+  whatsAppRegionForTimeZone,
+} from "../../_lib/whatsapp-phone";
 import {
   AvailabilityPicker,
   type AvailabilityPickerCopy,
@@ -71,6 +85,12 @@ interface BookingFlowProps {
   readonly locationId: string | null;
   readonly locationTimeZone: string;
   readonly serviceId: string | null;
+  /**
+   * The WhatsApp opt-in text from instance content, or null when the tenant
+   * does not offer the channel right now, in which case nothing about
+   * WhatsApp is rendered.
+   */
+  readonly whatsApp: WhatsAppConsentContent | null;
 }
 
 interface HeldSlot {
@@ -139,7 +159,11 @@ const formCodeCopyKeys: Readonly<Record<string, string>> = {
   [bookingFormCodes.emailRequired]: "bookingEmailRequired",
   [bookingFormCodes.fieldRequired]: "bookingFieldRequired",
   [bookingFormCodes.nameRequired]: "bookingNameRequired",
+  [bookingFormCodes.whatsAppPhoneInvalid]: "bookingWhatsAppPhoneInvalid",
+  [bookingFormCodes.whatsAppPhoneRequired]: "bookingWhatsAppPhoneRequired",
 };
+
+const whatsAppPhonePath = "contact.whatsappOptIn.phoneE164" as const;
 
 type Step = 1 | 2 | 3;
 
@@ -205,6 +229,7 @@ export function BookingFlow({
   locationId,
   locationTimeZone,
   serviceId,
+  whatsApp,
 }: BookingFlowProps) {
   const message = (key: string) => copy.booking[key] ?? key;
   const queryClient = useQueryClient();
@@ -234,15 +259,21 @@ export function BookingFlow({
   );
   // Answers survive every failure: the form outlives each hold, so a lost slot
   // never costs the customer the details they already typed.
+  // The WhatsApp country starts at the location's country when its time zone
+  // names one, otherwise the instance default.
+  const [whatsAppRegion, setWhatsAppRegion] = useState(() =>
+    whatsAppRegionForTimeZone(locationTimeZone),
+  );
+  const whatsAppDialCode = dialCodeForRegion(whatsAppRegion);
   const detailsSchema = useMemo(
-    () => bookingDetailsFormSchema(held?.form.fields ?? []),
-    [held],
+    () => bookingDetailsFormSchema(held?.form.fields ?? [], { whatsAppDialCode }),
+    [held, whatsAppDialCode],
   );
   const form = useZodForm(detailsSchema, {
     defaultValues: {
       consent: false,
       consentVersion: "",
-      contact: { email: "", fullName: "", phone: "" },
+      contact: { email: "", fullName: "", phone: "", whatsappOptIn: null },
       customerTimeZone: locationTimeZone,
       holdId: "",
       idempotencyKey: "",
@@ -253,6 +284,24 @@ export function BookingFlow({
     // The error summary takes focus instead, then links to each field.
     shouldFocusError: false,
   });
+
+  // A changed country changes what a national number means, so a number the
+  // customer already left is checked again against the new country.
+  useEffect(() => {
+    if (form.getFieldState(whatsAppPhonePath).isTouched) {
+      void form.trigger(whatsAppPhonePath);
+    }
+  }, [form, whatsAppDialCode]);
+  const whatsAppOptedIn = form.watch("contact.whatsappOptIn") != null;
+  const whatsAppPhone = form.watch(whatsAppPhonePath);
+  const whatsAppPreview =
+    typeof whatsAppPhone === "string"
+      ? normalizeWhatsAppNumber(whatsAppPhone, whatsAppDialCode)
+      : "";
+  const regionNames = useMemo(
+    () => new Intl.DisplayNames([locale], { type: "region" }),
+    [locale],
+  );
 
   const settlementQuery = useQuery({
     enabled: returnHold !== null,
@@ -417,6 +466,7 @@ export function BookingFlow({
           { id: "booking-full-name", text: problemText("contact.fullName") },
           { id: "booking-email", text: problemText("contact.email") },
           { id: "booking-phone", text: problemText("contact.phone") },
+          { id: "booking-whatsapp-phone", text: problemText(whatsAppPhonePath) },
           ...(held?.form.fields ?? []).map((field) => {
             const text = problemText(`intake.${field.key}`);
             return {
@@ -933,6 +983,125 @@ export function BookingFlow({
                     )}
                   />
                 </div>
+
+                {whatsApp === null ? null : (
+                  <div className="grid gap-4">
+                    <FormField
+                      control={form.control}
+                      name="contact.whatsappOptIn"
+                      render={({ field }) => (
+                        <FormItem>
+                          <div className="flex items-start gap-3">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value != null}
+                                className="mt-0.5"
+                                id="booking-whatsapp-opt-in"
+                                name="whatsappOptIn"
+                                onBlur={field.onBlur}
+                                onCheckedChange={(checked) => {
+                                  if (checked === true) {
+                                    // Exactly the words shown here, in this
+                                    // language, are what the server stores.
+                                    field.onChange({
+                                      consentText: whatsApp.consentText,
+                                      consentVersion: whatsApp.consentVersion,
+                                      phoneE164: "",
+                                    });
+                                    return;
+                                  }
+                                  field.onChange(null);
+                                  form.clearErrors("contact.whatsappOptIn");
+                                }}
+                                ref={field.ref}
+                              />
+                            </FormControl>
+                            <FormLabel
+                              htmlFor="booking-whatsapp-opt-in"
+                              className="font-medium"
+                            >
+                              {whatsApp.label}
+                            </FormLabel>
+                          </div>
+                          <FormDescription className="ps-7">
+                            {whatsApp.consentText}
+                          </FormDescription>
+                          <p className="ps-7 text-sm text-muted-foreground">
+                            {message("bookingWhatsAppEmailNote")}
+                          </p>
+                        </FormItem>
+                      )}
+                    />
+                    {whatsAppOptedIn ? (
+                      <div className="grid gap-5 ps-7 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+                        <div className="grid content-start gap-2">
+                          <Label htmlFor="booking-whatsapp-country">
+                            {message("bookingWhatsAppCountryLabel")}
+                          </Label>
+                          <Select
+                            name="whatsappCountry"
+                            onValueChange={setWhatsAppRegion}
+                            value={whatsAppRegion}
+                          >
+                            <SelectTrigger id="booking-whatsapp-country">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {whatsAppCountries.map((country) => (
+                                <SelectItem key={country.region} value={country.region}>
+                                  {regionNames.of(country.region) ?? country.region}{" "}
+                                  <bdi className="text-muted-foreground" dir="ltr">
+                                    +{country.dialCode}
+                                  </bdi>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name={whatsAppPhonePath}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel htmlFor="booking-whatsapp-phone" required>
+                                {message("bookingWhatsAppPhoneLabel")}
+                              </FormLabel>
+                              <FormDescription>
+                                {message("bookingWhatsAppPhoneDescription")}
+                              </FormDescription>
+                              <FormControl>
+                                <Input
+                                  {...field}
+                                  autoComplete="tel"
+                                  dir="ltr"
+                                  id="booking-whatsapp-phone"
+                                  inputMode="tel"
+                                  maxLength={32}
+                                  name="whatsappPhone"
+                                  required
+                                  type="tel"
+                                  value={field.value ?? ""}
+                                />
+                              </FormControl>
+                              <FormMessage />
+                              {e164Pattern.test(whatsAppPreview) ? (
+                                <p className="text-sm text-muted-foreground">
+                                  {message("bookingWhatsAppPhonePreview")}{" "}
+                                  <bdi
+                                    className="font-semibold text-foreground"
+                                    dir="ltr"
+                                  >
+                                    {whatsAppPreview}
+                                  </bdi>
+                                </p>
+                              ) : null}
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
 
                 {held.form.fields.length === 0 ? null : (
                   <FieldSet>

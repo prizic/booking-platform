@@ -15,6 +15,16 @@ import {
   parseBookingRequestsV1,
   parseScheduleWorkspaceV1,
   parseSaveScheduleConfigV1,
+  buildEnqueueTestNotificationV1Request,
+  buildSaveMyNotificationPreferencesV1Request,
+  buildSaveNotificationSettingsV1Request,
+  buildSaveWhatsAppConfigV1Request,
+  parseMyNotificationPreferencesV1,
+  parseNotificationMutationV1,
+  parseNotificationSettingsV1,
+  parseStaffNotificationPreferencesV1,
+  parseTestNotificationV1,
+  parseWhatsAppConfigV1,
   type CapabilityName,
   type AvailabilityV1Request,
   type StaffResourceDeactivationV1,
@@ -1628,6 +1638,69 @@ export function createDashboardDataSource(
       };
       return presentation;
     },
+
+    getNotificationSettings: async (tenantId) =>
+      parseNotificationSettingsV1(
+        assertRpc(
+          await api.rpc("get_notification_settings_v1", { p_tenant_id: tenantId }),
+        ),
+      ),
+    saveNotificationSettings: async (input) =>
+      parseNotificationMutationV1(
+        assertRpc(
+          await api.rpc(
+            "save_notification_settings_v1",
+            buildSaveNotificationSettingsV1Request(input),
+          ),
+        ),
+      ),
+    getMyNotificationPreferences: async (tenantId) =>
+      parseMyNotificationPreferencesV1(
+        assertRpc(
+          await api.rpc("get_my_notification_preferences_v1", {
+            p_tenant_id: tenantId,
+          }),
+        ),
+      ),
+    saveMyNotificationPreferences: async (input) =>
+      parseNotificationMutationV1(
+        assertRpc(
+          await api.rpc(
+            "save_my_notification_preferences_v1",
+            buildSaveMyNotificationPreferencesV1Request(input),
+          ),
+        ),
+      ),
+    listStaffNotificationPreferences: async (tenantId) =>
+      parseStaffNotificationPreferencesV1(
+        assertRpc(
+          await api.rpc("list_staff_notification_preferences_v1", {
+            p_tenant_id: tenantId,
+          }),
+        ),
+      ),
+    enqueueTestNotification: async (input) =>
+      parseTestNotificationV1(
+        assertRpc(
+          await api.rpc(
+            "enqueue_test_notification_v1",
+            buildEnqueueTestNotificationV1Request(input),
+          ),
+        ),
+      ),
+    getWhatsAppConfig: async (tenantId) =>
+      parseWhatsAppConfigV1(
+        assertRpc(await api.rpc("get_whatsapp_config_v1", { p_tenant_id: tenantId })),
+      ),
+    saveWhatsAppConfig: async (input) =>
+      parseNotificationMutationV1(
+        assertRpc(
+          await api.rpc(
+            "save_whatsapp_config_v1",
+            buildSaveWhatsAppConfigV1Request(input),
+          ),
+        ),
+      ),
 
     getDeliveryHealth: async (request) => {
       const row = firstRow(

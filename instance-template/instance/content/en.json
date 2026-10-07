@@ -22,5 +22,13 @@
   "home.manage.body": "Open the link in your confirmation email to view your booking, move it to another time, or cancel it.",
   "footer.contact.title": "Contact us",
   "footer.contact.body": "Questions about a booking? Reply to your confirmation email and our team will get back to you.",
-  "footer.rights": "© {year} {name}. All rights reserved."
+  "footer.rights": "© {year} {name}. All rights reserved.",
+  "footer.installApp": "Install the app",
+  "pwa.offline.title": "You are offline",
+  "pwa.offline.body": "This page needs an internet connection. Check your Wi-Fi or mobile data, then try again.",
+  "pwa.install.title": "Install the {name} app",
+  "pwa.install.intro": "Add {name} to your home screen or desktop to book in one tap. It opens like an app and always shows the latest open times.",
+  "whatsapp.optIn.label": "Also send updates on WhatsApp",
+  "whatsapp.optIn.consent": "I agree to receive messages about this booking — its confirmation, reminders and any changes — on WhatsApp at the number I enter here. My mobile provider's usual data charges may apply.",
+  "whatsapp.optIn.consentVersion": "1"
 }

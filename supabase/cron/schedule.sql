@@ -74,7 +74,13 @@ begin
       -- these jobs go out through the Edge Function that holds it.
       ('wlbp-notification-worker',     '* * * * *',   $$select private.invoke_edge_function_v1('notification-worker')$$),
       ('wlbp-staff-invitation-worker', '* * * * *',   $$select private.invoke_edge_function_v1('staff-invitation-worker')$$),
-      ('wlbp-reminder-scheduler',      '*/5 * * * *', $$select private.invoke_edge_function_v1('reminder-scheduler')$$)
+      ('wlbp-reminder-scheduler',      '*/5 * * * *', $$select private.invoke_edge_function_v1('reminder-scheduler')$$),
+      -- Opt-in staff agenda. Every 15 minutes is enough granularity for a
+      -- local send time, and the enqueue is idempotent per member per day.
+      ('wlbp-staff-digest',            '*/15 * * * *', $$select private.invoke_edge_function_v1('staff-digest')$$),
+      -- ADR-0018. Optional WhatsApp channel; claims nothing unless a tenant is
+      -- entitled, configured and has opted-in bookings, so it is cheap when idle.
+      ('wlbp-whatsapp-worker',         '* * * * *',   $$select private.invoke_edge_function_v1('whatsapp-worker')$$)
     ) as j(name,cadence,command)
   loop
     perform cron.unschedule(v_job.name)
