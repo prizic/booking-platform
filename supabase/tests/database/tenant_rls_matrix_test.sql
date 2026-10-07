@@ -43,7 +43,7 @@ select set_config('request.jwt.claims', '{"sub":"a1000000-0000-0000-0000-0000000
 set local role authenticated;
 select is((select count(*)::integer from app.locations), 2, 'tenant admin sees every location in their tenant');
 select is((select count(*)::integer from app.locations where tenant_id = 'b0000000-0000-0000-0000-000000000001'), 0, 'tenant admin sees no other-tenant locations');
-select is((select count(*)::integer from app.memberships), 5, 'tenant admin can manage memberships only in their tenant');
+select is((select count(*)::integer from app.memberships), 6, 'tenant admin can manage memberships only in their tenant');
 select is((select count(*)::integer from app.invitations), 1, 'tenant admin sees their tenant invitation');
 insert into app.invitations (id, tenant_id, role_id, invited_by_membership_id, invitee_email, token_hash, expires_at)
 values ('a6000000-0000-0000-0000-000000000010', 'a0000000-0000-0000-0000-000000000001', 'a2000000-0000-0000-0000-000000000001', 'a3000000-0000-0000-0000-000000000002', 'allowed@example.invalid', repeat('c', 64), '2027-09-05 00:00:00+00');

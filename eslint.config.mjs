@@ -11,6 +11,7 @@ export default defineConfig(
     "**/.next-warm/**",
     // Playwright starts brand-fixture dev servers with their own dist dirs.
     "**/.next-warm-*/**",
+    "**/.next-live-*/**",
     "**/.turbo/**",
     "**/coverage/**",
     "**/dist/**",

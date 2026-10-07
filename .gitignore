@@ -8,6 +8,7 @@ node_modules/
 .next/
 .next-warm/
 .next-warm-*/
+.next-live-*/
 next-env.d.ts
 dist/
 coverage/

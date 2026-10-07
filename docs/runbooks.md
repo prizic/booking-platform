@@ -86,6 +86,7 @@ Owners are placeholders until the on-call rotation exists.
 | R-13 | [Platform / tenant suspension and safe reactivation](#r-13-platform--tenant-suspension-and-safe-reactivation) | TBD — assign at M6 |
 | R-14 | [Backend release or environment identity failure](#r-14-backend-release-or-environment-identity-failure) | TBD — assign before the first hosted migration |
 | R-15 | [Stuck, waiting, or drifted provisioning run](#r-15-stuck-waiting-or-drifted-provisioning-run) | TBD — assign at M6 |
+| R-16 | [Disputed invoice, stuck meter, or restricted tenant](#r-16-disputed-invoice-stuck-meter-or-restricted-tenant) | TBD — assign at M6 |
 
 ### R-1 Slot contention / double-booking investigation
 
@@ -198,6 +199,13 @@ Owners are placeholders until the on-call rotation exists.
 - **First checks:** Read the run with `control_plane.get_provisioning_run_v1` — it returns the step list and the full timeline, and every field in it is a code, an identifier or a count. Distinguish the three shapes before touching anything: a step in `waiting` with a reason (usually `customer_dns`) is *progressing*, not broken, and the fix is with the tenant rather than with us; a step in `failed` has spent its retry budget and needs a human decision; a `running` step with an expired lock is a dead worker and is repaired by `control_plane.reconcile_provisioning_v1` on its own.
 - **Mitigation:** For a terminal failure, correct the cause and call `control_plane.retry_provisioning_run_v1`. It resets only the failed steps: everything that succeeded keeps its success and its external ID, which is what stops a retry from provisioning a second copy of the repository. Never hand-edit a step row to `succeeded` — the worker guard exists precisely so that an instance cannot be declared healthy by somebody who did not check it, and activation re-reads every gate anyway. If the run must be abandoned, `control_plane.deactivate_instance_v1` suspends the instance and flips desired state to inactive; it deletes nothing, because a half-provisioned repository holds the tenant's configuration and a half-provisioned domain holds their DNS.
 - **Escalation:** Provisioning owner. A `domains_unverified` blocker is R-7. A run blocked on `customer_dns` is outside our SLO and belongs with the tenant's account owner, not on-call.
+
+### R-16 Disputed invoice, stuck meter, or restricted tenant
+
+- **Trigger:** A tenant disputes an invoice line, a usage counter looks wrong, a metering source stops reporting, or a tenant asks why they cannot start new bookings.
+- **First checks:** Establish which of the two moneys the question is about before anything else. Platform billing (what the tenant pays us) lives entirely in `control_plane`; booking payments (what a customer pays the tenant) live in `app` and are R-2. Nothing joins them, so a question about one is never answered from the other. For a disputed line, read `control_plane.usage_events` — it is append-only and is the evidence; the counter and the invoice are both derived from it, and if they disagree with the events the events win. Every usage line names the meter definition version it was billed at, so a line from March can be recomputed against March's definition rather than today's.
+- **Mitigation:** A wrong counter is recomputed with `aggregate_usage_v1`, which replaces rather than accumulates and refuses to touch a closed period. A period that was already invoiced is **not** reopened: issue the correction as a credit with `apply_credit_v1`, which carries a reason and an actor. Never edit an invoice somebody has been sent. For a restricted tenant, `control_plane.tenant_restrictions` names who applied it, why, and until when; `revoke_tenant_restriction_v1` lifts it and reactivates the account only once nothing else is still holding the tenant down. No restriction kind deletes data or cancels an existing customer booking — if a tenant cannot export their own data, that is a bug, not a policy.
+- **Escalation:** Billing owner. A metering source that has stopped reporting is a worker problem, not a billing one — check the source named on the last event before assuming the meter is wrong.
 
 ---
 
