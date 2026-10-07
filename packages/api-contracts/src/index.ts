@@ -2094,7 +2094,13 @@ function requirePositiveRevision(value: unknown): number {
   return value;
 }
 
-function parseGrant(value: unknown): CapabilityGrantDto {
+/**
+ * Parses one grant. A well-formed grant for a capability this release does not
+ * know yet (added by a newer backend, e.g. role.manage) is skipped rather than
+ * failing the whole context: N-1 clients ignore permissions they cannot use.
+ * Malformed grants still fail closed.
+ */
+function parseGrant(value: unknown): CapabilityGrantDto | null {
   if (
     !isRecord(value) ||
     !hasExactKeys(value, ["capability", "requiresApproval", "scope"])
@@ -2103,12 +2109,13 @@ function parseGrant(value: unknown): CapabilityGrantDto {
   }
   if (
     typeof value.capability !== "string" ||
-    !capabilityNames.includes(value.capability as CapabilityName) ||
+    !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u.test(value.capability) ||
     typeof value.requiresApproval !== "boolean" ||
     (value.scope !== "tenant" && value.scope !== "location" && value.scope !== "own")
   ) {
     throw new Error("Capability grant is invalid");
   }
+  if (!capabilityNames.includes(value.capability as CapabilityName)) return null;
   return Object.freeze({
     capability: value.capability as CapabilityName,
     requiresApproval: value.requiresApproval,
@@ -2204,7 +2211,11 @@ export function parseDashboardContextV1(value: unknown): DashboardContextV1 {
     dashboardHostname: requireNonEmptyString(value.dashboardHostname),
     defaultLocale: value.defaultLocale,
     featureRevision: requirePositiveRevision(value.featureRevision),
-    grants: Object.freeze(value.grants.map(parseGrant)),
+    grants: Object.freeze(
+      value.grants
+        .map(parseGrant)
+        .filter((grant): grant is CapabilityGrantDto => grant !== null),
+    ),
     instanceId: requireNonEmptyString(value.instanceId),
     locationIds: Object.freeze(locationIds),
     locationScope: parseLocationScope(value.locationScope),

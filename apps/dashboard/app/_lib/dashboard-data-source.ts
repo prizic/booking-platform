@@ -250,9 +250,14 @@ function requireStringArray(value: unknown): readonly string[] {
   return value.map(requireString);
 }
 
+/**
+ * Validates the context's capability grants. Well-formed grants for capability
+ * names this release does not know (added by a newer backend) are dropped, so
+ * an N-1 Dashboard keeps working; malformed grants still fail closed.
+ */
 function requireCapabilityGrants(value: unknown) {
   if (!Array.isArray(value)) throw new Error("API returned invalid capabilities");
-  return value.map((item) => {
+  return value.flatMap((item) => {
     if (
       typeof item !== "object" ||
       item === null ||
@@ -262,7 +267,7 @@ function requireCapabilityGrants(value: unknown) {
       !("grantKind" in item) ||
       !("scopeKind" in item) ||
       typeof item.capability !== "string" ||
-      !capabilityNames.includes(item.capability as CapabilityName) ||
+      !/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/u.test(item.capability) ||
       (item.grantKind !== "direct" && item.grantKind !== "approval") ||
       (item.scopeKind !== "tenant" &&
         item.scopeKind !== "location" &&
@@ -270,11 +275,14 @@ function requireCapabilityGrants(value: unknown) {
     ) {
       throw new Error("API returned an unknown capability");
     }
-    return {
-      capability: item.capability as CapabilityName,
-      requiresApproval: item.grantKind === "approval",
-      scope: item.scopeKind,
-    };
+    if (!capabilityNames.includes(item.capability as CapabilityName)) return [];
+    return [
+      {
+        capability: item.capability as CapabilityName,
+        requiresApproval: item.grantKind === "approval",
+        scope: item.scopeKind,
+      },
+    ];
   });
 }
 

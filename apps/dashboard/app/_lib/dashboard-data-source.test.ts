@@ -243,6 +243,41 @@ describe("Dashboard Supabase adapter", () => {
     });
   });
 
+  it("ignores capabilities a newer backend added but fails closed on malformed ones", async () => {
+    const row = (capability: string) => ({
+      aal2: false,
+      brand_id: "brand-a",
+      config_version: 3,
+      dashboard_hostname: "dashboard.tenant.example",
+      default_locale: "en",
+      capabilities: [
+        { capability, grantKind: "approval", scopeKind: "tenant" },
+        { capability: "staff.manage", grantKind: "direct", scopeKind: "tenant" },
+      ],
+      feature_version: 4,
+      instance_id: "instance-a",
+      location_ids: [],
+      location_scope_mode: "tenant",
+      membership_id: "membership-a",
+      published_brand_revision: 2,
+      role_key: "tenant_admin",
+      tenant_id: "tenant-a",
+      tenant_name: "Tenant A",
+    });
+    const tolerant = createDashboardDataSource(
+      clientWithRows({ get_dashboard_context_v1: [row("future.capability_x")] }),
+    );
+    await expect(tolerant.getDashboardContext("tenant-a")).resolves.toMatchObject({
+      grants: [
+        { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
+      ],
+    });
+    const malformed = createDashboardDataSource(
+      clientWithRows({ get_dashboard_context_v1: [row("not a capability")] }),
+    );
+    await expect(malformed.getDashboardContext("tenant-a")).rejects.toThrow();
+  });
+
   it("loads the staff/resource workspace through one versioned RPC", async () => {
     const calls: Array<{ args?: Readonly<Record<string, unknown>>; name: string }> = [];
     const client = {
