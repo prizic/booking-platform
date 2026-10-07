@@ -14,6 +14,18 @@ import {
 import type { VerifiedIdentity } from "@wlbp/auth";
 import type { StaffAccessWorkspaceV1 } from "@wlbp/api-contracts";
 import type { CatalogWorkspaceV1, CatalogKindV1 } from "@wlbp/api-contracts";
+import type {
+  MyNotificationPreferencesV1,
+  NotificationMutationV1,
+  NotificationSettingsV1,
+  NotificationTemplateKeyV1,
+  SaveMyNotificationPreferencesV1Input,
+  SaveNotificationSettingsV1Input,
+  SaveWhatsAppConfigV1Input,
+  StaffNotificationPreferencesV1,
+  TestNotificationV1,
+  WhatsAppConfigV1,
+} from "@wlbp/api-contracts";
 import { buildTenantCacheKey, normalizeHostname } from "@wlbp/tenant-resolution";
 
 export interface ScheduleChoice {
@@ -259,6 +271,30 @@ export interface DashboardDataSource {
   getDeliveryHealth?: (request: {
     tenantId: string;
   }) => Promise<DeliveryHealthV1 | null>;
+  /* Notification settings, staff preferences, test send and WhatsApp. */
+  getNotificationSettings?: (tenantId: string) => Promise<NotificationSettingsV1>;
+  saveNotificationSettings?: (
+    input: SaveNotificationSettingsV1Input,
+  ) => Promise<NotificationMutationV1>;
+  getMyNotificationPreferences?: (
+    tenantId: string,
+  ) => Promise<MyNotificationPreferencesV1>;
+  saveMyNotificationPreferences?: (
+    input: SaveMyNotificationPreferencesV1Input,
+  ) => Promise<NotificationMutationV1>;
+  listStaffNotificationPreferences?: (
+    tenantId: string,
+  ) => Promise<StaffNotificationPreferencesV1>;
+  enqueueTestNotification?: (input: {
+    tenantId: string;
+    templateKey: NotificationTemplateKeyV1;
+    locale: "ar" | "en";
+    requestId: string;
+  }) => Promise<TestNotificationV1>;
+  getWhatsAppConfig?: (tenantId: string) => Promise<WhatsAppConfigV1>;
+  saveWhatsAppConfig?: (
+    input: SaveWhatsAppConfigV1Input,
+  ) => Promise<NotificationMutationV1>;
   listPaymentExceptions?: (request: {
     status: string | null;
     tenantId: string;

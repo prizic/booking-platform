@@ -1,22 +1,29 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { brandCases, getBrandSurfaceOrigin, locales, responsiveProfiles } from "./apps";
+import { bookingQuery, clientOrigin, stubBookingApi } from "./booking-fixtures";
 
+// The Client's own availability search on the booking page: the same
+// keyboard, error-summary and live-status concerns a customer meets first.
 const clientCopy = {
   en: {
-    alert: "We could not review your booking",
-    field: "Your name",
-    name: "Maha",
-    required: "Enter your name to continue.",
-    status: "Booking preview ready for Maha.",
-    submit: "Review booking",
+    alert: "Check your search",
+    date: "Starting date",
+    region: "Find an available time",
+    required: "Choose a starting date to search.",
+    search: "Find times",
+    select: "Select",
+    selected: "Selected",
+    status: /^Selected .+\. Availability will be checked again before confirmation\.$/u,
   },
   ar: {
-    alert: "تعذّرت مراجعة حجزك",
-    field: "اسمك",
-    name: "مها",
-    required: "أدخل اسمك للمتابعة.",
-    status: "معاينة الحجز جاهزة باسم مها.",
-    submit: "مراجعة الحجز",
+    alert: "راجع بيانات البحث",
+    date: "تاريخ البدء",
+    region: "ابحث عن وقت متاح",
+    required: "اختر تاريخ البدء لإجراء البحث.",
+    search: "البحث عن أوقات",
+    select: "اختيار",
+    selected: "تم الاختيار",
+    status: /^تم اختيار .+\. سيُتحقق من التوافر مرة أخرى قبل التأكيد\.$/u,
   },
 } as const;
 
@@ -43,11 +50,14 @@ for (const profile of responsiveProfiles) {
         page,
       }) => {
         const copy = clientCopy[language.locale];
-        await page.goto(`http://localhost:41730/${language.locale}`);
+        await stubBookingApi(page);
+        await page.goto(`${clientOrigin}/${language.locale}/book${bookingQuery}`);
 
-        const field = page.getByRole("textbox", { name: copy.field });
-        const submit = page.getByRole("button", { name: copy.submit });
-        await reachWithTab(page, field);
+        const dateField = page.getByRole("button", { name: copy.date, exact: true });
+        const search = page.getByRole("button", { name: copy.search, exact: true });
+        await expect(dateField).toBeEnabled();
+        // Searching without a date is caught before any request is made.
+        await reachWithTab(page, search);
         await page.keyboard.press("Enter");
 
         const errorLink = page.getByRole("link", { name: copy.required });
@@ -55,25 +65,50 @@ for (const profile of responsiveProfiles) {
         await expect(alert).toContainText(copy.alert);
         await expect(alert).toContainText(copy.required);
         await expect(alert).toBeFocused();
-        await expect(field).toHaveAttribute("aria-invalid", "true");
-        await expect(field).toHaveAccessibleDescription(
+        await expect(dateField).toHaveAttribute("data-invalid", "true");
+        await expect(dateField).toHaveAccessibleDescription(
           new RegExp(copy.required.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&"), "u"),
         );
 
         await page.keyboard.press("Tab");
         await expect(errorLink).toBeFocused();
         await page.keyboard.press("Enter");
-        await expect(field).toBeFocused();
+        await expect(dateField).toBeFocused();
 
-        await field.fill(copy.name);
-        await reachWithTab(page, submit);
+        // Open the calendar and take the focused day, all from the keyboard.
         await page.keyboard.press("Enter");
+        const calendar = page.getByRole("grid");
+        await expect(calendar).toBeVisible();
+        await page.keyboard.press("Enter");
+        await expect(calendar).toBeHidden();
+        await expect(page.locator('input[name="date"]')).toHaveValue(
+          /^\d{4}-\d{2}-\d{2}$/u,
+        );
+        await expect(alert).toHaveCount(0);
+        await expect(dateField).not.toHaveAttribute("data-invalid", "true");
 
-        const status = page.getByRole("status");
+        await reachWithTab(page, search);
+        await page.keyboard.press("Enter");
+        const select = page
+          .getByRole("button", { name: copy.select, exact: true })
+          .first();
+        await reachWithTab(page, select, 40);
+        await expect(select).toHaveAttribute("aria-pressed", "false");
+        await page.keyboard.press("Enter");
+        // The chosen time keeps focus, reports its pressed state and says so in words.
+        const chosen = page.getByRole("button", { name: copy.selected, exact: true });
+        await expect(chosen).toHaveCount(1);
+        await expect(chosen).toBeFocused();
+        await expect(chosen).toHaveAttribute("aria-pressed", "true");
+
+        // The advisory is a status too; this one announces the chosen time.
+        const status = page
+          .getByRole("region", { name: copy.region, exact: true })
+          .getByRole("status")
+          .filter({ hasText: copy.status });
         await expect(status).toHaveText(copy.status);
         await expect(status).toHaveAttribute("aria-live", "polite");
         await expect(status).toHaveAttribute("aria-atomic", "true");
-        await expect(field).not.toHaveAttribute("aria-invalid", "true");
       });
 
       test(`Dashboard ${language.locale} fails closed before tenant context`, async ({
@@ -88,7 +123,8 @@ for (const profile of responsiveProfiles) {
         await expect(
           page.getByText(copy.configurationSummary, { exact: true }),
         ).toBeVisible();
-        await expect(page.getByRole("list")).toHaveCount(0);
+        // Navigation lists may render; no protected workspace list may.
+        await expect(page.getByRole("main").getByRole("list")).toHaveCount(0);
       });
     }
   });
@@ -136,9 +172,9 @@ for (const language of locales) {
         )}/${language.locale}`,
       );
 
-      const sidebarControls = page.locator(
-        ".dashboard-sidebar :is(a, button:not(:disabled)):visible",
-      );
+      const sidebarControls = page
+        .getByRole("complementary")
+        .locator(":is(a, button:not(:disabled)):visible");
       const controlCount = await sidebarControls.count();
       expect(controlCount).toBeGreaterThan(0);
 
@@ -147,7 +183,7 @@ for (const language of locales) {
         await reachWithTab(page, control);
 
         const evidence = await control.evaluate((element) => {
-          const sidebar = element.closest(".dashboard-sidebar");
+          const sidebar = element.closest("aside");
           if (!(sidebar instanceof HTMLElement)) return undefined;
 
           const controlStyle = getComputedStyle(element);

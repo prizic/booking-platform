@@ -1,4 +1,6 @@
 import { formatNumber } from "@wlbp/i18n";
+import { Button } from "@wlbp/ui-foundation";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
@@ -11,6 +13,7 @@ import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
 import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
+import { MachineCode, SubText, TextLink } from "../../../_lib/ui/text";
 import { TimeValue } from "../../../_lib/ui/time";
 import { tenantsCopy as c } from "./copy";
 
@@ -52,13 +55,17 @@ export default async function TenantsPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
           atLeast(operator.role, "admin") ? (
-            <Link className="wlbp-button wlbp-button--primary" href={`${path}/new`}>
-              {say(locale, c.register)}
-            </Link>
+            <Button asChild>
+              <Link href={`${path}/new`}>
+                <Plus aria-hidden="true" />
+                {say(locale, c.register)}
+              </Link>
+            </Button>
           ) : null
         }
       />
@@ -116,12 +123,12 @@ export default async function TenantsPage({
               key: row.tenant_id,
               cells: [
                 <>
-                  <Link href={`${path}/${row.tenant_id}`}>
+                  <TextLink href={`${path}/${row.tenant_id}`}>
                     <bdi>{row.name}</bdi>
-                  </Link>
-                  <span className="secondary">
-                    <bdi>{row.brand_keys}</bdi>
-                  </span>
+                  </TextLink>
+                  <SubText>
+                    <MachineCode>{row.brand_keys}</MachineCode>
+                  </SubText>
                 </>,
                 <StatusBadge key="status" locale={locale} status={row.status} />,
                 row.plan_key ? (

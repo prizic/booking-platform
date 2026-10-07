@@ -1,20 +1,25 @@
+import {
+  Alert,
+  AlertDescription,
+  FieldLegend,
+  FieldSet,
+  ReferenceCode,
+  Section,
+} from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { randomUUID } from "node:crypto";
-import {
-  createRolloutAction,
-  setReleaseStatusAction,
-} from "../../../../_lib/actions/releases";
 import { copyFor, reasonCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
 import { pageLocale } from "../../../../_lib/page-locale";
 import { readPages } from "../../../../_lib/read-pages";
 import { releaseCopy } from "../../../../_lib/release-copy";
+import { rolloutRings } from "../../../../_lib/schemas/releases";
 import { PageHeader } from "../../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../../_lib/ui/data-table";
 import { Facts } from "../../../../_lib/ui/facts";
+import { CheckboxGroupFormField } from "../../../../_lib/ui/form-fields";
 import { EmptyState, Unknown, UnavailableState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../../_lib/ui/time";
@@ -22,6 +27,7 @@ import { TimeValue } from "../../../../_lib/ui/time";
 export const dynamic = "force-dynamic";
 
 const c = releaseCopy.releases;
+const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
 type Release = {
   id: string;
@@ -57,6 +63,19 @@ type Release = {
   }[];
 };
 
+function NoteList({ title, notes }: { title: string; notes: readonly string[] }) {
+  return (
+    <div className="grid content-start gap-2">
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+      <ul className="grid list-disc gap-1.5 ps-5 text-sm leading-relaxed">
+        {notes.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default async function ReleasePage({
   params,
 }: {
@@ -72,10 +91,10 @@ export default async function ReleasePage({
   const crumbs = [[say(locale, c.title), `/${locale}/releases`]] as const;
   if (!result.ok)
     return (
-      <>
+      <div className="grid gap-6">
         <PageHeader locale={locale} title={say(locale, c.title)} breadcrumbs={crumbs} />
         <UnavailableState locale={locale} code={result.code} />
-      </>
+      </div>
     );
   const r = result.data as unknown as Release;
   const admin = atLeast(operator.role, "admin");
@@ -88,9 +107,10 @@ export default async function ReleasePage({
   const status = (s: string) => copyFor(statusCopy, s, locale);
 
   return (
-    <>
+    <div className="grid gap-8">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={r.version}
         breadcrumbs={[...crumbs, [r.version]]}
         actions={
@@ -99,49 +119,52 @@ export default async function ReleasePage({
             {admin && r.status === "available" ? (
               <ActionDialog
                 locale={locale}
-                action={createRolloutAction}
+                operation="createRollout"
                 trigger={say(locale, c.createRollout)}
                 triggerVariant="primary"
                 title={say(locale, c.createRolloutTitle)}
                 description={say(locale, c.createRolloutBody)}
                 submit={say(locale, c.createRollout)}
                 successMessage={say(locale, c.rolloutCreated)}
-                reason={{ minLength: 5 }}
-                hidden={{ releaseId: r.id, idempotencyKey: randomUUID() }}
+                hidden={{ releaseId: r.id }}
+                values={{ rings: [], instanceIds: [] }}
               >
-                <fieldset>
-                  <legend>{say(locale, c.rings)}</legend>
-                  {(["canary", "early", "general"] as const).map((ring) => (
-                    <label key={ring} className="checkbox">
-                      <input type="checkbox" name="rings" value={ring} /> {status(ring)}
-                    </label>
-                  ))}
-                </fieldset>
-                <fieldset>
-                  <legend>{say(locale, c.instances)}</legend>
-                  {instances?.ok ? (
-                    instances.data.map((instance) => (
-                      <label key={instance.instance_id} className="checkbox">
-                        <input
-                          type="checkbox"
-                          name="instanceIds"
-                          value={instance.instance_id}
-                        />
-                        <bdi>
-                          {instance.tenant_name} · {instance.instance_id.slice(0, 8)}
-                        </bdi>
-                      </label>
-                    ))
-                  ) : (
+                <CheckboxGroupFormField
+                  name="rings"
+                  idPrefix="rollout-ring"
+                  legend={say(locale, c.rings)}
+                  options={rolloutRings.map((ring) => [ring, status(ring)] as const)}
+                />
+                {instances?.ok ? (
+                  <CheckboxGroupFormField
+                    name="instanceIds"
+                    idPrefix="rollout-instance"
+                    legend={say(locale, c.instances)}
+                    options={instances.data.map(
+                      (instance) =>
+                        [
+                          instance.instance_id,
+                          <>
+                            <bdi>{instance.tenant_name}</bdi>
+                            <ReferenceCode className="text-xs font-medium text-muted-foreground">
+                              {instance.instance_id.slice(0, 8)}
+                            </ReferenceCode>
+                          </>,
+                        ] as const,
+                    )}
+                  />
+                ) : (
+                  <FieldSet className="gap-3">
+                    <FieldLegend>{say(locale, c.instances)}</FieldLegend>
                     <UnavailableState locale={locale} />
-                  )}
-                </fieldset>
+                  </FieldSet>
+                )}
               </ActionDialog>
             ) : null}
             {admin ? (
               <ActionDialog
                 locale={locale}
-                action={setReleaseStatusAction}
+                operation="setReleaseStatus"
                 danger={r.status === "available"}
                 trigger={say(
                   locale,
@@ -159,7 +182,6 @@ export default async function ReleasePage({
                   r.status === "available" ? c.withdraw : c.makeAvailable,
                 )}
                 successMessage={say(locale, c.statusChanged)}
-                reason={{ minLength: 5 }}
                 hidden={{
                   releaseId: r.id,
                   status: r.status === "available" ? "withdrawn" : "available",
@@ -170,18 +192,25 @@ export default async function ReleasePage({
         }
       />
 
-      <section className="section" aria-labelledby="release-facts">
+      <section className="grid gap-4" aria-labelledby="release-facts">
         <h2 id="release-facts" className="sr-only">
           {r.version}
         </h2>
         <Facts
           items={[
             [say(locale, c.channel), status(r.channel)],
-            [say(locale, c.commit), <bdi key="g">{r.git_commit}</bdi>],
+            [
+              say(locale, c.commit),
+              <ReferenceCode key="g" className="break-all">
+                {r.git_commit}
+              </ReferenceCode>,
+            ],
             [say(locale, c.configSchema), String(r.config_schema_version)],
             [
               say(locale, c.contract),
-              `${r.backend_contract_min}–${r.backend_contract_max} (${r.backend_contract_version})`,
+              <bdi key="ct" dir="ltr">
+                {`${r.backend_contract_min}–${r.backend_contract_max} (${r.backend_contract_version})`}
+              </bdi>,
             ],
             [
               say(locale, c.reversible),
@@ -198,7 +227,9 @@ export default async function ReleasePage({
             [
               say(locale, c.migrations),
               r.migration_ids.length ? (
-                <bdi key="m">{r.migration_ids.join(", ")}</bdi>
+                <bdi key="m" dir="ltr" className="break-all">
+                  {r.migration_ids.join(", ")}
+                </bdi>
               ) : (
                 <Unknown key="m" locale={locale} kind="none" />
               ),
@@ -207,45 +238,35 @@ export default async function ReleasePage({
         />
       </section>
 
-      <section className="section" aria-labelledby="prereq-title">
-        <div className="section-header">
-          <h2 id="prereq-title">{say(locale, c.prerequisites)}</h2>
-        </div>
+      <Section id="prereq" title={say(locale, c.prerequisites)}>
         {r.prerequisites.length ? (
-          <ul>
-            {r.prerequisites.map((p) => (
-              <li key={p}>
-                {copyFor(reasonCopy, p, locale)} <bdi className="secondary">{p}</bdi>
-              </li>
-            ))}
-          </ul>
+          <Alert tone="warning">
+            <AlertDescription>
+              <ul className="grid list-disc gap-1 ps-5 text-foreground">
+                {r.prerequisites.map((p) => (
+                  <li key={p}>
+                    {copyFor(reasonCopy, p, locale)}{" "}
+                    <bdi className="text-xs text-muted-foreground">{p}</bdi>
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
         ) : (
-          <p>{say(locale, c.ready)}</p>
+          <Alert tone="positive">
+            <AlertDescription>{say(locale, c.ready)}</AlertDescription>
+          </Alert>
         )}
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="notes-title">
-        <div className="section-header">
-          <h2 id="notes-title">{say(locale, c.notes)}</h2>
+      <Section id="notes" title={say(locale, c.notes)}>
+        <div className="grid gap-6 md:grid-cols-2">
+          <NoteList title={say(locale, c.featureNotes)} notes={r.feature_notes} />
+          <NoteList title={say(locale, c.upgradeNotes)} notes={r.upgrade_notes} />
         </div>
-        <h3>{say(locale, c.featureNotes)}</h3>
-        <ul>
-          {r.feature_notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-        <h3>{say(locale, c.upgradeNotes)}</h3>
-        <ul>
-          {r.upgrade_notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="versions-title">
-        <div className="section-header">
-          <h2 id="versions-title">{say(locale, c.versions)}</h2>
-        </div>
+      <Section id="versions" title={say(locale, c.versions)}>
         {r.versions.length === 0 ? (
           <EmptyState locale={locale} />
         ) : (
@@ -262,12 +283,20 @@ export default async function ReleasePage({
             rows={r.versions.map((v) => ({
               key: v.instance_id,
               cells: [
-                <Link key="t" href={`/${locale}/instances/${v.instance_id}`}>
+                <Link
+                  key="t"
+                  href={`/${locale}/instances/${v.instance_id}`}
+                  className={linkClass}
+                >
                   <bdi>{v.tenant_name}</bdi>
                 </Link>,
-                <bdi key="d">{v.desired_release ?? "—"}</bdi>,
+                v.desired_release ? (
+                  <ReferenceCode key="d">{v.desired_release}</ReferenceCode>
+                ) : (
+                  <bdi key="d">—</bdi>
+                ),
                 v.current_release ? (
-                  <bdi key="c">{v.current_release}</bdi>
+                  <ReferenceCode key="c">{v.current_release}</ReferenceCode>
                 ) : (
                   <Unknown key="c" locale={locale} kind="notReported" />
                 ),
@@ -281,28 +310,38 @@ export default async function ReleasePage({
             }))}
           />
         )}
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="rollouts-title">
-        <div className="section-header">
-          <h2 id="rollouts-title">{say(locale, c.rollouts)}</h2>
-        </div>
+      <Section id="rollouts" title={say(locale, c.rollouts)}>
         {r.rollouts.length === 0 ? (
           <EmptyState locale={locale} />
         ) : (
-          <ul>
-            {r.rollouts.map((o) => (
-              <li key={o.id}>
-                <Link href={`/${locale}/rollouts/${o.id}`}>
-                  {o.target_rings.map(status).join(", ") || "—"}
-                </Link>{" "}
-                <StatusBadge locale={locale} status={o.status} />{" "}
-                <TimeValue locale={locale} value={o.created_at} />
-              </li>
-            ))}
-          </ul>
+          <DataTable
+            id="release-rollouts-table"
+            locale={locale}
+            caption={say(locale, c.rollouts)}
+            columns={[
+              { label: say(locale, releaseCopy.rollouts.rings) },
+              { label: say(locale, releaseCopy.rollouts.status) },
+              { label: say(locale, c.created) },
+            ]}
+            rows={r.rollouts.map((o) => ({
+              key: o.id,
+              cells: [
+                <Link
+                  key="o"
+                  href={`/${locale}/rollouts/${o.id}`}
+                  className={linkClass}
+                >
+                  {o.target_rings.map(status).join(", ") || say(locale, c.instances)}
+                </Link>,
+                <StatusBadge key="s" locale={locale} status={o.status} />,
+                <TimeValue key="t" locale={locale} value={o.created_at} />,
+              ],
+            }))}
+          />
         )}
-      </section>
-    </>
+      </Section>
+    </div>
   );
 }

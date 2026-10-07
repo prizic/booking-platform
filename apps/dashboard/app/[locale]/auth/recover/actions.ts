@@ -1,28 +1,25 @@
 "use server";
-import { isLocale } from "@wlbp/i18n";
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
 import { getDashboardSiteOrigin } from "../../../_lib/site-origin";
-import type { AuthFormState } from "../../../_lib/auth-form";
-export async function recoverPassword(
-  _state: AuthFormState,
-  form: FormData,
-): Promise<AuthFormState> {
-  const locale = form.get("locale");
-  const email = form.get("email");
-  if (
-    !isLocale(locale) ||
-    typeof email !== "string" ||
-    email.length > 254 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email)
-  )
-    return { message: "invalid", field: "email" };
+import { recoverSchema, type RecoverInput } from "../../../_lib/auth-schema";
+
+export async function recoverPassword(input: RecoverInput): Promise<ActionResult> {
+  const parsed = parseActionInput(recoverSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { email, locale } = parsed.data;
   try {
     const client = await createDashboardAuthClient();
     if (
       client === null ||
       (process.env.DASHBOARD_RECOVERY_COOKIE_SECRET?.length ?? 0) < 32
     )
-      return { message: "unavailable" };
+      return actionError("unavailable");
     const callback = new URL("/auth/callback", getDashboardSiteOrigin());
     callback.searchParams.set("locale", locale);
     // Return identical confirmation for every provider account outcome.
@@ -32,5 +29,5 @@ export async function recoverPassword(
   } catch {
     /* Do not disclose whether the account exists. */
   }
-  return { message: "sent", success: true };
+  return actionOk(undefined, "sent");
 }

@@ -11,6 +11,7 @@ import * as c6 from "./health-support-copy";
 import * as c7 from "./admin-copy";
 import * as c8 from "../[locale]/(console)/copy";
 import * as c9 from "../[locale]/(console)/tenants/copy";
+import * as c10 from "./form-messages";
 // Each route task appends its copy module here, e.g.
 // import * as tenants from "../[locale]/(console)/tenants/copy";
 const modules: Record<string, Record<string, unknown>> = {
@@ -25,6 +26,7 @@ const modules: Record<string, Record<string, unknown>> = {
   c7,
   c8,
   c9,
+  c10,
 };
 
 describe("copy parity", () => {

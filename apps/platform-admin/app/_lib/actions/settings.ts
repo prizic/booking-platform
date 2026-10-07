@@ -1,50 +1,54 @@
 "use server";
 
-import { instant, lines, optional, text } from "../form-data";
-import { runOperatorAction, type ActionResult } from "../operator-action";
-
-const providers = new Set(["github", "vercel", "resend", "stripe", "supabase"]);
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+import { runOperatorAction, type OperatorActionResult } from "../operator-action";
+import {
+  dottedKeyPattern,
+  integrationCheckSchema,
+  saveFlagSchema,
+  saveReferencesSchema,
+  type IntegrationCheckInput,
+  type SaveFlagInput,
+  type SaveReferencesInput,
+} from "../schemas/settings";
 
 export async function saveFlagAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const key = text(form, "key").toLowerCase();
+  input: SaveFlagInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(saveFlagSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const flag = parsed.data;
   return (
     await runOperatorAction({
       action: "platform_flag.save",
       fn: "save_platform_flag_v1",
       args: {
-        p_key: key,
-        p_kind: text(form, "kind"),
-        p_enabled: form.get("enabled") === "on",
-        p_message_en: optional(form, "messageEn") ?? null,
-        p_message_ar: optional(form, "messageAr") ?? null,
-        p_starts_at: instant(form, "startsAt") ?? null,
-        p_ends_at: instant(form, "endsAt") ?? null,
-        p_reason: text(form, "reason"),
+        p_key: flag.key,
+        p_kind: flag.kind,
+        p_enabled: flag.enabled,
+        p_message_en: flag.messageEn,
+        p_message_ar: flag.messageAr,
+        p_starts_at: flag.startsAt,
+        p_ends_at: flag.endsAt,
+        p_reason: flag.reason,
       },
       targetKind: "platform_flag",
-      targetId: /^[a-z][a-z0-9_.]{1,60}$/u.test(key) ? key : undefined,
+      targetId: dottedKeyPattern.test(flag.key) ? flag.key : undefined,
     })
   ).result;
 }
 
 export async function saveReferencesAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const provider = text(form, "provider");
-  if (!providers.has(provider)) return { kind: "error", code: "not_found" };
+  input: SaveReferencesInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(saveReferencesSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { provider, references } = parsed.data;
   return (
     await runOperatorAction({
       action: "integration.save_references",
       fn: "save_integration_references_v1",
-      // Names only, upper-cased; the database refuses anything secret-shaped.
-      args: {
-        p_provider: provider,
-        p_secret_references: lines(form, "references").map((r) => r.toUpperCase()),
-      },
+      args: { p_provider: provider, p_secret_references: references },
       targetKind: "integration",
       targetId: provider,
     })
@@ -52,11 +56,11 @@ export async function saveReferencesAction(
 }
 
 export async function requestIntegrationCheckAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const provider = text(form, "provider");
-  if (!providers.has(provider)) return { kind: "error", code: "not_found" };
+  input: IntegrationCheckInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(integrationCheckSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { provider } = parsed.data;
   return (
     await runOperatorAction({
       action: "integration.request_check",

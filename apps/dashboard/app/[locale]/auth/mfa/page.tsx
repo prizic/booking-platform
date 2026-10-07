@@ -1,10 +1,11 @@
 import type { Locale } from "@wlbp/i18n";
-import { BrandShell } from "@wlbp/white-label-ui";
 import { redirect } from "next/navigation";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
 import { normalizeAuthReturnPath } from "../../../_lib/auth-return-path";
 import { authMessage } from "../../../_lib/auth-copy";
-import { dashboardBrand } from "../../../_lib/brand";
+import { AuthFrame, authLinkClass } from "../../../_lib/auth-frame";
+import { pwaMessage } from "../../../_lib/pwa-copy";
+import Link from "next/link";
 import { MfaForm } from "./mfa-form";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -28,26 +29,29 @@ export default async function Page({
     friendlyName: factor.friendly_name || authMessage(locale, "factor"),
   });
   return (
-    <BrandShell
-      className="auth-shell"
-      labelledBy="mfa-title"
-      tokens={dashboardBrand.tokens}
+    <AuthFrame
+      locale={locale}
+      titleId="mfa-title"
+      title={authMessage(locale, "mfaTitle")}
+      intro={authMessage(locale, "mfaIntro")}
+      path="/auth/mfa"
+      footer={
+        <Link href={`/${locale}/install`} className={authLinkClass}>
+          {pwaMessage(locale, "installLink")}
+        </Link>
+      }
     >
-      <div className="access-panel">
-        <h1 id="mfa-title">{authMessage(locale, "mfaTitle")}</h1>
-        <p>{authMessage(locale, "mfaIntro")}</p>
-        <MfaForm
-          locale={locale}
-          returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
-          unavailable={Boolean(error)}
-          factors={factorNames
-            .filter((factor) => factor.status === "verified")
-            .map(named)}
-          unfinished={factorNames
-            .filter((factor) => factor.status === "unverified")
-            .map(named)}
-        />
-      </div>
-    </BrandShell>
+      <MfaForm
+        locale={locale}
+        returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
+        unavailable={Boolean(error)}
+        factors={factorNames
+          .filter((factor) => factor.status === "verified")
+          .map(named)}
+        unfinished={factorNames
+          .filter((factor) => factor.status === "unverified")
+          .map(named)}
+      />
+    </AuthFrame>
   );
 }

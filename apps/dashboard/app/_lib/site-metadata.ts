@@ -3,6 +3,7 @@ import type { Locale } from "@wlbp/i18n";
 import { dashboardBrand } from "./brand";
 import { getDashboardMessage } from "./copy";
 import { instanceLocalePolicy } from "./locale-policy";
+import { pwaAppleTouchIcon } from "./pwa-icons";
 import { getDashboardSiteOrigin } from "./site-origin";
 
 export function getDashboardLocaleMetadata(locale: Locale): Metadata {
@@ -14,8 +15,10 @@ export function getDashboardLocaleMetadata(locale: Locale): Metadata {
     description: getDashboardMessage(locale, "summary"),
     icons: {
       icon: dashboardBrand.assets.favicon,
-      apple: dashboardBrand.assets.icon,
+      // Opaque 180 px icon generated from the brand icon (iOS shows transparent areas as black).
+      apple: pwaAppleTouchIcon,
     },
+    manifest: "/manifest.webmanifest",
     openGraph: {
       images: [new URL(dashboardBrand.assets.socialImage, siteOrigin)],
       siteName: dashboardBrand.name,

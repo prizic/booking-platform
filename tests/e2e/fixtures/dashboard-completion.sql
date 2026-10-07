@@ -218,4 +218,34 @@ select u.instance_id, 'd1010000-0000-0000-0000-000000000007', u.aud, u.role, 'co
 insert into auth.identities(id,provider_id,user_id,identity_data,provider,created_at,updated_at)
 values('d1110000-0000-0000-0000-000000000007','completion-recovery@example.invalid','d1010000-0000-0000-0000-000000000007',jsonb_build_object('sub','d1010000-0000-0000-0000-000000000007','email','completion-recovery@example.invalid'),'email',statement_timestamp(),statement_timestamp());
 
+-- One booking that belongs to seeded Tenant A, so the scoped-authority cases can
+-- prove a completion actor is refused a foreign record on a fresh stack instead
+-- of depending on whichever earlier suite happened to leave one behind. Like the
+-- reports database fixture, the released hold stands in for capacity a real
+-- journey would have claimed before booking.
+insert into app.booking_holds(
+  id,tenant_id,service_id,location_id,publication_id,allocation_kind,starts_at,ends_at,
+  state,expires_at,ttl_seconds,price_minor,tax_rate_bps,currency,session_hash,
+  correlation_id,released_at)
+values ('d9400000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+  'a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',
+  'a7000000-0000-0000-0000-000000000001','appointment',
+  '2026-12-29 16:00:00+00','2026-12-29 17:00:00+00','released','2026-12-29 16:00:00+00',
+  900,18000,0,'USD',repeat('d',64),gen_random_uuid(),statement_timestamp());
+insert into app.bookings(
+  id,tenant_id,public_reference,service_id,location_id,hold_id,publication_id,
+  status,payment_status,notification_status,calendar_status,approval_status,
+  starts_at,ends_at,party_size,duration_minutes,buffer_before_minutes,buffer_after_minutes,
+  price_minor,tax_rate_bps,currency,policy_snapshot,consent_text,consent_version,consented_at,
+  intake_schema_snapshot,service_name,location_name,locale,location_time_zone,
+  customer_time_zone,correlation_id)
+values ('d9500000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+  'FRGNBKNGXB','a7200000-0000-0000-0000-000000000001','a5000000-0000-0000-0000-000000000001',
+  'd9400000-0000-0000-0000-000000000001','a7000000-0000-0000-0000-000000000001',
+  'confirmed','not_required','queued','pending','not_required',
+  '2026-12-29 16:00:00+00','2026-12-29 17:00:00+00',1,60,0,0,18000,0,'USD','{}'::jsonb,
+  'Synthetic terms.','1',statement_timestamp(),'{"fields":[]}'::jsonb,
+  'Synthetic foreign consultation','Synthetic Location A One','en','America/New_York',
+  'America/New_York',gen_random_uuid());
+
 commit;

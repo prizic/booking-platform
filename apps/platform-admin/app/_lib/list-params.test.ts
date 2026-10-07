@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { listHref, parseListParams } from "./list-params";
+import { ALL_FILTER, listHref, parseListParams } from "./list-params";
 
 const spec = {
   sorts: ["name", "-name", "-created"],
@@ -45,6 +45,14 @@ describe("parseListParams", () => {
       tenant: "a0000000-0000-0000-0000-000000000001",
       from: "2026-10-06",
     });
+  });
+  it("reads the select filters' All sentinel as no filter, for every rule", () => {
+    const p = parseListParams(
+      { status: ALL_FILTER, tenant: ALL_FILTER, from: ALL_FILTER, plan: ALL_FILTER },
+      { ...spec, filters: { ...spec.filters, plan: "text" } },
+    );
+    expect(p.filters).toEqual({});
+    expect(listHref("/en/tenants", p)).toBe("/en/tenants");
   });
   it("caps search length and uses the first repeated value", () => {
     expect(parseListParams({ q: ["a".repeat(300), "b"] }, spec).q).toHaveLength(100);

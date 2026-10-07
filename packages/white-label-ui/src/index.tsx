@@ -10,12 +10,42 @@ import {
 export * from "./brand-assets.js";
 export * from "./brand-config.js";
 export * from "./brand-tokens.js";
+export * from "./instance-content.js";
 
 type BrandStyle = CSSProperties & Readonly<Record<`--brand-${string}`, string>>;
 
+const colorVariables = [
+  ["background", "background"],
+  ["surface", "surface"],
+  ["text", "text"],
+  ["muted", "muted"],
+  ["border", "border"],
+  ["primary", "primary"],
+  ["onPrimary", "on-primary"],
+  ["success", "success"],
+  ["onSuccess", "on-success"],
+  ["warning", "warning"],
+  ["onWarning", "on-warning"],
+  ["danger", "danger"],
+  ["onDanger", "on-danger"],
+  ["focus", "focus"],
+] as const;
+
+/** Whether the brand ships a validated dark palette; the theme toggle is hidden otherwise. */
+export function brandSupportsDarkMode(tokens: BrandTokens): boolean {
+  return parseBrandTokens(tokens).colorDark !== undefined;
+}
+
 export function createBrandStyle(tokens: BrandTokens): BrandStyle {
   const validated = parseBrandTokens(tokens);
+  const dark = validated.colorDark;
+  const darkVariables = Object.fromEntries(
+    dark === undefined
+      ? []
+      : colorVariables.map(([key, name]) => [`--brand-dark-color-${name}`, dark[key]]),
+  );
   return {
+    ...darkVariables,
     "--brand-color-background": validated.color.background,
     "--brand-color-surface": validated.color.surface,
     "--brand-color-text": validated.color.text,

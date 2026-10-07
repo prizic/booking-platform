@@ -1,5 +1,5 @@
+import { Alert, AlertDescription, DatePicker, Field, Label } from "@wlbp/ui-foundation";
 import Link from "next/link";
-import { exportAuditAction } from "../../../_lib/actions/audit";
 import { auditCopy as c } from "../../../_lib/admin-copy";
 import {
   auditActionCopy,
@@ -62,18 +62,20 @@ export default async function AuditPage({
     p_offset: list.offset,
   });
   const exportFields = { q: list.q, ...list.filters };
+  const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
           atLeast(operator.role, "admin") ? (
             <ActionDialog
               locale={locale}
-              action={exportAuditAction}
+              operation="exportAudit"
               trigger={say(locale, c.export)}
               title={say(locale, c.exportTitle)}
               description={say(locale, c.exportBody)}
@@ -87,12 +89,17 @@ export default async function AuditPage({
         }
       />
       {list.filters.tenant ? (
-        <p className="notice">
-          {say(locale, c.filteredTenant)}{" "}
-          <Link href={listHref(path, list, { filters: { tenant: "" } })}>
-            {say(locale, formCopy.clear)}
-          </Link>
-        </p>
+        <Alert>
+          <AlertDescription>
+            {say(locale, c.filteredTenant)}{" "}
+            <Link
+              href={listHref(path, list, { filters: { tenant: "" } })}
+              className={linkClass}
+            >
+              {say(locale, formCopy.clear)}
+            </Link>
+          </AlertDescription>
+        </Alert>
       ) : null}
       <FilterBar
         locale={locale}
@@ -113,14 +120,26 @@ export default async function AuditPage({
           allLabel={say(locale, formCopy.all)}
           options={outcomes.map((o) => [o, say(locale, outcomeCopy[o])] as const)}
         />
-        <label>
-          {say(locale, c.from)}
-          <input type="date" name="from" defaultValue={list.filters.from} />
-        </label>
-        <label>
-          {say(locale, c.to)}
-          <input type="date" name="to" defaultValue={list.filters.to} />
-        </label>
+        <Field className="md:w-60">
+          <Label htmlFor="audit-from">{say(locale, c.from)}</Label>
+          <DatePicker
+            id="audit-from"
+            name="from"
+            locale={locale}
+            placeholder={say(locale, formCopy.pickDate)}
+            {...(list.filters.from ? { defaultValue: list.filters.from } : {})}
+          />
+        </Field>
+        <Field className="md:w-60">
+          <Label htmlFor="audit-to">{say(locale, c.to)}</Label>
+          <DatePicker
+            id="audit-to"
+            name="to"
+            locale={locale}
+            placeholder={say(locale, formCopy.pickDate)}
+            {...(list.filters.to ? { defaultValue: list.filters.to } : {})}
+          />
+        </Field>
         {list.filters.tenant ? (
           <input type="hidden" name="tenant" value={list.filters.tenant} />
         ) : null}
@@ -153,12 +172,12 @@ export default async function AuditPage({
               cells: [
                 <TimeValue key="t" locale={locale} value={row.created_at} />,
                 <bdi key="a">{row.operator_email ?? row.operator_id}</bdi>,
-                <>
-                  {copyFor(auditActionCopy, row.action, locale)}
-                  <span className="secondary">
-                    <bdi>{row.action}</bdi>
+                <div key="c" className="grid gap-0.5">
+                  <span className="font-medium text-foreground">
+                    {copyFor(auditActionCopy, row.action, locale)}
                   </span>
-                </>,
+                  <bdi className="text-xs text-muted-foreground">{row.action}</bdi>
+                </div>,
                 <StatusBadge key="o" locale={locale} status={row.outcome} />,
                 row.target_kind ? (
                   <bdi key="g">
@@ -169,7 +188,11 @@ export default async function AuditPage({
                   <Unknown key="g" locale={locale} kind="none" />
                 ),
                 row.tenant_id ? (
-                  <Link key="n" href={`/${locale}/tenants/${row.tenant_id}`}>
+                  <Link
+                    key="n"
+                    href={`/${locale}/tenants/${row.tenant_id}`}
+                    className={linkClass}
+                  >
                     <bdi>{row.tenant_name ?? row.tenant_id}</bdi>
                   </Link>
                 ) : (
@@ -189,6 +212,6 @@ export default async function AuditPage({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

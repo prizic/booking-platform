@@ -69,6 +69,33 @@ function validateBackendContract(value, label) {
   }
 }
 
+const darkColorVariables = [
+  ["background", "background"],
+  ["surface", "surface"],
+  ["text", "text"],
+  ["muted", "muted"],
+  ["border", "border"],
+  ["primary", "primary"],
+  ["onPrimary", "on-primary"],
+  ["success", "success"],
+  ["onSuccess", "on-success"],
+  ["warning", "warning"],
+  ["onWarning", "on-warning"],
+  ["danger", "danger"],
+  ["onDanger", "on-danger"],
+  ["focus", "focus"],
+];
+
+function expectedDarkDeclarations(colorDark) {
+  if (colorDark === undefined) return {};
+  return Object.fromEntries(
+    darkColorVariables.map(([key, name]) => [
+      `--brand-dark-color-${name}`,
+      colorDark[key],
+    ]),
+  );
+}
+
 function expectedThemeDeclarations(tokens) {
   return {
     root: {
@@ -125,6 +152,7 @@ function expectedThemeDeclarations(tokens) {
       "--brand-motion-reduced-slow": tokens.motion.reducedSlow,
       "--brand-motion-easing-standard": tokens.motion.easingStandard,
       "--brand-motion-easing-exit": tokens.motion.easingExit,
+      ...expectedDarkDeclarations(tokens.colorDark),
     },
     rtl: {
       "--brand-font-body": tokens.typography.arabicBodyFamily,
@@ -405,7 +433,19 @@ if (instancePath !== undefined) {
     }
 
     const brand = await readJson(path.join(instancePath, "brand.json"));
-    requireExactKeys(brand, ["name", "assets", "tokens"], "brand.json");
+    requireExactKeys(
+      brand,
+      Object.hasOwn(brand, "appearance")
+        ? ["name", "assets", "tokens", "appearance"]
+        : ["name", "assets", "tokens"],
+      "brand.json",
+    );
+    if (
+      Object.hasOwn(brand, "appearance") &&
+      !["light", "dark"].includes(brand.appearance?.defaultTheme)
+    ) {
+      errors.push('brand.json appearance.defaultTheme must be "light" or "dark"');
+    }
     if (
       !isPlainObject(brand) ||
       typeof brand.name !== "string" ||

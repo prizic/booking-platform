@@ -90,6 +90,11 @@ inspector_port = 8083
 [functions.resend-webhook]
 verify_jwt = false
 
+# Meta cannot present a Supabase JWT either. The function verifies
+# X-Hub-Signature-256 over the raw body with the platform app secret (ADR-0018).
+[functions.whatsapp-webhook]
+verify_jwt = false
+
 [auth.mfa.totp]
 enroll_enabled = true
 verify_enabled = true

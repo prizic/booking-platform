@@ -1,0 +1,150 @@
+/**
+ * WhatsApp notification channel (ADR-0018). Sending one approved template.
+ *
+ * The bearer token is passed in by the caller. Nothing here reads the
+ * environment: the Edge Function resolves the token from the tenant's secret
+ * reference (see `resolveWhatsAppAccessToken`) and hands it over for exactly
+ * one request.
+ */
+import {
+  classifyWhatsAppResponse,
+  whatsAppNetworkFailure,
+  type WhatsAppDeliveryReport,
+} from "./classify.js";
+import {
+  buildWhatsAppTemplateMessage,
+  whatsAppMessagesUrl,
+  WhatsAppPayloadError,
+  type BuildTemplateMessageInput,
+} from "./payload.js";
+
+export interface WhatsAppTransport {
+  (
+    url: string,
+    init: {
+      readonly body: string;
+      readonly headers: Readonly<Record<string, string>>;
+      readonly method: "POST";
+    },
+  ): Promise<{ readonly status: number; readonly text: () => Promise<string> }>;
+}
+
+export interface SendWhatsAppTemplateCommand extends BuildTemplateMessageInput {
+  readonly phoneNumberId: string;
+}
+
+export async function sendWhatsAppTemplate(
+  command: SendWhatsAppTemplateCommand,
+  accessToken: string,
+  transport: WhatsAppTransport,
+): Promise<WhatsAppDeliveryReport> {
+  let url: string;
+  let body: string;
+  try {
+    url = whatsAppMessagesUrl(command.phoneNumberId);
+    body = JSON.stringify(buildWhatsAppTemplateMessage(command));
+  } catch (error) {
+    // A message that cannot be built will never be built.
+    return {
+      category: "request",
+      errorCode: error instanceof WhatsAppPayloadError ? error.code : "build_failed",
+      outcome: "permanent_error",
+    };
+  }
+  if (accessToken === "") {
+    return {
+      category: "configuration",
+      errorCode: "token_unresolved",
+      outcome: "retryable_error",
+    };
+  }
+
+  let response: Awaited<ReturnType<WhatsAppTransport>>;
+  try {
+    response = await transport(url, {
+      body,
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json",
+      },
+      method: "POST",
+    });
+  } catch {
+    return whatsAppNetworkFailure;
+  }
+
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(await response.text()) as unknown;
+  } catch {
+    parsed = null;
+  }
+  return classifyWhatsAppResponse(response.status, parsed);
+}
+
+/**
+ * A token reference, as stored in `app.whatsapp_configs.access_token_secret_ref`,
+ * is `env:<NAME>`: the *name* of a platform Edge Function secret, never the
+ * token itself. `NAME` must be this tenant's own:
+ * `WHATSAPP_TOKEN_<tenant id as 32 upper-case hex digits>[_<SUFFIX>]`.
+ */
+export const whatsAppTokenReferencePrefix = "WHATSAPP_TOKEN_";
+
+/** The secret name a tenant's token must live under, without the `env:` scheme. */
+export function expectedWhatsAppTokenReference(tenantId: string): string | null {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(tenantId)
+  ) {
+    return null;
+  }
+  return `${whatsAppTokenReferencePrefix}${tenantId.replaceAll("-", "").toUpperCase()}`;
+}
+
+export type WhatsAppTokenResolution =
+  | { readonly ok: true; readonly token: string }
+  | {
+      readonly ok: false;
+      /**
+       * `reference_invalid` is permanent: the stored reference is missing or
+       * names a secret that does not belong to this tenant.
+       * `reference_unsupported` is permanent: a `vault:` reference, which this
+       * worker deliberately does not resolve (ADR-0018).
+       * `token_unresolved` is retryable: the reference is well-formed but the
+       * operator has not set the secret yet.
+       */
+      readonly reason:
+        "reference_invalid" | "reference_unsupported" | "token_unresolved";
+    };
+
+/**
+ * Resolves a tenant's access token from its secret reference.
+ *
+ * The reference is tenant-editable configuration, so it is not trusted to name
+ * any secret it likes. Binding the name to the tenant id stops one tenant
+ * pointing its configuration at another tenant's token, or at
+ * `SUPABASE_SERVICE_ROLE_KEY`. `readSecret` is injected so this is tested
+ * without an environment.
+ */
+export function resolveWhatsAppAccessToken(
+  tenantId: string,
+  reference: string | null | undefined,
+  readSecret: (name: string) => string | undefined,
+): WhatsAppTokenResolution {
+  const expected = expectedWhatsAppTokenReference(tenantId);
+  if (expected === null || typeof reference !== "string") {
+    return { ok: false, reason: "reference_invalid" };
+  }
+  if (reference.startsWith("vault:")) {
+    return { ok: false, reason: "reference_unsupported" };
+  }
+  if (!reference.startsWith("env:")) return { ok: false, reason: "reference_invalid" };
+  const name = reference.slice("env:".length);
+  const ownName =
+    name === expected ||
+    (name.startsWith(`${expected}_`) &&
+      /^[A-Z0-9]{1,16}$/u.test(name.slice(expected.length + 1)));
+  if (!ownName) return { ok: false, reason: "reference_invalid" };
+  const token = readSecret(name) ?? "";
+  if (token.trim() === "") return { ok: false, reason: "token_unresolved" };
+  return { ok: true, token: token.trim() };
+}

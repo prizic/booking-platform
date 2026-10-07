@@ -546,3 +546,128 @@ describe("Dashboard Supabase adapter", () => {
     ]);
   });
 });
+
+describe("Dashboard notification adapter", () => {
+  const tenantId = "0a3f2b64-0000-4000-8000-000000000001";
+  const requestId = "0a3f2b64-0000-4000-8000-0000000000aa";
+  function recording(responses: Record<string, unknown>) {
+    const calls: Array<{ name: string; args: unknown }> = [];
+    const client = {
+      auth: { getClaims: async () => ({ data: null, error: null }) },
+      schema: () => ({
+        rpc: async (name: string, args?: unknown) => {
+          calls.push({ name, args });
+          const data = responses[name];
+          return data instanceof Error
+            ? { data: null, error: { code: "40001", message: data.message } }
+            : { data, error: null };
+        },
+      }),
+    } as unknown as RequestScopedSupabaseClient;
+    return { calls, source: createDashboardDataSource(client) };
+  }
+
+  it("reads settings and saves only the shapes the RPC accepts", async () => {
+    const { calls, source } = recording({
+      get_notification_settings_v1: {
+        version: 1,
+        tenant_id: tenantId,
+        revision: 0,
+        reminder_offsets_minutes: [1440, 120],
+        whatsapp_entitled: false,
+        whatsapp_configured: false,
+        whatsapp_enabled: false,
+        whatsapp_available: false,
+        items: [
+          {
+            template_key: "booking.reminder",
+            audience: "customer",
+            email_enabled: true,
+            whatsapp_enabled: false,
+            whatsapp_capable: true,
+            editable: true,
+          },
+        ],
+      },
+      save_notification_settings_v1: { version: 1, revision: 1, replayed: false },
+    });
+    const settings = await source.getNotificationSettings!(tenantId);
+    expect(settings.reminderOffsetsMinutes).toEqual([1440, 120]);
+    expect(settings.items[0]).toMatchObject({ templateKey: "booking.reminder" });
+    await expect(
+      source.saveNotificationSettings!({
+        tenantId,
+        settings: [{ templateKey: "booking.reminder", emailEnabled: false }],
+        reminderOffsetsMinutes: [120],
+        expectedRevision: 0,
+        requestId,
+      }),
+    ).resolves.toEqual({ revision: 1, replayed: false });
+    expect(calls[1]).toEqual({
+      name: "save_notification_settings_v1",
+      args: {
+        p_tenant_id: tenantId,
+        p_settings: [{ template_key: "booking.reminder", email_enabled: false }],
+        p_reminder_offsets: [120],
+        p_expected_revision: 0,
+        p_request_id: requestId,
+      },
+    });
+  });
+
+  it("surfaces the stable error so actions can explain a conflict", async () => {
+    const { source } = recording({
+      save_my_notification_preferences_v1: new Error("revision_conflict"),
+    });
+    await expect(
+      source.saveMyNotificationPreferences!({
+        tenantId,
+        preferences: { "staff.daily_digest": true },
+        digestLocalTime: "08:15",
+        requestId,
+      }),
+    ).rejects.toMatchObject({ stableMessage: "revision_conflict" });
+  });
+
+  it("never sends a token reference the form left empty", async () => {
+    const { calls, source } = recording({
+      save_whatsapp_config_v1: { version: 1, revision: 2, replayed: false },
+    });
+    await source.saveWhatsAppConfig!({
+      tenantId,
+      enabled: false,
+      phoneNumberId: null,
+      businessAccountId: "102290129340398",
+      templateMap: {
+        "booking.confirmed": { name: "booking_confirmed_v1", language: "ar" },
+      },
+      expectedRevision: 1,
+      requestId,
+    });
+    const args = calls[0]?.args as { p_config: Record<string, unknown> };
+    expect("access_token_secret_ref" in args.p_config).toBe(false);
+    expect(args.p_config.template_map).toEqual({
+      "booking.confirmed": { name: "booking_confirmed_v1", language: "ar" },
+    });
+  });
+
+  it("refuses a WhatsApp read that ever carries the secret reference", async () => {
+    const { source } = recording({
+      get_whatsapp_config_v1: {
+        version: 1,
+        tenant_id: tenantId,
+        revision: 1,
+        entitled: true,
+        configured: true,
+        enabled: true,
+        available: true,
+        phone_number_id: "106540352242922",
+        business_account_id: "102290129340398",
+        access_token_configured: true,
+        access_token_secret_ref: "env:WHATSAPP_TOKEN_X",
+        template_map: {},
+      },
+    });
+    await expect(source.getWhatsAppConfig!(tenantId)).rejects.toThrow();
+  });
+});

@@ -1,5 +1,8 @@
 {
-  "name": "Example Booking",
+  "name": "Your Business",
+  "appearance": {
+    "defaultTheme": "light"
+  },
   "assets": {
     "logoLight": "/assets/logo-light.png",
     "logoDark": "/assets/logo-dark.png",
@@ -9,20 +12,36 @@
   },
   "tokens": {
     "color": {
-      "background": "#f3efe5",
-      "surface": "#fffdf8",
-      "text": "#17332e",
-      "muted": "#50645f",
-      "border": "#747d78",
-      "primary": "#106b5a",
+      "background": "#fafaf9",
+      "surface": "#ffffff",
+      "text": "#1c1917",
+      "muted": "#57534e",
+      "border": "#78716c",
+      "primary": "#8f1d22",
       "onPrimary": "#ffffff",
-      "success": "#137333",
+      "success": "#15803d",
       "onSuccess": "#ffffff",
-      "warning": "#7a4300",
+      "warning": "#a16207",
       "onWarning": "#ffffff",
-      "danger": "#9f251d",
+      "danger": "#b91c1c",
       "onDanger": "#ffffff",
-      "focus": "#9b3d0c"
+      "focus": "#c2410c"
+    },
+    "colorDark": {
+      "background": "#0c0a09",
+      "surface": "#1c1917",
+      "text": "#f5f5f4",
+      "muted": "#a8a29e",
+      "border": "#78716c",
+      "primary": "#f26b6b",
+      "onPrimary": "#1c0a0a",
+      "success": "#4ade80",
+      "onSuccess": "#052e16",
+      "warning": "#facc15",
+      "onWarning": "#1c1917",
+      "danger": "#f87171",
+      "onDanger": "#1c0a0a",
+      "focus": "#fb923c"
     },
     "typography": {
       "bodyFamily": "Inter, \"Noto Sans Arabic\", sans-serif",
@@ -42,10 +61,21 @@
         "semibold": "600",
         "bold": "700"
       },
-      "lineHeight": { "compact": "1.2", "body": "1.55", "relaxed": "1.7" }
+      "lineHeight": {
+        "compact": "1.2",
+        "body": "1.55",
+        "relaxed": "1.7"
+      }
     },
-    "radius": { "control": "1.5rem", "surface": "1.75rem", "pill": "999rem" },
-    "borderWidth": { "default": "0.0625rem", "strong": "0.125rem" },
+    "radius": {
+      "control": "1.5rem",
+      "surface": "1.75rem",
+      "pill": "999rem"
+    },
+    "borderWidth": {
+      "default": "0.0625rem",
+      "strong": "0.125rem"
+    },
     "spacing": {
       "xxs": "0.25rem",
       "xs": "0.5rem",
@@ -55,7 +85,11 @@
       "xl": "2rem",
       "xxl": "3rem"
     },
-    "contentWidth": { "form": "40rem", "reading": "70ch", "wide": "78rem" },
+    "contentWidth": {
+      "form": "40rem",
+      "reading": "70ch",
+      "wide": "78rem"
+    },
     "motion": {
       "fast": "120ms",
       "standard": "180ms",

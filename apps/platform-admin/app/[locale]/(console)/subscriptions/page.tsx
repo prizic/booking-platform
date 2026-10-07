@@ -1,9 +1,6 @@
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { actionCopy as a } from "../../../_lib/action-copy";
-import {
-  assignSubscriptionAction,
-  updateSubscriptionAction,
-} from "../../../_lib/actions/subscriptions";
 import { commercialCopy } from "../../../_lib/commercial-copy";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
@@ -14,8 +11,8 @@ import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import { DateTimeFormField, SelectFormField } from "../../../_lib/ui/form-fields";
 import { Pagination } from "../../../_lib/ui/pagination";
-import { SelectField } from "../../../_lib/ui/select-field";
 import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -57,13 +54,16 @@ export default async function SubscriptionsPage({
     : [];
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
-      <p className="notice">{say(locale, c.billingNote)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.billingNote)}</AlertDescription>
+      </Alert>
       <FilterBar
         locale={locale}
         path={path}
@@ -110,11 +110,17 @@ export default async function SubscriptionsPage({
             rows={result.data.map((row) => ({
               key: row.tenant_id,
               cells: [
-                <Link key="t" href={`/${locale}/tenants/${row.tenant_id}#subscription`}>
+                <Link
+                  key="t"
+                  href={`/${locale}/tenants/${row.tenant_id}#subscription`}
+                  className="font-semibold text-primary underline-offset-4 hover:underline"
+                >
                   <bdi>{row.tenant_name}</bdi>
                 </Link>,
                 row.plan_key ? (
-                  <bdi key="p">{row.plan_name ?? row.plan_key}</bdi>
+                  <bdi key="p" className="font-medium">
+                    {row.plan_name ?? row.plan_key}
+                  </bdi>
                 ) : (
                   <Unknown key="p" locale={locale} kind="none" />
                 ),
@@ -138,68 +144,69 @@ export default async function SubscriptionsPage({
                   empty="none"
                 />,
                 admin ? (
-                  <div key="a" className="page-actions">
+                  <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
-                      action={assignSubscriptionAction}
+                      operation="assignSubscription"
                       trigger={say(locale, a.assignPlan.trigger)}
                       triggerVariant="quiet"
                       title={say(locale, a.assignPlan.title)}
                       description={say(locale, a.assignPlan.body)}
                       submit={say(locale, a.assignPlan.submit)}
                       successMessage={say(locale, a.assignPlan.done)}
-                      reason={{ minLength: 5 }}
                       hidden={{ tenantId: row.tenant_id }}
+                      values={{
+                        planKey: row.plan_key ?? undefined,
+                        ring: row.rollout_ring ?? "general",
+                      }}
                     >
-                      <SelectField
+                      <SelectFormField
                         name="planKey"
                         label={say(locale, a.fields.plan)}
-                        value={row.plan_key ?? undefined}
                         options={planOptions}
                       />
-                      <SelectField
+                      <SelectFormField
                         name="ring"
                         label={say(locale, a.fields.ring)}
-                        value={row.rollout_ring ?? "general"}
                         options={ringOptions}
                       />
                     </ActionDialog>
                     {row.updated_at ? (
                       <ActionDialog
                         locale={locale}
-                        action={updateSubscriptionAction}
+                        operation="updateSubscription"
                         trigger={say(locale, a.updateSubscription.trigger)}
                         triggerVariant="quiet"
                         title={say(locale, a.updateSubscription.title)}
                         description={say(locale, a.updateSubscription.body)}
                         submit={say(locale, a.updateSubscription.submit)}
                         successMessage={say(locale, a.updateSubscription.done)}
-                        reason={{ minLength: 5 }}
                         hidden={{
                           tenantId: row.tenant_id,
                           expectedUpdatedAt: row.updated_at,
                         }}
+                        values={{
+                          state: row.state,
+                          endsAt: row.ends_at?.slice(0, 16) ?? "",
+                          ring: row.rollout_ring ?? "general",
+                        }}
                       >
-                        <SelectField
+                        <SelectFormField
                           name="state"
                           label={say(locale, a.fields.state)}
-                          value={row.state}
                           options={states
                             .filter((s) => s !== "none")
                             .map((s) => [s, status(s)] as const)}
                         />
-                        <label className="field">
-                          <span>{say(locale, a.fields.endsAt)}</span>
-                          <input
-                            type="datetime-local"
-                            name="endsAt"
-                            defaultValue={row.ends_at?.slice(0, 16)}
-                          />
-                        </label>
-                        <SelectField
+                        <DateTimeFormField
+                          id={`subscription-ends-${row.tenant_id}`}
+                          name="endsAt"
+                          locale={locale}
+                          label={say(locale, a.fields.endsAt)}
+                        />
+                        <SelectFormField
                           name="ring"
                           label={say(locale, a.fields.ring)}
-                          value={row.rollout_ring ?? "general"}
                           options={ringOptions}
                         />
                       </ActionDialog>
@@ -218,6 +225,6 @@ export default async function SubscriptionsPage({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

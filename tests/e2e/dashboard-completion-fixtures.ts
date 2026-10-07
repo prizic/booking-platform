@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHmac } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 import { readLocalSupabaseEnvironment } from "../../scripts/live-booking-e2e.mjs";
 export const completionOrigin = "http://localhost:41731";
 export const completionTenant = "d0000000-0000-0000-0000-000000000001";
@@ -159,6 +159,8 @@ export async function enrollCompletionMfa(page: Page) {
     secret = (
       await section.locator('p[dir="ltr"]').textContent({ timeout: 60_000 })
     )?.trim();
+    // The new factor must become the selected one before it can be verified.
+    await expect(verified).not.toHaveValue("", { timeout: 15_000 });
     const factorId = await verified.inputValue();
     writeFileSync(
       credentialFile,

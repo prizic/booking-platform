@@ -1,9 +1,19 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { Button, TextField } from "@wlbp/ui-foundation";
-import { useEffect, useId, useRef, useState } from "react";
-import { formCopy, say, type Copy } from "../copy";
+import {
+  Button,
+  Form,
+  FormRootError,
+  useActionMutation,
+  useZodForm,
+} from "@wlbp/ui-foundation";
+import { ShieldAlert } from "lucide-react";
+import { useEffect, useId, useMemo, useRef } from "react";
+import { formCopy, say } from "../copy";
+import { authFormMessages } from "../form-messages";
+import { totpCodeSchema, type TotpCodeInput } from "../schemas/auth";
+import { TextFormField } from "./form-fields";
 import { verifyStepUp } from "./step-up";
 
 export function StepUpPrompt({
@@ -15,52 +25,85 @@ export function StepUpPrompt({
 }) {
   const id = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  const [error, setError] = useState<Copy | null>(null);
-  const [pending, setPending] = useState(false);
+  const form = useZodForm(totpCodeSchema, { defaultValues: { code: "" } });
+  const messages = useMemo(
+    () => ({
+      ...authFormMessages(locale),
+      invalid_code: say(locale, formCopy.stepUpInvalid),
+      no_factor: say(locale, formCopy.stepUpNoFactor),
+    }),
+    [locale],
+  );
+  // The fresh TOTP verification refreshes the session cookie; the caller then
+  // re-sends its own action, so nothing here needs a page refresh.
+  const mutation = useActionMutation(verifyStepUp, {
+    refresh: false,
+    onSuccess: () => onVerified(),
+  });
 
   useEffect(() => heading.current?.focus(), []);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    const outcome = await verifyStepUp(
-      String(new FormData(event.currentTarget).get("code") ?? ""),
-    );
-    setPending(false);
-    if (outcome === "ok") onVerified();
-    else
-      setError(
-        outcome === "no-factor" ? formCopy.stepUpNoFactor : formCopy.stepUpInvalid,
-      );
-  }
+  const failed =
+    mutation.data && !mutation.data.ok ? mutation.data.formError : undefined;
 
   return (
-    <section className="notice notice--warning" aria-labelledby={id}>
-      <h3 id={id} ref={heading} tabIndex={-1}>
-        {say(locale, formCopy.stepUpTitle)}
-      </h3>
-      <p>{say(locale, formCopy.stepUpBody)}</p>
-      {error ? <p role="alert">{say(locale, error)}</p> : null}
-      <form onSubmit={submit}>
-        <TextField
-          id={`${id}-code`}
-          name="code"
-          label={say(locale, formCopy.stepUpCode)}
-          autoComplete="one-time-code"
-          inputMode="numeric"
-          minLength={6}
-          maxLength={6}
-          required
+    <section
+      aria-labelledby={id}
+      className="grid gap-4 rounded-lg border border-warning/35 bg-warning-soft p-4"
+    >
+      <div className="flex items-start gap-3">
+        <ShieldAlert
+          aria-hidden="true"
+          className="mt-0.5 size-5 shrink-0 text-warning"
         />
-        <Button
-          type="submit"
-          loading={pending}
-          loadingLabel={say(locale, formCopy.working)}
+        <div className="grid gap-1">
+          <h3
+            id={id}
+            ref={heading}
+            tabIndex={-1}
+            className="rounded-sm text-base font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            {say(locale, formCopy.stepUpTitle)}
+          </h3>
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {say(locale, formCopy.stepUpBody)}
+          </p>
+        </div>
+      </div>
+      <Form form={form} locale={locale} messages={messages}>
+        <FormRootError code={failed} />
+        {mutation.isError ? <FormRootError code="network" /> : null}
+        <form
+          noValidate
+          onSubmit={(event) =>
+            void form.handleSubmit(() =>
+              mutation.mutate(form.getValues() as TotpCodeInput),
+            )(event)
+          }
+          className="flex flex-wrap items-start gap-3"
         >
-          {say(locale, formCopy.stepUpSubmit)}
-        </Button>
-      </form>
+          <TextFormField
+            id={`${id}-code`}
+            name="code"
+            label={say(locale, formCopy.stepUpCode)}
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            dir="ltr"
+            minLength={6}
+            maxLength={6}
+            required
+            className="w-48"
+          />
+          <Button
+            type="submit"
+            className="mt-7"
+            loading={mutation.isPending}
+            loadingLabel={say(locale, formCopy.working)}
+          >
+            {say(locale, formCopy.stepUpSubmit)}
+          </Button>
+        </form>
+      </Form>
     </section>
   );
 }

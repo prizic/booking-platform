@@ -1,17 +1,41 @@
 "use client";
 
-import type { Locale } from "@wlbp/i18n";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  type ButtonVariant,
+} from "@wlbp/ui-foundation";
+import { useCallback, useId, useState, type ReactNode } from "react";
 import { fill, formCopy, say } from "../copy";
-import { OperatorForm, type FormAction } from "./operator-form";
+import { operations, type OperationKey, type OperationSpec } from "../schemas";
+import { TextFormField, TextareaFormField } from "./form-fields";
+import { OperatorForm, type OperatorFormProps } from "./operator-form";
+
+function triggerStyle(
+  variant: "primary" | "secondary" | "quiet",
+  danger: boolean,
+): ButtonVariant {
+  if (variant === "primary") return danger ? "destructive" : "default";
+  if (danger) return "destructive-outline";
+  return variant === "quiet" ? "ghost" : "outline";
+}
 
 /**
- * A native modal <dialog>: focus moves in, Escape closes, focus returns to the
- * trigger. Destructive and high-impact actions always go through one.
+ * A modal dialog: focus moves to the first field, Escape closes, focus returns
+ * to the trigger. Destructive and high-impact actions always go through one.
+ * The form mounts fresh on every open, so an earlier error, step-up or
+ * idempotency key never lingers. The operation decides whether an audit
+ * reason is required and its minimum length.
  */
-export function ActionDialog({
+export function ActionDialog<K extends OperationKey>({
   locale,
-  action,
+  operation,
   trigger,
   title,
   description,
@@ -20,111 +44,87 @@ export function ActionDialog({
   danger,
   triggerVariant = "secondary",
   hidden,
-  reason,
+  values,
   confirmText,
   children,
-}: {
-  locale: Locale;
-  action: FormAction;
+}: Pick<
+  OperatorFormProps<K>,
+  "locale" | "operation" | "submit" | "successMessage" | "hidden" | "values"
+> & {
   trigger: string;
   title: string;
   description?: string | undefined;
-  submit: string;
-  successMessage: string;
   danger?: boolean;
   triggerVariant?: "primary" | "secondary" | "quiet";
-  hidden?: Record<string, string>;
-  reason?: { minLength: number };
+  /** The operator must type this exact text before submitting. */
   confirmText?: string;
   children?: ReactNode;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
   const fieldId = useId();
-  const [typed, setTyped] = useState("");
-  // A fresh form on every open, so a previous error or step-up does not linger.
-  const [generation, setGeneration] = useState(0);
-  useEffect(() => {
-    // Open after the fresh keyed form commits, so initial focus is not removed.
-    if (generation > 0) dialog.current?.showModal();
-  }, [generation]);
-
-  const close = useCallback(() => dialog.current?.close(), []);
-  const onSuccess = useCallback(() => {
-    dialog.current?.close();
-  }, []);
+  const [open, setOpen] = useState(false);
+  const onSuccess = useCallback(() => setOpen(false), []);
+  const spec: OperationSpec = operations[operation];
+  const reasonMin = spec.reason;
+  const startingValues = {
+    ...(reasonMin !== undefined ? { reason: "" } : {}),
+    ...(confirmText !== undefined ? { confirmation: "" } : {}),
+    ...values,
+  } as OperatorFormProps<K>["values"];
 
   return (
-    <>
-      <button
-        type="button"
-        className={`wlbp-button wlbp-button--${danger && triggerVariant === "primary" ? "primary wlbp-button--danger" : triggerVariant}`}
-        onClick={() => {
-          setTyped("");
-          setGeneration((value) => value + 1);
-        }}
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant={triggerStyle(triggerVariant, danger ?? false)}>
+          {trigger}
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        closeLabel={say(locale, formCopy.close)}
+        {...(description ? {} : { "aria-describedby": undefined })}
       >
-        {trigger}
-      </button>
-      <dialog ref={dialog} className="dialog" aria-labelledby={titleId}>
-        <h2 id={titleId}>{title}</h2>
-        {description ? <p>{description}</p> : null}
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? <DialogDescription>{description}</DialogDescription> : null}
+        </DialogHeader>
         <OperatorForm
-          key={generation}
           locale={locale}
-          action={action}
+          operation={operation}
           submit={submit}
           successMessage={successMessage}
           danger={danger ?? false}
           onSuccess={onSuccess}
-          submitDisabled={confirmText !== undefined && typed !== confirmText}
+          {...(hidden ? { hidden } : {})}
+          {...(startingValues ? { values: startingValues } : {})}
+          {...(confirmText !== undefined ? { confirmText } : {})}
+          secondaryAction={
+            <DialogClose asChild>
+              <Button variant="ghost">{say(locale, formCopy.cancel)}</Button>
+            </DialogClose>
+          }
         >
-          {Object.entries(hidden ?? {}).map(([name, value]) => (
-            <input key={name} type="hidden" name={name} value={value} />
-          ))}
           {children}
-          {reason ? (
-            <label className="field" htmlFor={`${fieldId}-reason`}>
-              <span>{say(locale, formCopy.reason)}</span>
-              <textarea
-                id={`${fieldId}-reason`}
-                name="reason"
-                required
-                minLength={reason.minLength}
-                maxLength={500}
-                aria-describedby={`${fieldId}-reason-hint`}
-              />
-              <small id={`${fieldId}-reason-hint`}>
-                {fill(locale, formCopy.reasonHint, { n: String(reason.minLength) })}
-              </small>
-            </label>
+          {reasonMin !== undefined ? (
+            <TextareaFormField
+              id={`${fieldId}-reason`}
+              name="reason"
+              label={say(locale, formCopy.reason)}
+              description={fill(locale, formCopy.reasonHint, { n: String(reasonMin) })}
+              required
+              minLength={reasonMin}
+              maxLength={500}
+            />
           ) : null}
           {confirmText !== undefined ? (
-            <label className="field" htmlFor={`${fieldId}-confirm`}>
-              <span>
-                {fill(locale, formCopy.typeToConfirm, { value: confirmText })}
-              </span>
-              <input
-                id={`${fieldId}-confirm`}
-                name="confirmation"
-                value={typed}
-                autoComplete="off"
-                onChange={(event) => setTyped(event.target.value)}
-                required
-              />
-            </label>
+            <TextFormField
+              id={`${fieldId}-confirm`}
+              name="confirmation"
+              label={fill(locale, formCopy.typeToConfirm, { value: confirmText })}
+              autoComplete="off"
+              required
+            />
           ) : null}
         </OperatorForm>
-        <div className="form-actions">
-          <button
-            type="button"
-            className="wlbp-button wlbp-button--quiet"
-            onClick={close}
-          >
-            {say(locale, formCopy.cancel)}
-          </button>
-        </div>
-      </dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

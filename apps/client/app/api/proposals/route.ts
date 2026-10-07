@@ -1,3 +1,6 @@
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+
+import { proposalResponseSchema } from "../../[locale]/proposal/proposal-schema";
 import {
   ClientBookingError,
   createClientBookingDataSource,
@@ -10,25 +13,15 @@ import {
 
 export const dynamic = "force-dynamic";
 
-interface ProposalRequestBody {
-  readonly action?: unknown;
-  readonly actionToken?: unknown;
-}
-
 export async function POST(request: Request): Promise<Response> {
   try {
     const context = await createPublicApiContext();
     if (context === null) return contractErrorResponse("availability_unavailable", 503);
-    const body = (await request.json()) as ProposalRequestBody;
     // The link is a bearer credential for exactly one intent, so nothing but a
     // well formed token and one of two actions is forwarded.
-    if (
-      typeof body.actionToken !== "string" ||
-      !/^[a-f0-9]{64}$/u.test(body.actionToken) ||
-      (body.action !== "accept" && body.action !== "decline")
-    ) {
-      return contractErrorResponse("invalid_request", 400);
-    }
+    const input = parseActionInput(proposalResponseSchema, await request.json());
+    if (!input.ok) return contractErrorResponse("invalid_request", 400);
+    const body = input.data;
     const data = await createClientBookingDataSource(
       context.api,
       context.hostname,

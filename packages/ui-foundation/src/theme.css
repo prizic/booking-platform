@@ -1,0 +1,224 @@
+/*
+ * Design-system token bridge for every app (Client, Dashboard, Platform Admin).
+ *
+ * Tenant brand tokens arrive as validated `--brand-*` custom properties on
+ * <html> (see @wlbp/white-label-ui createBrandStyle). This file maps them onto
+ * the semantic roles the shared shadcn/ui components use. Apps never author
+ * component CSS: they compose these components and Tailwind utilities only.
+ */
+@import "tw-animate-css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  --background: var(--brand-color-background, #fafaf9);
+  --foreground: var(--brand-color-text, #1c1917);
+  --card: var(--brand-color-surface, #ffffff);
+  --primary: var(--brand-color-primary, #8f1d22);
+  --primary-foreground: var(--brand-color-on-primary, #ffffff);
+  --muted-foreground: var(--brand-color-muted, #57534e);
+  --border-strong: var(--brand-color-border, #78716c);
+  --success: var(--brand-color-success, #15803d);
+  --success-foreground: var(--brand-color-on-success, #ffffff);
+  --warning: var(--brand-color-warning, #a16207);
+  --warning-foreground: var(--brand-color-on-warning, #ffffff);
+  --destructive: var(--brand-color-danger, #b91c1c);
+  --destructive-foreground: var(--brand-color-on-danger, #ffffff);
+  --ring: var(--brand-color-focus, #c2410c);
+
+  /* The rail is the darkest field of the light theme: woven charcoal. */
+  --rail: var(--foreground);
+  --rail-foreground: var(--background);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --background: var(--brand-dark-color-background, #0c0a09);
+  --foreground: var(--brand-dark-color-text, #f5f5f4);
+  --card: var(--brand-dark-color-surface, #1c1917);
+  --primary: var(--brand-dark-color-primary, #f26b6b);
+  --primary-foreground: var(--brand-dark-color-on-primary, #1c0a0a);
+  --muted-foreground: var(--brand-dark-color-muted, #a8a29e);
+  --border-strong: var(--brand-dark-color-border, #78716c);
+  --success: var(--brand-dark-color-success, #4ade80);
+  --success-foreground: var(--brand-dark-color-on-success, #052e16);
+  --warning: var(--brand-dark-color-warning, #facc15);
+  --warning-foreground: var(--brand-dark-color-on-warning, #1c1917);
+  --destructive: var(--brand-dark-color-danger, #f87171);
+  --destructive-foreground: var(--brand-dark-color-on-danger, #1c0a0a);
+  --ring: var(--brand-dark-color-focus, #fb923c);
+  --rail: var(--card);
+  --rail-foreground: var(--foreground);
+}
+
+:root,
+:root.dark {
+  /* One stepped neutral ramp, derived from the tenant's own text and ground. */
+  --neutral-1: color-mix(in oklab, var(--foreground) 3%, var(--background));
+  --neutral-2: color-mix(in oklab, var(--foreground) 6%, var(--background));
+  --neutral-3: color-mix(in oklab, var(--foreground) 11%, var(--background));
+  --neutral-4: color-mix(in oklab, var(--foreground) 18%, var(--background));
+  --card-foreground: var(--foreground);
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --secondary: var(--neutral-2);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--neutral-1);
+  --accent: var(--neutral-2);
+  --accent-foreground: var(--foreground);
+  --border: var(--neutral-3);
+  --input: var(--border-strong);
+  --primary-soft: color-mix(in oklab, var(--primary) 12%, var(--card));
+  --success-soft: color-mix(in oklab, var(--success) 12%, var(--card));
+  --warning-soft: color-mix(in oklab, var(--warning) 14%, var(--card));
+  --destructive-soft: color-mix(in oklab, var(--destructive) 12%, var(--card));
+  /* Ink: a status colour deepened toward the text colour, for words on soft fills. */
+  --primary-ink: color-mix(in oklab, var(--primary) 72%, var(--foreground));
+  --success-ink: color-mix(in oklab, var(--success) 68%, var(--foreground));
+  --warning-ink: color-mix(in oklab, var(--warning) 62%, var(--foreground));
+  --destructive-ink: color-mix(in oklab, var(--destructive) 72%, var(--foreground));
+  --rail-muted: color-mix(in oklab, var(--rail-foreground) 72%, var(--rail));
+  --rail-accent: color-mix(in oklab, var(--rail-foreground) 12%, var(--rail));
+  /* A brand's focus colour is checked against its ground, not against the dark
+     rail; on the rail the indicator uses the rail's own ink (text contrast). */
+  --rail-ring: var(--rail-foreground);
+  --radius: var(--brand-radius-control, 1.5rem);
+  --radius-surface: var(--brand-radius-surface, 1.75rem);
+  --font-latin: var(--brand-font-body, Inter, "Noto Sans Arabic", sans-serif);
+  --font-arabic: var(--brand-font-arabic-body, "Noto Sans Arabic", sans-serif);
+  --font-active: var(--font-latin);
+}
+
+:root[dir="rtl"] {
+  --font-active: var(--font-arabic);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-primary-ink: var(--primary-ink);
+  --color-success-ink: var(--success-ink);
+  --color-warning-ink: var(--warning-ink);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-soft: var(--warning-soft);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-neutral-1: var(--neutral-1);
+  --color-neutral-2: var(--neutral-2);
+  --color-neutral-3: var(--neutral-3);
+  --color-neutral-4: var(--neutral-4);
+  --color-rail: var(--rail);
+  --color-rail-foreground: var(--rail-foreground);
+  --color-rail-muted: var(--rail-muted);
+  --color-rail-accent: var(--rail-accent);
+  --font-sans: var(--font-active);
+  --font-latin: var(--font-latin);
+  --font-arabic: var(--font-arabic);
+  --radius-sm: calc(var(--radius) - 0.125rem);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-surface);
+  --radius-xl: calc(var(--radius-surface) + 0.25rem);
+}
+
+/* Sadu signature: a row of woven triangle teeth along a band edge. */
+@utility sadu-teeth {
+  block-size: 0.375rem;
+  background: conic-gradient(from -45deg at 50% 100%, currentColor 90deg, transparent 0)
+    0 0 / 0.75rem 100% repeat-x;
+}
+
+/* Sadu weave for not-yet-committed segments (requests awaiting a decision). */
+@utility sadu-weave {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, currentColor 22%, transparent) 0 0.3rem,
+    transparent 0.3rem 0.6rem
+  );
+}
+
+@layer base {
+  * {
+    /* Full strength: a translucent resting colour would fade the indicator in
+       on every `transition-colors` control. */
+    @apply border-border outline-ring;
+  }
+
+  html {
+    @apply bg-background text-foreground font-sans antialiased;
+    text-rendering: optimizeLegibility;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply min-h-dvh bg-background leading-relaxed;
+    scrollbar-color: var(--neutral-4) transparent;
+  }
+
+  :lang(ar) {
+    letter-spacing: normal;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 24%, transparent);
+    color: var(--foreground);
+  }
+
+  input,
+  textarea {
+    caret-color: var(--primary);
+  }
+
+  a {
+    text-underline-offset: 0.2em;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0ms !important;
+      transition-duration: 0ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/*
+ * The keyboard focus indicator is deliberately unlayered, so a component's
+ * `outline-none` utility can never remove it. A translucent box-shadow ring
+ * alone falls below 3:1 non-text contrast and disappears in forced-colors
+ * mode. Programmatic focus targets (tabindex="-1": main, dialogs, listbox
+ * options) keep their own treatment.
+ */
+:focus-visible:not([tabindex="-1"]) {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

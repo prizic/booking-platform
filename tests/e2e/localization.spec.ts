@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { locales, tenantApplications } from "./apps";
+import { reachDetailsStep, stubBookingApi } from "./booking-fixtures";
 
 for (const application of tenantApplications) {
   test(`${application.name} keeps English and Arabic copy distinct and complete`, async ({
@@ -25,15 +26,21 @@ for (const application of tenantApplications) {
   });
 }
 
-test("Client localizes appointment, currency, and digits while retaining the IANA zone", async ({
-  page,
-}) => {
-  await page.goto("http://localhost:41730/ar");
+test.describe("Client held appointment", () => {
+  // The details step shows times in the visitor's own zone, stated once.
+  test.use({ timezoneId: "Asia/Riyadh" });
 
-  const main = await page.getByRole("main").innerText();
-  expect(main).toContain("Asia/Riyadh");
-  expect(main).toMatch(/[٠-٩]/u);
-  expect(main).toContain("ر.س");
+  test("Client localizes appointment, currency, and digits while retaining the IANA zone", async ({
+    page,
+  }) => {
+    await stubBookingApi(page);
+    await reachDetailsStep(page, "ar");
+
+    const main = await page.getByRole("main").innerText();
+    expect(main).toContain("Asia/Riyadh");
+    expect(main).toMatch(/[٠-٩]/u);
+    expect(main).toContain("ر.س");
+  });
 });
 
 test("Dashboard localizes its fail-closed private state", async ({ page }) => {
@@ -43,5 +50,6 @@ test("Dashboard localizes its fail-closed private state", async ({ page }) => {
   expect(main).toContain("إعداد مساحة العمل غير متاح");
   expect(main).toContain("تظل مساحة العمل الخاصة مغلقة");
   expect(main).not.toContain("Asia/Riyadh");
-  expect(page.getByRole("list")).toHaveCount(0);
+  // Navigation lists may render; no protected workspace list may.
+  await expect(page.getByRole("main").getByRole("list")).toHaveCount(0);
 });

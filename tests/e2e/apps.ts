@@ -48,13 +48,18 @@ export const locales = [
     locale: "en",
     direction: "ltr",
     languageNavigation: "Language",
-    switchLanguage: "Arabic",
+    // Language links carry each language's own name, marked with its `lang`.
+    currentLanguage: "English",
+    switchLanguage: "العربية",
+    switchLocale: "ar",
   },
   {
     locale: "ar",
     direction: "rtl",
     languageNavigation: "اللغة",
-    switchLanguage: "الإنجليزية",
+    currentLanguage: "العربية",
+    switchLanguage: "English",
+    switchLocale: "en",
   },
 ] as const;
 
@@ -77,10 +82,18 @@ export function getBrandSurfaceOrigin(
 
 export async function settleBrandRender(page: Page) {
   await page.evaluate(async () => {
-    await Promise.all(
-      document
-        .getAnimations()
-        .map((animation) => animation.finished.catch(() => undefined)),
-    );
+    const finiteAnimations = document.getAnimations().filter((animation) => {
+      const endTime = animation.effect?.getComputedTiming().endTime;
+      return typeof endTime === "number" && Number.isFinite(endTime);
+    });
+
+    // Hydration can replace an animation before its finished promise settles.
+    // Screenshot assertions still disable animations and wait for visual stability.
+    await Promise.race([
+      Promise.all(
+        finiteAnimations.map((animation) => animation.finished.catch(() => undefined)),
+      ),
+      new Promise((resolve) => window.setTimeout(resolve, 1_000)),
+    ]);
   });
 }

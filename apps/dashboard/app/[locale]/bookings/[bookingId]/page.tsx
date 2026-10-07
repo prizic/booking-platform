@@ -1,13 +1,33 @@
 import { workspaceStatus } from "../../../_lib/workspace-status";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  EmptyState,
+  Facts,
+  PageHeader,
+  ReferenceCode,
+  Section,
+  StatusStamp,
+} from "@wlbp/ui-foundation";
+import { ArrowLeft, StickyNote } from "lucide-react";
 import Link from "next/link";
 
 import type { BookingDetailV1 } from "../../../_lib/dashboard-access";
 import { getDashboardMessage } from "../../../_lib/copy";
 import { loadDashboardRequestAccess } from "../../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../../_lib/workspace-shell";
-import { addBookingNoteAction, transitionBookingAction } from "../actions";
+import { formatCount, stampStateFor } from "../../../_lib/booking-display";
+import { countLabel, workspaceMessage } from "../../../_lib/workspace-copy";
+import { ResultAlert } from "../../../_lib/ui/result-alert";
+import { textLinkClass } from "../../../_lib/ui/text-link";
+import { Money } from "../../../_lib/ui/money";
+import { ServiceDye } from "../../../_lib/ui/service-dye";
+import { When } from "../../../_lib/ui/when";
+import { ZoneNote } from "../../../_lib/ui/zone-note";
+import { BookingNoteForm, BookingTransitionForm } from "./booking-detail-forms";
 import { detailResultKeys, positiveResults } from "../results";
 
 export const dynamic = "force-dynamic";
@@ -19,16 +39,12 @@ type BookingDetailPageProps = {
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-// Every action is offered; the database decides which one this booking can
-// actually make. Hiding a control is presentation, never authorization, and a
-// hidden control would also hide the honest refusal that teaches an operator
-// what state the booking is really in.
-const actions = [
-  { key: "check_in", label: "detailCheckIn" },
-  { key: "complete", label: "detailComplete" },
-  { key: "no_show", label: "detailNoShow" },
-  { key: "correct", label: "detailCorrect" },
-] as const;
+const actorKeys = {
+  staff: "actorStaff",
+  guest: "actorGuest",
+  system: "actorSystem",
+  worker: "actorWorker",
+} as const;
 
 async function loadDetail(
   locale: Locale,
@@ -68,282 +84,312 @@ export default async function BookingDetailPage({
     result !== null && result in detailResultKeys
       ? detailResultKeys[result as keyof typeof detailResultKeys]
       : null;
+  const hidden = message("detailContactHidden");
 
   return (
     <WorkspaceShell current="bookings" labelledBy="detail-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="detail-title">
-        <h1 id="detail-title">
-          {booking === null ? (
-            message("detailTitle")
-          ) : (
-            <>
-              {booking.serviceName} · <bdi>{booking.publicReference}</bdi>
-            </>
-          )}
-        </h1>
-        <Link href={`/${locale}/bookings`}>{message("detailBackToList")}</Link>
-        {resultKey === null ? null : (
-          <StatusMessage
-            tone={positiveResults.has(result ?? "") ? "positive" : "warning"}
-          >
-            {message(resultKey)}
-          </StatusMessage>
-        )}
+      <div className="grid gap-4">
+        <Link
+          className={`${textLinkClass} inline-flex w-fit items-center gap-1.5 text-sm`}
+          href={`/${locale}/bookings`}
+        >
+          <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          {message("detailBackToList")}
+        </Link>
+        <PageHeader
+          titleId="detail-title"
+          title={
+            booking === null ? (
+              message("detailTitle")
+            ) : (
+              <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <ServiceDye name={booking.serviceName} />
+                <ReferenceCode size="lg">{booking.publicReference}</ReferenceCode>
+              </span>
+            )
+          }
+          meta={
+            booking === null ? null : (
+              <>
+                {/* Status is words, never colour alone. */}
+                <StatusStamp state={stampStateFor(booking.status)}>
+                  {workspaceStatus(locale, booking.status)}
+                </StatusStamp>
+                <When
+                  className="text-sm text-muted-foreground"
+                  instant={booking.startAt}
+                  locale={locale}
+                  timeZone={booking.locationTimeZone}
+                />
+                <ZoneNote locale={locale} timeZone={booking.locationTimeZone} />
+              </>
+            )
+          }
+        />
+      </div>
+      {resultKey === null ? null : (
+        <ResultAlert positive={positiveResults.has(result ?? "")}>
+          {message(resultKey)}
+        </ResultAlert>
+      )}
 
-        {booking === null ? (
-          <p>{message("detailUnavailable")}</p>
-        ) : (
-          <>
-            <nav aria-label={locale === "ar" ? "صفحات مرتبطة" : "Related pages"}>
-              <ul className="workspace-related-links">
-                {customerId ? (
-                  <li>
+      {booking === null ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {message("detailUnavailable")}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <nav aria-label={workspaceMessage(locale, "relatedPages")}>
+            <ul className="flex flex-wrap gap-2">
+              {customerId ? (
+                <li>
+                  <Button asChild variant="outline">
                     <Link href={`/${locale}/customers/${customerId}`}>
                       {message("detailCustomerLabel")}
                     </Link>
-                  </li>
-                ) : (
-                  <li>{message("detailContactHidden")}</li>
-                )}
-                <li>
+                  </Button>
+                </li>
+              ) : (
+                <li className="flex min-h-11 items-center px-1 text-sm text-muted-foreground">
+                  {hidden}
+                </li>
+              )}
+              <li>
+                <Button asChild variant="outline">
                   <Link href={`/${locale}/payments`}>
                     {message("detailPaymentLabel")}
                   </Link>
-                </li>
-                <li>
+                </Button>
+              </li>
+              <li>
+                <Button asChild variant="outline">
                   <Link href={`/${locale}/communications`}>
                     {message("navCommunications")}
                   </Link>
-                </li>
-                <li>
+                </Button>
+              </li>
+              <li>
+                <Button asChild variant="ghost">
                   <a href="#detail-history">{message("detailHistoryTitle")}</a>
-                </li>
-              </ul>
-            </nav>
-            <dl className="workspace-record-facts">
-              <div>
-                <dt>{message("bookingsWhenLabel")}</dt>
-                <dd>
-                  {formatDateTime(booking.startAt, locale, booking.locationTimeZone)}
-                </dd>
-              </div>
-              <div>
-                <dt>{message("bookingsStatusLabel")}</dt>
-                {/* Status is words, never colour alone. */}
-                <dd>{workspaceStatus(locale, booking.status)}</dd>
-              </div>
-              <div>
-                <dt>{message("detailDurationLabel")}</dt>
-                <dd>{booking.durationMinutes}</dd>
-              </div>
-              <div>
-                <dt>{message("detailPaymentLabel")}</dt>
-                <dd>{workspaceStatus(locale, booking.paymentStatus)}</dd>
-              </div>
-              <div>
-                <dt>{message("bookingsDeliveryLabel")}</dt>
-                <dd>{workspaceStatus(locale, booking.notificationStatus)}</dd>
-              </div>
-              <div>
-                <dt>{message("detailPriceLabel")}</dt>
-                <dd>{formatCurrency(booking.priceMinor, booking.currency, locale)}</dd>
-              </div>
-              <div>
-                <dt>{message("detailRescheduleCountLabel")}</dt>
-                <dd>{booking.rescheduleCount}</dd>
-              </div>
-              <div>
-                <dt>{message("detailLocationLabel")}</dt>
-                <dd>{booking.locationName}</dd>
-              </div>
-              {booking.cancelledAt === null ? null : (
-                <div>
-                  <dt>{message("detailCancelledAtLabel")}</dt>
-                  <dd>
-                    {formatDateTime(
-                      booking.cancelledAt,
-                      locale,
-                      booking.locationTimeZone,
-                    )}
-                  </dd>
-                </div>
-              )}
-              {booking.refundEligibleMinor === null ? null : (
-                <div>
-                  <dt>{message("detailRefundLabel")}</dt>
-                  <dd>
-                    {formatCurrency(
-                      booking.refundEligibleMinor,
-                      booking.currency,
-                      locale,
-                    )}
-                  </dd>
-                </div>
-              )}
-              <div>
-                <dt>{message("detailCustomerLabel")}</dt>
-                {/* Absent, not blanked: the read never carried it. */}
-                <dd>{booking.customerFullName ?? message("detailContactHidden")}</dd>
-              </div>
-              <div>
-                <dt>{message("detailEmailLabel")}</dt>
-                <dd>
-                  {booking.customerEmail === null ? (
-                    message("detailContactHidden")
+                </Button>
+              </li>
+            </ul>
+          </nav>
+
+          <Facts
+            columns={3}
+            className="rounded-lg border bg-card p-5"
+            items={[
+              {
+                key: "when",
+                label: message("bookingsWhenLabel"),
+                value: (
+                  <When
+                    instant={booking.startAt}
+                    locale={locale}
+                    timeZone={booking.locationTimeZone}
+                  />
+                ),
+              },
+              {
+                key: "duration",
+                label: message("detailDurationLabel"),
+                value: countLabel(locale, "minutes", booking.durationMinutes),
+              },
+              {
+                key: "location",
+                label: message("detailLocationLabel"),
+                value: booking.locationName,
+              },
+              {
+                key: "payment",
+                label: message("detailPaymentLabel"),
+                value: workspaceStatus(locale, booking.paymentStatus),
+              },
+              {
+                key: "delivery",
+                label: message("bookingsDeliveryLabel"),
+                value: workspaceStatus(locale, booking.notificationStatus),
+              },
+              {
+                key: "price",
+                label: message("detailPriceLabel"),
+                value: (
+                  <Money
+                    minor={booking.priceMinor}
+                    currency={booking.currency}
+                    locale={locale}
+                  />
+                ),
+              },
+              {
+                key: "reschedules",
+                label: message("detailRescheduleCountLabel"),
+                value: formatCount(booking.rescheduleCount, locale),
+              },
+              ...(booking.cancelledAt === null
+                ? []
+                : [
+                    {
+                      key: "cancelled",
+                      label: message("detailCancelledAtLabel"),
+                      value: (
+                        <When
+                          instant={booking.cancelledAt}
+                          locale={locale}
+                          timeZone={booking.locationTimeZone}
+                        />
+                      ),
+                    },
+                  ]),
+              ...(booking.refundEligibleMinor === null
+                ? []
+                : [
+                    {
+                      key: "refund",
+                      label: message("detailRefundLabel"),
+                      value: (
+                        <Money
+                          minor={booking.refundEligibleMinor}
+                          currency={booking.currency}
+                          locale={locale}
+                        />
+                      ),
+                    },
+                  ]),
+              {
+                key: "customer",
+                label: message("detailCustomerLabel"),
+                // Absent, not blanked: the read never carried it.
+                value: booking.customerFullName ?? hidden,
+              },
+              {
+                key: "email",
+                label: message("detailEmailLabel"),
+                value:
+                  booking.customerEmail === null ? (
+                    hidden
                   ) : (
                     <bdi>{booking.customerEmail}</bdi>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>{message("detailPhoneLabel")}</dt>
-                <dd>
-                  {booking.customerPhone === null ? (
-                    message("detailContactHidden")
+                  ),
+              },
+              {
+                key: "phone",
+                label: message("detailPhoneLabel"),
+                value:
+                  booking.customerPhone === null ? (
+                    hidden
                   ) : (
-                    <bdi>{booking.customerPhone}</bdi>
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>{message("bookingsListLabel")}</dt>
-                <dd>
-                  {booking.hasIntake
-                    ? message("detailIntakePresent")
-                    : message("detailIntakeAbsent")}
-                </dd>
-              </div>
-            </dl>
+                    <bdi dir="ltr">{booking.customerPhone}</bdi>
+                  ),
+              },
+              {
+                key: "intake",
+                label: message("bookingsListLabel"),
+                value: booking.hasIntake
+                  ? message("detailIntakePresent")
+                  : message("detailIntakeAbsent"),
+              },
+            ]}
+          />
 
-            <section aria-labelledby="detail-actions">
-              <h2 id="detail-actions">{message("detailLifecycleTitle")}</h2>
-              <p>{message("detailLifecycleHint")}</p>
-              <form action={transitionBookingAction}>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="bookingId" value={booking.bookingId} />
-                <input
-                  type="hidden"
-                  name="expectedRevision"
-                  value={booking.bookingRevision}
-                />
-                <label htmlFor="transition-reason">
-                  {message("detailReasonLabel")}
-                </label>
-                <textarea
-                  id="transition-reason"
-                  maxLength={500}
-                  name="reason"
-                  rows={2}
-                />
-                <div className="requests-actions">
-                  {actions.map((action) => (
-                    <Button
-                      key={action.key}
-                      name="action"
-                      type="submit"
-                      value={action.key}
-                      variant={action.key === "check_in" ? "primary" : "secondary"}
-                    >
-                      {message(action.label)}
-                    </Button>
-                  ))}
-                </div>
-              </form>
-            </section>
+          <Section
+            id="detail-actions"
+            title={message("detailLifecycleTitle")}
+            description={message("detailLifecycleHint")}
+          >
+            <BookingTransitionForm
+              key={booking.bookingId}
+              locale={locale}
+              bookingId={booking.bookingId}
+              bookingRevision={booking.bookingRevision}
+            />
+          </Section>
 
-            <section aria-labelledby="detail-history">
-              <h2 id="detail-history">{message("detailHistoryTitle")}</h2>
-              <ol className="requests-list">
+          <div className="grid items-start gap-8 lg:grid-cols-2">
+            <Section id="detail-history" title={message("detailHistoryTitle")}>
+              <ol className="grid gap-0 border-s-2 border-border ps-5">
                 {booking.history.map((entry) => (
-                  <li key={entry.sequence}>
-                    <article>
-                      <h3>
-                        {locale === "ar" ? "تغيير في الحجز" : "Booking change"} ·{" "}
-                        <bdi>{entry.eventType}</bdi>
-                      </h3>
-                      <dl>
-                        <div>
-                          <dt>{message("bookingsWhenLabel")}</dt>
-                          <dd>
-                            {formatDateTime(
-                              entry.createdAt,
-                              locale,
-                              booking.locationTimeZone,
-                            )}
-                          </dd>
-                        </div>
-                        <div>
-                          <dt>{message("detailHistoryActorLabel")}</dt>
-                          <dd>
-                            {locale === "ar"
-                              ? ({
-                                  staff: "موظف",
-                                  guest: "عميل",
-                                  system: "النظام",
-                                  worker: "عامل النظام",
-                                }[entry.actorKind as "staff"] ?? "فاعل")
-                              : ({
-                                  staff: "Staff",
-                                  guest: "Customer",
-                                  system: "System",
-                                  worker: "Worker",
-                                }[entry.actorKind as "staff"] ?? "Actor")}
-                          </dd>
-                        </div>
-                      </dl>
-                      {entry.reason === null ? null : <p>{entry.reason}</p>}
-                    </article>
+                  <li
+                    key={entry.sequence}
+                    className="relative grid gap-1 pb-5 last:pb-0"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="absolute -start-[1.6rem] top-1.5 size-2.5 rounded-full border-2 border-card bg-primary"
+                    />
+                    <h3 className="text-sm font-semibold">
+                      {workspaceMessage(locale, "bookingChange")} ·{" "}
+                      <bdi className="font-latin text-muted-foreground">
+                        {entry.eventType}
+                      </bdi>
+                    </h3>
+                    <dl className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <div className="flex gap-1.5">
+                        <dt className="sr-only">{message("bookingsWhenLabel")}</dt>
+                        <dd>
+                          <When
+                            instant={entry.createdAt}
+                            locale={locale}
+                            timeZone={booking.locationTimeZone}
+                          />
+                        </dd>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <dt>{message("detailHistoryActorLabel")}:</dt>
+                        <dd className="text-foreground">
+                          {workspaceMessage(
+                            locale,
+                            actorKeys[entry.actorKind as keyof typeof actorKeys] ??
+                              "actorUnknown",
+                          )}
+                        </dd>
+                      </div>
+                    </dl>
+                    {entry.reason === null ? null : (
+                      <p className="text-sm text-foreground">{entry.reason}</p>
+                    )}
                   </li>
                 ))}
               </ol>
-            </section>
+            </Section>
 
-            <section aria-labelledby="detail-notes">
-              <h2 id="detail-notes">{message("detailNotesTitle")}</h2>
+            <Section id="detail-notes" title={message("detailNotesTitle")}>
               {booking.notes.length === 0 ? (
-                <p>{message("detailNotesEmpty")}</p>
+                <EmptyState
+                  icon={<StickyNote aria-hidden="true" />}
+                  title={message("detailNotesEmpty")}
+                />
               ) : (
-                <ul className="requests-list">
+                <ul className="divide-y rounded-lg border bg-card">
                   {booking.notes.map((note) => (
-                    <li key={note.noteId}>
-                      <article>
-                        <Badge
-                          tone={note.visibility === "sensitive" ? "warning" : "neutral"}
-                        >
-                          {message(
-                            note.visibility === "sensitive"
-                              ? "detailNoteSensitive"
-                              : "detailNoteOperational",
-                          )}
-                        </Badge>
-                        <p>{note.body}</p>
-                      </article>
+                    <li key={note.noteId} className="grid gap-2 px-4 py-3">
+                      <Badge
+                        tone={note.visibility === "sensitive" ? "warning" : "neutral"}
+                      >
+                        {message(
+                          note.visibility === "sensitive"
+                            ? "detailNoteSensitive"
+                            : "detailNoteOperational",
+                        )}
+                      </Badge>
+                      <p className="text-sm whitespace-pre-line">{note.body}</p>
                     </li>
                   ))}
                 </ul>
               )}
 
-              <form action={addBookingNoteAction}>
-                <h3>{message("detailAddNoteTitle")}</h3>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="bookingId" value={booking.bookingId} />
-                <label htmlFor="note-body">{message("detailNoteBodyLabel")}</label>
-                <textarea id="note-body" maxLength={2000} name="body" rows={3} />
-                <label htmlFor="note-visibility">
-                  {message("detailNoteVisibilityLabel")}
-                </label>
-                <select id="note-visibility" name="visibility">
-                  <option value="operational">
-                    {message("detailNoteOperational")}
-                  </option>
-                  <option value="sensitive">{message("detailNoteSensitive")}</option>
-                </select>
-                <Button type="submit">{message("detailAddNote")}</Button>
-              </form>
-            </section>
-          </>
-        )}
-      </Surface>
+              <BookingNoteForm
+                key={booking.bookingId}
+                locale={locale}
+                bookingId={booking.bookingId}
+              />
+            </Section>
+          </div>
+        </>
+      )}
     </WorkspaceShell>
   );
 }

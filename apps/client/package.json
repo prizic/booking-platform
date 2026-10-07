@@ -11,23 +11,31 @@
     "test:unit": "vitest run"
   },
   "dependencies": {
+    "@hookform/resolvers": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "@wlbp/api-contracts": "workspace:*",
     "@wlbp/config": "workspace:*",
     "@wlbp/i18n": "workspace:*",
-    "@wlbp/ui-foundation": "workspace:*",
-    "@wlbp/white-label-ui": "workspace:*",
     "@wlbp/supabase-client": "workspace:*",
     "@wlbp/tenant-resolution": "workspace:*",
+    "@wlbp/ui-foundation": "workspace:*",
+    "@wlbp/white-label-ui": "workspace:*",
+    "lucide-react": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "react-hook-form": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@tailwindcss/postcss": "catalog:",
+    "postcss": "catalog:",
+    "tailwindcss": "catalog:"
   },
   "wlbp": {
     "distribution": "distributed"

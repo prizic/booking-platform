@@ -1,6 +1,4 @@
-import { TextField } from "@wlbp/ui-foundation";
-import { randomUUID } from "node:crypto";
-import { requestProvisioningAction } from "../../../../_lib/actions/operations";
+import { Alert, FieldGroup } from "@wlbp/ui-foundation";
 import { say, stateCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
@@ -8,8 +6,8 @@ import { operationsCopy } from "../../../../_lib/operations-copy";
 import { readPages } from "../../../../_lib/read-pages";
 import { pageLocale } from "../../../../_lib/page-locale";
 import { PageHeader } from "../../../../_lib/shell/page-header";
+import { SelectFormField, TextFormField } from "../../../../_lib/ui/form-fields";
 import { OperatorForm } from "../../../../_lib/ui/operator-form";
-import { SelectField } from "../../../../_lib/ui/select-field";
 import { EmptyState, UnavailableState } from "../../../../_lib/ui/states";
 
 export const dynamic = "force-dynamic";
@@ -42,7 +40,7 @@ export default async function RequestProvisioningPage({
     return (
       <>
         {header}
-        <p className="notice">{say(locale, stateCopy.roleRequired)}</p>
+        <Alert tone="info">{say(locale, stateCopy.roleRequired)}</Alert>
       </>
     );
 
@@ -96,24 +94,29 @@ export default async function RequestProvisioningPage({
   return (
     <>
       {header}
-      <section className="section">
+      <section className="max-w-4xl rounded-lg border bg-card p-5 md:p-6">
         <OperatorForm
           locale={locale}
-          action={requestProvisioningAction}
+          operation="requestProvisioning"
           submit={say(locale, c.request)}
           successMessage={say(locale, c.submitted)}
+          values={{
+            target: preselected
+              ? `${preselected.tenant_id}|${preselected.instance_id}`
+              : undefined,
+            slug: "",
+            defaultLocale: locale,
+            timezone: "Asia/Riyadh",
+            currency: "SAR",
+            clientHostname: "",
+            dashboardHostname: "",
+          }}
         >
-          <input type="hidden" name="idempotencyKey" value={randomUUID()} />
-          <div className="form-grid">
-            <div className="full">
-              <SelectField
+          <FieldGroup columns={2}>
+            <div className="md:col-span-2">
+              <SelectFormField
                 name="target"
                 label={say(locale, c.target)}
-                value={
-                  preselected
-                    ? `${preselected.tenant_id}|${preselected.instance_id}`
-                    : undefined
-                }
                 options={instances.data.map(
                   (i) =>
                     [
@@ -123,7 +126,7 @@ export default async function RequestProvisioningPage({
                 )}
               />
             </div>
-            <TextField
+            <TextFormField
               id="slug"
               name="slug"
               label={say(locale, c.slug)}
@@ -133,61 +136,58 @@ export default async function RequestProvisioningPage({
               maxLength={40}
               autoComplete="off"
             />
-            <SelectField
+            <SelectFormField
               name="planKey"
               label={say(locale, c.plan)}
               options={plans.data
                 .filter((p) => p.active)
                 .map((p) => [p.key, p.name] as const)}
             />
-            <SelectField
+            <SelectFormField
               name="releaseId"
               label={say(locale, c.releaseField)}
               options={releases.data.map(
                 (r) => [r.release_id, `${r.version} · ${r.channel}`] as const,
               )}
             />
-            <SelectField
+            <SelectFormField
               name="defaultLocale"
               label={say(locale, c.defaultLocale)}
-              value={locale}
               options={[
                 ["en", "English"],
                 ["ar", "العربية"],
               ]}
             />
-            <TextField
+            <TextFormField
               id="timezone"
               name="timezone"
               label={say(locale, c.timezone)}
               description={say(locale, c.timezoneHint)}
-              defaultValue="Asia/Riyadh"
               required
             />
-            <TextField
+            <TextFormField
               id="currency"
               name="currency"
               label={say(locale, c.currency)}
-              defaultValue="SAR"
               required
               minLength={3}
               maxLength={3}
             />
-            <TextField
+            <TextFormField
               id="clientHostname"
               name="clientHostname"
               label={say(locale, c.clientHostname)}
               maxLength={253}
               autoComplete="off"
             />
-            <TextField
+            <TextFormField
               id="dashboardHostname"
               name="dashboardHostname"
               label={say(locale, c.dashboardHostname)}
               maxLength={253}
               autoComplete="off"
             />
-          </div>
+          </FieldGroup>
         </OperatorForm>
       </section>
     </>

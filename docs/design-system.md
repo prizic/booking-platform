@@ -174,3 +174,54 @@ WCAG 2.2 AA is the floor for both Client and Dashboard. Concrete checks:
 - Removing RTL, keyboard, focus, contrast, mobile, or error-state behavior is never an accepted customization at any support tier.
 
 Verification commands and the human acceptance pass live in [local setup](./local-setup.md) and [runbooks](./runbooks.md). Scope per release is tracked in [release scope](./release-scope.md); external standards are listed in [references](./references.md).
+
+---
+
+## 7. Component system: shadcn/ui + Tailwind
+
+All three applications (Client, Dashboard, Platform Admin) render through one
+component library, `@wlbp/ui-foundation`, built on shadcn/ui patterns, Radix
+primitives and Tailwind CSS v4. One `Button`, one `Input`, one `Select`, and so
+on, with variants; applications never author component CSS and never render
+raw form controls (`button`, `input` other than hidden, `select`, `textarea`,
+`table`, `dialog`, native date/time pickers).
+
+- **Token bridge.** `packages/ui-foundation/src/theme.css` maps the validated
+  `--brand-*` custom properties (set on `<html>` by `createBrandStyle`) onto the
+  semantic roles the components use (`background`, `foreground`, `card`,
+  `primary`, `muted-foreground`, `border`, `ring`, status colours, a derived
+  stepped neutral ramp `neutral-1..4`, and "ink" variants for text on soft
+  fills). Each app's `globals.css` contains only the Tailwind entry, this theme
+  and the three local font faces.
+- **Dark theme.** `brand.json` may declare `tokens.colorDark`, validated with
+  the same contrast floor as `color`. Without it the theme toggle is hidden.
+  `appearance.defaultTheme` selects the first-visit theme (light by default);
+  the visitor's choice is remembered in the `wlbp-theme` cookie and applied on
+  the server, so there is no flash.
+- **Default language.** The instance manifest's `defaultLocale` is Arabic. `/`
+  opens in the visitor's last chosen language (`wlbp-locale` cookie), otherwise
+  the default; Accept-Language is no longer used for the first redirect.
+- **Visual direction (Sadu Band).** Operate surfaces follow an Arabic-first
+  merchant-console layout: a charcoal rail on the inline-start edge, a top bar
+  with the Hijri/Gregorian date, and the working day drawn as woven bands
+  (`ScheduleBands`: one lane per staff member or resource, bookings as dyed
+  segments, requests woven, cancellations struck through and never removed).
+  The triangle-tooth edge appears only on band edges. Booking references use
+  `ReferenceCode`; record states use `StatusStamp` (always words plus colour).
+- **Forms and data.** Every form uses React Hook Form with one Zod schema
+  that the browser form and the server action (or API route) both apply:
+  `parseActionInput` re-validates untrusted input before any existing
+  authorization, idempotency and RPC logic, and the database functions remain
+  the final authority for booking, capacity, price and permissions. Schemas
+  emit stable error codes rendered in Arabic or English by `FormMessage`.
+  Every create/update/delete runs as a React Query mutation
+  (`useActionMutation` for server actions); server-rendered pages keep
+  server-side reads and refresh after a mutation, while reads that happen in
+  the browser use `useQuery`. Mutations are never retried automatically.
+  Platform Admin schemas stay inside the private app.
+- **Dependencies.** `radix-ui`, `class-variance-authority`, `clsx`,
+  `tailwind-merge`, `lucide-react`, `tw-animate-css`, `react-day-picker`,
+  `date-fns`, `react-hook-form`, `@hookform/resolvers`, `zod`,
+  `@tanstack/react-query` (all MIT/ISC/Apache-2.0) in the distributed `ui-foundation`
+  package; `tailwindcss` and `@tailwindcss/postcss` as app build tooling.
+  Versions are pinned in the pnpm catalog and respect the release-age policy.

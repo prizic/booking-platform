@@ -7,17 +7,58 @@ import {
   type ManagementActionV1,
   type ManagementViewV1,
 } from "@wlbp/api-contracts";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
 import {
-  Badge,
+  formatCurrency,
+  formatDateTime,
+  formatTimeZone,
+  type Locale,
+} from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
-  TextField,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  DatePicker,
+  Facts,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  PageHeader,
+  ReferenceCode,
+  Separator,
+  Skeleton,
+  StatusStamp,
+  TimeSelect,
+  useZodForm,
+  type StampState,
 } from "@wlbp/ui-foundation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Mail } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
+import type { z } from "zod";
+
+import { formatWallDateTime } from "../../_lib/wall-time";
+import {
+  manageFormCodes,
+  rescheduleFormSchema,
+  rescheduleStartAt,
+  verifyStepUpSchema,
+  type ManageActionInput,
+  type ManageViewInput,
+  type RequestStepUpInput,
+} from "./manage-schema";
 
 interface ManageBookingProps {
   readonly copy: Readonly<Record<string, string>>;
@@ -25,13 +66,22 @@ interface ManageBookingProps {
   readonly token: string | null;
 }
 
+type GrantedView = Extract<ManagementViewV1, { outcome: "granted" }>;
+type AppliedAction = Extract<ManagementActionV1, { outcome: "applied" }>;
+
 const statusKeys: Readonly<Record<string, string>> = {
   cancelled: "manageStatusCancelled",
   confirmed: "manageStatusConfirmed",
   requested: "manageStatusRequested",
 };
 
-async function callManage(body: Record<string, unknown>): Promise<unknown> {
+const stampStates: Readonly<Record<string, StampState>> = {
+  cancelled: "cancelled",
+  confirmed: "confirmed",
+  requested: "requested",
+};
+
+async function callManage(body: unknown): Promise<unknown> {
   // The token travels in the body, never the URL, so it cannot leak through a
   // referrer header, a browser history entry, or an access log.
   const response = await fetch("/api/manage", {
@@ -43,335 +93,564 @@ async function callManage(body: Record<string, unknown>): Promise<unknown> {
   return response.json();
 }
 
+/** The cache entry for one link's booking view. */
+function manageViewKey(token: string | null) {
+  return ["manage", "view", token] as const;
+}
+
 export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
   const message = (key: string) => copy[key] ?? key;
-  const [view, setView] = useState<ManagementViewV1 | null>(null);
-  const [stepUpSent, setStepUpSent] = useState(false);
-  const [stepUpFailed, setStepUpFailed] = useState(false);
-  const [busy, setBusy] = useState<"cancel" | "move" | "send" | "verify" | null>(null);
-  const [code, setCode] = useState("");
-  const [newStart, setNewStart] = useState("");
-  const [applied, setApplied] = useState<Extract<
-    ManagementActionV1,
-    { outcome: "applied" }
-  > | null>(null);
-  const [actionFailed, setActionFailed] = useState<"conflict" | "failed" | null>(null);
+  const queryClient = useQueryClient();
+  const formMessages = useMemo(
+    () => ({
+      [manageFormCodes.codeFormat]: copy.manageStepUpCodeFormat ?? "",
+      [manageFormCodes.timeUnavailable]: copy.manageRescheduleTimeUnavailable ?? "",
+    }),
+    [copy],
+  );
+  const viewQuery = useQuery({
+    enabled: token !== null,
+    queryKey: manageViewKey(token),
+    queryFn: async () =>
+      parseManagementViewV1(
+        await callManage({ intent: "view", token: token! } satisfies ManageViewInput),
+      ),
+    // Redeeming the link is an audited read: only on load and after a change.
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: Infinity,
+  });
+  // Any failure to read is the same refusal as a refused link.
+  const view: ManagementViewV1 | null =
+    viewQuery.data ?? (viewQuery.isError ? { outcome: "unavailable" } : null);
 
-  useEffect(() => {
-    if (token === null) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const result = parseManagementViewV1(
-          await callManage({ intent: "view", token }),
-        );
-        if (!cancelled) setView(result);
-      } catch {
-        if (!cancelled) setView({ outcome: "unavailable" });
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  const [applied, setApplied] = useState<{
+    readonly action: AppliedAction;
+    readonly booking: GrantedView["booking"];
+  } | null>(null);
+  const act = useMutation({
+    mutationFn: async ({
+      body,
+    }: {
+      body: ManageActionInput;
+      booking: GrantedView["booking"];
+    }) => parseManagementActionV1(await callManage(body)),
+    // The confirmation keeps the booking the customer acted on, whatever the
+    // refreshed view later says about the link.
+    onSuccess: (result, { booking }) => {
+      if (result.outcome === "applied") setApplied({ action: result, booking });
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: manageViewKey(token) }),
+    retry: false,
+  });
+  // A refusal is indistinguishable, so the page says what is true for the
+  // customer: nothing changed, and the newest email is authoritative.
+  const actionFailed = act.isError
+    ? "failed"
+    : act.data !== undefined && act.data.outcome !== "applied"
+      ? "conflict"
+      : null;
 
-  async function sendCode() {
-    if (token === null) return;
-    setBusy("send");
-    setStepUpFailed(false);
-    try {
-      parseManagementStepUpV1(await callManage({ action: "request-step-up", token }));
-    } catch {
-      // Ignored on purpose: whether a code was really sent is not something
-      // this page may confirm, so both outcomes render the same message.
-    } finally {
-      setStepUpSent(true);
-      setBusy(null);
-    }
+  function runAction(body: ManageActionInput, booking: GrantedView["booking"]) {
+    act.mutate({ body, booking });
   }
 
-  async function verifyCode(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (token === null) return;
-    setBusy("verify");
-    try {
-      const result = (await callManage({
-        action: "verify-step-up",
-        code,
-        token,
-      })) as { verified?: unknown };
-      if (result.verified === true) {
-        setStepUpFailed(false);
-        const refreshed = parseManagementViewV1(
-          await callManage({ intent: "view", token }),
-        );
-        setView(refreshed);
-      } else {
-        setStepUpFailed(true);
-      }
-    } catch {
-      setStepUpFailed(true);
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function act(action: "cancel" | "reschedule") {
-    if (token === null || view === null || view.outcome !== "granted") return;
-    setBusy(action === "cancel" ? "cancel" : "move");
-    setActionFailed(null);
-    try {
-      const result = parseManagementActionV1(
-        await callManage({
-          action,
-          expectedRevision: view.booking.bookingRevision,
-          newStartAt:
-            action === "reschedule" && newStart !== ""
-              ? new Date(`${newStart}:00Z`).toISOString()
-              : null,
-          token,
-        }),
-      );
-      // A refusal is indistinguishable, so the page says what is true for the
-      // customer: nothing changed, and the newest email is authoritative.
-      if (result.outcome === "applied") setApplied(result);
-      else setActionFailed("conflict");
-    } catch {
-      setActionFailed("failed");
-    } finally {
-      setBusy(null);
-    }
-  }
+  const homeLink = (
+    <Button asChild variant="outline">
+      <Link href={`/${locale}`}>{message("manageUnavailableAction")}</Link>
+    </Button>
+  );
 
   if (token === null) {
     return (
-      <Surface as="section" className="booking-flow" labelledBy="manage-title">
-        <h1 id="manage-title">{message("manageTitle")}</h1>
-        <p>{message("manageMissingToken")}</p>
-        <Link href={`/${locale}`}>{message("manageUnavailableAction")}</Link>
-      </Surface>
+      <section aria-labelledby="manage-title" className="grid gap-6">
+        <PageHeader title={message("manageTitle")} titleId="manage-title" />
+        <Alert tone="info">{message("manageMissingToken")}</Alert>
+        <div>{homeLink}</div>
+      </section>
     );
   }
 
-  if (view === null) {
-    return (
-      <Surface as="section" className="booking-flow" labelledBy="manage-title">
-        <h1 id="manage-title">{message("manageTitle")}</h1>
-        <p>{message("manageSummary")}</p>
-      </Surface>
-    );
-  }
-
-  if (view.outcome === "unavailable") {
-    return (
-      <Surface as="section" className="booking-flow" labelledBy="manage-title">
-        <h1 id="manage-title">{message("manageUnavailableTitle")}</h1>
-        <p>{message("manageUnavailableBody")}</p>
-        <Link href={`/${locale}`}>{message("manageUnavailableAction")}</Link>
-      </Surface>
-    );
-  }
-
-  const { booking } = view;
   if (applied !== null) {
+    const { action, booking } = applied;
     return (
-      <Surface as="section" className="booking-confirmed" labelledBy="manage-title">
-        <Badge tone="positive">{booking.publicReference}</Badge>
-        <h1 id="manage-title">
-          {applied.status === "cancelled"
-            ? message("manageCancelled")
-            : message("manageRescheduled")}
-        </h1>
-        {applied.startAt === null ? null : (
-          <StatusMessage tone="positive">
-            {formatDateTime(applied.startAt, locale, booking.customerTimeZone)}
-          </StatusMessage>
+      <section aria-labelledby="manage-title" className="grid gap-6">
+        <PageHeader
+          title={
+            action.status === "cancelled"
+              ? message("manageCancelled")
+              : message("manageRescheduled")
+          }
+          titleId="manage-title"
+          meta={
+            <>
+              <StatusStamp
+                state={action.status === "cancelled" ? "cancelled" : "confirmed"}
+              >
+                {message(statusKeys[action.status] ?? "manageStatusOther")}
+              </StatusStamp>
+              <ReferenceCode>{booking.publicReference}</ReferenceCode>
+            </>
+          }
+        />
+        {action.startAt === null ? null : (
+          <Alert tone="positive">
+            {formatDateTime(action.startAt, locale, booking.customerTimeZone)}
+          </Alert>
         )}
-        {applied.refund === null ? null : (
-          <p>
-            {applied.refund.minorUnits > 0
+        {action.refund === null ? null : (
+          <p className="text-[0.9375rem] leading-relaxed text-muted-foreground">
+            {action.refund.minorUnits > 0
               ? message("manageCancelRefund").replace(
                   "{amount}",
                   formatCurrency(
-                    applied.refund.minorUnits,
-                    applied.refund.currency,
+                    action.refund.minorUnits,
+                    action.refund.currency,
                     locale,
                   ),
                 )
               : message("manageCancelNoRefund")}
           </p>
         )}
-      </Surface>
+      </section>
     );
   }
-  return (
-    <Surface as="section" className="booking-confirmed" labelledBy="manage-title">
-      <Badge tone={booking.status === "cancelled" ? "neutral" : "positive"}>
-        {message(statusKeys[booking.status] ?? "manageStatusOther")}
-      </Badge>
-      <h1 id="manage-title">{message("manageTitle")}</h1>
-      <p>{message("manageSummary")}</p>
-      <dl className="booking-confirmed__facts">
-        <div>
-          <dt>{message("manageReferenceLabel")}</dt>
-          <dd dir="ltr">{booking.publicReference}</dd>
-        </div>
-        <div>
-          <dt>{message("manageServiceLabel")}</dt>
-          <dd>{booking.serviceName}</dd>
-        </div>
-        <div>
-          <dt>{message("manageLocationLabel")}</dt>
-          <dd>{booking.locationName}</dd>
-        </div>
-        <div>
-          <dt>{message("manageWhenLabel")}</dt>
-          <dd>{formatDateTime(booking.startAt, locale, booking.customerTimeZone)}</dd>
-        </div>
-        <div>
-          <dt>{message("manageTimezoneLabel")}</dt>
-          <dd dir="ltr">{booking.customerTimeZone}</dd>
-        </div>
-        <div>
-          <dt>{message("manageTotalLabel")}</dt>
-          <dd>
-            {formatCurrency(booking.price.minorUnits, booking.price.currency, locale)}
-          </dd>
-        </div>
-        <div>
-          <dt>{message("managePolicyVersionLabel")}</dt>
-          <dd dir="ltr">{booking.consentVersion}</dd>
-        </div>
-        <div>
-          <dt>{message("manageLinkExpiresLabel")}</dt>
-          <dd>
-            {formatDateTime(view.tokenExpiresAt, locale, booking.customerTimeZone)}
-          </dd>
-        </div>
-      </dl>
 
-      <StatusMessage tone={view.canReschedule ? "positive" : "warning"}>
-        {view.canReschedule
-          ? message("manageRescheduleEligible")
-          : message("manageRescheduleIneligible")}
-      </StatusMessage>
-      <StatusMessage tone={view.canCancel ? "positive" : "warning"}>
-        {view.canCancel
-          ? message("manageCancelEligible")
-          : message("manageCancelIneligible")}
-      </StatusMessage>
-      <p>{message("manageActionsPending")}</p>
+  if (view === null) {
+    return (
+      <section aria-busy="true" aria-labelledby="manage-title" className="grid gap-6">
+        <PageHeader
+          title={message("manageTitle")}
+          titleId="manage-title"
+          description={message("manageSummary")}
+        />
+        <Card>
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+            <Skeleton className="h-10" />
+          </CardContent>
+        </Card>
+      </section>
+    );
+  }
+
+  if (view.outcome === "unavailable") {
+    return (
+      <section aria-labelledby="manage-title" className="grid gap-6">
+        <PageHeader
+          title={message("manageUnavailableTitle")}
+          titleId="manage-title"
+          description={message("manageUnavailableBody")}
+        />
+        <div>{homeLink}</div>
+      </section>
+    );
+  }
+
+  const { booking } = view;
+  return (
+    <section aria-labelledby="manage-title" className="grid gap-6">
+      <PageHeader
+        title={message("manageTitle")}
+        titleId="manage-title"
+        description={message("manageSummary")}
+        meta={
+          <StatusStamp state={stampStates[booking.status] ?? "neutral"}>
+            {message(statusKeys[booking.status] ?? "manageStatusOther")}
+          </StatusStamp>
+        }
+      />
+
+      <Card>
+        <CardHeader>
+          <p className="text-xs font-semibold text-muted-foreground">
+            {message("manageReferenceLabel")}
+          </p>
+          <ReferenceCode size="lg">{booking.publicReference}</ReferenceCode>
+        </CardHeader>
+        <CardContent>
+          <Facts
+            items={[
+              {
+                key: "service",
+                label: message("manageServiceLabel"),
+                value: booking.serviceName,
+              },
+              {
+                key: "location",
+                label: message("manageLocationLabel"),
+                value: booking.locationName,
+              },
+              {
+                key: "when",
+                label: message("manageWhenLabel"),
+                value: formatWallDateTime(
+                  booking.startAt,
+                  locale,
+                  booking.customerTimeZone,
+                ),
+              },
+              {
+                key: "zone",
+                label: message("manageTimezoneLabel"),
+                value: formatTimeZone(
+                  booking.startAt,
+                  locale,
+                  booking.customerTimeZone,
+                ),
+              },
+              {
+                key: "total",
+                label: message("manageTotalLabel"),
+                value: formatCurrency(
+                  booking.price.minorUnits,
+                  booking.price.currency,
+                  locale,
+                ),
+              },
+              {
+                key: "policy",
+                label: message("managePolicyVersionLabel"),
+                value: <bdi dir="ltr">{booking.consentVersion}</bdi>,
+              },
+              {
+                key: "expires",
+                label: message("manageLinkExpiresLabel"),
+                value: formatWallDateTime(
+                  view.tokenExpiresAt,
+                  locale,
+                  booking.customerTimeZone,
+                ),
+              },
+            ]}
+          />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-3">
+        <Alert tone={view.canReschedule ? "positive" : "warning"}>
+          {view.canReschedule
+            ? message("manageRescheduleEligible")
+            : message("manageRescheduleIneligible")}
+        </Alert>
+        <Alert tone={view.canCancel ? "positive" : "warning"}>
+          {view.canCancel
+            ? message("manageCancelEligible")
+            : message("manageCancelIneligible")}
+        </Alert>
+        <p className="text-sm text-muted-foreground">
+          {message("manageActionsPending")}
+        </p>
+      </div>
 
       {actionFailed === null ? null : (
-        <ErrorSummary
-          focusTarget
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="manage-action-error"
-          title={message("manageActionFailed")}
+          tabIndex={-1}
+          tone="danger"
         >
-          <p>
+          <AlertTitle>{message("manageActionFailed")}</AlertTitle>
+          <AlertDescription>
             {actionFailed === "conflict"
               ? message("manageActionConflict")
               : message("manageActionFailed")}
-          </p>
-        </ErrorSummary>
+          </AlertDescription>
+        </Alert>
       )}
 
       {view.stepUpVerified && view.intent === "cancel" ? (
-        <section aria-labelledby="manage-cancel">
-          <h2 id="manage-cancel">{message("manageCancelConfirmTitle")}</h2>
-          <Button
-            loading={busy === "cancel"}
-            loadingLabel={message("manageCancelling")}
-            onClick={() => void act("cancel")}
-          >
-            {message("manageCancelAction")}
-          </Button>
-        </section>
+        <Card aria-labelledby="manage-cancel" role="region">
+          <CardHeader>
+            <CardTitle id="manage-cancel">
+              {message("manageCancelConfirmTitle")}
+            </CardTitle>
+          </CardHeader>
+          <CardFooter>
+            <Button
+              loading={act.isPending && act.variables?.body.action === "cancel"}
+              loadingLabel={message("manageCancelling")}
+              onClick={() =>
+                runAction(
+                  {
+                    action: "cancel",
+                    expectedRevision: booking.bookingRevision,
+                    newStartAt: null,
+                    token,
+                  },
+                  booking,
+                )
+              }
+              variant="destructive"
+            >
+              {message("manageCancelAction")}
+            </Button>
+          </CardFooter>
+        </Card>
       ) : null}
 
       {view.stepUpVerified && view.intent === "reschedule" ? (
-        <form
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            void act("reschedule");
-          }}
-        >
-          <TextField
-            description={message("manageRescheduleTimeHint")}
-            id="manage-new-start"
-            label={message("manageRescheduleTimeLabel")}
-            name="newStartAt"
-            onChange={(event) => setNewStart(event.currentTarget.value)}
-            required
-            type="datetime-local"
-            value={newStart}
-          />
-          <Button
-            loading={busy === "move"}
-            loadingLabel={message("manageRescheduling")}
-            type="submit"
-          >
-            {message("manageRescheduleAction")}
-          </Button>
-        </form>
+        <Card aria-labelledby="manage-reschedule" role="region">
+          <CardHeader>
+            <CardTitle id="manage-reschedule">
+              {message("manageRescheduleAction")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RescheduleForm
+              customerTimeZone={booking.customerTimeZone}
+              locale={locale}
+              message={message}
+              messages={formMessages}
+              onResolved={(newStartAt) =>
+                runAction(
+                  {
+                    action: "reschedule",
+                    expectedRevision: booking.bookingRevision,
+                    newStartAt,
+                    token,
+                  },
+                  booking,
+                )
+              }
+              pending={act.isPending && act.variables?.body.action === "reschedule"}
+            />
+          </CardContent>
+        </Card>
       ) : null}
 
       {view.stepUpRequired ? (
-        <section aria-labelledby="manage-step-up">
-          <h2 id="manage-step-up">{message("manageStepUpTitle")}</h2>
-          <p>{message("manageStepUpSummary")}</p>
-          {view.stepUpVerified ? (
-            <StatusMessage tone="positive">
-              {message("manageStepUpVerified")}
-            </StatusMessage>
-          ) : (
-            <>
-              {stepUpFailed ? (
-                <ErrorSummary
-                  focusTarget
-                  id="manage-step-up-error"
-                  title={message("manageStepUpTitle")}
-                >
-                  <p>{message("manageStepUpFailed")}</p>
-                </ErrorSummary>
-              ) : null}
-              <Button
-                loading={busy === "send"}
-                loadingLabel={message("manageStepUpSending")}
-                onClick={() => void sendCode()}
-                variant="secondary"
-              >
-                {message("manageStepUpSend")}
-              </Button>
-              {stepUpSent ? (
-                <StatusMessage>{message("manageStepUpSent")}</StatusMessage>
-              ) : null}
-              <form noValidate onSubmit={verifyCode}>
-                <TextField
-                  autoComplete="one-time-code"
-                  description={message("manageStepUpCodeHint")}
-                  id="manage-step-up-code"
-                  inputMode="numeric"
-                  label={message("manageStepUpCodeLabel")}
-                  maxLength={6}
-                  name="code"
-                  onChange={(event) => setCode(event.currentTarget.value)}
-                  required
-                  value={code}
-                />
-                <Button
-                  loading={busy === "verify"}
-                  loadingLabel={message("manageStepUpVerifying")}
-                  type="submit"
-                >
-                  {message("manageStepUpVerify")}
-                </Button>
-              </form>
-            </>
-          )}
-        </section>
+        <Card aria-labelledby="manage-step-up" role="region">
+          <CardHeader>
+            <CardTitle id="manage-step-up">{message("manageStepUpTitle")}</CardTitle>
+            <CardDescription>{message("manageStepUpSummary")}</CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            {view.stepUpVerified ? (
+              <Alert tone="positive">{message("manageStepUpVerified")}</Alert>
+            ) : (
+              <StepUp
+                locale={locale}
+                message={message}
+                messages={formMessages}
+                onVerified={() =>
+                  queryClient.invalidateQueries({ queryKey: manageViewKey(token) })
+                }
+                token={token}
+              />
+            )}
+          </CardContent>
+        </Card>
       ) : null}
-    </Surface>
+    </section>
+  );
+}
+
+interface StepUpProps {
+  readonly locale: Locale;
+  readonly message: (key: string) => string;
+  readonly messages: Readonly<Record<string, string>>;
+  /** Re-reads the view once the code is accepted. */
+  readonly onVerified: () => Promise<unknown>;
+  readonly token: string;
+}
+
+/** Email a one-time code, then confirm it before the link may act. */
+function StepUp({ locale, message, messages, onVerified, token }: StepUpProps) {
+  const form = useZodForm(verifyStepUpSchema, {
+    defaultValues: { action: "verify-step-up", code: "", token },
+  });
+  const verify = useMutation({
+    mutationFn: async (input: z.output<typeof verifyStepUpSchema>) =>
+      (await callManage(input)) as { verified?: unknown },
+    onSuccess: async (result) => {
+      if (result.verified === true) await onVerified();
+    },
+    retry: false,
+  });
+  const sendCode = useMutation({
+    mutationFn: async (input: RequestStepUpInput) =>
+      parseManagementStepUpV1(await callManage(input)),
+    retry: false,
+  });
+  // Whether a code was really sent is not something this page may confirm, so
+  // a failure renders the same message as a success.
+  const stepUpSent = sendCode.isSuccess || sendCode.isError;
+  const stepUpFailed =
+    verify.isError || (verify.isSuccess && verify.data.verified !== true);
+
+  return (
+    <>
+      {stepUpFailed ? (
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
+          id="manage-step-up-error"
+          tabIndex={-1}
+          tone="danger"
+        >
+          <AlertTitle>{message("manageStepUpTitle")}</AlertTitle>
+          <AlertDescription>{message("manageStepUpFailed")}</AlertDescription>
+        </Alert>
+      ) : null}
+      <Button
+        className="justify-self-start"
+        loading={sendCode.isPending}
+        loadingLabel={message("manageStepUpSending")}
+        onClick={() => {
+          verify.reset();
+          sendCode.mutate({ action: "request-step-up", token });
+        }}
+        variant="outline"
+      >
+        <Mail aria-hidden="true" />
+        {message("manageStepUpSend")}
+      </Button>
+      {stepUpSent ? <Alert tone="info">{message("manageStepUpSent")}</Alert> : null}
+      <Separator />
+      <Form form={form} locale={locale} messages={messages}>
+        <form
+          className="grid gap-5"
+          noValidate
+          onSubmit={(event) =>
+            void form.handleSubmit((values) => verify.mutate(values))(event)
+          }
+        >
+          <FormField
+            control={form.control}
+            name="code"
+            render={({ field }) => (
+              <FormItem className="max-w-xs">
+                <FormLabel htmlFor="manage-step-up-code" required>
+                  {message("manageStepUpCodeLabel")}
+                </FormLabel>
+                <FormDescription>{message("manageStepUpCodeHint")}</FormDescription>
+                <FormControl>
+                  <Input
+                    {...field}
+                    autoComplete="one-time-code"
+                    dir="ltr"
+                    id="manage-step-up-code"
+                    inputMode="numeric"
+                    maxLength={6}
+                    name="code"
+                    required
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Button
+            className="justify-self-start"
+            loading={verify.isPending}
+            loadingLabel={message("manageStepUpVerifying")}
+            type="submit"
+          >
+            {message("manageStepUpVerify")}
+          </Button>
+        </form>
+      </Form>
+    </>
+  );
+}
+
+interface RescheduleFormProps {
+  readonly customerTimeZone: string;
+  readonly locale: Locale;
+  readonly message: (key: string) => string;
+  readonly messages: Readonly<Record<string, string>>;
+  /** Receives the one instant the chosen wall time names. */
+  readonly onResolved: (newStartAt: string) => void;
+  readonly pending: boolean;
+}
+
+/**
+ * The new time is picked as wall time in the customer's own booking timezone
+ * and resolved there by the schema; a DST gap or a repeated hour is refused
+ * on the field instead of guessed.
+ */
+function RescheduleForm({
+  customerTimeZone,
+  locale,
+  message,
+  messages,
+  onResolved,
+  pending,
+}: RescheduleFormProps) {
+  const form = useZodForm(rescheduleFormSchema, {
+    defaultValues: { customerTimeZone, date: "", time: "" },
+  });
+  return (
+    <Form form={form} locale={locale} messages={messages}>
+      <form
+        className="grid gap-5"
+        noValidate
+        onSubmit={(event) =>
+          void form.handleSubmit((values) => onResolved(rescheduleStartAt(values)))(
+            event,
+          )
+        }
+      >
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_12rem]">
+          <FormField
+            control={form.control}
+            name="date"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="manage-new-start" required>
+                  {message("manageRescheduleTimeLabel")}
+                </FormLabel>
+                <FormControl>
+                  <DatePicker
+                    id="manage-new-start"
+                    locale={locale}
+                    name="newStartDate"
+                    onValueChange={field.onChange}
+                    placeholder={message("manageRescheduleDatePlaceholder")}
+                    required
+                    value={field.value}
+                  />
+                </FormControl>
+                <FormDescription>{message("manageRescheduleTimeHint")}</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="time"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel htmlFor="manage-new-start-time" required>
+                  {message("manageRescheduleClockLabel")}
+                </FormLabel>
+                <FormControl>
+                  <TimeSelect
+                    id="manage-new-start-time"
+                    locale={locale}
+                    name="newStartTime"
+                    onValueChange={field.onChange}
+                    placeholder={message("manageRescheduleTimePlaceholder")}
+                    required
+                    value={field.value}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <Button
+          className="justify-self-start"
+          loading={pending}
+          loadingLabel={message("manageRescheduling")}
+          type="submit"
+        >
+          {message("manageRescheduleAction")}
+        </Button>
+      </form>
+    </Form>
   );
 }

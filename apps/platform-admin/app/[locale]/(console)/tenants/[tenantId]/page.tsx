@@ -1,3 +1,4 @@
+import { ReferenceCode } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { say } from "../../../../_lib/copy";
@@ -56,13 +57,22 @@ export default async function TenantPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={detail.tenant.name}
         breadcrumbs={[...crumbs, [detail.tenant.name]]}
+        meta={<ReferenceCode>{detail.tenant.id}</ReferenceCode>}
         actions={<StatusBadge locale={locale} status={detail.tenant.status} />}
       />
-      <nav className="section-nav" aria-label={detail.tenant.name}>
+      <nav
+        aria-label={detail.tenant.name}
+        className="-mx-1 flex gap-1 overflow-x-auto border-b pb-px [scrollbar-width:thin]"
+      >
         {sectionIds.map((id) => (
-          <Link key={id} href={`#${id}`}>
+          <Link
+            key={id}
+            href={`#${id}`}
+            className="inline-flex min-h-11 shrink-0 items-center rounded-md px-3 text-sm font-medium whitespace-nowrap text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
             {say(locale, c.sections[id])}
           </Link>
         ))}

@@ -1,9 +1,7 @@
 import type { Locale } from "@wlbp/i18n";
-import { BrandShell } from "@wlbp/white-label-ui";
-import Link from "next/link";
 
-import { clientBrand } from "../../_lib/brand";
-import { bookingFlowCopy, getClientMessage } from "../../_lib/copy";
+import { bookingFlowCopy } from "../../_lib/copy";
+import { SiteFrame } from "../../_lib/ui/site-frame";
 import { ProposalResponse } from "./proposal-response";
 
 type ProposalPageProps = {
@@ -28,31 +26,8 @@ export default async function ProposalPage({
       : null;
 
   return (
-    <BrandShell
-      className="client-shell"
-      labelledBy="proposal-title"
-      tokens={clientBrand.tokens}
-    >
-      <header className="client-header">
-        <Link className="wordmark" href={`/${locale}`} aria-label={clientBrand.name}>
-          <span>{clientBrand.name}</span>
-        </Link>
-        <nav aria-label={getClientMessage(locale, "languageNavigation")}>
-          <Link aria-current={locale === "en" ? "page" : undefined} href="/en">
-            <span aria-hidden="true">EN</span>
-            <span className="sr-only">
-              {getClientMessage(locale, "languageEnglish")}
-            </span>
-          </Link>
-          <Link aria-current={locale === "ar" ? "page" : undefined} href="/ar">
-            <span aria-hidden="true">عربي</span>
-            <span className="sr-only">
-              {getClientMessage(locale, "languageArabic")}
-            </span>
-          </Link>
-        </nav>
-      </header>
-      <div className="client-main">
+    <SiteFrame locale={locale}>
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 md:px-6 md:py-14">
         <ProposalResponse
           actionToken={actionToken}
           copy={bookingFlowCopy(locale)}
@@ -60,6 +35,6 @@ export default async function ProposalPage({
           timeZone="Asia/Riyadh"
         />
       </div>
-    </BrandShell>
+    </SiteFrame>
   );
 }

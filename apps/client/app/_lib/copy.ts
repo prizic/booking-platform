@@ -1,35 +1,35 @@
 import type { Locale } from "@wlbp/i18n";
 
+/*
+ * Product and system strings only: booking mechanics, validation, statuses.
+ * Tenant-facing marketing and identity text (site title, hero, section
+ * headings, calls to action, footer, contact) lives in the instance folder:
+ * instance/content/en.json and ar.json, read through `instanceText`.
+ */
 export type ClientMessageKey =
-  | "eyebrow"
-  | "title"
-  | "summary"
-  | "stepDiscover"
-  | "stepChoose"
-  | "stepConfirm"
-  | "status"
-  | "timezone"
-  | "primaryAction"
-  | "secondaryAction"
-  | "previewLabel"
   | "languageNavigation"
-  | "languageEnglish"
-  | "languageArabic"
-  | "appointmentLabel"
-  | "timezoneLabel"
-  | "priceLabel"
-  | "customerNameLabel"
-  | "customerNameDescription"
-  | "submitAction"
-  | "errorSummaryTitle"
-  | "nameRequired"
-  | "successMessage"
+  | "skipToContent"
+  | "siteNavigation"
+  | "themeToDark"
+  | "themeToLight"
+  | "catalogEmptyTitle"
+  | "catalogEmptyBody"
   | "notFoundTitle"
+  | "notFoundBody"
   | "returnHome"
   | "availabilityTitle"
   | "availabilitySummary"
   | "availabilityDateLabel"
   | "availabilityTimeZoneLabel"
+  | "availabilityDatePlaceholder"
+  | "availabilityDateRequired"
+  | "availabilityFormErrorTitle"
+  | "availabilityTimeZoneService"
+  | "availabilityTimeZoneDevice"
+  | "bookingTimeZoneLabel"
+  | "manageRescheduleDatePlaceholder"
+  | "manageRescheduleTimePlaceholder"
+  | "manageRescheduleClockLabel"
   | "availabilityPartySizeLabel"
   | "availabilitySearch"
   | "availabilitySearching"
@@ -41,6 +41,7 @@ export type ClientMessageKey =
   | "availabilityRetry"
   | "availabilityAdvisory"
   | "availabilityLocationTimeZone"
+  | "availabilityShownIn"
   | "availabilitySelect"
   | "availabilitySelected"
   | "availabilitySelectedAnnouncement"
@@ -51,6 +52,7 @@ export type ClientMessageKey =
   | "availabilityNoSlotsPolicy"
   | "bookingTitle"
   | "bookingSummary"
+  | "bookingStepsLabel"
   | "bookingStepSlot"
   | "bookingStepDetails"
   | "bookingStepConfirmed"
@@ -65,6 +67,13 @@ export type ClientMessageKey =
   | "bookingPhoneDescription"
   | "bookingIntakeLegend"
   | "bookingConsentLabel"
+  | "bookingWhatsAppCountryLabel"
+  | "bookingWhatsAppPhoneLabel"
+  | "bookingWhatsAppPhoneDescription"
+  | "bookingWhatsAppPhonePreview"
+  | "bookingWhatsAppEmailNote"
+  | "bookingWhatsAppPhoneRequired"
+  | "bookingWhatsAppPhoneInvalid"
   | "bookingConsentRequired"
   | "bookingNameRequired"
   | "bookingEmailRequired"
@@ -161,6 +170,7 @@ export type ClientMessageKey =
   | "manageStepUpVerifying"
   | "manageStepUpVerified"
   | "manageStepUpFailed"
+  | "manageStepUpCodeFormat"
   | "manageMissingToken"
   | "manageStatusConfirmed"
   | "manageStatusRequested"
@@ -176,41 +186,36 @@ export type ClientMessageKey =
   | "manageRescheduling"
   | "manageRescheduleTimeLabel"
   | "manageRescheduleTimeHint"
+  | "manageRescheduleTimeUnavailable"
   | "manageRescheduled"
   | "manageActionFailed"
   | "manageActionConflict";
 
 export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
   en: {
-    eyebrow: "Public booking experience",
-    title: "Book the right time, without the back-and-forth.",
-    summary: "A calm, accessible path from service discovery to a confirmed booking.",
-    stepDiscover: "Discover a service",
-    stepChoose: "Choose a valid time",
-    stepConfirm: "Review and confirm",
-    status: "Booking client shell ready",
-    timezone: "Times are shown in Asia/Riyadh",
-    primaryAction: "Explore services",
-    secondaryAction: "Manage a booking",
-    previewLabel: "Booking journey preview",
     languageNavigation: "Language",
-    languageEnglish: "English",
-    languageArabic: "Arabic",
-    appointmentLabel: "Selected appointment",
-    timezoneLabel: "Time zone",
-    priceLabel: "Total",
-    customerNameLabel: "Your name",
-    customerNameDescription: "Used to identify this booking preview.",
-    submitAction: "Review booking",
-    errorSummaryTitle: "We could not review your booking",
-    nameRequired: "Enter your name to continue.",
-    successMessage: "Booking preview ready for {name}.",
+    skipToContent: "Skip to main content",
+    siteNavigation: "Site sections",
+    themeToDark: "Switch to dark theme",
+    themeToLight: "Switch to light theme",
+    catalogEmptyTitle: "No services are open for booking yet",
+    catalogEmptyBody: "Please check back soon.",
     notFoundTitle: "Page not found",
+    notFoundBody: "The link may be old or mistyped. Start again from the booking page.",
     returnHome: "Return to booking",
     availabilityTitle: "Find an available time",
     availabilitySummary: "Search a seven-day window in the timezone you prefer.",
     availabilityDateLabel: "Starting date",
     availabilityTimeZoneLabel: "Your timezone",
+    availabilityDatePlaceholder: "Choose a date",
+    availabilityDateRequired: "Choose a starting date to search.",
+    availabilityFormErrorTitle: "Check your search",
+    availabilityTimeZoneService: "service location",
+    availabilityTimeZoneDevice: "this device",
+    bookingTimeZoneLabel: "Times shown in",
+    manageRescheduleDatePlaceholder: "Choose a date",
+    manageRescheduleTimePlaceholder: "Choose a time",
+    manageRescheduleClockLabel: "New start time",
     availabilityPartySizeLabel: "Guests",
     availabilitySearch: "Find times",
     availabilitySearching: "Finding available times",
@@ -223,6 +228,7 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     availabilityRetry: "Try again",
     availabilityAdvisory: "Times can change until your booking is confirmed.",
     availabilityLocationTimeZone: "Service timezone",
+    availabilityShownIn: "Times shown in",
     availabilitySelect: "Select",
     availabilitySelected: "Selected",
     availabilitySelectedAnnouncement:
@@ -235,9 +241,10 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingTitle: "Book an appointment",
     bookingSummary:
       "Choose a time, share how to reach you, and confirm. Nothing is charged.",
-    bookingStepSlot: "1. Choose a time",
-    bookingStepDetails: "2. Your details",
-    bookingStepConfirmed: "3. Confirmed",
+    bookingStepsLabel: "Booking steps",
+    bookingStepSlot: "Choose a time",
+    bookingStepDetails: "Your details",
+    bookingStepConfirmed: "Confirmed",
     bookingHoldExpires: "This time is held for you until {time}.",
     bookingContinue: "Hold this time",
     bookingHolding: "Holding your time",
@@ -249,6 +256,17 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingPhoneDescription: "Only used if we need to reach you about this booking.",
     bookingIntakeLegend: "Before your appointment",
     bookingConsentLabel: "I accept the booking and cancellation policy.",
+    bookingWhatsAppCountryLabel: "Country code",
+    bookingWhatsAppPhoneLabel: "WhatsApp number",
+    bookingWhatsAppPhoneDescription:
+      "Your mobile number without the country code, or the full number starting with +.",
+    bookingWhatsAppPhonePreview: "Updates will go to",
+    bookingWhatsAppEmailNote:
+      "Your confirmation and updates are always sent by email as well.",
+    bookingWhatsAppPhoneRequired:
+      "Enter the WhatsApp number for updates, or untick WhatsApp updates.",
+    bookingWhatsAppPhoneInvalid:
+      "Enter a valid mobile number, or the full international number starting with +.",
     bookingConsentRequired: "Accept the policy to confirm your booking.",
     bookingNameRequired: "Enter your full name.",
     bookingEmailRequired: "Enter an email address we can send your confirmation to.",
@@ -372,6 +390,7 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpVerifying: "Checking your code",
     manageStepUpVerified: "Confirmed. You can continue with this action.",
     manageStepUpFailed: "That code did not work. Request a new one if you need to.",
+    manageStepUpCodeFormat: "Enter the six-digit code from the email.",
     manageMissingToken: "Open the link from your booking email to manage this booking.",
     manageStatusConfirmed: "Confirmed",
     manageStatusRequested: "Awaiting approval",
@@ -391,52 +410,49 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageRescheduleTimeLabel: "New time",
     manageRescheduleTimeHint:
       "Times are shown in your timezone. Only times the business still has free can be booked.",
+    manageRescheduleTimeUnavailable:
+      "A clock change in your timezone skips or repeats this time. Choose another time.",
     manageRescheduled: "Your booking has been moved. The new time is confirmed.",
     manageActionFailed: "That did not work. Your booking has not changed.",
     manageActionConflict:
       "Your booking changed while this page was open, so nothing was applied. Open the most recent email about it.",
   },
   ar: {
-    eyebrow: "تجربة الحجز العامة",
-    title: "احجز الموعد المناسب دون مراسلات متكررة.",
-    summary: "مسار هادئ وميسّر يبدأ باكتشاف الخدمة وينتهي بحجز مؤكّد.",
-    stepDiscover: "اكتشف خدمة",
-    stepChoose: "اختر وقتًا متاحًا",
-    stepConfirm: "راجع وأكّد",
-    status: "واجهة تطبيق الحجز جاهزة",
-    timezone: "تُعرض الأوقات حسب توقيت آسيا/الرياض",
-    primaryAction: "استكشف الخدمات",
-    secondaryAction: "إدارة حجز",
-    previewLabel: "معاينة رحلة الحجز",
     languageNavigation: "اللغة",
-    languageEnglish: "الإنجليزية",
-    languageArabic: "العربية",
-    appointmentLabel: "الموعد المحدد",
-    timezoneLabel: "المنطقة الزمنية",
-    priceLabel: "الإجمالي",
-    customerNameLabel: "اسمك",
-    customerNameDescription: "يُستخدم للتعرّف على معاينة هذا الحجز.",
-    submitAction: "مراجعة الحجز",
-    errorSummaryTitle: "تعذّرت مراجعة حجزك",
-    nameRequired: "أدخل اسمك للمتابعة.",
-    successMessage: "معاينة الحجز جاهزة باسم {name}.",
+    skipToContent: "انتقل إلى المحتوى الرئيسي",
+    siteNavigation: "أقسام الموقع",
+    themeToDark: "التبديل إلى المظهر الداكن",
+    themeToLight: "التبديل إلى المظهر الفاتح",
+    catalogEmptyTitle: "لا توجد خدمات متاحة للحجز حاليًا",
+    catalogEmptyBody: "يُرجى العودة لاحقًا.",
     notFoundTitle: "الصفحة غير موجودة",
+    notFoundBody: "ربما يكون الرابط قديمًا أو فيه خطأ. ابدأ من جديد من صفحة الحجز.",
     returnHome: "العودة إلى الحجز",
     availabilityTitle: "ابحث عن وقت متاح",
     availabilitySummary: "ابحث ضمن سبعة أيام بالمنطقة الزمنية التي تفضلها.",
     availabilityDateLabel: "تاريخ البدء",
     availabilityTimeZoneLabel: "منطقتك الزمنية",
-    availabilityPartySizeLabel: "عدد الضيوف",
+    availabilityDatePlaceholder: "اختر تاريخًا",
+    availabilityDateRequired: "اختر تاريخ البدء لإجراء البحث.",
+    availabilityFormErrorTitle: "راجع بيانات البحث",
+    availabilityTimeZoneService: "موقع الخدمة",
+    availabilityTimeZoneDevice: "هذا الجهاز",
+    bookingTimeZoneLabel: "الأوقات معروضة بتوقيت",
+    manageRescheduleDatePlaceholder: "اختر تاريخًا",
+    manageRescheduleTimePlaceholder: "اختر وقتًا",
+    manageRescheduleClockLabel: "وقت البدء الجديد",
+    availabilityPartySizeLabel: "عدد الأشخاص",
     availabilitySearch: "البحث عن أوقات",
     availabilitySearching: "جارٍ البحث عن الأوقات المتاحة",
     availabilityResults: "الأوقات المتاحة",
     availabilityEmpty: "لا توجد أوقات مطابقة لهذا البحث.",
     availabilityEmptyAction: "جرّب تاريخًا أو منطقة زمنية أخرى.",
     availabilityErrorTitle: "تعذر تحميل الأوقات المتاحة",
-    availabilityError: "التوافر غير متاح مؤقتًا. لم يتغير حجزك.",
+    availabilityError: "تعذّر عرض الأوقات المتاحة مؤقتًا. لم يتغيّر شيء في حجزك.",
     availabilityRetry: "إعادة المحاولة",
     availabilityAdvisory: "قد تتغير الأوقات حتى يتم تأكيد حجزك.",
     availabilityLocationTimeZone: "المنطقة الزمنية للخدمة",
+    availabilityShownIn: "الأوقات معروضة بتوقيت",
     availabilitySelect: "اختيار",
     availabilitySelected: "تم الاختيار",
     availabilitySelectedAnnouncement:
@@ -444,13 +460,15 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     availabilityUnavailable: "اختر خدمة منشورة قبل البحث عن وقت.",
     availabilityNoSlotsCapacity: "لم تعد السعة كافية في هذه الأوقات.",
     availabilityNoSlotsMatching: "لا توجد أوقات قابلة للحجز تطابق هذا البحث.",
-    availabilityNoSlotsWindow: "تقع هذه التواريخ خارج نافذة الحجز.",
+    availabilityNoSlotsWindow: "هذه التواريخ خارج الفترة المتاحة للحجز.",
     availabilityNoSlotsPolicy: "لا تسمح سياسة الحجز الحالية بهذه الأوقات.",
     bookingTitle: "احجز موعدًا",
-    bookingSummary: "اختر وقتًا، وشاركنا وسيلة التواصل معك، ثم أكّد. لا توجد أي رسوم.",
-    bookingStepSlot: "١. اختر وقتًا",
-    bookingStepDetails: "٢. بياناتك",
-    bookingStepConfirmed: "٣. تم التأكيد",
+    bookingSummary:
+      "اختر وقتًا، وأخبرنا كيف نتواصل معك، ثم أكّد الحجز. لن يُخصم أي مبلغ.",
+    bookingStepsLabel: "خطوات الحجز",
+    bookingStepSlot: "اختر وقتًا",
+    bookingStepDetails: "بياناتك",
+    bookingStepConfirmed: "تم التأكيد",
     bookingHoldExpires: "هذا الوقت محجوز لك حتى {time}.",
     bookingContinue: "احجز هذا الوقت مؤقتًا",
     bookingHolding: "جارٍ حجز وقتك",
@@ -462,6 +480,17 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingPhoneDescription: "يُستخدم فقط إذا احتجنا للتواصل معك بشأن هذا الحجز.",
     bookingIntakeLegend: "قبل موعدك",
     bookingConsentLabel: "أوافق على سياسة الحجز والإلغاء.",
+    bookingWhatsAppCountryLabel: "رمز الدولة",
+    bookingWhatsAppPhoneLabel: "رقم واتساب",
+    bookingWhatsAppPhoneDescription:
+      "رقم جوالك دون رمز الدولة، أو الرقم الدولي كاملًا بدءًا بعلامة +.",
+    bookingWhatsAppPhonePreview: "ستصل التحديثات إلى",
+    bookingWhatsAppEmailNote:
+      "نرسل التأكيد والتحديثات إلى بريدك الإلكتروني دائمًا أيضًا.",
+    bookingWhatsAppPhoneRequired:
+      "أدخل رقم واتساب لاستلام التحديثات، أو ألغِ اختيار التحديثات عبر واتساب.",
+    bookingWhatsAppPhoneInvalid:
+      "أدخل رقم جوال صحيحًا، أو الرقم الدولي كاملًا بدءًا بعلامة +.",
     bookingConsentRequired: "وافق على السياسة لتأكيد حجزك.",
     bookingNameRequired: "أدخل اسمك الكامل.",
     bookingEmailRequired: "أدخل بريدًا إلكترونيًا لإرسال التأكيد إليه.",
@@ -578,6 +607,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpVerifying: "جارٍ التحقق من الرمز",
     manageStepUpVerified: "تم التأكيد. يمكنك متابعة هذا الإجراء.",
     manageStepUpFailed: "لم ينجح هذا الرمز. اطلب رمزًا جديدًا إذا لزم الأمر.",
+    manageStepUpCodeFormat:
+      "أدخل الرمز المكوّن من ستة أرقام الوارد في البريد الإلكتروني.",
     manageMissingToken: "افتح الرابط من رسالة الحجز لإدارة هذا الحجز.",
     manageStatusConfirmed: "مؤكّد",
     manageStatusRequested: "بانتظار الموافقة",
@@ -597,6 +628,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageRescheduleTimeLabel: "الوقت الجديد",
     manageRescheduleTimeHint:
       "تُعرض الأوقات بمنطقتك الزمنية. يمكن حجز الأوقات المتاحة لدى مقدّم الخدمة فقط.",
+    manageRescheduleTimeUnavailable:
+      "يُتخطّى هذا الوقت أو يتكرّر بسبب تغيير التوقيت في منطقتك الزمنية. اختر وقتًا آخر.",
     manageRescheduled: "تم نقل حجزك، والوقت الجديد مؤكّد.",
     manageActionFailed: "لم تنجح العملية، ولم يتغيّر حجزك.",
     manageActionConflict:
@@ -619,6 +652,7 @@ export function availabilityPickerCopy(locale: Locale) {
     error: message("availabilityError"),
     errorTitle: message("availabilityErrorTitle"),
     locationTimeZone: message("availabilityLocationTimeZone"),
+    shownIn: message("availabilityShownIn"),
     noSlotReasons: {
       capacity_unavailable: message("availabilityNoSlotsCapacity"),
       no_matching_availability: message("availabilityNoSlotsMatching"),
@@ -635,6 +669,11 @@ export function availabilityPickerCopy(locale: Locale) {
     selectedAnnouncement: message("availabilitySelectedAnnouncement"),
     summary: message("availabilitySummary"),
     timeZoneLabel: message("availabilityTimeZoneLabel"),
+    datePlaceholder: message("availabilityDatePlaceholder"),
+    dateRequired: message("availabilityDateRequired"),
+    formErrorTitle: message("availabilityFormErrorTitle"),
+    timeZoneServiceHint: message("availabilityTimeZoneService"),
+    timeZoneDeviceHint: message("availabilityTimeZoneDevice"),
     title: message("availabilityTitle"),
     unavailable: message("availabilityUnavailable"),
   };

@@ -1,10 +1,9 @@
-import { TextField } from "@wlbp/ui-foundation";
-import { randomUUID } from "node:crypto";
+import { Alert } from "@wlbp/ui-foundation";
 import { say, stateCopy } from "../../../../_lib/copy";
-import { createTenantAction } from "../../../../_lib/actions/tenants";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
 import { pageLocale } from "../../../../_lib/page-locale";
 import { PageHeader } from "../../../../_lib/shell/page-header";
+import { TextFormField } from "../../../../_lib/ui/form-fields";
 import { OperatorForm } from "../../../../_lib/ui/operator-form";
 import { tenantsCopy as c } from "../copy";
 
@@ -29,24 +28,24 @@ export default async function NewTenantPage({
           [say(locale, c.newTitle)],
         ]}
       />
-      <section className="section">
+      <section className="max-w-2xl rounded-lg border bg-card p-5 md:p-6">
         {atLeast(operator.role, "admin") ? (
           <OperatorForm
             locale={locale}
-            action={createTenantAction}
+            operation="createTenant"
             submit={say(locale, c.register)}
             successMessage={say(locale, c.created_ok)}
+            values={{ name: "", brandKey: "" }}
           >
-            {/* A fresh key per render: a double submit replays, a new visit creates. */}
-            <input type="hidden" name="idempotencyKey" value={randomUUID()} />
-            <TextField
+            {/* The kit generates a fresh idempotency key per visit: a double submit replays. */}
+            <TextFormField
               id="name"
               name="name"
               label={say(locale, c.tenantName)}
               required
               maxLength={160}
             />
-            <TextField
+            <TextFormField
               id="brandKey"
               name="brandKey"
               label={say(locale, c.brandKey)}
@@ -57,7 +56,7 @@ export default async function NewTenantPage({
             />
           </OperatorForm>
         ) : (
-          <p className="notice">{say(locale, stateCopy.roleRequired)}</p>
+          <Alert tone="info">{say(locale, stateCopy.roleRequired)}</Alert>
         )}
       </section>
     </>

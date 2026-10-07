@@ -1,5 +1,6 @@
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import type { Locale } from "@wlbp/i18n";
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { getTeamResourcesMetadata } from "../../_lib/team-resources-metadata";
@@ -89,45 +90,51 @@ export default async function TeamResourcesPage({
       labelledBy="team-resources-title"
       locale={locale}
     >
-      <TeamResourcesView
-        actions={{
-          deactivateResource: deactivateResourceAction,
-          deactivateStaff: deactivateStaffAction,
-          saveResource: saveResourceAction,
-          saveResourceType: saveResourceTypeAction,
-          saveStaffProfile: saveStaffProfileAction,
-          setResourceLocationEligibility: setResourceLocationEligibilityAction,
-          setResourceRequirement: setResourceRequirementAction,
-          setStaffEligibility: setStaffEligibilityAction,
-        }}
-        locale={locale}
-        members={access?.members.filter((member) => member.status === "active") ?? []}
-        {...(retry === undefined ? {} : { retry })}
-        {...(query.result === "saved" ||
-        query.result === "cancelled" ||
-        query.result === "deactivated" ||
-        query.result === "deferred" ||
-        query.result === "reassigned" ||
-        query.result === "invalid-request" ||
-        query.result === "not-authorized" ||
-        query.result === "revision-conflict" ||
-        query.result === "backend-unavailable"
-          ? { result: query.result }
-          : {})}
-        state={state}
-      />
-      {access ? (
-        <StaffAccessPanel
+      <div className="grid gap-10">
+        <TeamResourcesView
+          actions={{
+            deactivateResource: deactivateResourceAction,
+            deactivateStaff: deactivateStaffAction,
+            saveResource: saveResourceAction,
+            saveResourceType: saveResourceTypeAction,
+            saveStaffProfile: saveStaffProfileAction,
+            setResourceLocationEligibility: setResourceLocationEligibilityAction,
+            setResourceRequirement: setResourceRequirementAction,
+            setStaffEligibility: setStaffEligibilityAction,
+          }}
           locale={locale}
-          workspace={access}
-          attempts={Array.from(
-            { length: 1 + access.members.length * 2 + access.invitations.length * 2 },
-            () => crypto.randomUUID(),
-          )}
+          members={access?.members.filter((member) => member.status === "active") ?? []}
+          {...(retry === undefined ? {} : { retry })}
+          {...(query.result === "saved" ||
+          query.result === "cancelled" ||
+          query.result === "deactivated" ||
+          query.result === "deferred" ||
+          query.result === "reassigned" ||
+          query.result === "invalid-request" ||
+          query.result === "not-authorized" ||
+          query.result === "revision-conflict" ||
+          query.result === "backend-unavailable"
+            ? { result: query.result }
+            : {})}
+          state={state}
         />
-      ) : canManageAccess ? (
-        <p role="alert">{staffAccessMessage(locale, "unavailable")}</p>
-      ) : null}
+        {access ? (
+          <StaffAccessPanel
+            locale={locale}
+            workspace={access}
+            attempts={Array.from(
+              { length: 1 + access.members.length * 2 + access.invitations.length * 2 },
+              () => crypto.randomUUID(),
+            )}
+          />
+        ) : canManageAccess ? (
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {staffAccessMessage(locale, "unavailable")}
+            </AlertDescription>
+          </Alert>
+        ) : null}
+      </div>
     </WorkspaceShell>
   );
 }

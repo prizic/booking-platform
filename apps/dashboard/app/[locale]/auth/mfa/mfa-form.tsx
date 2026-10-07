@@ -1,17 +1,43 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  applyActionErrors,
+  Button,
+  Checkbox,
+  FieldDescription,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
+  useActionMutation,
+  useZodForm,
+} from "@wlbp/ui-foundation";
 import { authMessage, type AuthMessageKey } from "../../../_lib/auth-copy";
+import { authFormMessages } from "../../../_lib/auth-form";
+import { textLinkClass as authLinkClass } from "../../../_lib/ui/text-link";
 import {
   enrollAuthenticator,
   verifyAuthenticator,
   removeAuthenticator,
   cancelAuthenticatorSetup,
-  type MfaResult,
+  type AuthenticatorSetup,
 } from "./actions";
+import { removeAuthenticatorSchema, verifyAuthenticatorSchema } from "./mfa-schema";
+
 export function MfaForm({
   locale,
   factors,
@@ -25,164 +51,292 @@ export function MfaForm({
   readonly unavailable: boolean;
   readonly returnTo: string;
 }) {
-  const [setup, setSetup] = useState<MfaResult | null>(null);
+  const [setup, setSetup] = useState<AuthenticatorSetup | null>(null);
   const [result, setResult] = useState<AuthMessageKey | null>(null);
-  const [pending, start] = useTransition();
-  const router = useRouter();
   const message = (key: AuthMessageKey) => authMessage(locale, key);
-  const available = setup?.factorId
+  const messages = authFormMessages(locale);
+  const available = setup
     ? [...factors, { id: setup.factorId, friendlyName: message("factor") }]
     : factors;
+
+  const enroll = useActionMutation(enrollAuthenticator, {
+    refresh: false,
+    onSuccess: (data) => setSetup(data),
+    onFailure: () => setResult("unavailable"),
+    onError: () => setResult("unavailable"),
+  });
+
+  const verifyForm = useZodForm(verifyAuthenticatorSchema, {
+    defaultValues: { factorId: factors[0]?.id ?? "", code: "" },
+  });
+  // A setup in progress is the factor being verified, as soon as it exists.
+  const setupFactorId = setup?.factorId;
+  useEffect(() => {
+    if (setupFactorId !== undefined) verifyForm.setValue("factorId", setupFactorId);
+  }, [setupFactorId, verifyForm]);
+  const verify = useActionMutation(verifyAuthenticator, {
+    onSuccess: () => {
+      setResult("verified");
+      setSetup(null);
+      verifyForm.resetField("code");
+    },
+    onFailure: (failure) => {
+      applyActionErrors(verifyForm, failure);
+      setResult("invalid");
+    },
+    onError: () => setResult("unavailable"),
+  });
+
+  const cancel = useActionMutation(cancelAuthenticatorSetup, {
+    onSuccess: () => {
+      setSetup(null);
+      setResult(null);
+    },
+    onFailure: () => setResult("unavailable"),
+    onError: () => setResult("unavailable"),
+  });
+
+  const removeForm = useZodForm(removeAuthenticatorSchema, {
+    defaultValues: { factorId: factors[0]?.id ?? "", confirm: false },
+  });
+  const remove = useActionMutation(removeAuthenticator, {
+    onSuccess: () => {
+      setResult("verified");
+      removeForm.resetField("confirm");
+    },
+    onFailure: (failure) => {
+      applyActionErrors(removeForm, failure);
+      setResult("invalid");
+    },
+    onError: () => setResult("unavailable"),
+  });
+
+  const pending =
+    enroll.isPending || verify.isPending || cancel.isPending || remove.isPending;
+
   return (
-    <div className="auth-form">
-      {unavailable ? <p role="alert">{message("unavailable")}</p> : null}
-      {result ? (
-        <p role={result === "verified" ? "status" : "alert"}>{message(result)}</p>
+    <div className="grid gap-5">
+      {unavailable ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {message("unavailable")}
+          </AlertDescription>
+        </Alert>
       ) : null}
-      {setup?.ok && setup.qrCode ? (
-        <section aria-label={message("setup")}>
-          <p>{message("setup")}</p>
+      {result ? (
+        <Alert tone={result === "verified" ? "positive" : "danger"}>
+          <AlertDescription className="text-foreground">
+            {message(result)}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {setup ? (
+        <section
+          aria-label={message("setup")}
+          className="grid justify-items-center gap-3"
+        >
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {message("setup")}
+          </p>
+          {/* A QR code needs a light quiet zone to scan, in either theme, so
+              this is the one place a fixed white is deliberate. */}
           <Image
             unoptimized
             src={setup.qrCode}
             alt={message("qr")}
             width={240}
             height={240}
+            className="rounded-md border bg-white p-2"
           />
-          <p dir="ltr">{setup.secret}</p>
+          <p
+            dir="ltr"
+            className="font-latin text-sm font-semibold tracking-[0.08em] break-all [font-variant-numeric:tabular-nums]"
+          >
+            {setup.secret}
+          </p>
         </section>
       ) : null}
       {available.length === 0 ? (
-        <p>{message("noFactor")}</p>
+        <p className="text-sm text-muted-foreground">{message("noFactor")}</p>
       ) : (
-        <form
-          className="auth-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            const factor = String(data.get("factorId"));
-            const code = String(data.get("code"));
-            start(async () => {
-              const response = await verifyAuthenticator(factor, code);
-              setResult(response.ok ? "verified" : "invalid");
-              if (response.ok) {
-                setSetup(null);
-                router.refresh();
-              }
-            });
-          }}
-        >
-          <label>
-            {message("factor")}
-            <select
-              key={setup?.factorId ?? "existing"}
-              className="wlbp-field__input"
+        <Form form={verifyForm} locale={locale} messages={messages}>
+          <form
+            noValidate
+            className="grid gap-5"
+            onSubmit={verifyForm.handleSubmit((values) => verify.mutate(values))}
+          >
+            <FormField
+              control={verifyForm.control}
               name="factorId"
-              defaultValue={setup?.factorId ?? factors[0]?.id}
-            >
-              {available.map((factor) => (
-                <option key={factor.id} value={factor.id}>
-                  {factor.friendlyName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {message("code")}
-            <input
-              className="wlbp-field__input"
-              name="code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              required
-              minLength={6}
-              maxLength={6}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{message("factor")}</FormLabel>
+                  <Select
+                    name={field.name}
+                    value={field.value}
+                    onValueChange={(value) => {
+                      // Radix echoes "" from its hidden native select before a
+                      // newly added option exists; never let that clear the choice.
+                      if (value) field.onChange(value);
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger onBlur={field.onBlur}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {available.map((factor) => (
+                        <SelectItem key={factor.id} value={factor.id}>
+                          {factor.friendlyName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
             />
-          </label>
-          <button className="wlbp-button" disabled={pending} type="submit">
-            {message(pending ? "pending" : "verify")}
-          </button>
-        </form>
+            <FormField
+              control={verifyForm.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{message("code")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      dir="ltr"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      className="font-latin tracking-[0.3em]"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="submit"
+              block
+              loading={verify.isPending}
+              disabled={pending}
+              loadingLabel={message("pending")}
+            >
+              {message("verify")}
+            </Button>
+          </form>
+        </Form>
       )}
       {!setup ? (
-        <button
-          className="wlbp-button wlbp-button--quiet"
+        <Button
+          variant="outline"
           disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const response = await enrollAuthenticator();
-              if (response.ok) setSetup(response);
-              else setResult("unavailable");
-            })
-          }
+          loading={enroll.isPending}
+          onClick={() => enroll.mutate(undefined)}
         >
           {message("enroll")}
-        </button>
+        </Button>
       ) : null}
       {[
-        ...(setup?.factorId
-          ? [{ id: setup.factorId, friendlyName: message("factor") }]
-          : []),
+        ...(setup ? [{ id: setup.factorId, friendlyName: message("factor") }] : []),
         ...unfinished.filter((factor) => factor.id !== setup?.factorId),
       ].map((factor) => (
-        <button
+        <Button
           key={factor.id}
-          className="wlbp-button wlbp-button--quiet"
+          variant="ghost"
           disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const response = await cancelAuthenticatorSetup(factor.id);
-              if (response.ok) {
-                setSetup(null);
-                setResult(null);
-                router.refresh();
-              } else setResult("unavailable");
-            })
-          }
+          onClick={() => cancel.mutate({ factorId: factor.id })}
         >
           {message("cancelSetup")} — {factor.friendlyName}
-        </button>
+        </Button>
       ))}
       {factors.length ? (
-        <details>
-          <summary>{message("remove")}</summary>
-          <p>{message("removeHint")}</p>
-          <form
-            className="auth-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              start(async () => {
-                const response = await removeAuthenticator(
-                  String(data.get("factorId")),
-                );
-                setResult(response.ok ? "verified" : "invalid");
-                if (response.ok) router.refresh();
-              });
-            }}
-          >
-            <label>
-              {message("factor")}
-              <select className="wlbp-field__input" name="factorId">
-                {factors.map((factor) => (
-                  <option key={factor.id} value={factor.id}>
-                    {factor.friendlyName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <input type="checkbox" required />
-              {message("removeHint")}
-            </label>
-            <button className="wlbp-button wlbp-button--quiet" disabled={pending}>
-              {message("remove")}
-            </button>
-          </form>
-        </details>
+        <>
+          <Separator />
+          <Form form={removeForm} locale={locale} messages={messages}>
+            <form
+              noValidate
+              aria-labelledby="mfa-remove-title"
+              className="grid gap-4"
+              onSubmit={removeForm.handleSubmit((values) => remove.mutate(values))}
+            >
+              <div className="grid gap-1">
+                <h2 id="mfa-remove-title" className="text-base font-semibold">
+                  {message("remove")}
+                </h2>
+                <FieldDescription>{message("removeHint")}</FieldDescription>
+              </div>
+              <FormField
+                control={removeForm.control}
+                name="factorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{message("factor")}</FormLabel>
+                    <Select
+                      name={field.name}
+                      value={field.value}
+                      onValueChange={(value) => {
+                        // Radix echoes "" from its hidden native select before a
+                        // newly added option exists; never let that clear the choice.
+                        if (value) field.onChange(value);
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger onBlur={field.onBlur}>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {factors.map((factor) => (
+                          <SelectItem key={factor.id} value={factor.id}>
+                            {factor.friendlyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={removeForm.control}
+                name="confirm"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-start gap-3">
+                      <FormControl>
+                        <Checkbox
+                          name={field.name}
+                          checked={field.value === true}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked === true)
+                          }
+                          onBlur={field.onBlur}
+                        />
+                      </FormControl>
+                      <FormLabel required>{message("removeHint")}</FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                variant="destructive-outline"
+                disabled={pending}
+                loading={remove.isPending}
+              >
+                {message("remove")}
+              </Button>
+            </form>
+          </Form>
+        </>
       ) : null}
-      <Link href={returnTo}>{message("back")}</Link>
+      <Link className={authLinkClass} href={returnTo}>
+        {message("back")}
+      </Link>
     </div>
   );
 }

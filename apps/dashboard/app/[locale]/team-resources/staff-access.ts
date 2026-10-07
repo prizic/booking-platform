@@ -52,6 +52,17 @@ const copy = {
     account: "Staff account",
     noAccount: "No login account",
     currentAccount: "Current linked account",
+    cancel: "Cancel",
+    reload: "Reload access",
+    verify: "Verify your authenticator",
+    revokeTitle: "Revoke this member's access?",
+    revokeInvitationTitle: "Revoke this invitation?",
+    revokeInvitationConfirm:
+      "The invitation link stops working. You can send a new invitation later.",
+    invitations: "Invitations",
+    members: "Members",
+    noMembers: "No members have login access yet.",
+    inviteHint: "Send a sign-in invitation with a built-in role.",
   },
   ar: {
     title: "صلاحية الدخول",
@@ -99,6 +110,17 @@ const copy = {
     account: "حساب الموظف",
     noAccount: "دون حساب دخول",
     currentAccount: "الحساب المرتبط حاليًا",
+    cancel: "إلغاء",
+    reload: "إعادة تحميل الصلاحية",
+    verify: "التحقق بتطبيق المصادقة",
+    revokeTitle: "هل تريد إلغاء صلاحية دخول هذا العضو؟",
+    revokeInvitationTitle: "هل تريد إلغاء هذه الدعوة؟",
+    revokeInvitationConfirm:
+      "سيتوقف رابط الدعوة عن العمل. يمكنك إرسال دعوة جديدة لاحقًا.",
+    invitations: "الدعوات",
+    members: "الأعضاء",
+    noMembers: "لا يملك أي عضو صلاحية دخول بعد.",
+    inviteHint: "أرسل دعوة تسجيل دخول بدور معتمد.",
   },
 } as const;
 export type StaffAccessMessage = keyof typeof copy.en;
@@ -106,63 +128,3 @@ export const staffAccessMessage = (locale: Locale, key: StaffAccessMessage) =>
   copy[locale][key];
 export const staffRoleName = (locale: Locale, role: BuiltInStaffRole) =>
   copy[locale][role];
-const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu;
-export function parseStaffAccessCommand(form: FormData) {
-  const action = form.get("operation");
-  const requestId = form.get("requestId");
-  if (
-    typeof requestId !== "string" ||
-    !uuid.test(requestId) ||
-    typeof action !== "string" ||
-    ![
-      "invite",
-      "resend",
-      "revoke_invitation",
-      "edit_membership",
-      "revoke_membership",
-    ].includes(action)
-  )
-    return null;
-  const targetId = form.get("targetId");
-  const roleId = form.get("roleId");
-  const expected = form.get("expectedRevision");
-  const locationIds = form.getAll("locationIds");
-  const email = form.get("email");
-  if (
-    locationIds.length > 100 ||
-    locationIds.some((id) => typeof id !== "string" || !uuid.test(id))
-  )
-    return null;
-  if (
-    action !== "invite" &&
-    (typeof targetId !== "string" ||
-      !uuid.test(targetId) ||
-      typeof expected !== "string" ||
-      !/^[1-9][0-9]*$/u.test(expected) ||
-      !Number.isSafeInteger(Number(expected)))
-  )
-    return null;
-  if (
-    ["invite", "edit_membership"].includes(action) &&
-    (typeof roleId !== "string" || !uuid.test(roleId))
-  )
-    return null;
-  if (
-    action === "invite" &&
-    (typeof email !== "string" ||
-      email.length > 254 ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email))
-  )
-    return null;
-  if (action.startsWith("revoke") && form.get("confirm") !== "yes") return null;
-  return {
-    action,
-    requestId,
-    targetId: typeof targetId === "string" && uuid.test(targetId) ? targetId : null,
-    roleId: typeof roleId === "string" && uuid.test(roleId) ? roleId : null,
-    expectedRevision:
-      typeof expected === "string" && expected !== "" ? Number(expected) : null,
-    locationIds: locationIds as string[],
-    email: typeof email === "string" ? email.trim().toLowerCase() : null,
-  };
-}

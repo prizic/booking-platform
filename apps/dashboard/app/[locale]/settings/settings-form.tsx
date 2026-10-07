@@ -1,12 +1,75 @@
 "use client";
 import { featureLabel } from "./feature-label";
-import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Locale } from "@wlbp/i18n";
+import { ArrowUp, Plus, Trash2 } from "lucide-react";
+import { useFieldArray } from "react-hook-form";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import {
+  Button,
+  FieldDescription,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
+  Form,
+  StatusStamp,
+  applyActionErrors,
+  useActionMutation,
+  useZodForm,
+} from "@wlbp/ui-foundation";
 import type { TenantConfigurationV1 } from "../../_lib/dashboard-access";
-import { getDashboardMessage } from "../../_lib/copy";
-import { settingsNavigation, settingsRoutes } from "./settings-fields";
+import { getDashboardMessage, type DashboardMessageKey } from "../../_lib/copy";
+import { settingsNavigation } from "./settings-document";
+import { settingsRoutes, settingsSchema, type SettingsInput } from "./settings-schema";
 import { saveStructuredSettingsAction } from "./actions";
+import { FormActions } from "../services/form-kit";
+import { CheckboxField, SelectField, TextField } from "../services/form-fields";
+import { newAttemptId, useAuthoritativeDefaults } from "../services/form-hooks";
+import { MutationFeedback } from "../services/mutation-feedback";
+import { dashboardFormMessages } from "../../_lib/form-messages";
+
+const panel = "grid gap-5 rounded-lg border bg-card p-5 md:p-6";
+
+const errorKeys = [
+  "requestsResultInvalid",
+  "requestsResultNotAuthorized",
+  "requestsResultConflict",
+  "requestsResultUnavailable",
+  "settingsUnavailable",
+  "settingsResultInvalid",
+  "brandResultUnsafe",
+] as const satisfies readonly DashboardMessageKey[];
+
+/** The editor's values for the stored configuration, as the controls hold them. */
+export function settingsDefaults(
+  locale: Locale,
+  configuration: TenantConfigurationV1,
+): SettingsInput {
+  const settings = configuration.settings;
+  return {
+    locale,
+    expectedRevision: String(configuration.revision),
+    defaultLocale: String(
+      settings.defaultLocale ?? configuration.defaultLocale,
+    ) as SettingsInput["defaultLocale"],
+    replyToEmail: String(settings.replyToEmail ?? ""),
+    currency: String(settings.currency ?? "USD"),
+    taxRateBps: String(settings.taxRateBps ?? ""),
+    bookingHorizonDays: String(settings.bookingHorizonDays ?? ""),
+    navigation: settingsNavigation(configuration.navigation).map((row) => ({
+      rowKey: row.rowKey,
+      en: row.label.en,
+      ar: row.label.ar,
+      destination: row.route ?? row.href ?? "",
+    })),
+    features: Object.keys(configuration.entitlements).map((key) => ({
+      key,
+      enabled:
+        configuration.entitlements[key] === true &&
+        configuration.featureConfiguration[key]?.enabled === true,
+    })),
+  };
+}
+
 export function SettingsForm({
   locale,
   configuration,
@@ -15,225 +78,266 @@ export function SettingsForm({
   configuration: TenantConfigurationV1;
 }) {
   const router = useRouter();
-  const [state, action, pending] = useActionState(saveStructuredSettingsAction, {});
-  const [items, setItems] = useState(() =>
-    settingsNavigation(configuration.navigation),
-  );
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
-  useEffect(() => {
-    if (state.saved) router.refresh();
-  }, [state, router]);
+  const messages = {
+    ...dashboardFormMessages(locale),
+    ...Object.fromEntries(
+      errorKeys.map((key) => [key, getDashboardMessage(locale, key)]),
+    ),
+    invalid: getDashboardMessage(locale, "settingsResultInvalid"),
+    settings_destination_invalid: m(
+      "Choose an approved route or enter an https:// link.",
+      "اختر مسارًا معتمدًا أو أدخل رابطًا يبدأ بـ https://.",
+    ),
+  };
+  const defaults = settingsDefaults(locale, configuration);
+  const form = useZodForm(settingsSchema, { defaultValues: defaults });
+  useAuthoritativeDefaults(form, defaults);
+  const control = form.control;
+  const items = useFieldArray({ control, name: "navigation", keyName: "fieldId" });
+  const mutation = useActionMutation(saveStructuredSettingsAction, {
+    onFailure: (result) => applyActionErrors(form, result),
+  });
+  const pending = mutation.isPending;
+  const currentCurrency = configuration.settings.currency;
   return (
-    <form
-      action={action}
-      className="catalog-form"
-      onReset={(event) => event.preventDefault()}
-    >
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="expectedRevision" value={configuration.revision} />
-      <fieldset disabled={pending}>
-        <legend>
-          {m("Locale and customer communication", "اللغة والتواصل مع العميل")}
-        </legend>
-        <label>
-          {m("Default language", "اللغة الافتراضية")}
-          <select
-            name="defaultLocale"
-            defaultValue={String(
-              configuration.settings.defaultLocale ?? configuration.defaultLocale,
-            )}
-          >
-            <option value="en">English</option>
-            <option value="ar">العربية</option>
-          </select>
-        </label>
-        <label>
-          {m("Reply-to email", "بريد الرد")}
-          <input
-            name="replyToEmail"
-            type="email"
-            defaultValue={String(configuration.settings.replyToEmail ?? "")}
-            maxLength={254}
-          />
-        </label>
-      </fieldset>
-      <fieldset disabled={pending}>
-        <legend>
-          {m("Money and booking preferences", "التفضيلات المالية والحجز")}
-        </legend>
-        <label>
-          {m("Currency", "العملة")}
-          <select
-            name="currency"
-            defaultValue={String(configuration.settings.currency ?? "USD")}
-          >
-            <option value="USD">USD</option>
-            {configuration.settings.currency &&
-            configuration.settings.currency !== "USD" ? (
-              <option value={String(configuration.settings.currency)}>
-                {String(configuration.settings.currency)}
-              </option>
-            ) : null}
-          </select>
-        </label>
-        <label>
-          {m("Tax rate (basis points; 100 = 1%)", "معدل الضريبة (نقاط أساس؛ ١٠٠ = ١٪)")}
-          <input
-            name="taxRateBps"
-            type="number"
-            min={0}
-            max={3000}
-            step={1}
-            defaultValue={String(configuration.settings.taxRateBps ?? "")}
-          />
-        </label>
-        <label>
-          {m(
-            "Booking horizon preference (days, 1–730)",
-            "تفضيل أفق الحجز (أيام، ١–٧٣٠)",
-          )}
-          <input
-            name="bookingHorizonDays"
-            type="number"
-            min={1}
-            max={730}
-            step={1}
-            defaultValue={String(configuration.settings.bookingHorizonDays ?? "")}
-          />
-        </label>
-        <p>
-          {m(
-            "Authoritative notice, slot intervals and schedule limits are managed in Availability. Saved bookings keep their snapshots.",
-            "تُدار حدود الإشعار والفواصل والجدول في التوافر. تحتفظ الحجوزات المحفوظة بنسخها الأصلية.",
-          )}
-        </p>
-      </fieldset>
-      <fieldset disabled={pending}>
-        <legend>{m("Customer navigation", "تنقل العميل")}</legend>
-        <input name="navigationCount" type="hidden" value={items.length} />
-        {items.map((row, index) => (
-          <div key={row.rowKey} className="catalog-columns">
-            <input name={`nav-${index}-key`} type="hidden" value={row.rowKey} />
-            <label>
-              {m("English label", "التسمية الإنجليزية")}
-              <input
-                name={`nav-${index}-en`}
-                defaultValue={row.label.en}
-                maxLength={160}
-                required
-                lang="en"
-                dir="ltr"
-              />
-            </label>
-            <label>
-              {m("Arabic label", "التسمية العربية")}
-              <input
-                name={`nav-${index}-ar`}
-                defaultValue={row.label.ar}
-                maxLength={160}
-                required
-                lang="ar"
-                dir="rtl"
-              />
-            </label>
-            <label>
-              {m("Approved route or HTTPS link", "مسار معتمد أو رابط HTTPS")}
-              <input
-                name={`nav-${index}-destination`}
-                defaultValue={row.route ?? row.href}
-                list="settings-route-options"
-                required
-                dir="ltr"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={() =>
-                setItems(items.filter((item) => item.rowKey !== row.rowKey))
-              }
-            >
-              {m("Remove link", "إزالة الرابط")}
-            </button>
-            <button
-              type="button"
-              disabled={index === 0}
-              onClick={() => {
-                const next = [...items];
-                [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-                setItems(next);
-              }}
-            >
-              {m("Move up", "نقل للأعلى")}
-            </button>
-          </div>
-        ))}
-        <datalist id="settings-route-options">
-          {settingsRoutes.map((route) => (
-            <option key={route} value={route} />
-          ))}
-        </datalist>
-        <button
-          type="button"
-          disabled={items.length >= 50}
-          onClick={() =>
-            setItems([
-              ...items,
-              {
-                rowKey: crypto.randomUUID(),
-                route: "/book",
-                label: { en: "", ar: "" },
-              },
-            ])
-          }
-        >
-          {m("Add link", "إضافة رابط")}
-        </button>
-      </fieldset>
-      <fieldset disabled={pending}>
-        <legend>{m("Features granted by your plan", "الميزات المتاحة في خطتك")}</legend>
-        <p>{getDashboardMessage(locale, "settingsPlanHint")}</p>
-        {Object.keys(configuration.entitlements).map((key) => (
-          <label key={key}>
-            <input
-              name={`feature-${key}`}
-              type="checkbox"
-              value="yes"
-              defaultChecked={
-                configuration.entitlements[key] === true &&
-                configuration.featureConfiguration[key]?.enabled === true
-              }
-              disabled={configuration.entitlements[key] !== true}
+    <Form form={form} locale={locale} messages={messages}>
+      <form
+        noValidate
+        className="grid gap-6"
+        onSubmit={form.handleSubmit(() => mutation.mutate(form.getValues()))}
+      >
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>
+            {m("Language and customer communication", "اللغة والتواصل مع العملاء")}
+          </FieldLegend>
+          <FieldGroup columns={2}>
+            <SelectField
+              control={control}
+              name="defaultLocale"
+              label={m("Default language", "اللغة الافتراضية")}
+              options={[
+                { value: "ar", label: <span lang="ar">العربية</span> },
+                { value: "en", label: <span lang="en">English</span> },
+              ]}
             />
-            <bdi>{featureLabel(locale, key)}</bdi> ·{" "}
+            <TextField
+              control={control}
+              name="replyToEmail"
+              label={m("Reply-to email", "بريد الرد")}
+              type="email"
+              dir="ltr"
+              maxLength={254}
+            />
+          </FieldGroup>
+        </FieldSet>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>
+            {m("Money and booking preferences", "التفضيلات المالية وتفضيلات الحجز")}
+          </FieldLegend>
+          <FieldGroup columns={3}>
+            <SelectField
+              control={control}
+              name="currency"
+              label={m("Currency", "العملة")}
+              options={[
+                { value: "USD", label: <bdi>USD</bdi> },
+                ...(currentCurrency && currentCurrency !== "USD"
+                  ? [
+                      {
+                        value: String(currentCurrency),
+                        label: <bdi>{String(currentCurrency)}</bdi>,
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+            <TextField
+              control={control}
+              name="taxRateBps"
+              label={m("Tax rate (basis points)", "معدل الضريبة (نقاط أساس)")}
+              type="number"
+              min={0}
+              max={3000}
+              step={1}
+              description={m(
+                `${formatNumber(100, "en")} = ${formatNumber(1, "en")}%`,
+                `${formatNumber(100, "ar")} نقطة = ${formatNumber(1, "ar")}٪`,
+              )}
+            />
+            <TextField
+              control={control}
+              name="bookingHorizonDays"
+              label={m(
+                "Booking horizon preference (days)",
+                "أفق الحجز المفضّل (بالأيام)",
+              )}
+              type="number"
+              min={1}
+              max={730}
+              step={1}
+              description={m(
+                `From ${formatNumber(1, "en")} to ${formatNumber(730, "en")} days.`,
+                `من ${formatNumber(1, "ar")} إلى ${formatNumber(730, "ar")} يومًا.`,
+              )}
+            />
+          </FieldGroup>
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {m(
-              configuration.entitlements[key] ? "Granted" : "Unavailable",
-              configuration.entitlements[key] ? "متاح" : "غير متاح",
+              "Authoritative notice, slot intervals and schedule limits are managed in Availability. Saved bookings keep their snapshots.",
+              "تُدار مدة الإشعار وفواصل المواعيد وحدود الجدول من صفحة التوافر. وتحتفظ الحجوزات المحفوظة بنسخها الأصلية.",
             )}
-          </label>
-        ))}
-      </fieldset>
-      <button disabled={pending} type="submit">
-        {m(
-          pending ? "Saving…" : "Save settings",
-          pending ? "جارٍ الحفظ…" : "حفظ الإعدادات",
-        )}
-      </button>
-      {state.message ? (
-        <p role={state.saved ? "status" : "alert"}>
-          {getDashboardMessage(locale, state.message)}
-        </p>
-      ) : null}
-      {state.field ? (
-        <p role="alert">
-          {m("Review the configuration field:", "راجع حقل الإعدادات:")}{" "}
-          <bdi>{state.field}</bdi>
-        </p>
-      ) : null}
-      {state.message === "requestsResultConflict" ? (
-        <button type="button" onClick={() => router.refresh()}>
-          {m("Reload and review", "إعادة التحميل والمراجعة")}
-        </button>
-      ) : null}
-    </form>
+          </p>
+        </FieldSet>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>{m("Customer navigation", "روابط التنقل للعملاء")}</FieldLegend>
+          {items.fields.map((row, index) => (
+            <div
+              key={row.fieldId}
+              className="grid gap-4 border-b pb-5 last-of-type:border-b-0 last-of-type:pb-0"
+            >
+              <FieldGroup columns={3}>
+                <TextField
+                  control={control}
+                  name={`navigation.${index}.en`}
+                  htmlName={`nav-${index}-en`}
+                  label={m("English label", "التسمية بالإنجليزية")}
+                  required
+                  maxLength={160}
+                  lang="en"
+                  dir="ltr"
+                />
+                <TextField
+                  control={control}
+                  name={`navigation.${index}.ar`}
+                  htmlName={`nav-${index}-ar`}
+                  label={m("Arabic label", "التسمية بالعربية")}
+                  required
+                  maxLength={160}
+                  lang="ar"
+                  dir="rtl"
+                />
+                <TextField
+                  control={control}
+                  name={`navigation.${index}.destination`}
+                  htmlName={`nav-${index}-destination`}
+                  label={m("Approved route or HTTPS link", "مسار معتمد أو رابط HTTPS")}
+                  required
+                  list="settings-route-options"
+                  dir="ltr"
+                />
+              </FieldGroup>
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  disabled={index === 0}
+                  onClick={() => items.swap(index - 1, index)}
+                >
+                  <ArrowUp aria-hidden="true" />
+                  {m("Move up", "نقل للأعلى")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => items.remove(index)}
+                >
+                  <Trash2 aria-hidden="true" />
+                  {m("Remove link", "إزالة الرابط")}
+                </Button>
+              </div>
+            </div>
+          ))}
+          <datalist id="settings-route-options">
+            {settingsRoutes.map((route) => (
+              <option key={route} value={route} />
+            ))}
+          </datalist>
+          <div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={items.fields.length >= 50}
+              onClick={() =>
+                items.append({
+                  rowKey: newAttemptId(),
+                  en: "",
+                  ar: "",
+                  destination: "/book",
+                })
+              }
+            >
+              <Plus aria-hidden="true" />
+              {m("Add link", "إضافة رابط")}
+            </Button>
+          </div>
+        </FieldSet>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>
+            {m("Features granted by your plan", "الميزات المتاحة في خطتك")}
+          </FieldLegend>
+          <FieldDescription className="-mt-3">
+            {getDashboardMessage(locale, "settingsPlanHint")}
+          </FieldDescription>
+          <div className="grid gap-x-6 md:grid-cols-2">
+            {defaults.features.map((feature, index) => (
+              <CheckboxField
+                key={feature.key}
+                control={control}
+                name={`features.${index}.enabled`}
+                htmlName={`feature-${feature.key}`}
+                disabled={configuration.entitlements[feature.key] !== true}
+                label={
+                  <>
+                    <bdi>{featureLabel(locale, feature.key)}</bdi>
+                    <StatusStamp
+                      state={
+                        configuration.entitlements[feature.key]
+                          ? "confirmed"
+                          : "neutral"
+                      }
+                    >
+                      {m(
+                        configuration.entitlements[feature.key]
+                          ? "Granted"
+                          : "Unavailable",
+                        configuration.entitlements[feature.key] ? "متاح" : "غير متاح",
+                      )}
+                    </StatusStamp>
+                  </>
+                }
+              />
+            ))}
+          </div>
+        </FieldSet>
+        <MutationFeedback
+          locale={locale}
+          messages={messages}
+          result={mutation.data}
+          transportFailed={mutation.isError}
+          success={
+            mutation.data?.ok
+              ? getDashboardMessage(locale, mutation.data.data.message)
+              : null
+          }
+          reload={{
+            codes: ["requestsResultConflict"],
+            label: m("Reload and review", "إعادة التحميل والمراجعة"),
+            onReload: () => router.refresh(),
+          }}
+        />
+        <FormActions sticky>
+          <Button
+            type="submit"
+            loading={pending}
+            loadingLabel={m("Saving…", "جارٍ الحفظ…")}
+          >
+            {m("Save settings", "حفظ الإعدادات")}
+          </Button>
+        </FormActions>
+      </form>
+    </Form>
   );
 }

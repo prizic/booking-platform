@@ -1,6 +1,6 @@
-import { formatDateTime, formatNumber, type Locale } from "@wlbp/i18n";
+import { formatDateTime, formatNumber, formatTimeZone, type Locale } from "@wlbp/i18n";
 import { Badge } from "@wlbp/ui-foundation";
-import { fill, say, stateCopy } from "../copy";
+import { fill, stateCopy } from "../copy";
 import { Unknown } from "./states";
 
 export function ageLabel(locale: Locale, minutes: number): string {
@@ -15,7 +15,17 @@ export function ageLabel(locale: Locale, minutes: number): string {
   });
 }
 
-/** Always UTC and labelled; optionally flags data older than a threshold. */
+/**
+ * A UTC date and time without the zone suffix. Pages that show times state
+ * the zone once in their header (PageHeader `timesInUtc`), not on every row.
+ */
+export function formatUtc(value: string, locale: Locale): string {
+  const full = formatDateTime(value, locale, "UTC");
+  const zone = formatTimeZone(value, locale, "UTC");
+  return full.endsWith(zone) ? full.slice(0, -zone.length).trimEnd() : full;
+}
+
+/** Always UTC (stated once per page); optionally flags data older than a threshold. */
 export function TimeValue({
   locale,
   value,
@@ -33,16 +43,14 @@ export function TimeValue({
   const minutes = Math.max(0, Math.floor((now - new Date(value).getTime()) / 60000));
   const stale = staleAfterMinutes !== undefined && minutes > staleAfterMinutes;
   return (
-    <span>
-      <time dateTime={value}>{formatDateTime(value, locale, "UTC")}</time>{" "}
-      <span className="secondary">{say(locale, stateCopy.utc)}</span>
+    <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1 [font-variant-numeric:tabular-nums]">
+      <time dateTime={value} className="whitespace-nowrap">
+        {formatUtc(value, locale)}
+      </time>
       {stale ? (
-        <>
-          {" "}
-          <Badge tone="warning">
-            {fill(locale, stateCopy.staleSince, { age: ageLabel(locale, minutes) })}
-          </Badge>
-        </>
+        <Badge tone="warning">
+          {fill(locale, stateCopy.staleSince, { age: ageLabel(locale, minutes) })}
+        </Badge>
       ) : null}
     </span>
   );

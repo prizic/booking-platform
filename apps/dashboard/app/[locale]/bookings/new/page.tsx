@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
+import { Alert, AlertDescription, PageHeader } from "@wlbp/ui-foundation";
+import { ArrowLeft } from "lucide-react";
 import { loadDashboardRequestAccess } from "../../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../../_lib/workspace-shell";
-import { DashboardAccessPanel } from "../../../_lib/dashboard-access-panel";
+import { textLinkClass } from "../../../_lib/ui/text-link";
 import { OnBehalfBookingForm } from "./booking-form";
 import { bookingMessage } from "./booking-copy";
 export const dynamic = "force-dynamic";
@@ -14,8 +16,8 @@ export default async function NewBookingPage({
   const { locale } = await params;
   const request = await loadDashboardRequestAccess(locale);
   let body;
-  if (request.state.kind !== "ready")
-    body = <DashboardAccessPanel locale={locale} state={request.state} />;
+  // The frame already explains a missing session, tenant or configuration.
+  if (request.state.kind !== "ready") body = null;
   else {
     const context = request.state.context;
     const loaded = await (async () => {
@@ -40,16 +42,31 @@ export default async function NewBookingPage({
         />
       );
     } else {
-      body = <p role="alert">{bookingMessage(locale, "unavailable")}</p>;
+      body = (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {bookingMessage(locale, "unavailable")}
+          </AlertDescription>
+        </Alert>
+      );
     }
   }
   return (
     <WorkspaceShell locale={locale} current="bookings" labelledBy="new-booking-title">
-      <header className="dashboard-intro">
-        <Link href={`/${locale}/bookings`}>{bookingMessage(locale, "back")}</Link>
-        <h1 id="new-booking-title">{bookingMessage(locale, "title")}</h1>
-        <p>{bookingMessage(locale, "intro")}</p>
-      </header>
+      <div className="grid gap-4">
+        <Link
+          className={`${textLinkClass} inline-flex w-fit items-center gap-1.5 text-sm`}
+          href={`/${locale}/bookings`}
+        >
+          <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+          {bookingMessage(locale, "back")}
+        </Link>
+        <PageHeader
+          titleId="new-booking-title"
+          title={bookingMessage(locale, "title")}
+          description={bookingMessage(locale, "intro")}
+        />
+      </div>
       {body}
     </WorkspaceShell>
   );

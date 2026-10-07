@@ -1,10 +1,4 @@
-import { TextField } from "@wlbp/ui-foundation";
-import {
-  addOperatorAction,
-  disableOperatorAction,
-  enableOperatorAction,
-  setOperatorRoleAction,
-} from "../../../_lib/actions/operators";
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import { operatorsCopy as c } from "../../../_lib/admin-copy";
 import { copyFor, roleCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
@@ -13,14 +7,19 @@ import { pageLocale } from "../../../_lib/page-locale";
 import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
-import { SelectField } from "../../../_lib/ui/select-field";
+import {
+  DateTimeFormField,
+  SelectFormField,
+  TextFormField,
+} from "../../../_lib/ui/form-fields";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { RoleBadge, StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
+import { operatorRoles } from "../../../_lib/schemas/operators";
 
 export const dynamic = "force-dynamic";
 
-const roles = ["viewer", "operator", "admin", "break_glass"] as const;
+const roles = operatorRoles;
 
 export default async function OperatorsPage({
   params,
@@ -35,46 +34,44 @@ export default async function OperatorsPage({
   const now = Date.now();
   const admin = atLeast(operator.role, "admin");
   const roleOptions = roles.map((r) => [r, copyFor(roleCopy, r, locale)] as const);
-  const roleFields = (role?: string, expires?: string | null) => (
+  const roleValues = (role?: string, expires?: string | null) => ({
+    role: role ?? "viewer",
+    expiresAt: expires?.slice(0, 16) ?? "",
+  });
+  const roleFields = (suffix: string) => (
     <>
-      <SelectField
-        name="role"
-        label={say(locale, c.role)}
-        value={role ?? "viewer"}
-        options={roleOptions}
+      <SelectFormField name="role" label={say(locale, c.role)} options={roleOptions} />
+      <DateTimeFormField
+        id={`operator-expires-${suffix}`}
+        name="expiresAt"
+        locale={locale}
+        label={say(locale, c.expiresAt)}
+        description={say(locale, c.expiresHint)}
       />
-      <label className="field">
-        <span>{say(locale, c.expiresAt)}</span>
-        <input
-          type="datetime-local"
-          name="expiresAt"
-          defaultValue={expires?.slice(0, 16)}
-        />
-        <small>{say(locale, c.expiresHint)}</small>
-      </label>
     </>
   );
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
           admin ? (
             <ActionDialog
               locale={locale}
-              action={addOperatorAction}
+              operation="addOperator"
               trigger={say(locale, c.add)}
               triggerVariant="primary"
               title={say(locale, c.addTitle)}
               description={say(locale, c.addBody)}
               submit={say(locale, c.add)}
               successMessage={say(locale, c.added)}
-              reason={{ minLength: 5 }}
+              values={{ email: "", ...roleValues() }}
             >
-              <TextField
+              <TextFormField
                 id="op-email"
                 name="email"
                 type="email"
@@ -82,14 +79,18 @@ export default async function OperatorsPage({
                 required
                 autoComplete="off"
               />
-              {roleFields()}
+              {roleFields("new")}
             </ActionDialog>
           ) : null
         }
       />
-      <p className="notice">{say(locale, c.roles)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.roles)}</AlertDescription>
+      </Alert>
       {!admin ? (
-        <p className="secondary">{say(locale, stateCopy.roleRequired)}</p>
+        <p className="text-sm text-muted-foreground">
+          {say(locale, stateCopy.roleRequired)}
+        </p>
       ) : null}
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
@@ -117,13 +118,22 @@ export default async function OperatorsPage({
             return {
               key: row.operator_id,
               cells: [
-                <>
-                  <bdi>{row.email}</bdi>
-                  {self ? <> {say(locale, c.you)}</> : null}
+                <div key="m" className="grid gap-0.5">
+                  <span className="font-semibold text-foreground">
+                    <bdi>{row.email}</bdi>
+                    {self ? (
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        {say(locale, c.you)}
+                      </span>
+                    ) : null}
+                  </span>
                   {row.usable_admin ? (
-                    <span className="secondary">{say(locale, c.usable)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {say(locale, c.usable)}
+                    </span>
                   ) : null}
-                </>,
+                </div>,
                 <RoleBadge key="r" locale={locale} role={row.role} />,
                 say(locale, row.mfa_verified ? c.verified : c.missing),
                 <StatusBadge key="s" locale={locale} status={state} />,
@@ -135,36 +145,35 @@ export default async function OperatorsPage({
                 />,
                 <TimeValue key="l" locale={locale} value={row.last_sign_in_at} />,
                 admin ? (
-                  <div key="a" className="page-actions">
+                  <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
-                      action={setOperatorRoleAction}
+                      operation="setOperatorRole"
                       trigger={say(locale, c.changeRole)}
                       triggerVariant="quiet"
                       title={say(locale, c.changeRoleTitle)}
                       submit={say(locale, c.changeRole)}
                       successMessage={say(locale, c.roleChanged)}
-                      reason={{ minLength: 5 }}
                       hidden={{ operatorId: row.operator_id }}
+                      values={roleValues(row.role, row.expires_at)}
                     >
-                      {roleFields(row.role, row.expires_at)}
+                      {roleFields(row.operator_id)}
                     </ActionDialog>
                     {row.disabled_at ? (
                       <ActionDialog
                         locale={locale}
-                        action={enableOperatorAction}
+                        operation="enableOperator"
                         trigger={say(locale, c.enable)}
                         triggerVariant="quiet"
                         title={say(locale, c.enableTitle)}
                         submit={say(locale, c.enable)}
                         successMessage={say(locale, c.enabled)}
-                        reason={{ minLength: 5 }}
                         hidden={{ operatorId: row.operator_id }}
                       />
                     ) : (
                       <ActionDialog
                         locale={locale}
-                        action={disableOperatorAction}
+                        operation="disableOperator"
                         trigger={say(locale, c.disable)}
                         triggerVariant="quiet"
                         danger
@@ -172,7 +181,6 @@ export default async function OperatorsPage({
                         description={say(locale, c.disableBody)}
                         submit={say(locale, c.disable)}
                         successMessage={say(locale, c.disabled)}
-                        reason={{ minLength: 5 }}
                         hidden={{ operatorId: row.operator_id }}
                       />
                     )}
@@ -183,6 +191,6 @@ export default async function OperatorsPage({
           })}
         />
       )}
-    </>
+    </div>
   );
 }

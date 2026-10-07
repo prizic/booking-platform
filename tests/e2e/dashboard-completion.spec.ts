@@ -2,6 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
+import { chooseDate } from "./booking-fixtures";
 import {
   completionOrigin,
   completionSql,
@@ -31,6 +32,117 @@ async function submitMutation(page: Page, button: Locator) {
     ),
     button.click(),
   ]);
+}
+/**
+ * Dangerous submits open an alertdialog. The trigger must only open the dialog:
+ * no server action may run until the operator confirms inside it, because only
+ * the dialog's confirm button adds the explicit `confirm` literal the server
+ * requires.
+ */
+async function confirmDangerous(
+  page: Page,
+  scope: Locator,
+  trigger: string,
+  confirm: string,
+) {
+  const actionCalls: string[] = [];
+  const recordAction = (request: {
+    headers(): Record<string, string>;
+    url(): string;
+  }) => {
+    if (request.headers()["next-action"] !== undefined) actionCalls.push(request.url());
+  };
+  page.on("request", recordAction);
+  await scope.getByRole("button", { name: trigger, exact: true }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  page.off("request", recordAction);
+  expect(actionCalls).toEqual([]);
+  await dialog.getByRole("button", { name: confirm, exact: true }).click();
+}
+const monthNames = Array.from({ length: 12 }, (_, index) =>
+  new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(
+    new Date(Date.UTC(2000, index, 1)),
+  ),
+);
+/**
+ * The Dashboard has no native date inputs: a date is chosen in the design
+ * system's month grid, which submits the same YYYY-MM-DD under the same name.
+ */
+async function pickDate(page: Page, trigger: Locator, iso: string) {
+  const [year, month, day] = iso.split("-").map(Number) as [number, number, number];
+  const monthName = monthNames[month - 1]!;
+  await trigger.click();
+  // The month grid's popover, not a surrounding Dialog that hosts the picker.
+  const popover = page.getByRole("dialog").filter({ has: page.getByRole("grid") });
+  await expect(popover).toHaveCount(1);
+  const grid = popover.getByRole("grid").first();
+  for (let step = 0; step < 48; step += 1) {
+    const caption = (await grid.getAttribute("aria-label")) ?? "";
+    if (caption.includes(`${monthName} ${year}`)) break;
+    const [shownName, shownYear] = caption.split(" ");
+    const shown = Number(shownYear) * 12 + monthNames.indexOf(shownName ?? "");
+    await popover
+      .getByRole("button", {
+        name: shown < year * 12 + month - 1 ? /next month/iu : /previous month/iu,
+      })
+      .click();
+  }
+  await popover
+    .getByRole("button", {
+      name: new RegExp(`${monthName} ${day}(?:st|nd|rd|th)?,? ${year}`, "u"),
+    })
+    .click();
+  await expect(popover).toBeHidden();
+}
+/** A time step in a TimeSelect listbox, e.g. "13:00" is the option "1:00 PM". */
+async function pickTime(page: Page, trigger: Locator, hhmm: string) {
+  const [hour, minute] = hhmm.split(":").map(Number) as [number, number];
+  const h12 = hour % 12 === 0 ? 12 : hour % 12;
+  const suffix = hour < 12 ? "AM" : "PM";
+  await trigger.click();
+  await page
+    .getByRole("option", {
+      name: new RegExp(`^${h12}:${String(minute).padStart(2, "0")}\\s${suffix}$`, "u"),
+    })
+    .click();
+}
+/** A date + time pair labelled `label`; it submits YYYY-MM-DDTHH:MM. */
+async function pickDateTime(page: Page, scope: Locator, label: string, value: string) {
+  const [date, time] = value.split("T") as [string, string];
+  // Required labels carry an aria-hidden "*", so match the computed accessible name.
+  await pickDate(page, scope.getByRole("button", { name: label, exact: true }), date);
+  await pickTime(
+    page,
+    scope.getByRole("combobox", { name: `${label}, time`, exact: true }),
+    time,
+  );
+  await expect(scope.locator(`input[type="hidden"][value="${value}"]`)).toHaveCount(1);
+}
+const ruleLabels = {
+  weekly: "Weekly hours",
+  break: "Break",
+  exception: "Date override",
+  blackout: "Location blackout",
+  maintenance: "Resource maintenance",
+} as const;
+/**
+ * The rule type is controlled React state: a change dispatched to the native
+ * backing select before hydration is lost, so repeat it until the visible
+ * trigger reports the chosen rule.
+ */
+async function chooseRule(form: Locator, operation: keyof typeof ruleLabels) {
+  const trigger = form.getByRole("combobox", { name: "Rule type", exact: true });
+  await expect(async () => {
+    await form.locator('select[name="operation"]').selectOption(operation);
+    await expect(trigger).toHaveText(ruleLabels[operation], { timeout: 2_000 });
+  }).toPass({ timeout: 60_000 });
+}
+/** Radix selects without a native backing control are chosen through the listbox. */
+async function chooseOption(page: Page, trigger: Locator, name: string) {
+  await trigger.click();
+  await page.getByRole("option", { name, exact: true }).click();
+  await expect(trigger).toContainText(name);
 }
 
 test("local recovery mail, PKCE receipt, password update and replay refusal", async ({
@@ -110,8 +222,12 @@ test.describe("persisted workflows", () => {
       ),
     ).toBe("0");
     await page.goto(`${completionOrigin}/en/services`);
-    await page.locator('input[name="confirm"]').check();
-    await page.getByRole("button", { name: "Publish catalog", exact: true }).click();
+    await confirmDangerous(
+      page,
+      page.locator("#publish"),
+      "Publish catalog",
+      "Publish now",
+    );
     await expect(page.locator("main").getByRole("status")).toContainText(
       "Catalog published",
     );
@@ -140,8 +256,11 @@ test.describe("persisted workflows", () => {
     await invitation
       .locator('input[name="email"]')
       .fill("completion-invite@example.invalid");
-    await invitation.locator('input[name="locationIds"]').first().check();
-    await submitMutation(page, invitation.locator("button").last());
+    await invitation.getByRole("checkbox").first().check();
+    await submitMutation(
+      page,
+      invitation.getByRole("button", { name: "Invite staff", exact: true }),
+    );
     await expect(invitation.getByRole("status")).toBeVisible();
     evidence.invitation = completionSql(
       `select id from app.invitations where tenant_id='${completionTenant}' and invitee_email='completion-invite@example.invalid' and status='pending'`,
@@ -152,9 +271,7 @@ test.describe("persisted workflows", () => {
       .locator("summary")
       .filter({ hasText: /^Add resource$/u })
       .click();
-    const resource = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="formId"][value="new-resource"]') });
+    const resource = page.locator('form[data-form-id="new-resource"]');
     await expect(resource).toBeVisible();
     await resource
       .locator('select[name="resourceTypeId"]')
@@ -175,7 +292,7 @@ test.describe("persisted workflows", () => {
       .locator("details")
       .filter({
         has: page.locator(
-          'input[name="staffId"][value="d8000000-0000-0000-0000-000000000001"]',
+          'form[data-form-id="staff-d8000000-0000-0000-0000-000000000001-eligibility"]',
         ),
       })
       .filter({ has: page.locator('select[name="eligible"]') });
@@ -207,9 +324,9 @@ test.describe("persisted workflows", () => {
       .locator("form")
       .filter({ has: page.locator('select[name="operation"]') })
       .first();
-    await schedule.locator('select[name="operation"]').selectOption("blackout");
-    await schedule.locator('input[name="startsAt"]').fill("2026-12-21T09:00");
-    await schedule.locator('input[name="endsAt"]').fill("2026-12-21T10:00");
+    await chooseRule(schedule, "blackout");
+    await pickDateTime(page, schedule, "Starts (local time)", "2026-12-21T09:00");
+    await pickDateTime(page, schedule, "Ends (local time)", "2026-12-21T10:00");
     await schedule
       .locator('input[name="reason"]')
       .fill("Synthetic acceptance blackout");
@@ -226,16 +343,21 @@ test.describe("persisted workflows", () => {
         .locator("form")
         .filter({ has: page.locator('select[name="operation"]') })
         .first();
-      await rule.locator('select[name="operation"]').selectOption(operation);
+      await chooseRule(rule, operation);
       if (operation === "weekly" || operation === "break") {
         await rule
-          .locator('[name="startTime"]')
-          .fill(operation === "weekly" ? "06:00" : "12:00");
+          .locator('select[name="startTime"]')
+          .selectOption(operation === "weekly" ? "06:00" : "12:00");
         await rule
-          .locator('[name="endTime"]')
-          .fill(operation === "weekly" ? "07:00" : "12:15");
+          .locator('select[name="endTime"]')
+          .selectOption(operation === "weekly" ? "07:00" : "12:15");
       } else if (operation === "exception") {
-        await rule.locator('[name="localDate"]').fill("2026-12-22");
+        await pickDate(
+          page,
+          rule.getByRole("button", { name: "Date", exact: true }),
+          "2026-12-22",
+        );
+        await expect(rule.locator('input[name="localDate"]')).toHaveValue("2026-12-22");
       } else {
         await rule
           .locator('select[name="locationId"]')
@@ -243,28 +365,39 @@ test.describe("persisted workflows", () => {
         await rule
           .locator('[name="resourceId"]')
           .selectOption({ label: "Completion room" });
-        await rule.locator('[name="startsAt"]').fill("2026-12-23T09:00");
-        await rule.locator('[name="endsAt"]').fill("2026-12-23T10:00");
+        await pickDateTime(page, rule, "Starts (local time)", "2026-12-23T09:00");
+        await pickDateTime(page, rule, "Ends (local time)", "2026-12-23T10:00");
         await rule.locator('[name="reason"]').fill("Synthetic acceptance maintenance");
       }
       await rule.getByRole("button", { name: "Save rule", exact: true }).click();
       await expect(rule.getByRole("status")).toBeVisible();
     }
     await page.goto(`${completionOrigin}/en/bookings/new`);
-    await page.locator("#on-behalf-name").fill("Completion synthetic guest");
-    await page.locator("#on-behalf-email").fill("completion-guest@example.invalid");
-    await page
-      .locator("#on-behalf-offer")
-      .selectOption({ label: "Completion consultation · Live booking suite" });
+    await field(page, "fullName").fill("Completion synthetic guest");
+    await field(page, "email").fill("completion-guest@example.invalid");
+    await chooseOption(
+      page,
+      page.getByRole("combobox", { name: "Service and location", exact: true }),
+      "Completion consultation · Live booking suite",
+    );
     const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-    await page.locator("#on-behalf-date").fill(date);
+    await pickDate(page, page.getByRole("button", { name: "Date", exact: true }), date);
     await page
       .getByRole("button", { name: "Find available times", exact: true })
       .click();
-    await page.locator('input[name="available-time"]').first().check();
+    await page
+      .getByRole("radiogroup", { name: "Available time", exact: true })
+      .getByRole("radio")
+      .first()
+      .check();
     await page.getByRole("button", { name: "Hold selected time", exact: true }).click();
-    await page.locator("#intake-reason").fill("Synthetic acceptance intake");
-    await page.locator('input[name="consented"]').check();
+    await field(page, "answers.reason").fill("Synthetic acceptance intake");
+    await page
+      .getByRole("checkbox", {
+        name: "The customer has agreed to the policy shown above",
+        exact: true,
+      })
+      .check();
     await page.getByRole("button", { name: "Create booking", exact: true }).click();
     await page.waitForURL(/\/bookings\/[a-f0-9-]{36}$/u);
     const bookingId = page.url().split("/").at(-1)!;
@@ -317,12 +450,8 @@ test.describe("persisted workflows", () => {
     expect(page.url()).not.toMatch(/token|code=/u);
     await enrollCompletionMfa(page);
     await page.goto(`${completionOrigin}/en/brand`);
-    const publish = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="contentHash"]') })
-      .filter({ has: page.locator('input[name="confirm"]') });
-    await publish.locator('input[name="confirm"]').check();
-    await publish.getByRole("button").click();
+    const publish = page.locator('[data-brand-action="publish"]');
+    await confirmDangerous(page, publish, "Publish this draft", "Publish this draft");
     await page.waitForURL(/result=published/u);
     expect(
       completionSql(
@@ -330,11 +459,9 @@ test.describe("persisted workflows", () => {
       ),
     ).toBe("1");
     const rollback = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="toRevision"][value="1"]') })
+      .locator('[data-brand-action="rollback"][data-to-revision="1"]')
       .first();
-    await rollback.locator('input[name="confirm"]').check();
-    await rollback.getByRole("button").click();
+    await confirmDangerous(page, rollback, "Roll back to this", "Roll back to this");
     await expect(page).toHaveURL(/result=rolled-back/u);
     expect(
       completionSql(
@@ -359,21 +486,34 @@ test.describe("persisted workflows", () => {
     email: string,
   ) {
     await page.goto(`${completionOrigin}/en/bookings/new`);
-    await page.locator("#on-behalf-name").fill("Completion workflow guest");
-    await page.locator("#on-behalf-email").fill(email);
-    await page
-      .locator("#on-behalf-offer")
-      .selectOption({ label: `${offer} · Live booking suite` });
-    await page
-      .locator("#on-behalf-date")
-      .fill(new Date(Date.now() + days * 86400000).toISOString().slice(0, 10));
+    await field(page, "fullName").fill("Completion workflow guest");
+    await field(page, "email").fill(email);
+    await chooseOption(
+      page,
+      page.getByRole("combobox", { name: "Service and location", exact: true }),
+      `${offer} · Live booking suite`,
+    );
+    await pickDate(
+      page,
+      page.getByRole("button", { name: "Date", exact: true }),
+      new Date(Date.now() + days * 86400000).toISOString().slice(0, 10),
+    );
     await page
       .getByRole("button", { name: "Find available times", exact: true })
       .click();
-    await page.locator('input[name="available-time"]').first().check();
+    await page
+      .getByRole("radiogroup", { name: "Available time", exact: true })
+      .getByRole("radio")
+      .first()
+      .check();
     await page.getByRole("button", { name: "Hold selected time", exact: true }).click();
-    await page.locator("#intake-reason").fill("Synthetic workflow intake");
-    await page.locator('input[name="consented"]').check();
+    await field(page, "answers.reason").fill("Synthetic workflow intake");
+    await page
+      .getByRole("checkbox", {
+        name: "The customer has agreed to the policy shown above",
+        exact: true,
+      })
+      .check();
     await page.getByRole("button", { name: "Create booking", exact: true }).click();
     await page.waitForURL(/\/bookings\/[a-f0-9-]{36}$/u);
     return page.url().split("/").at(-1)!;
@@ -386,9 +526,10 @@ test.describe("persisted workflows", () => {
     await page.goto(
       "http://localhost:41730/en/book?service=d7200000-0000-0000-0000-000000000001&location=d5000000-0000-0000-0000-000000000001",
     );
-    await page
-      .locator('input[name="date"]')
-      .fill(new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10));
+    await chooseDate(
+      page,
+      new Date(Date.now() + 8 * 86400000).toISOString().slice(0, 10),
+    );
     await page.getByRole("button", { name: /find times/iu }).click();
     await page
       .getByRole("button", { name: /^select$/iu })
@@ -424,17 +565,16 @@ test.describe("persisted workflows", () => {
         "requested",
       );
       await page.goto(`${completionOrigin}/en/requests`);
-      const form = page
-        .locator("form")
-        .filter({ has: page.locator(`input[name="bookingId"][value="${id}"]`) });
+      const form = page.locator(`form[data-booking-id="${id}"]`);
       await form.locator('[name="publicReason"]').fill("Synthetic request decision");
       await form.locator('[name="internalReason"]').fill("Synthetic review");
       if (action === "propose")
-        await form
-          .locator('[name="proposedStartAt"]')
-          .fill(
-            `${new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)}T15:00`,
-          );
+        await pickDateTime(
+          page,
+          form,
+          "Suggested time",
+          `${new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)}T15:00`,
+        );
       await form.locator(`button[value="${action}"]`).click();
       await expect(page).toHaveURL(
         new RegExp(
@@ -452,14 +592,14 @@ test.describe("persisted workflows", () => {
       13,
       email("no-show"),
     );
-    await page.locator("#transition-reason").fill("Synthetic no-show outcome");
+    await field(page, "reason").fill("Synthetic no-show outcome");
     await submitMutation(page, page.locator('button[name="action"][value="no_show"]'));
     await expect(page).toHaveURL(/result=no-show/u);
-    await expect(page.locator('input[name="expectedRevision"]')).toHaveValue("2");
+    await expect(page.locator('form[data-expected-revision="2"]')).toHaveCount(1);
     expect(
       completionSql(`select status from app.bookings where id='${noShowId}'`),
     ).toBe("no_show");
-    await page.locator("#transition-reason").fill("Synthetic outcome correction");
+    await field(page, "reason").fill("Synthetic outcome correction");
     await submitMutation(page, page.locator('button[name="action"][value="correct"]'));
     await expect(page).toHaveURL(/result=corrected/u);
     expect(
@@ -487,17 +627,25 @@ test.describe("persisted workflows", () => {
         email(action),
       );
       await page.goto(`${completionOrigin}/en/bookings`);
+      // Each row opens its change form in a dialog named by the booking reference.
       const change = page
-        .locator("form")
-        .filter({ has: page.locator(`input[name="bookingId"][value="${changedId}"]`) });
+        .getByRole("dialog")
+        .locator(`form[data-booking-id="${changedId}"]`);
+      // A click that lands before hydration opens nothing; repeat until it does.
+      await expect(async () => {
+        if ((await change.count()) === 0)
+          await page.locator(`button[aria-describedby="booking-${changedId}"]`).click();
+        await expect(change).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 60_000 });
       await change.locator('[name="publicReason"]').fill("Synthetic booking change");
       await change.locator('[name="internalReason"]').fill("Synthetic acceptance");
       if (action === "reschedule")
-        await change
-          .locator('[name="newStartAt"]')
-          .fill(
-            `${new Date(Date.now() + changeDays * 86400000).toISOString().slice(0, 10)}T13:00`,
-          );
+        await pickDateTime(
+          page,
+          change,
+          "New time",
+          `${new Date(Date.now() + changeDays * 86400000).toISOString().slice(0, 10)}T13:00`,
+        );
       await change.locator(`button[value="${action}"]`).click();
       await expect(page).toHaveURL(
         new RegExp(`result=${action === "cancel" ? "rejected" : "moved"}`),
@@ -516,20 +664,20 @@ test.describe("persisted workflows", () => {
       12,
       email("lifecycle"),
     );
-    await page.locator("#transition-reason").fill("Synthetic check-in override");
+    await field(page, "reason").fill("Synthetic check-in override");
     await page.getByRole("button", { name: "Check in", exact: true }).click();
     await expect(page).toHaveURL(/result=checked-in/u);
-    await page.locator("#transition-reason").fill("Synthetic completion");
+    await field(page, "reason").fill("Synthetic completion");
     await page.getByRole("button", { name: "Complete", exact: true }).click();
     await expect(page).toHaveURL(/result=completed/u);
     expect(completionSql(`select status from app.bookings where id='${id}'`)).toBe(
       "completed",
     );
     await page.getByRole("link", { name: "Customer", exact: true }).click();
-    await page.locator("#correct-name").fill("Completion corrected guest");
+    await field(page, "fullName").fill("Completion corrected guest");
     await page
       .locator("form")
-      .filter({ has: page.locator("#correct-name") })
+      .filter({ has: page.locator('[name="fullName"]') })
       .getByRole("button")
       .click();
     await expect(page).toHaveURL(/result=corrected/u);
@@ -546,10 +694,10 @@ test.describe("persisted workflows", () => {
     await page.locator('button[name="kind"][value="export"]').click();
     await expect(page).toHaveURL(/result=exported/u);
     await expect(page.locator("#customer-export-title")).toBeVisible();
-    await page.locator("#flag-reason").fill("Synthetic privacy restriction");
+    await field(page, "reason").fill("Synthetic privacy restriction");
     await page.locator('button[name="action"][value="restrict"]').click();
     await expect(page).toHaveURL(/result=restricted/u);
-    await page.locator("#flag-reason").fill("Synthetic legal hold");
+    await field(page, "reason").fill("Synthetic legal hold");
     await page.locator('button[name="action"][value="hold"]').click();
     await expect(page).toHaveURL(/result=held/u);
     await page.locator('button[name="kind"][value="deletion"]').click();
@@ -563,12 +711,8 @@ test.describe("persisted workflows", () => {
     await page.goto(`${completionOrigin}/en/communications`);
     // The lifecycle customer is privacy-restricted above. Retry a separate,
     // unrestricted booking so this flow preserves the suppression contract.
-    const retry = page
-      .locator("form")
-      .filter({ has: page.locator(`input[name="bookingId"][value="${noShowId}"]`) })
-      .first();
-    await retry.locator('input[name="confirm"]').check();
-    await retry.getByRole("button", { name: "Retry email", exact: true }).click();
+    const retry = page.locator(`[data-communication-retry="${noShowId}"]`).first();
+    await confirmDangerous(page, retry, "Retry email", "Retry email");
     await expect(page).toHaveURL(/result=queued/u);
     await expect(page.locator("main").getByRole("status")).toContainText(
       "Retry queued",
@@ -582,7 +726,7 @@ test.describe("persisted workflows", () => {
     const report = page
       .locator("form")
       .filter({ has: page.locator('select[name="reportKey"]') });
-    await report.getByRole("button").click();
+    await report.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(/result=exported/u);
     await page.goto(`${completionOrigin}/ar/calendar?view=list`);
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
@@ -612,11 +756,14 @@ test.describe("persisted workflows", () => {
       route.fulfill({ status: 503, body: "{}" }),
     );
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    const recheck = "Access must be checked again. Protected content is hidden.";
+    // Shown in the workspace and announced once through the live region.
     await expect(
-      page.getByText("Access must be checked again. Protected content is hidden.", {
-        exact: true,
-      }),
+      page.locator("main").getByText(recheck, { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("status").filter({ hasText: recheck }).first(),
+    ).toHaveText(recheck);
     await expect(page.locator("#calendar-title")).toHaveCount(0);
     await page.unroute(contextRead);
     await page.getByRole("button", { name: "Refresh workspace", exact: true }).click();
@@ -635,12 +782,10 @@ test.describe("persisted workflows", () => {
       `select id from app.bookings where tenant_id='${completionTenant}' and status='confirmed' order by created_at desc limit 1`,
     );
     await operator.goto(`${completionOrigin}/en/bookings/${id}`);
-    await operator
-      .locator("#transition-reason")
-      .fill("Synthetic acceptance check-in override");
+    await field(operator, "reason").fill("Synthetic acceptance check-in override");
     await operator.getByRole("button", { name: "Check in", exact: true }).click();
     await expect(operator).toHaveURL(/result=checked-in/u);
-    const changedEvent = page.locator("article.calendar-event").filter({
+    const changedEvent = page.getByRole("listitem").filter({
       has: page.locator(`a[href="/en/bookings/${id}"]`),
     });
     await expect(changedEvent).toContainText("Checked in", { timeout: 15000 });
@@ -658,8 +803,7 @@ test.describe("persisted workflows", () => {
       .locator("summary")
       .filter({ hasText: /Revoke/u })
       .click();
-    await member.locator('input[name="confirm"]').check();
-    await member.getByRole("button", { name: /Revoke/u }).click();
+    await confirmDangerous(operator, member, "Revoke access", "Revoke access");
     await page.bringToFront();
     // Exercise focus/poll revalidation, without a navigation or manual reload.
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -794,3 +938,241 @@ for (const locale of ["en", "ar"] as const)
       ).toEqual([]);
     }
   });
+
+const notificationCopy = {
+  en: {
+    nav: "Communications sections",
+    settings: "Notification settings",
+    preferences: "My email preferences",
+    email: "Email",
+    save: "Save notification settings",
+    saved: "Notification settings saved.",
+    refund: "Refund issued",
+    refundFailed: "Refund failed",
+    confirmed: "Booking confirmed",
+    alwaysSent: "Always sent",
+    digest: "Email me the day’s agenda each morning",
+    savePrefs: "Save my preferences",
+    savedPrefs: "Your email preferences are saved.",
+    waTitle: "WhatsApp",
+    waNotEntitled: "Your plan does not include WhatsApp notifications.",
+  },
+  ar: {
+    nav: "أقسام التواصل",
+    settings: "إعدادات الإشعارات",
+    preferences: "تفضيلات بريدي",
+    email: "البريد",
+    save: "حفظ إعدادات الإشعارات",
+    saved: "حُفظت إعدادات الإشعارات.",
+    refund: "إصدار استرداد",
+    refundFailed: "تعذّر الاسترداد",
+    confirmed: "تأكيد الحجز",
+    alwaysSent: "تُرسل دائمًا",
+    digest: "أرسل إليّ جدول اليوم كل صباح",
+    savePrefs: "حفظ تفضيلاتي",
+    savedPrefs: "حُفظت تفضيلات بريدك.",
+    waTitle: "واتساب",
+    waNotEntitled: "لا تشمل خطتك إشعارات واتساب.",
+  },
+} as const;
+
+/** Zero automated WCAG A/AA violations, and no horizontal scroll, at this width. */
+async function expectAccessibleAt(page: Page, width: number, label: string) {
+  await page.setViewportSize({ width, height: 900 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+    `${label} ${width}px must reflow`,
+  ).toBe(true);
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+    `${label} ${width}px`,
+  ).toEqual([]);
+}
+
+/** A click that lands before hydration changes nothing; repeat until it does. */
+async function setSwitch(target: Locator, on: boolean) {
+  await expect(async () => {
+    if ((await target.getAttribute("aria-checked")) !== String(on))
+      await target.click();
+    await expect(target).toHaveAttribute("aria-checked", String(on), {
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 60_000 });
+}
+
+/** The tenant's stored email override for one type: "true", "false" or "default". */
+const tenantEmailSetting = (key: string) =>
+  completionSql(
+    `select coalesce((select s.overrides->'${key}'->>'email_enabled' from app.notification_settings s where s.tenant_id='${completionTenant}'),'default')`,
+  );
+
+test.describe("notification configuration", () => {
+  test.describe.configure({ mode: "serial" });
+  for (const [locale, templateKey] of [
+    ["en", "payment.refunded"],
+    ["ar", "payment.refund_failed"],
+  ] as const)
+    test(`administrator turns an optional customer email off in ${locale}; always-sent types stay locked`, async ({
+      page,
+    }) => {
+      const copy = notificationCopy[locale];
+      const name = templateKey === "payment.refunded" ? copy.refund : copy.refundFailed;
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await signInCompletion(page, "admin", locale);
+      await page.goto(`${completionOrigin}/${locale}/communications`);
+      await page
+        .getByRole("navigation", { name: copy.nav, exact: true })
+        .getByRole("link", { name: copy.settings, exact: true })
+        .click();
+      await page.waitForURL(new RegExp(`/${locale}/communications/settings$`, "u"));
+      await expect(page.locator("html")).toHaveAttribute(
+        "dir",
+        locale === "ar" ? "rtl" : "ltr",
+      );
+      await expect(
+        page.getByRole("heading", { level: 1, name: copy.settings, exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByRole("navigation", { name: copy.nav, exact: true })
+          .getByRole("link", { name: copy.settings, exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+
+      // Always-sent types render their email switch on, disabled, and stamped.
+      for (const locked of [
+        "booking.confirmed",
+        "management.otp_requested",
+        "auth.sign_in_link",
+        "auth.password_reset",
+        "auth.email_change",
+      ]) {
+        const row = page.locator(`li[data-template-key="${locked}"]`);
+        await expect(row).toHaveCount(1);
+        await expect(row.getByRole("switch")).toBeDisabled();
+        await expect(row.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+        await expect(row).toContainText(copy.alwaysSent);
+      }
+      await expect(
+        page.locator('li[data-template-key="booking.confirmed"]').getByRole("switch"),
+      ).toHaveAccessibleName(`${copy.email} — ${copy.confirmed}`);
+
+      const row = page.locator(`li[data-template-key="${templateKey}"]`);
+      const toggle = row.getByRole("switch", {
+        name: `${copy.email} — ${name}`,
+        exact: true,
+      });
+      await expect(toggle).toBeEnabled();
+      const save = async () => {
+        await submitMutation(
+          page,
+          page.getByRole("button", { name: copy.save, exact: true }),
+        );
+        await expect(page.locator("main").getByRole("status")).toContainText(
+          copy.saved,
+        );
+      };
+      // A diagnostic rerun on a used stack restores the default first, so the
+      // "off" below is always a real change.
+      if (tenantEmailSetting(templateKey) === "false") {
+        await setSwitch(toggle, true);
+        await save();
+        await page.reload();
+      }
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await setSwitch(toggle, false);
+      await save();
+      expect(tenantEmailSetting(templateKey)).toBe("false");
+      // Locked types never gain an email override, whatever the browser sent.
+      expect(
+        completionSql(
+          `select count(*) from app.notification_settings where tenant_id='${completionTenant}' and (overrides->'booking.confirmed' ? 'email_enabled' or overrides->'management.otp_requested' ? 'email_enabled')`,
+        ),
+      ).toBe("0");
+      expect(
+        completionSql(
+          `select count(*) > 0 from app.notification_settings_events where tenant_id='${completionTenant}' and action='settings_saved'`,
+        ),
+      ).toBe("t");
+
+      // The saved state is what a fresh load shows.
+      await page.reload();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+      await expectAccessibleAt(page, 1440, `notification settings ${locale}`);
+      await expectAccessibleAt(page, 390, `notification settings ${locale}`);
+    });
+
+  test("staff member turns on the daily agenda in My email preferences", async ({
+    page,
+  }) => {
+    const copy = notificationCopy.en;
+    const staffMembership = "d3000000-0000-0000-0000-000000000003";
+    const stored = () =>
+      completionSql(
+        `select coalesce((select preferences->>'staff.daily_digest' from app.staff_notification_preferences where tenant_id='${completionTenant}' and membership_id='${staffMembership}'),'none')`,
+      );
+    await signInCompletion(page, "staff");
+    await page.goto(`${completionOrigin}/en/communications`);
+    const nav = page.getByRole("navigation", { name: copy.nav, exact: true });
+    // Staff hold no policy.edit, so the tenant settings section is not offered.
+    await expect(
+      nav.getByRole("link", { name: copy.settings, exact: true }),
+    ).toHaveCount(0);
+    await nav.getByRole("link", { name: copy.preferences, exact: true }).click();
+    await page.waitForURL(/\/en\/communications\/preferences$/u);
+    await expect(
+      page.getByRole("heading", { level: 1, name: copy.preferences, exact: true }),
+    ).toBeVisible();
+    const digest = page.getByRole("switch", { name: copy.digest, exact: true });
+    const save = async () => {
+      await submitMutation(
+        page,
+        page.getByRole("button", { name: copy.savePrefs, exact: true }),
+      );
+      await expect(page.locator("main").getByRole("status")).toContainText(
+        copy.savedPrefs,
+      );
+    };
+    if (stored() === "true") {
+      await setSwitch(digest, false);
+      await save();
+      await page.reload();
+    }
+    await expect(digest).toHaveAttribute("aria-checked", "false");
+    await setSwitch(digest, true);
+    await save();
+    expect(stored()).toBe("true");
+    await page.reload();
+    await expect(digest).toHaveAttribute("aria-checked", "true");
+    await expectAccessibleAt(page, 1440, "my email preferences");
+  });
+
+  for (const locale of ["en", "ar"] as const)
+    test(`integrations shows WhatsApp as not on the plan in ${locale}`, async ({
+      page,
+    }) => {
+      const copy = notificationCopy[locale];
+      await signInCompletion(page, "admin", locale);
+      await page.goto(`${completionOrigin}/${locale}/integrations`);
+      const section = page.locator("#integrations-whatsapp");
+      await expect(
+        section.getByRole("heading", { name: copy.waTitle, exact: true }),
+      ).toBeVisible();
+      await expect(section).toContainText(copy.waNotEntitled);
+      // Without the entitlement no setup control is offered at all.
+      await expect(section.locator("form")).toHaveCount(0);
+      await expect(
+        section
+          .getByRole("textbox")
+          .or(section.getByRole("switch"))
+          .or(section.getByRole("button")),
+      ).toHaveCount(0);
+      expect(
+        completionSql(
+          `select count(*) from app.whatsapp_configs where tenant_id='${completionTenant}'`,
+        ),
+      ).toBe("0");
+    });
+});

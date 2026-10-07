@@ -1,6 +1,19 @@
 "use client";
-import { useRef, useState, type ReactNode } from "react";
+import { Menu } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import {
+  Button,
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from "@wlbp/ui-foundation";
 
+/**
+ * A stand-alone navigation sheet for narrow screens. The workspace frame uses
+ * AppShell's own sheet; this remains for any surface that needs the menu
+ * outside the frame. Radix returns focus to the trigger on Escape.
+ */
 export function WorkspaceMobileMenu({
   children,
   label,
@@ -11,36 +24,24 @@ export function WorkspaceMobileMenu({
   readonly currentLabel: string;
 }) {
   const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
   return (
-    <div
-      className="workspace-navigation"
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && open) {
-          setOpen(false);
-          button.current?.focus();
-        }
-      }}
-    >
-      <button
-        ref={button}
-        type="button"
-        className="workspace-menu-button wlbp-button wlbp-button--quiet"
-        aria-expanded={open}
-        aria-controls="workspace-menu"
-        onClick={() => setOpen(!open)}
-      >
-        {label}: {currentLabel}
-      </button>
-      <div
-        id="workspace-menu"
-        className={open ? "workspace-menu is-open" : "workspace-menu"}
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" className="lg:hidden">
+          <Menu aria-hidden="true" />
+          {label}: {currentLabel}
+        </Button>
+      </SheetTrigger>
+      <SheetContent
+        closeLabel={label}
+        aria-describedby={undefined}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest("a")) setOpen(false);
         }}
       >
+        <SheetTitle className="sr-only">{label}</SheetTitle>
         {children}
-      </div>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }

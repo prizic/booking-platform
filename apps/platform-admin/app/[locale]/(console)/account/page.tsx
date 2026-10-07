@@ -1,4 +1,5 @@
 import { formatNumber } from "@wlbp/i18n";
+import { Alert, Section } from "@wlbp/ui-foundation";
 import { accountCopy as c } from "../../../_lib/admin-copy";
 import { fill, say } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
@@ -29,13 +30,14 @@ export default async function AccountPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
       {!context.ok ? (
         <UnavailableState locale={locale} code={context.code} />
       ) : (
-        <section className="section" aria-labelledby="standing-title">
+        <section aria-labelledby="standing-title" className="grid gap-4">
           <h2 id="standing-title" className="sr-only">
             {say(locale, c.title)}
           </h2>
@@ -67,25 +69,19 @@ export default async function AccountPage({
               ],
             ]}
           />
-          <p className="secondary">
+          <p className="text-sm leading-relaxed text-muted-foreground">
             {fill(locale, c.stepUp, {
               n: formatNumber(operator.stepUpSeconds / 60, locale),
             })}
           </p>
         </section>
       )}
-      <section className="section" aria-labelledby="factors-title">
-        <div className="section-header">
-          <h2 id="factors-title">{say(locale, c.factors)}</h2>
-        </div>
+      <Section id="factors" title={say(locale, c.factors)}>
         <Factors locale={locale} />
-      </section>
-      <section className="section" aria-labelledby="recovery-title">
-        <div className="section-header">
-          <h2 id="recovery-title">{say(locale, c.recoveryTitle)}</h2>
-        </div>
-        <p>{say(locale, c.recovery)}</p>
-      </section>
+      </Section>
+      <Section id="recovery" title={say(locale, c.recoveryTitle)}>
+        <Alert tone="info">{say(locale, c.recovery)}</Alert>
+      </Section>
     </>
   );
 }

@@ -12,7 +12,24 @@ function readBrandFixture(): string {
   throw new Error("Instance brand fixture is missing");
 }
 
+function readContentFixture(): string {
+  for (const relativePath of [
+    "../../../../instance/content/",
+    "../../../../instance-template/instance/content/",
+  ]) {
+    const directory = new URL(relativePath, import.meta.url);
+    if (existsSync(new URL("en.json", directory))) {
+      return JSON.stringify({
+        en: JSON.parse(readFileSync(new URL("en.json", directory), "utf8")),
+        ar: JSON.parse(readFileSync(new URL("ar.json", directory), "utf8")),
+      });
+    }
+  }
+  throw new Error("Instance content fixture is missing");
+}
+
 const serializedBrand = readBrandFixture();
+const serializedContent = readContentFixture();
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -20,9 +37,11 @@ afterEach(() => {
 });
 
 describe("Client locale metadata", () => {
+  // Cold-imports the layout and the whole shared UI library on first run.
   it("uses the validated tenant origin for canonical and social URLs", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://client.booking.example");
     vi.stubEnv("WLBP_BRAND_CONFIG_JSON", serializedBrand);
+    vi.stubEnv("WLBP_INSTANCE_CONTENT_JSON", serializedContent);
 
     const [{ clientBrand }, { getClientLocaleMetadata }] = await Promise.all([
       import("../_lib/brand"),
@@ -30,8 +49,13 @@ describe("Client locale metadata", () => {
     ]);
 
     const metadata = getClientLocaleMetadata("ar");
+    const content = JSON.parse(serializedContent) as {
+      ar: Record<string, string>;
+    };
 
     expect(metadata).toMatchObject({
+      title: content.ar["site.title"],
+      description: content.ar["site.description"],
       metadataBase: new URL("https://client.booking.example/"),
       openGraph: {
         images: [
@@ -47,7 +71,7 @@ describe("Client locale metadata", () => {
         },
       },
     });
-  });
+  }, 20_000);
 
   it("fails closed when a production build has no public origin", async () => {
     const { getClientSiteOrigin } = await import("../_lib/site-origin");

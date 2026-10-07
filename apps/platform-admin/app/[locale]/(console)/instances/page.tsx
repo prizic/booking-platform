@@ -1,6 +1,6 @@
 import { formatNumber } from "@wlbp/i18n";
 import { Badge } from "@wlbp/ui-foundation";
-import Link from "next/link";
+import { TextLink } from "../../../_lib/ui/text";
 import { copyFor, formCopy, say, stateCopy, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
@@ -53,6 +53,7 @@ export default async function InstancesPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
@@ -111,12 +112,12 @@ export default async function InstancesPage({
             rows={result.data.map((row) => ({
               key: row.instance_id,
               cells: [
-                <Link key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
+                <TextLink key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
                   <bdi>{row.tenant_name}</bdi>
-                </Link>,
-                <Link key="i" href={`${path}/${row.instance_id}`}>
+                </TextLink>,
+                <TextLink key="i" href={`${path}/${row.instance_id}`}>
                   <bdi>{row.instance_id.slice(0, 8)}</bdi>
-                </Link>,
+                </TextLink>,
                 <StatusBadge key="s" locale={locale} status={row.deployment_state} />,
                 row.rollout_ring ? (
                   status(row.rollout_ring)

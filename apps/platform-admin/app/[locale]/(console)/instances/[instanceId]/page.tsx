@@ -1,8 +1,8 @@
 import { formatNumber } from "@wlbp/i18n";
-import { Badge } from "@wlbp/ui-foundation";
-import Link from "next/link";
+import { Badge, ReferenceCode } from "@wlbp/ui-foundation";
+import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
-import { copyFor, say, stateCopy, statusCopy } from "../../../../_lib/copy";
+import { say, stateCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { getOperator } from "../../../../_lib/operator-page";
 import { operationsCopy } from "../../../../_lib/operations-copy";
@@ -91,21 +91,25 @@ export default async function InstancePage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={`${d.tenant_name} · ${d.id.slice(0, 8)}`}
         breadcrumbs={[...crumbs, [d.id.slice(0, 8)]]}
+        meta={<ReferenceCode>{d.id}</ReferenceCode>}
         actions={<StatusBadge locale={locale} status={d.deployment_state} />}
       />
-      <section className="section" aria-labelledby="release-title">
-        <div className="section-header">
-          <h2 id="release-title">{say(locale, c.releaseState)}</h2>
+      <section className="grid gap-4" aria-labelledby="release-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="release-title" className="text-lg leading-snug font-semibold">
+            {say(locale, c.releaseState)}
+          </h2>
         </div>
         <Facts
           items={[
             [
               say(locale, c.tenant),
-              <Link key="t" href={`/${locale}/tenants/${d.tenant_id}`}>
+              <TextLink key="t" href={`/${locale}/tenants/${d.tenant_id}`}>
                 <bdi>{d.tenant_name}</bdi>
-              </Link>,
+              </TextLink>,
             ],
             [
               say(locale, c.release),
@@ -164,17 +168,23 @@ export default async function InstancePage({
         />
       </section>
 
-      <section className="section" aria-labelledby="infra-title">
-        <div className="section-header">
-          <h2 id="infra-title">{say(locale, c.resources)}</h2>
+      <section className="grid gap-4" aria-labelledby="infra-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="infra-title" className="text-lg leading-snug font-semibold">
+            {say(locale, c.resources)}
+          </h2>
         </div>
         {d.infrastructure.length === 0 ? (
           <EmptyState locale={locale} title={say(locale, c.noResources)} />
         ) : (
           d.infrastructure.map((f) => (
-            <article key={f.id} className="section" aria-labelledby={`res-${f.id}`}>
-              <div className="section-header">
-                <h3 id={`res-${f.id}`}>
+            <article
+              key={f.id}
+              aria-labelledby={`res-${f.id}`}
+              className="grid gap-4 rounded-lg border bg-card p-5"
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <h3 id={`res-${f.id}`} className="text-base font-semibold">
                   <bdi>
                     {f.provider} · {f.resource_kind}
                   </bdi>
@@ -226,14 +236,30 @@ export default async function InstancePage({
                   ],
                 ]}
               />
-              <div className="json-pair">
-                <div>
-                  <h4>{say(locale, c.desired)}</h4>
-                  <pre>{JSON.stringify(f.desired_state, null, 2)}</pre>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="grid min-w-0 gap-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">
+                    {say(locale, c.desired)}
+                  </h4>
+                  <pre
+                    dir="ltr"
+                    tabIndex={0}
+                    className="max-h-80 overflow-auto rounded-md bg-muted p-3 font-latin text-xs leading-relaxed"
+                  >
+                    {JSON.stringify(f.desired_state, null, 2)}
+                  </pre>
                 </div>
-                <div>
-                  <h4>{say(locale, c.observed)}</h4>
-                  <pre>{JSON.stringify(f.observed_state, null, 2)}</pre>
+                <div className="grid min-w-0 gap-2">
+                  <h4 className="text-sm font-semibold text-muted-foreground">
+                    {say(locale, c.observed)}
+                  </h4>
+                  <pre
+                    dir="ltr"
+                    tabIndex={0}
+                    className="max-h-80 overflow-auto rounded-md bg-muted p-3 font-latin text-xs leading-relaxed"
+                  >
+                    {JSON.stringify(f.observed_state, null, 2)}
+                  </pre>
                 </div>
               </div>
             </article>
@@ -241,9 +267,11 @@ export default async function InstancePage({
         )}
       </section>
 
-      <section className="section" aria-labelledby="signals-title">
-        <div className="section-header">
-          <h2 id="signals-title">{say(locale, c.signals)}</h2>
+      <section className="grid gap-4" aria-labelledby="signals-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="signals-title" className="text-lg leading-snug font-semibold">
+            {say(locale, c.signals)}
+          </h2>
         </div>
         {d.health.length === 0 ? (
           <p>
@@ -268,7 +296,7 @@ export default async function InstancePage({
                 <>
                   <StatusBadge locale={locale} status={h.status} />
                   {h.error_code ? (
-                    <span className="secondary">
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                       <bdi>{h.error_code}</bdi>
                     </span>
                   ) : null}
@@ -285,25 +313,31 @@ export default async function InstancePage({
         )}
       </section>
 
-      <section className="section" aria-labelledby="links-title">
-        <div className="section-header">
-          <h2 id="links-title">
+      <section className="grid gap-4" aria-labelledby="links-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="links-title" className="text-lg leading-snug font-semibold">
             {say(locale, c.domains)} · {say(locale, c.runs)}
           </h2>
         </div>
-        <ul>
+        <ul className="divide-y rounded-lg border bg-card">
           {d.domains.map((dom) => (
-            <li key={dom.id}>
+            <li
+              key={dom.id}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+            >
               <bdi>{dom.hostname}</bdi>{" "}
               <StatusBadge locale={locale} status={dom.verification_status} />
             </li>
           ))}
           {d.runs.map((run) => (
-            <li key={run.id}>
-              <Link href={`/${locale}/provisioning/${run.id}`}>
+            <li
+              key={run.id}
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+            >
+              <TextLink href={`/${locale}/provisioning/${run.id}`}>
                 <bdi>{run.slug}</bdi>
-              </Link>{" "}
-              {copyFor(statusCopy, run.state, locale)}
+              </TextLink>{" "}
+              <StatusBadge locale={locale} status={run.state} />
             </li>
           ))}
         </ul>

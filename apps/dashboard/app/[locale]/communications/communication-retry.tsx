@@ -1,7 +1,12 @@
 "use client";
-import { useActionState } from "react";
 import type { Locale } from "@wlbp/i18n";
+import { useActionMutation } from "@wlbp/ui-foundation";
+import { ConfirmAction } from "../services/confirm-submit";
+import { useResultNavigation } from "../services/form-hooks";
+import { MutationFeedback } from "../services/mutation-feedback";
 import { retryCommunication } from "./actions";
+import { dashboardFormMessages } from "../../_lib/form-messages";
+
 export function CommunicationRetry({
   bookingId,
   locale,
@@ -9,30 +14,42 @@ export function CommunicationRetry({
   bookingId: string;
   locale: Locale;
 }) {
-  const [state, action, pending] = useActionState(retryCommunication, {});
+  const navigate = useResultNavigation();
+  const mutation = useActionMutation(retryCommunication, {
+    refresh: false,
+    onSuccess: (data) => navigate(data.destination),
+  });
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
+  const refused = m(
+    "Retry refused or unavailable. Check permission and suppression status.",
+    "رُفضت إعادة المحاولة أو أنها غير متاحة. تحقّق من الصلاحيات وحالة منع الإرسال.",
+  );
   return (
-    <form action={action}>
-      <input name="locale" type="hidden" value={locale} />
-      <input name="bookingId" type="hidden" value={bookingId} />
-      <label>
-        <input name="confirm" type="checkbox" value="yes" required disabled={pending} />
-        {m("Confirm retry of this booking email", "تأكيد إعادة محاولة بريد هذا الحجز")}
-      </label>
-      <button type="submit" disabled={pending}>
-        {m(
-          pending ? "Retrying…" : "Retry email",
-          pending ? "جارٍ إعادة المحاولة…" : "إعادة محاولة البريد",
+    <div className="grid justify-items-end gap-2" data-communication-retry={bookingId}>
+      <ConfirmAction
+        variant="outline"
+        size="sm"
+        label={m("Retry email", "إعادة محاولة البريد")}
+        pending={mutation.isPending}
+        pendingLabel={m("Retrying…", "جارٍ إعادة المحاولة…")}
+        title={m("Retry this booking email?", "هل تريد إعادة محاولة بريد هذا الحجز؟")}
+        description={m(
+          "The message is queued again. Queuing does not confirm delivery.",
+          "تُضاف الرسالة إلى قائمة الإرسال مجددًا. الإضافة إلى القائمة لا تؤكد التسليم.",
         )}
-      </button>
-      {state.error ? (
-        <p role="alert">
-          {m(
-            "Retry refused or unavailable. Check permission and suppression status.",
-            "إعادة المحاولة مرفوضة أو غير متاحة. تحقق من الصلاحيات ومنع الإرسال.",
-          )}
-        </p>
-      ) : null}
-    </form>
+        confirmLabel={m("Retry email", "إعادة محاولة البريد")}
+        cancelLabel={m("Cancel", "إلغاء")}
+        onConfirm={() => mutation.mutate({ locale, bookingId, confirm: "yes" })}
+      />
+      <div className="text-start">
+        <MutationFeedback
+          locale={locale}
+          // Every refusal (validation, permission, suppression, provider) reads the same.
+          messages={{ ...dashboardFormMessages(locale), refused, invalid: refused }}
+          result={mutation.data?.ok === false ? mutation.data : undefined}
+          transportFailed={mutation.isError}
+        />
+      </div>
+    </div>
   );
 }

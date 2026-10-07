@@ -13,6 +13,7 @@ import {
 } from "@playwright/test";
 import {
   bookingQuery,
+  chooseDate,
   clientOrigin,
   confirmed,
   fillDetails,
@@ -474,9 +475,7 @@ test.describe("live database booking journey", () => {
     await page.goto(
       `${clientOrigin}/en/book?service=${liveServiceId}&location=${liveLocationId}`,
     );
-    const dateInput = page.locator('input[name="date"]');
-    await expect(dateInput).toBeEnabled();
-    await dateInput.fill(futureDate(daysFromNow));
+    await chooseDate(page, futureDate(daysFromNow));
     const availability = page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/api/availability",
     );
@@ -586,8 +585,8 @@ test.describe("live database booking journey", () => {
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
     await expect(
-      page.getByRole("heading", {
-        name: new RegExp(`Live consultation · ${booking.publicReference}`, "u"),
+      page.getByRole("link", {
+        name: new RegExp(booking.publicReference, "u"),
       }),
     ).toBeVisible();
   });
@@ -658,7 +657,7 @@ test.describe("live database booking journey", () => {
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: new RegExp(publicReference, "u") }),
+      page.getByRole("link", { name: new RegExp(publicReference, "u") }),
     ).toBeVisible();
   });
 

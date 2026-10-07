@@ -1,4 +1,6 @@
 import { formatNumber } from "@wlbp/i18n";
+import { Button } from "@wlbp/ui-foundation";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { copyFor, formCopy, reasonCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
@@ -12,6 +14,7 @@ import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
+import { MachineCode, SubText, TextLink } from "../../../_lib/ui/text";
 import { TimeValue } from "../../../_lib/ui/time";
 
 export const dynamic = "force-dynamic";
@@ -51,13 +54,17 @@ export default async function ProvisioningPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
           atLeast(operator.role, "operator") ? (
-            <Link className="wlbp-button wlbp-button--primary" href={`${path}/new`}>
-              {say(locale, c.request)}
-            </Link>
+            <Button asChild>
+              <Link href={`${path}/new`}>
+                <Plus aria-hidden="true" />
+                {say(locale, c.request)}
+              </Link>
+            </Button>
           ) : null
         }
       />
@@ -95,30 +102,32 @@ export default async function ProvisioningPage({
             rows={result.data.map((row) => ({
               key: row.run_id,
               cells: [
-                <Link key="s" href={`${path}/${row.run_id}`}>
-                  <bdi>{row.slug}</bdi>
-                </Link>,
-                <Link key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
+                <TextLink key="s" href={`${path}/${row.run_id}`}>
+                  <MachineCode className="text-sm">{row.slug}</MachineCode>
+                </TextLink>,
+                <TextLink key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
                   <bdi>{row.tenant_name}</bdi>
-                </Link>,
+                </TextLink>,
                 <>
                   <StatusBadge
                     locale={locale}
                     status={row.waiting_reason ? "waiting" : row.state}
                   />
                   {row.waiting_reason ? (
-                    <span className="secondary">
+                    <SubText>
                       {copyFor(reasonCopy, `waiting_${row.waiting_reason}`, locale)}
-                    </span>
+                    </SubText>
                   ) : null}
                   {row.last_error_code ? (
-                    <span className="secondary">
-                      <bdi>{row.last_error_code}</bdi>
-                    </span>
+                    <SubText>
+                      <MachineCode>{row.last_error_code}</MachineCode>
+                    </SubText>
                   ) : null}
                 </>,
                 `${formatNumber(row.steps_succeeded, locale)} / ${formatNumber(row.steps_total, locale)}`,
-                <bdi key="r">{row.desired_release}</bdi>,
+                <MachineCode key="r" className="text-sm">
+                  {row.desired_release}
+                </MachineCode>,
                 <TimeValue key="u" locale={locale} value={row.updated_at} />,
               ],
             }))}

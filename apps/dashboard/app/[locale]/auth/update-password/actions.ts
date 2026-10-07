@@ -1,36 +1,36 @@
 "use server";
-import { isLocale } from "@wlbp/i18n";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { redirect } from "next/navigation";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
 import { isRecoverySession } from "../../../_lib/auth-recovery-session";
 import { recoveryCookieName } from "../../../_lib/auth-recovery-ticket";
 import { cookies } from "next/headers";
-import type { AuthFormState } from "../../../_lib/auth-form";
+import {
+  updatePasswordSchema,
+  type UpdatePasswordInput,
+} from "../../../_lib/auth-schema";
+
 export async function updatePassword(
-  _state: AuthFormState,
-  form: FormData,
-): Promise<AuthFormState> {
-  const locale = form.get("locale");
-  const password = form.get("password");
-  if (
-    !isLocale(locale) ||
-    typeof password !== "string" ||
-    password.length < 8 ||
-    password.length > 256 ||
-    password !== form.get("confirmation")
-  )
-    return { message: "invalid", field: "password" };
+  input: UpdatePasswordInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(updatePasswordSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, password } = parsed.data;
   try {
     const client = await createDashboardAuthClient();
-    if (client === null) return { message: "unavailable" };
-    if (!(await isRecoverySession(client))) return { message: "expired" };
+    if (client === null) return actionError("unavailable");
+    if (!(await isRecoverySession(client))) return actionError("expired");
     const result = await client.auth.updateUser({ password });
-    if (result.error) return { message: "expired" };
+    if (result.error) return actionError("expired");
     (await cookies()).delete(recoveryCookieName);
     const signedOut = await client.auth.signOut({ scope: "global" });
-    if (signedOut.error) return { message: "unavailable" };
+    if (signedOut.error) return actionError("unavailable");
   } catch {
-    return { message: "unavailable" };
+    return actionError("unavailable");
   }
   redirect(`/${locale}/auth/sign-in`);
 }
