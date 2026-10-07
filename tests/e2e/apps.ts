@@ -87,6 +87,8 @@ export async function settleBrandRender(page: Page) {
       return typeof endTime === "number" && Number.isFinite(endTime);
     });
 
+    // Hydration can replace an animation before its finished promise settles.
+    // Screenshot assertions still disable animations and wait for visual stability.
     await Promise.race([
       Promise.all(
         finiteAnimations.map((animation) => animation.finished.catch(() => undefined)),
