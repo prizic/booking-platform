@@ -104,7 +104,7 @@ describe("theme.css configuration validation", () => {
 
   it("rejects duplicate declarations", async () => {
     const result = await runWithTheme((theme) =>
-      theme.replace(":root {", ":root {\n  --brand-color-background: #f3efe5;"),
+      theme.replace(":root {", ":root {\n  --brand-color-background: #fafaf9;"),
     );
 
     assert.notEqual(result.status, 0);
@@ -117,7 +117,7 @@ describe("theme.css configuration validation", () => {
   it("rejects declarations whose values drift from brand.json", async () => {
     const result = await runWithTheme((theme) =>
       theme.replace(
-        "--brand-color-background: #f3efe5",
+        "--brand-color-background: #fafaf9",
         "--brand-color-background: #000000",
       ),
     );
@@ -125,7 +125,7 @@ describe("theme.css configuration validation", () => {
     assert.notEqual(result.status, 0);
     assert.match(
       result.stderr,
-      /theme\.css :root --brand-color-background must equal brand\.json value #f3efe5/u,
+      /theme\.css :root --brand-color-background must equal brand\.json value #fafaf9/u,
     );
   });
 

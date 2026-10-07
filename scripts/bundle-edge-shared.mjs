@@ -39,6 +39,7 @@ const bundles = [
     modules: [
       "brand.ts",
       "digest.ts",
+      "intl-locale.ts",
       "layout.ts",
       "payload.ts",
       "samples.ts",

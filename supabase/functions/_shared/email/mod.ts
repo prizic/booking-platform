@@ -2,6 +2,7 @@
 // Do not edit. Change the package and run `pnpm bundle:edge`.
 export * from "./brand.ts";
 export * from "./digest.ts";
+export * from "./intl-locale.ts";
 export * from "./layout.ts";
 export * from "./payload.ts";
 export * from "./samples.ts";
