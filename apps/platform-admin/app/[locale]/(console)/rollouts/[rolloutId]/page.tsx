@@ -1,4 +1,5 @@
 import { formatNumber } from "@wlbp/i18n";
+import { Alert, AlertDescription, ReferenceCode, Section } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -9,7 +10,7 @@ import {
   startRolloutAction,
 } from "../../../../_lib/actions/releases";
 import type { AuditRow } from "../../../../_lib/audit-copy";
-import { copyFor, reasonCopy, say, statusCopy } from "../../../../_lib/copy";
+import { copyFor, reasonCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
 import { pageLocale } from "../../../../_lib/page-locale";
@@ -22,10 +23,12 @@ import { Facts } from "../../../../_lib/ui/facts";
 import { EmptyState, Unknown, UnavailableState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../../_lib/ui/time";
+import { ProgressRow } from "../progress-row";
 
 export const dynamic = "force-dynamic";
 
 const c = releaseCopy.rollouts;
+const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
 type Rollout = {
   id: string;
@@ -79,10 +82,10 @@ export default async function RolloutPage({
   const crumbs = [[say(locale, c.title), `/${locale}/rollouts`]] as const;
   if (!result.ok)
     return (
-      <>
+      <div className="grid gap-6">
         <PageHeader locale={locale} title={say(locale, c.title)} breadcrumbs={crumbs} />
         <UnavailableState locale={locale} code={result.code} />
-      </>
+      </div>
     );
   const o = result.data as unknown as Rollout;
   const hidden = { rolloutId: o.id };
@@ -90,12 +93,21 @@ export default async function RolloutPage({
   const operatorRole = atLeast(operator.role, "operator");
   const status = (s: string) => copyFor(statusCopy, s, locale);
   const hasFailed = (o.counts.failed ?? 0) > 0;
-  const title = `${o.release.version} · ${o.target_rings.map(status).join(", ")}`;
+  const title = `${o.release.version} · ${
+    o.target_rings.map(status).join(", ") || say(locale, releaseCopy.releases.instances)
+  }`;
+  const count = (...keys: string[]) =>
+    keys.reduce((sum, key) => sum + Number(o.counts[key] ?? 0), 0);
+  const total = Object.values(o.counts).reduce((sum, v) => sum + Number(v), 0);
+  const progress = Object.entries(o.counts)
+    .map(([k, v]) => `${status(k)}: ${formatNumber(v, locale)}`)
+    .join(" · ");
 
   return (
-    <>
+    <div className="grid gap-8">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={title}
         breadcrumbs={[...crumbs, [o.release.version]]}
         actions={
@@ -174,13 +186,19 @@ export default async function RolloutPage({
         }
       />
       {!o.release.reversible ? (
-        <p className="notice notice--warning">{say(locale, c.rollbackUnavailable)}</p>
+        <Alert tone="warning">
+          <AlertDescription className="text-foreground">
+            {say(locale, c.rollbackUnavailable)}
+          </AlertDescription>
+        </Alert>
       ) : null}
       {["running", "paused"].includes(o.status) ? (
-        <p className="notice">{say(locale, c.workerNote)}</p>
+        <Alert>
+          <AlertDescription>{say(locale, c.workerNote)}</AlertDescription>
+        </Alert>
       ) : null}
 
-      <section className="section" aria-labelledby="rollout-facts">
+      <section className="grid gap-4" aria-labelledby="rollout-facts">
         <h2 id="rollout-facts" className="sr-only">
           {title}
         </h2>
@@ -188,8 +206,14 @@ export default async function RolloutPage({
           items={[
             [
               say(locale, c.version),
-              <Link key="r" href={`/${locale}/releases/${o.release.id}`}>
-                <bdi>{o.release.version}</bdi>
+              <Link
+                key="r"
+                href={`/${locale}/releases/${o.release.id}`}
+                className={linkClass}
+              >
+                <ReferenceCode className="text-primary">
+                  {o.release.version}
+                </ReferenceCode>
               </Link>,
             ],
             [say(locale, c.reason), o.reason],
@@ -204,14 +228,30 @@ export default async function RolloutPage({
             ],
             [
               say(locale, c.progress),
-              Object.entries(o.counts)
-                .map(([k, v]) => `${status(k)}: ${formatNumber(v, locale)}`)
-                .join(" · "),
+              <ProgressRow
+                key="p"
+                total={total}
+                segments={[
+                  {
+                    key: "succeeded",
+                    value: count("succeeded", "rolled_back"),
+                    tone: "positive",
+                  },
+                  { key: "failed", value: count("failed"), tone: "danger" },
+                  {
+                    key: "queued",
+                    value: count("queued", "rollback_queued"),
+                    tone: "warning",
+                  },
+                ]}
+              >
+                {progress || say(locale, stateCopy.none)}
+              </ProgressRow>,
             ],
             [
               say(locale, c.blocked),
               o.blocked.length ? (
-                <ul key="bl">
+                <ul key="bl" className="grid list-disc gap-1 ps-5">
                   {o.blocked.map((b) => (
                     <li key={b}>{copyFor(reasonCopy, b, locale)}</li>
                   ))}
@@ -224,10 +264,7 @@ export default async function RolloutPage({
         />
       </section>
 
-      <section className="section" aria-labelledby="targets-title">
-        <div className="section-header">
-          <h2 id="targets-title">{say(locale, c.targets)}</h2>
-        </div>
+      <Section id="targets" title={say(locale, c.targets)}>
         {o.targets.length === 0 ? (
           <EmptyState locale={locale} />
         ) : (
@@ -247,7 +284,11 @@ export default async function RolloutPage({
             rows={o.targets.map((t) => ({
               key: t.instance_id,
               cells: [
-                <Link key="t" href={`/${locale}/instances/${t.instance_id}`}>
+                <Link
+                  key="t"
+                  href={`/${locale}/instances/${t.instance_id}`}
+                  className={linkClass}
+                >
                   <bdi>{t.tenant_name}</bdi>
                 </Link>,
                 t.ring ? (
@@ -256,51 +297,52 @@ export default async function RolloutPage({
                   <Unknown key="r" locale={locale} kind="none" />
                 ),
                 t.from_release ? (
-                  <bdi key="f">{t.from_release}</bdi>
+                  <ReferenceCode key="f">{t.from_release}</ReferenceCode>
                 ) : (
                   <Unknown key="f" locale={locale} kind="notReported" />
                 ),
-                <>
+                <div key="s" className="grid justify-items-start gap-1">
                   <StatusBadge locale={locale} status={t.status} />
                   {t.error_code ? (
-                    <span className="secondary">
+                    <span className="text-xs text-muted-foreground">
                       {copyFor(reasonCopy, t.error_code, locale)}{" "}
                       <bdi>{t.error_code}</bdi>
                     </span>
                   ) : null}
-                </>,
+                </div>,
                 formatNumber(t.attempts, locale),
                 t.job_id ? (
-                  <Link key="j" href={`/${locale}/jobs/${t.job_id}`}>
+                  <Link
+                    key="j"
+                    href={`/${locale}/jobs/${t.job_id}`}
+                    className={linkClass}
+                  >
                     {status(t.job_status ?? "queued")}
                   </Link>
                 ) : (
                   <Unknown key="j" locale={locale} kind="none" />
                 ),
                 t.current_release ? (
-                  <>
-                    <bdi>{t.current_release}</bdi>{" "}
+                  <div key="c" className="grid gap-0.5">
+                    <ReferenceCode>{t.current_release}</ReferenceCode>
                     <TimeValue locale={locale} value={t.reported_at} />
-                  </>
+                  </div>
                 ) : (
-                  <Unknown locale={locale} kind="notReported" />
+                  <Unknown key="c" locale={locale} kind="notReported" />
                 ),
               ],
             }))}
           />
         )}
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="history-title">
-        <div className="section-header">
-          <h2 id="history-title">{say(locale, c.history)}</h2>
-        </div>
+      <Section id="history" title={say(locale, c.history)}>
         {o.history.length ? (
           <AuditList locale={locale} rows={o.history} />
         ) : (
           <EmptyState locale={locale} />
         )}
-      </section>
-    </>
+      </Section>
+    </div>
   );
 }

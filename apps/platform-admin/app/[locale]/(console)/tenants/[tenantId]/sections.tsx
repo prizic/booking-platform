@@ -1,5 +1,15 @@
 import type { Locale } from "@wlbp/i18n";
-import { TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  Button,
+  DateTimePicker,
+  Field,
+  Label,
+  ReferenceCode,
+  Section as FoundationSection,
+  TextField,
+} from "@wlbp/ui-foundation";
+import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { randomUUID } from "node:crypto";
 import type { ReactNode } from "react";
@@ -21,7 +31,14 @@ import {
   setTenantStatusAction,
 } from "../../../../_lib/actions/tenants";
 import type { AuditRow } from "../../../../_lib/audit-copy";
-import { copyFor, say, stateCopy, statusCopy } from "../../../../_lib/copy";
+import {
+  copyFor,
+  fill,
+  formCopy,
+  say,
+  stateCopy,
+  statusCopy,
+} from "../../../../_lib/copy";
 import { atLeast, type OperatorContext } from "../../../../_lib/operator-page";
 import { ActionDialog } from "../../../../_lib/ui/action-dialog";
 import { AuditList } from "../../../../_lib/ui/audit-list";
@@ -31,6 +48,7 @@ import { OperatorForm } from "../../../../_lib/ui/operator-form";
 import { SelectField } from "../../../../_lib/ui/select-field";
 import { EmptyState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
+import { MachineCode, SubText, TextLink } from "../../../../_lib/ui/text";
 import { TimeValue } from "../../../../_lib/ui/time";
 import { tenantsCopy as c } from "../copy";
 
@@ -123,13 +141,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="section" id={id} aria-labelledby={`${id}-title`}>
-      <div className="section-header">
-        <h2 id={`${id}-title`}>{title}</h2>
-        {actions ? <div className="page-actions">{actions}</div> : null}
-      </div>
+    <FoundationSection
+      id={id}
+      title={title}
+      className="scroll-mt-20"
+      {...(actions ? { actions } : {})}
+    >
       {children}
-    </section>
+    </FoundationSection>
   );
 }
 
@@ -165,7 +184,7 @@ export function IdentitySection({ locale, detail, operator }: Props) {
       <Facts
         items={[
           [say(locale, c.name), <bdi key="n">{tenant.name}</bdi>],
-          [say(locale, c.id), <bdi key="i">{tenant.id}</bdi>],
+          [say(locale, c.id), <ReferenceCode key="i">{tenant.id}</ReferenceCode>],
           [
             say(locale, c.brands),
             <bdi key="b">{detail.brands.map((b) => b.key).join(", ")}</bdi>,
@@ -257,10 +276,14 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
         ]}
       />
       {admin && tenant.status === "active" ? (
-        <p className="secondary">{say(locale, c.closureNeedsSuspend)}</p>
+        <p className="text-sm text-muted-foreground">
+          {say(locale, c.closureNeedsSuspend)}
+        </p>
       ) : null}
       {!admin ? (
-        <p className="secondary">{say(locale, stateCopy.roleRequired)}</p>
+        <p className="text-sm text-muted-foreground">
+          {say(locale, stateCopy.roleRequired)}
+        </p>
       ) : null}
     </Section>
   );
@@ -331,14 +354,22 @@ export function SubscriptionSection({
                     (s) => [s, copyFor(statusCopy, s, locale)] as const,
                   )}
                 />
-                <label className="field">
-                  <span>{say(locale, a.fields.endsAt)}</span>
-                  <input
-                    type="datetime-local"
+                <Field>
+                  <Label htmlFor="subscription-ends-at">
+                    {say(locale, a.fields.endsAt)}
+                  </Label>
+                  <DateTimePicker
+                    id={"subscription-ends-at"}
                     name="endsAt"
-                    defaultValue={sub.ends_at?.slice(0, 16)}
+                    locale={locale}
+                    datePlaceholder={say(locale, formCopy.pickDate)}
+                    timePlaceholder={say(locale, formCopy.pickTime)}
+                    timeLabel={fill(locale, formCopy.timeOf, {
+                      field: say(locale, a.fields.endsAt),
+                    })}
+                    {...(sub.ends_at ? { defaultValue: sub.ends_at.slice(0, 16) } : {})}
                   />
-                </label>
+                </Field>
                 <SelectField
                   name="ring"
                   label={say(locale, a.fields.ring)}
@@ -351,7 +382,7 @@ export function SubscriptionSection({
         ) : null
       }
     >
-      <p className="notice">{say(locale, c.billingNote)}</p>
+      <Alert tone="info">{say(locale, c.billingNote)}</Alert>
       {sub ? (
         <Facts
           items={[
@@ -375,7 +406,7 @@ export function SubscriptionSection({
           ]}
         />
       ) : (
-        <p>{say(locale, c.noSubscription)}</p>
+        <EmptyState locale={locale} title={say(locale, c.noSubscription)} />
       )}
     </Section>
   );
@@ -417,10 +448,21 @@ export function EntitlementsSection({ locale, detail, operator }: Props) {
                 ["no", say(locale, a.fields.grantNo)],
               ]}
             />
-            <label className="field">
-              <span>{say(locale, a.fields.expiresAt)}</span>
-              <input type="datetime-local" name="expiresAt" />
-            </label>
+            <Field>
+              <Label htmlFor="override-expires-at">
+                {say(locale, a.fields.expiresAt)}
+              </Label>
+              <DateTimePicker
+                id={"override-expires-at"}
+                name="expiresAt"
+                locale={locale}
+                datePlaceholder={say(locale, formCopy.pickDate)}
+                timePlaceholder={say(locale, formCopy.pickTime)}
+                timeLabel={fill(locale, formCopy.timeOf, {
+                  field: say(locale, a.fields.expiresAt),
+                })}
+              />
+            </Field>
           </ActionDialog>
         ) : null
       }
@@ -555,7 +597,7 @@ export function DomainsSection({ locale, detail, operator }: Props) {
                   action={requestDomainVerificationAction}
                   submit={say(locale, a.verifyDomain.submit)}
                   successMessage={say(locale, a.verifyDomain.done)}
-                  className="inline-form"
+                  compact
                 >
                   <input type="hidden" name="domainId" value={d.id} />
                   <input type="hidden" name="tenantId" value={detail.tenant.id} />
@@ -585,9 +627,9 @@ export function InstancesSection({ locale, detail }: Omit<Props, "operator">) {
         rows={detail.instances.map((i) => ({
           key: i.id,
           cells: [
-            <Link key="l" href={`/${locale}/instances/${i.id}`}>
+            <TextLink key="l" href={`/${locale}/instances/${i.id}`}>
               <bdi>{i.id}</bdi>
-            </Link>,
+            </TextLink>,
             <StatusBadge key="s" locale={locale} status={i.deployment_state} />,
             <bdi key="r">
               {i.desired_release ?? "—"} →{" "}
@@ -608,12 +650,11 @@ export function ProvisioningSection({ locale, detail, operator }: Props) {
       title={say(locale, c.sections.provisioning)}
       actions={
         atLeast(operator.role, "operator") ? (
-          <Link
-            className="wlbp-button wlbp-button--secondary"
-            href={`/${locale}/provisioning/new?tenant=${detail.tenant.id}`}
-          >
-            {say(locale, c.requestProvisioning)}
-          </Link>
+          <Button asChild variant="outline">
+            <Link href={`/${locale}/provisioning/new?tenant=${detail.tenant.id}`}>
+              {say(locale, c.requestProvisioning)}
+            </Link>
+          </Button>
         ) : null
       }
     >
@@ -632,18 +673,18 @@ export function ProvisioningSection({ locale, detail, operator }: Props) {
           rows={detail.provisioning_runs.map((r) => ({
             key: r.id,
             cells: [
-              <Link key="l" href={`/${locale}/provisioning/${r.id}`}>
+              <TextLink key="l" href={`/${locale}/provisioning/${r.id}`}>
                 <bdi>{r.slug}</bdi>
-              </Link>,
+              </TextLink>,
               <>
                 <StatusBadge
                   locale={locale}
                   status={r.waiting_reason ? "waiting" : r.state}
                 />
                 {r.last_error_code ? (
-                  <span className="secondary">
-                    <bdi>{r.last_error_code}</bdi>
-                  </span>
+                  <SubText>
+                    <MachineCode>{r.last_error_code}</MachineCode>
+                  </SubText>
                 ) : null}
               </>,
               <TimeValue key="t" locale={locale} value={r.updated_at} />,
@@ -673,9 +714,9 @@ export function JobsSection({ locale, detail }: Omit<Props, "operator">) {
           rows={detail.jobs.map((j) => ({
             key: j.id,
             cells: [
-              <Link key="l" href={`/${locale}/jobs/${j.id}`}>
+              <TextLink key="l" href={`/${locale}/jobs/${j.id}`}>
                 <bdi>{j.kind}</bdi>
-              </Link>,
+              </TextLink>,
               <StatusBadge
                 key="s"
                 locale={locale}
@@ -715,18 +756,17 @@ export function SupportSection({ locale, detail, operator }: Props) {
               required
               maxLength={120}
             />
-            <label className="field">
-              <span>{say(locale, a.fields.minutes)}</span>
-              <input
-                type="number"
-                name="minutes"
-                min={5}
-                max={480}
-                defaultValue={60}
-                required
-              />
-              <small>{say(locale, a.fields.minutesHint)}</small>
-            </label>
+            <TextField
+              id="support-minutes"
+              name="minutes"
+              type="number"
+              label={say(locale, a.fields.minutes)}
+              description={say(locale, a.fields.minutesHint)}
+              min={5}
+              max={480}
+              defaultValue={60}
+              required
+            />
           </ActionDialog>
         ) : null
       }
@@ -746,9 +786,9 @@ export function SupportSection({ locale, detail, operator }: Props) {
           rows={detail.support_grants.map((g) => ({
             key: g.id,
             cells: [
-              <Link key="l" href={`/${locale}/support?tenant=${detail.tenant.id}`}>
+              <TextLink key="l" href={`/${locale}/support?tenant=${detail.tenant.id}`}>
                 <bdi>{g.ticket_reference}</bdi>
-              </Link>,
+              </TextLink>,
               <StatusBadge key="s" locale={locale} status={g.status} />,
               <TimeValue key="t" locale={locale} value={g.expires_at} empty="none" />,
             ],
@@ -765,9 +805,12 @@ export function AuditSection({ locale, detail }: Omit<Props, "operator">) {
       id="audit"
       title={say(locale, c.sections.audit)}
       actions={
-        <Link href={`/${locale}/audit?tenant=${detail.tenant.id}`}>
-          {say(locale, c.allAudit)}
-        </Link>
+        <Button asChild variant="ghost">
+          <Link href={`/${locale}/audit?tenant=${detail.tenant.id}`}>
+            {say(locale, c.allAudit)}
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        </Button>
       }
     >
       {detail.audit.length ? (

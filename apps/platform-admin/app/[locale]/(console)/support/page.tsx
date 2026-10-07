@@ -1,4 +1,14 @@
-import { TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Field,
+  FieldDescription,
+  Input,
+  Label,
+  ReferenceCode,
+  RequiredMark,
+  TextField,
+} from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { actionCopy as a } from "../../../_lib/action-copy";
 import {
@@ -57,9 +67,10 @@ export default async function SupportPage({
   ]);
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
@@ -88,23 +99,32 @@ export default async function SupportPage({
                 required
                 maxLength={120}
               />
-              <label className="field">
-                <span>{say(locale, a.fields.minutes)}</span>
-                <input
+              <Field>
+                <Label htmlFor="support-minutes">
+                  {say(locale, a.fields.minutes)}
+                  <RequiredMark />
+                </Label>
+                <Input
+                  id="support-minutes"
                   type="number"
                   name="minutes"
                   min={5}
                   max={480}
                   defaultValue={60}
                   required
+                  aria-describedby="support-minutes-hint"
                 />
-                <small>{say(locale, a.fields.minutesHint)}</small>
-              </label>
+                <FieldDescription id="support-minutes-hint">
+                  {say(locale, a.fields.minutesHint)}
+                </FieldDescription>
+              </Field>
             </ActionDialog>
           ) : null
         }
       />
-      <p className="notice">{say(locale, c.rules)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.rules)}</AlertDescription>
+      </Alert>
       <FilterBar locale={locale} path={path}>
         <SelectFilter
           name="status"
@@ -140,14 +160,18 @@ export default async function SupportPage({
             rows={result.data.map((g) => ({
               key: g.grant_id,
               cells: [
-                <Link key="t" href={`/${locale}/tenants/${g.tenant_id}#support`}>
+                <Link
+                  key="t"
+                  href={`/${locale}/tenants/${g.tenant_id}#support`}
+                  className="font-semibold text-primary underline-offset-4 hover:underline"
+                >
                   <bdi>{g.tenant_name}</bdi>
                 </Link>,
                 <StatusBadge key="s" locale={locale} status={g.status} />,
-                <>
-                  <bdi>{g.ticket_reference}</bdi>
-                  <span className="secondary">{g.reason}</span>
-                </>,
+                <div key="k" className="grid gap-0.5">
+                  <ReferenceCode>{g.ticket_reference}</ReferenceCode>
+                  <span className="text-xs text-muted-foreground">{g.reason}</span>
+                </div>,
                 <bdi key="r">{g.requested_by_email ?? "—"}</bdi>,
                 g.approved_by_email ? (
                   <bdi key="a">{g.approved_by_email}</bdi>
@@ -156,7 +180,7 @@ export default async function SupportPage({
                 ),
                 say(locale, c.readOnly),
                 <TimeValue key="e" locale={locale} value={g.expires_at} empty="none" />,
-                <div key="x" className="page-actions">
+                <div key="x" className="flex flex-wrap items-center gap-2">
                   {g.status === "pending" && atLeast(operator.role, "admin") ? (
                     <ActionDialog
                       locale={locale}
@@ -169,9 +193,13 @@ export default async function SupportPage({
                       successMessage={say(locale, c.approved)}
                       hidden={{ grantId: g.grant_id, tenantId: g.tenant_id }}
                     >
-                      <label className="field">
-                        <span>{say(locale, c.duration)}</span>
-                        <input
+                      <Field>
+                        <Label htmlFor={`approve-minutes-${g.grant_id}`}>
+                          {say(locale, c.duration)}
+                          <RequiredMark />
+                        </Label>
+                        <Input
+                          id={`approve-minutes-${g.grant_id}`}
                           type="number"
                           name="minutes"
                           min={5}
@@ -179,7 +207,7 @@ export default async function SupportPage({
                           defaultValue={60}
                           required
                         />
-                      </label>
+                      </Field>
                     </ActionDialog>
                   ) : null}
                   {(g.status === "pending" || g.status === "active") && operatorRole ? (
@@ -209,6 +237,6 @@ export default async function SupportPage({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

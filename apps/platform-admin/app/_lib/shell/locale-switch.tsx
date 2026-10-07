@@ -1,17 +1,25 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import Link from "next/link";
+import { LocaleSwitch as FoundationLocaleSwitch } from "@wlbp/ui-foundation";
 import { usePathname, useSearchParams } from "next/navigation";
 
+/** Each language's own name: these are endonyms, identical in both locales. */
+const endonyms: Record<Locale, string> = { ar: "العربية", en: "English" };
+
+/** Switches language on the same page, keeping the path and query. */
 export function LocaleSwitch({
   locale,
   label,
-  names,
+  className,
+  tone,
 }: {
   locale: Locale;
   label: string;
-  names: { en: string; ar: string };
+  /** Kept for callers; the switch shows each language by its own name. */
+  names?: { en: string; ar: string };
+  className?: string;
+  tone?: "default" | "rail";
 }) {
   const pathname = usePathname();
   const search = useSearchParams().toString();
@@ -20,19 +28,16 @@ export function LocaleSwitch({
     return `/${target}${rest}${search ? `?${search}` : ""}`;
   };
   return (
-    <nav className="locale-switch" aria-label={label}>
-      {(["en", "ar"] as const).map((target) => (
-        <Link
-          key={target}
-          href={hrefFor(target)}
-          lang={target}
-          hrefLang={target}
-          aria-current={target === locale ? "true" : undefined}
-        >
-          <span aria-hidden="true">{target === "en" ? "EN" : "عربي"}</span>
-          <span className="sr-only">{names[target]}</span>
-        </Link>
-      ))}
-    </nav>
+    <FoundationLocaleSwitch
+      label={label}
+      {...(className ? { className } : {})}
+      {...(tone ? { tone } : {})}
+      options={(["ar", "en"] as const).map((target) => ({
+        locale: target,
+        href: hrefFor(target),
+        label: endonyms[target],
+        current: target === locale,
+      }))}
+    />
   );
 }

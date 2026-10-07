@@ -13,3 +13,8 @@ export function validateBrandAssetSource(
 ): string;
 
 export function loadInstanceBrand(appDirectory: string): LoadedInstanceBrand;
+
+export declare function loadInstanceContent(appDirectory: string): Readonly<{
+  path: string;
+  serialized: string;
+}>;

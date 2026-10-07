@@ -15,6 +15,9 @@ export type ListParams = {
   offset: number;
 };
 
+/** What a select filter submits for "All": Radix Select cannot hold an empty value. */
+export const ALL_FILTER = "all";
+
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 const datePattern = /^\d{4}-\d{2}-\d{2}$/u;
 
@@ -40,7 +43,7 @@ export function parseListParams(
   const filters: Record<string, string> = {};
   for (const [name, rule] of Object.entries(spec.filters ?? {})) {
     const value = first(raw[name]).trim();
-    if (!value) continue;
+    if (!value || value === ALL_FILTER) continue;
     if (rule === "uuid") {
       if (uuidPattern.test(value.toLowerCase())) filters[name] = value.toLowerCase();
     } else if (rule === "date") {

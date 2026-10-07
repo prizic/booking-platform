@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-07T00:00:00Z",
+  "title": "Design System: White-Label Booking Platform",
+  "extensions": {
+    "whiteLabel": "Every colour, radius and font value is the template fallback from instance-template/instance/brand.json. Validated tenant brand tokens (--brand-* on <html>, light `color` and optional `colorDark`) override them at runtime; derived tones are color-mix expressions of the tenant's own text, ground and primary.",
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Madder", "canonical": "var(--brand-color-primary, #8f1d22)", "tonalRamp": ["#3a0b0e", "#5a1216", "#78191d", "#8f1d22", "#b0464a", "#cc7a7d", "#e5b3b4", "#f6e3e3"] },
+      "on-primary": { "role": "primary", "displayName": "On Madder", "canonical": "var(--brand-color-on-primary, #ffffff)" },
+      "primary-soft": { "role": "primary", "displayName": "Madder Wash", "canonical": "color-mix(in oklab, var(--primary) 12%, var(--card))" },
+      "primary-ink": { "role": "primary", "displayName": "Madder Ink", "canonical": "color-mix(in oklab, var(--primary) 72%, var(--foreground))" },
+      "focus": { "role": "primary", "displayName": "Kiln Orange", "canonical": "var(--brand-color-focus, #c2410c)" },
+      "background": { "role": "neutral", "displayName": "Stone Ground", "canonical": "var(--brand-color-background, #fafaf9)" },
+      "surface": { "role": "neutral", "displayName": "Paper", "canonical": "var(--brand-color-surface, #ffffff)" },
+      "text": { "role": "neutral", "displayName": "Charcoal Thread", "canonical": "var(--brand-color-text, #1c1917)" },
+      "muted": { "role": "neutral", "displayName": "Ash", "canonical": "var(--brand-color-muted, #57534e)" },
+      "border-strong": { "role": "neutral", "displayName": "Selvedge", "canonical": "var(--brand-color-border, #78716c)" },
+      "neutral-1": { "role": "neutral", "displayName": "Neutral 1", "canonical": "color-mix(in oklab, var(--foreground) 3%, var(--background))", "tonalRamp": ["#f3f3f2", "#edeceb", "#e2e1e0", "#d2d2d0"] },
+      "neutral-2": { "role": "neutral", "displayName": "Neutral 2", "canonical": "color-mix(in oklab, var(--foreground) 6%, var(--background))" },
+      "neutral-3": { "role": "neutral", "displayName": "Neutral 3 (hairline border)", "canonical": "color-mix(in oklab, var(--foreground) 11%, var(--background))" },
+      "neutral-4": { "role": "neutral", "displayName": "Neutral 4", "canonical": "color-mix(in oklab, var(--foreground) 18%, var(--background))" },
+      "rail": { "role": "neutral", "displayName": "Charcoal Rail", "canonical": "var(--foreground) in light; var(--card) in dark" },
+      "rail-muted": { "role": "neutral", "displayName": "Rail Ash", "canonical": "color-mix(in oklab, var(--rail-foreground) 72%, var(--rail))" },
+      "rail-accent": { "role": "neutral", "displayName": "Rail Weft", "canonical": "color-mix(in oklab, var(--rail-foreground) 12%, var(--rail))" },
+      "success": { "role": "status", "displayName": "Success", "canonical": "var(--brand-color-success, #15803d)" },
+      "warning": { "role": "status", "displayName": "Warning", "canonical": "var(--brand-color-warning, #a16207)" },
+      "danger": { "role": "status", "displayName": "Danger", "canonical": "var(--brand-color-danger, #b91c1c)" },
+      "dye-indigo": { "role": "secondary", "displayName": "Indigo Dye", "canonical": "oklch(0.42 0.1 262)" },
+      "dye-green": { "role": "secondary", "displayName": "Henna Green Dye", "canonical": "oklch(0.45 0.08 152)" },
+      "dye-ochre": { "role": "secondary", "displayName": "Ochre Dye", "canonical": "oklch(0.47 0.1 58)" },
+      "dye-teal": { "role": "secondary", "displayName": "Teal Dye", "canonical": "oklch(0.44 0.07 205)" },
+      "dye-plum": { "role": "secondary", "displayName": "Plum Dye", "canonical": "oklch(0.42 0.11 335)" },
+      "dark-background": { "role": "neutral", "displayName": "Night Ground", "canonical": "var(--brand-dark-color-background, #0c0a09)" },
+      "dark-surface": { "role": "neutral", "displayName": "Night Paper (also the dark rail)", "canonical": "var(--brand-dark-color-surface, #1c1917)" },
+      "dark-text": { "role": "neutral", "displayName": "Night Thread", "canonical": "var(--brand-dark-color-text, #f5f5f4)" },
+      "dark-muted": { "role": "neutral", "displayName": "Night Ash", "canonical": "var(--brand-dark-color-muted, #a8a29e)" },
+      "dark-primary": { "role": "primary", "displayName": "Night Madder", "canonical": "var(--brand-dark-color-primary, #f26b6b)" },
+      "dark-on-primary": { "role": "primary", "displayName": "On Night Madder", "canonical": "var(--brand-dark-color-on-primary, #1c0a0a)" },
+      "dark-focus": { "role": "primary", "displayName": "Night Kiln", "canonical": "var(--brand-dark-color-focus, #fb923c)" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Client landing headline only." },
+      "headline": { "displayName": "Headline", "purpose": "The one h1 per page, from PageHeader." },
+      "title": { "displayName": "Title", "purpose": "Section h2 (1.125rem); card and h3 titles at 1rem." },
+      "body": { "displayName": "Body", "purpose": "Running text; Arabic uses Noto Sans Arabic via dir=rtl. Controls drop to 0.875rem at md." },
+      "label": { "displayName": "Label", "purpose": "Fact labels, table heads, nav group labels, badges; stamps at 700." },
+      "reference": { "displayName": "Reference", "purpose": "Booking references via ReferenceCode: LTR-isolated, tabular, 0.06em tracking." }
+    },
+    "shadows": [
+      { "name": "hairline", "value": "0 1px 2px 0 rgb(0 0 0 / 0.04)", "purpose": "Cards." },
+      { "name": "control", "value": "0 1px 2px 0 rgb(0 0 0 / 0.05)", "purpose": "Filled and outline buttons, inputs, select triggers." },
+      { "name": "lift", "value": "0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)", "purpose": "Active tab and switch thumb. Band segments stay flat dyed fields." },
+      { "name": "float", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Menus and popovers." },
+      { "name": "overlay", "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)", "purpose": "Dialogs, alert dialogs, the menu sheet." }
+    ],
+    "motion": [
+      { "name": "control-transition", "value": "150ms ease-out", "purpose": "Colour, border and ring transitions on buttons and fields." },
+      { "name": "dialog-enter", "value": "fade-in + zoom-in 0.98", "purpose": "Dialogs and alert dialogs open." },
+      { "name": "sheet", "value": "200ms slide", "purpose": "Narrow-screen rail sheet." },
+      { "name": "segment-hover", "value": "translateY(-1px)", "purpose": "Linked band segments on hover." },
+      { "name": "reduced-motion", "value": "0ms", "purpose": "prefers-reduced-motion zeroes every animation and transition." }
+    ],
+    "breakpoints": [
+      { "name": "md", "value": "48rem", "note": "Tables replace record cards; band label column widens; controls drop to 0.875rem." },
+      { "name": "lg", "value": "64rem", "note": "Rail becomes a persistent 16.5rem column; sheet menu retires." },
+      { "name": "xl", "value": "80rem", "note": "Today places the 21rem needs-decision column beside the bands." }
+    ],
+    "textures": [
+      { "name": "sadu-teeth", "value": "block-size: 0.375rem; background: conic-gradient(from -45deg at 50% 100%, currentColor 90deg, transparent 0) 0 0 / 0.75rem 100% repeat-x;", "purpose": "Triangle-tooth edge in primary, on schedule band edges only." },
+      { "name": "sadu-weave", "value": "background-image: repeating-linear-gradient(-45deg, color-mix(in oklab, currentColor 22%, transparent) 0 0.3rem, transparent 0.3rem 0.6rem);", "purpose": "Uncommitted states: requested segments and stamps, blocked time." }
+    ],
+    "focus": { "value": "outline: 2px solid var(--ring); outline-offset: 2px;", "purpose": "Unlayered :focus-visible rule that component utilities cannot remove; on the rail the ring is the rail's own ink." }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The main action; one per region, at the card or form end.",
+      "html": "<button class=\"ds-btn-primary\">مراجعة الطلب</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; height: 2.75rem; padding: 0 1rem; border: none; border-radius: var(--radius, 1.5rem); background: var(--primary, #8f1d22); color: var(--primary-foreground, #ffffff); font-size: 0.875rem; font-weight: 600; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: background-color 150ms ease-out, box-shadow 150ms ease-out; cursor: pointer; } .ds-btn-primary:hover { background: color-mix(in oklab, var(--primary, #8f1d22) 90%, transparent); } .ds-btn-primary:active { background: color-mix(in oklab, var(--primary, #8f1d22) 85%, transparent); } .ds-btn-primary:focus-visible { outline: 2px solid var(--ring, #c2410c); outline-offset: 2px; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #c2410c) 50%, transparent); }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary action beside a primary.",
+      "html": "<button class=\"ds-btn-outline\">تصفّح الخدمات</button>",
+      "css": ".ds-btn-outline { display: inline-flex; align-items: center; justify-content: center; height: 2.75rem; padding: 0 1rem; border: 1px solid var(--border-strong, #78716c); border-radius: var(--radius, 1.5rem); background: var(--card, #ffffff); color: var(--foreground, #1c1917); font-size: 0.875rem; font-weight: 600; box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: background-color 150ms ease-out; cursor: pointer; } .ds-btn-outline:hover { background: var(--neutral-2, #edeceb); } .ds-btn-outline:active { background: var(--neutral-3, #e2e1e0); } .ds-btn-outline:focus-visible { outline: 2px solid var(--ring, #c2410c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Low-emphasis inline action such as opening a record.",
+      "html": "<button class=\"ds-btn-ghost\">فتح الحجز</button>",
+      "css": ".ds-btn-ghost { display: inline-flex; align-items: center; justify-content: center; height: 2.75rem; padding: 0 1rem; border: none; border-radius: var(--radius, 1.5rem); background: transparent; color: var(--foreground, #1c1917); font-size: 0.875rem; font-weight: 600; transition: background-color 150ms ease-out; cursor: pointer; } .ds-btn-ghost:hover { background: var(--neutral-2, #edeceb); } .ds-btn-ghost:active { background: var(--neutral-3, #e2e1e0); } .ds-btn-ghost:focus-visible { outline: 2px solid var(--ring, #c2410c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Shared field geometry for inputs, selects and date/time triggers.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">اسمك</span><input class=\"ds-input\" placeholder=\"الاسم الكامل\" /></label>",
+      "css": ".ds-field { display: grid; gap: 0.375rem; } .ds-field-label { font-size: 0.875rem; font-weight: 600; color: var(--foreground, #1c1917); } .ds-input { height: 2.75rem; width: 100%; padding: 0 0.75rem; border: 1px solid var(--border-strong, #78716c); border-radius: var(--radius, 1.5rem); background: var(--card, #ffffff); color: var(--foreground, #1c1917); font-size: 0.875rem; caret-color: var(--primary, #8f1d22); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); transition: border-color 150ms, box-shadow 150ms; } .ds-input::placeholder { color: var(--muted-foreground, #57534e); } .ds-input:focus-visible { border-color: var(--ring, #c2410c); outline: 2px solid var(--ring, #c2410c); outline-offset: 2px; box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring, #c2410c) 40%, transparent); } .ds-input[aria-invalid=true] { border-color: var(--destructive, #b91c1c); }"
+    },
+    {
+      "name": "Rail Navigation",
+      "kind": "nav",
+      "refersTo": "rail-nav-item",
+      "description": "Charcoal rail on the inline-start edge; current destination marked by fill alone.",
+      "html": "<nav class=\"ds-rail\" dir=\"rtl\"><p class=\"ds-rail-group\">العمليات</p><a class=\"ds-rail-item\" aria-current=\"page\" href=\"#\">اليوم</a><a class=\"ds-rail-item\" href=\"#\">التقويم</a><a class=\"ds-rail-item\" href=\"#\">الطلبات <span class=\"ds-rail-count\">١</span></a></nav>",
+      "css": ".ds-rail { display: grid; gap: 0.125rem; width: 16.5rem; padding: 1.25rem 0.75rem; background: var(--rail, #1c1917); } .ds-rail-group { margin: 0; padding: 0 0.75rem 0.25rem; font-size: 0.75rem; font-weight: 600; color: var(--rail-muted, #bcbbba); } .ds-rail-item { display: flex; align-items: center; gap: 0.75rem; min-height: 2.75rem; padding: 0 0.75rem; border-radius: var(--radius, 1.5rem); color: var(--rail-muted, #bcbbba); font-size: 0.875rem; font-weight: 500; text-decoration: none; transition: background-color 150ms, color 150ms; } .ds-rail-item:hover { background: var(--rail-accent, #373432); color: var(--rail-foreground, #fafaf9); } .ds-rail-item[aria-current=page] { background: var(--rail-accent, #373432); color: var(--rail-foreground, #fafaf9); font-weight: 600; } .ds-rail-item:focus-visible { outline: 2px solid var(--rail-foreground, #fafaf9); outline-offset: 2px; } .ds-rail-count { margin-inline-start: auto; padding: 0 0.5rem; border-radius: 9999px; background: var(--primary, #8f1d22); color: var(--primary-foreground, #ffffff); font-size: 0.75rem; font-weight: 700; line-height: 1.25rem; }"
+    },
+    {
+      "name": "Status Stamps",
+      "kind": "chip",
+      "refersTo": "status-stamp",
+      "description": "Record states as words plus colour; requests woven, cancellations struck and kept.",
+      "html": "<div class=\"ds-stamps\"><span class=\"ds-stamp ds-stamp-confirmed\">مؤكد</span><span class=\"ds-stamp ds-stamp-requested\">طلب حجز</span><span class=\"ds-stamp ds-stamp-cancelled\">ملغى</span></div>",
+      "css": ".ds-stamps { display: flex; gap: 0.5rem; flex-wrap: wrap; } .ds-stamp { display: inline-flex; align-items: center; padding: 0.125rem 0.5rem; border: 1px solid; border-radius: var(--radius, 1.5rem); font-size: 0.75rem; line-height: 1.25rem; font-weight: 700; } .ds-stamp-confirmed { border-color: color-mix(in oklab, var(--success, #15803d) 40%, transparent); background: color-mix(in oklab, var(--success, #15803d) 12%, #ffffff); color: color-mix(in oklab, var(--success, #15803d) 68%, #1c1917); } .ds-stamp-requested { border-style: dashed; border-color: color-mix(in oklab, var(--warning, #a16207) 60%, transparent); background-color: var(--card, #ffffff); color: color-mix(in oklab, var(--warning, #a16207) 62%, #1c1917); background-image: repeating-linear-gradient(-45deg, color-mix(in oklab, currentColor 22%, transparent) 0 0.3rem, transparent 0.3rem 0.6rem); } .ds-stamp-cancelled { border-color: color-mix(in oklab, var(--destructive, #b91c1c) 40%, transparent); background: var(--card, #ffffff); color: var(--destructive, #b91c1c); text-decoration: line-through; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Paper surface with hairline border and lift; actions at the end.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">Completion request</h3><p class=\"ds-card-desc\">Completion workflow guest</p><span class=\"ds-card-ref\">4DEW268AQX</span></article>",
+      "css": ".ds-card { display: grid; gap: 0.5rem; padding: 1.25rem; border: 1px solid var(--border, #e2e1e0); border-radius: var(--radius-surface, 1.75rem); background: var(--card, #ffffff); color: var(--foreground, #1c1917); box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04); } .ds-card-title { margin: 0; font-size: 1rem; font-weight: 600; line-height: 1.375; } .ds-card-desc { margin: 0; font-size: 0.875rem; color: var(--muted-foreground, #57534e); } .ds-card-ref { direction: ltr; unicode-bidi: isolate; font-size: 0.875rem; font-weight: 600; letter-spacing: 0.06em; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Schedule Bands",
+      "kind": "custom",
+      "refersTo": "band-segment-confirmed",
+      "description": "The Sadu Band signature: tooth edge on the band frame, lanes per staff member, dyed and woven segments, primary now thread.",
+      "html": "<div class=\"ds-bands\" dir=\"rtl\"><div class=\"ds-teeth\"></div><div class=\"ds-lane\"><div class=\"ds-lane-label\">سارة</div><div class=\"ds-lane-track\"><span class=\"ds-seg ds-seg-confirmed\" style=\"inset-inline-start:8%;width:22%\">قص شعر</span><span class=\"ds-seg ds-seg-requested\" style=\"inset-inline-start:40%;width:18%\">طلب</span><span class=\"ds-now\" style=\"inset-inline-start:35%\"></span></div></div><div class=\"ds-lane\"><div class=\"ds-lane-label\">الغرفة ١</div><div class=\"ds-lane-track\"><span class=\"ds-seg ds-seg-cancelled\" style=\"inset-inline-start:12%;width:20%\">ملغى</span><span class=\"ds-now\" style=\"inset-inline-start:35%\"></span></div></div></div>",
+      "css": ".ds-bands { overflow: hidden; border: 1px solid var(--border, #e2e1e0); border-radius: var(--radius-surface, 1.75rem); background: var(--card, #ffffff); } .ds-teeth { block-size: 0.375rem; color: var(--primary, #8f1d22); background: conic-gradient(from -45deg at 50% 100%, currentColor 90deg, transparent 0) 0 0 / 0.75rem 100% repeat-x; } .ds-lane { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); border-top: 1px solid var(--border, #e2e1e0); } .ds-lane-label { padding: 0.75rem 1rem; font-size: 0.875rem; font-weight: 600; border-inline-end: 1px solid var(--border, #e2e1e0); } .ds-lane-track { position: relative; height: 4.25rem; } .ds-seg { position: absolute; top: 0.5rem; bottom: 0.5rem; display: grid; align-content: center; padding: 0 0.5rem; border-radius: var(--radius, 1.5rem); font-size: 0.75rem; font-weight: 600; overflow: hidden; white-space: nowrap; } .ds-seg-confirmed { background: var(--primary, #8f1d22); color: #ffffff; box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1); transition: transform 150ms; } .ds-seg-confirmed:hover { transform: translateY(-1px); } .ds-seg-requested { border: 1px dashed oklch(0.42 0.1 262); color: oklch(0.42 0.1 262); background-color: var(--card, #ffffff); background-image: repeating-linear-gradient(-45deg, color-mix(in oklab, currentColor 22%, transparent) 0 0.3rem, transparent 0.3rem 0.6rem); } .ds-seg-cancelled { border: 1px solid color-mix(in oklab, var(--destructive, #b91c1c) 40%, transparent); background: var(--card, #ffffff); color: var(--muted-foreground, #57534e); text-decoration: line-through; } .ds-now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--primary, #8f1d22); pointer-events: none; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Sadu Band",
+    "overview": "The working day is woven, not listed. Staff and resources are lanes of a Sadu weave; each booking is a dyed segment laid along the lane in reading direction (right to left in Arabic). Around that signature sits a quiet merchant console: a deep charcoal rail on the inline-start edge, a translucent top bar carrying the Gregorian and Umm al-Qura Hijri date together, and flat warm-stone surfaces where the tenant's primary acts as madder dye rather than decoration.\n\nThe system is Arabic-first and white-label. Every value in this file is the template palette shipped in `instance-template/instance/brand.json`; a tenant's validated brand tokens (`--brand-*`, set on `<html>`) override it at runtime, in both the light `color` and the optional `colorDark` palette. Rules here are therefore written in terms of roles (primary, rail, neutral ramp, ink), never in terms of the template's red. The neutral ramp, soft fills, inks and rail tints are derived by `color-mix` from the tenant's own text, ground and primary, so they follow any brand.\n\nAll three applications (Client, Dashboard, Platform Admin) render through one shared library on shadcn/ui patterns, Radix primitives and Tailwind CSS v4. Applications compose components and utilities; they never author component CSS and never render raw form controls. Density is operational: 44px targets, compact headings, generous rounded geometry.",
+    "keyCharacteristics": [
+      "Tenant brand tokens override the template palette; derived tones follow the brand automatically.",
+      "Charcoal rail on the inline-start edge; active destination marked by fill alone.",
+      "Schedule as woven bands: dyed segments, woven requests, struck-through cancellations.",
+      "Triangle-tooth edge on band edges only.",
+      "One stepped neutral ramp; flat fields with hairline lift.",
+      "Words plus colour for every state; references as typographic anchors.",
+      "Semantic RTL, Arabic default locale, light theme default with an optional dark palette."
+    ],
+    "rules": [
+      { "name": "The Brand Overrides Rule", "body": "The template hexes are fallbacks. Never hard-code them in a surface; reference the role token so a tenant's validated brand replaces them.", "section": "colors" },
+      { "name": "The Derived Tone Rule", "body": "Tints, washes, inks and rail tones are `color-mix` derivations of the tenant's text, ground and primary. Do not add a fixed grey or a second accent.", "section": "colors" },
+      { "name": "The Ink-On-Wash Rule", "body": "Text on a soft status fill uses that status's ink, never the raw status colour.", "section": "colors" },
+      { "name": "The No Kicker Rule", "body": "A heading carries its own weight. No eyebrow or kicker labels above headings.", "section": "typography" },
+      { "name": "The Isolated Reference Rule", "body": "Booking codes, technical identifiers and Latin values inside Arabic text are bidi-isolated, LTR and tabular.", "section": "typography" },
+      { "name": "The No Card-In-Card Rule", "body": "A card never sits inside another card; nest with dividers, facts or lists instead.", "section": "elevation" },
+      { "name": "The Band Edge Rule", "body": "The tooth edge appears only on schedule band edges. Not on the rail, the header, page dividers or cards.", "section": "shapes" },
+      { "name": "The Weave Means Uncommitted Rule", "body": "The weave texture marks requests awaiting a decision and blocked time. Committed work is a solid dye.", "section": "shapes" }
+    ],
+    "dos": [
+      "**Do** reference role tokens (`primary`, `neutral-2`, `primary-ink`) so a tenant's validated brand overrides the template palette in light and dark.",
+      "**Do** keep every interactive target at least 2.75rem (44px).",
+      "**Do** state every status in words as well as colour; keep cancelled records visible and struck through.",
+      "**Do** give a service one dye everywhere via its id, and pair the dye dot with the service name.",
+      "**Do** use logical properties and mirror directional icons so Arabic RTL is the native layout.",
+      "**Do** render wide tables as stacked record cards below md, and always render the list alternative beneath the bands.",
+      "**Do** use `DatePicker`, `TimeSelect` and the shared controls instead of native inputs."
+    ],
+    "donts": [
+      "**Don't** hard-code the template hexes in a surface; they are fallbacks for the tenant brand.",
+      "**Don't** place the tooth edge anywhere but the band edges.",
+      "**Don't** mark the active nav item with a stripe or bar; the fill alone marks it.",
+      "**Don't** put eyebrows or kicker labels above headings.",
+      "**Don't** nest a card inside a card.",
+      "**Don't** use the weave texture for committed work.",
+      "**Don't** author component CSS in an app or render raw `button`, `input`, `select`, `textarea`, `table`, `dialog` or native date/time pickers."
+    ]
+  }
+}

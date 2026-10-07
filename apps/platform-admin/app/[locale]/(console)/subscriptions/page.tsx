@@ -1,3 +1,10 @@
+import {
+  Alert,
+  AlertDescription,
+  DateTimePicker,
+  Field,
+  Label,
+} from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { actionCopy as a } from "../../../_lib/action-copy";
 import {
@@ -5,7 +12,7 @@ import {
   updateSubscriptionAction,
 } from "../../../_lib/actions/subscriptions";
 import { commercialCopy } from "../../../_lib/commercial-copy";
-import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
+import { copyFor, fill, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
@@ -57,13 +64,16 @@ export default async function SubscriptionsPage({
     : [];
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
-      <p className="notice">{say(locale, c.billingNote)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.billingNote)}</AlertDescription>
+      </Alert>
       <FilterBar
         locale={locale}
         path={path}
@@ -110,11 +120,17 @@ export default async function SubscriptionsPage({
             rows={result.data.map((row) => ({
               key: row.tenant_id,
               cells: [
-                <Link key="t" href={`/${locale}/tenants/${row.tenant_id}#subscription`}>
+                <Link
+                  key="t"
+                  href={`/${locale}/tenants/${row.tenant_id}#subscription`}
+                  className="font-semibold text-primary underline-offset-4 hover:underline"
+                >
                   <bdi>{row.tenant_name}</bdi>
                 </Link>,
                 row.plan_key ? (
-                  <bdi key="p">{row.plan_name ?? row.plan_key}</bdi>
+                  <bdi key="p" className="font-medium">
+                    {row.plan_name ?? row.plan_key}
+                  </bdi>
                 ) : (
                   <Unknown key="p" locale={locale} kind="none" />
                 ),
@@ -138,7 +154,7 @@ export default async function SubscriptionsPage({
                   empty="none"
                 />,
                 admin ? (
-                  <div key="a" className="page-actions">
+                  <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
                       action={assignSubscriptionAction}
@@ -188,14 +204,24 @@ export default async function SubscriptionsPage({
                             .filter((s) => s !== "none")
                             .map((s) => [s, status(s)] as const)}
                         />
-                        <label className="field">
-                          <span>{say(locale, a.fields.endsAt)}</span>
-                          <input
-                            type="datetime-local"
+                        <Field>
+                          <Label htmlFor={`subscription-ends-${row.tenant_id}`}>
+                            {say(locale, a.fields.endsAt)}
+                          </Label>
+                          <DateTimePicker
+                            id={`subscription-ends-${row.tenant_id}`}
                             name="endsAt"
-                            defaultValue={row.ends_at?.slice(0, 16)}
+                            locale={locale}
+                            datePlaceholder={say(locale, formCopy.pickDate)}
+                            timePlaceholder={say(locale, formCopy.pickTime)}
+                            timeLabel={fill(locale, formCopy.timeOf, {
+                              field: say(locale, a.fields.endsAt),
+                            })}
+                            {...(row.ends_at
+                              ? { defaultValue: row.ends_at.slice(0, 16) }
+                              : {})}
                           />
-                        </label>
+                        </Field>
                         <SelectField
                           name="ring"
                           label={say(locale, a.fields.ring)}
@@ -218,6 +244,6 @@ export default async function SubscriptionsPage({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

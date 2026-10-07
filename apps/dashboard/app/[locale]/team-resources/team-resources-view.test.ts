@@ -129,7 +129,11 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain("Create team member");
     expect(html).toContain("Update exact eligibility");
     expect(html).toContain('name="expectedRevision" value="2"');
-    expect(html).toContain('value="a3000000-0000-0000-0000-000000000010"');
+    // The linked login account stays preselected; the select trigger names it
+    // in server markup (Radix renders its options only after hydration).
+    expect(html).toMatch(
+      /id="staff-a8000000-0000-0000-0000-000000000001-membership"><span data-slot="select-value"[^>]*>Current linked account</u,
+    );
     expect(html).toContain("Booking specialist</textarea>");
     expect(html).toContain("Morning shifts</textarea>");
     expect(html).toContain('name="offeredHoursPerWeek"');

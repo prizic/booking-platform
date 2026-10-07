@@ -18,7 +18,8 @@ describe("Team and resources metadata", () => {
       languages: {
         ar: new URL("https://dashboard.booking.example/ar/team-resources"),
         en: new URL("https://dashboard.booking.example/en/team-resources"),
-        "x-default": new URL("https://dashboard.booking.example/en/team-resources"),
+        // The instance locale policy defaults to Arabic.
+        "x-default": new URL("https://dashboard.booking.example/ar/team-resources"),
       },
     });
   });

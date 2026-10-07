@@ -1,5 +1,6 @@
 import { formatNumber } from "@wlbp/i18n";
-import Link from "next/link";
+import { Alert, ReferenceCode } from "@wlbp/ui-foundation";
+import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
 import {
   approveJobAction,
@@ -91,8 +92,10 @@ export default async function JobPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={title}
         breadcrumbs={[...crumbs, [title]]}
+        meta={<ReferenceCode>{job.id}</ReferenceCode>}
         actions={
           <>
             <StatusBadge
@@ -142,11 +145,9 @@ export default async function JobPage({
         }
       />
       {job.status === "queued" ? (
-        <p className="notice notice--warning">
-          {fill(locale, c.workerNote, { worker })}
-        </p>
+        <Alert tone="warning">{fill(locale, c.workerNote, { worker })}</Alert>
       ) : null}
-      <section className="section" aria-labelledby="job-facts">
+      <section className="grid gap-4" aria-labelledby="job-facts">
         <h2 id="job-facts" className="sr-only">
           {title}
         </h2>
@@ -155,9 +156,9 @@ export default async function JobPage({
             [
               say(locale, c.tenant),
               job.tenant_id ? (
-                <Link key="t" href={`/${locale}/tenants/${job.tenant_id}`}>
+                <TextLink key="t" href={`/${locale}/tenants/${job.tenant_id}`}>
                   <bdi>{job.tenant_name}</bdi>
-                </Link>
+                </TextLink>
               ) : (
                 <Unknown key="t" locale={locale} kind="none" />
               ),
@@ -215,15 +216,20 @@ export default async function JobPage({
           ]}
         />
       </section>
-      <section className="section" aria-labelledby="job-events">
-        <div className="section-header">
-          <h2 id="job-events">{say(locale, c.events)}</h2>
+      <section className="grid gap-4" aria-labelledby="job-events">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="job-events" className="text-lg leading-snug font-semibold">
+            {say(locale, c.events)}
+          </h2>
         </div>
-        <ol className="timeline">
+        <ol className="divide-y rounded-lg border bg-card">
           {job.events.map((e, index) => (
-            <li key={`${e.at}:${index}`}>
+            <li
+              key={`${e.at}:${index}`}
+              className="grid gap-1.5 px-4 py-3 text-sm md:grid-cols-[13rem_minmax(0,1fr)] md:gap-4"
+            >
               <TimeValue locale={locale} value={e.at} />
-              <div>
+              <div className="min-w-0 leading-relaxed">
                 <strong>{copyFor(statusCopy, e.event, locale)}</strong>
                 {e.attempt !== null ? <> · #{formatNumber(e.attempt, locale)}</> : null}
                 {e.actor_email ? (
@@ -233,7 +239,7 @@ export default async function JobPage({
                   </>
                 ) : null}
                 {e.error_code ? (
-                  <span className="secondary">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                     <bdi>{e.error_code}</bdi>
                   </span>
                 ) : null}

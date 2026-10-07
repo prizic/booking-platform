@@ -106,6 +106,12 @@ const copy = {
     chooseLocations: "Offered at locations",
     currencyHint:
       "Enter an exact decimal amount. Grouping separators and excess decimal places are refused.",
+    publishedState: "Published",
+    cancel: "Cancel",
+    publishConfirmTitle: "Publish these drafts?",
+    publishConfirmAction: "Publish now",
+    question: "Question",
+    emptyHint: "Change the search or state filter, or create a new record.",
   },
   ar: {
     services: "الخدمات",
@@ -196,7 +202,7 @@ const copy = {
       "يستخدم العرض نمطًا أو عملة خارج نطاق الإصدار الأول.",
     empty: "لا توجد سجلات مطابقة.",
     search: "بحث",
-    filter: "تطبيق المرشحات",
+    filter: "تطبيق التصفية",
     all: "جميع الحالات",
     preview: "معاينة المسودة",
     previewHint: "هذه مراجعة خاصة للمسودة المحفوظة. يرى العملاء الكتالوج المنشور.",
@@ -207,6 +213,12 @@ const copy = {
     chooseLocations: "المواقع التي تقدم الخدمة",
     currencyHint:
       "أدخل مبلغًا عشريًا دقيقًا. لا تُقبل فواصل التجميع أو المنازل العشرية الزائدة.",
+    publishedState: "منشور",
+    cancel: "إلغاء",
+    publishConfirmTitle: "هل تريد نشر هذه المسودات؟",
+    publishConfirmAction: "النشر الآن",
+    question: "سؤال",
+    emptyHint: "غيّر البحث أو مرشح الحالة، أو أنشئ سجلًا جديدًا.",
   },
 } as const;
 export type CatalogMessageKey = keyof typeof copy.en;

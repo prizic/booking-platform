@@ -1,6 +1,9 @@
 import { parseCurrencyMinorUnits } from "@wlbp/i18n";
 import type { CatalogEntityV1, CatalogKindV1 } from "@wlbp/api-contracts";
 
+/** Select value meaning "no category / staff / resource link" (Radix forbids ""). */
+export const CATALOG_NO_LINK = "none";
+
 export function catalogDraftDocument(
   kind: CatalogKindV1,
   form: FormData,
@@ -125,7 +128,9 @@ export function catalogDraftDocument(
     metadata.assignment_mode = assignment;
     const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/iu;
     for (const name of ["category_id", "fixed_staff_id", "resource_type_id"]) {
-      const value = form.get(name);
+      const raw = form.get(name);
+      // The editor's select submits an explicit "none" sentinel for "no link".
+      const value = raw === CATALOG_NO_LINK ? "" : raw;
       if (typeof value !== "string" || (value && !uuid.test(value))) return null;
       metadata[name] = value || null;
     }

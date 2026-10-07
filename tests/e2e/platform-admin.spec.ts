@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator } from "@playwright/test";
 import {
   adminOrigin,
   apiToken,
@@ -9,6 +9,12 @@ import {
   signOut,
   watchConsole,
 } from "./platform-admin-fixtures";
+
+/** Radix Select: open the trigger, then pick the option carrying this value. */
+async function chooseOption(trigger: Locator, value: string) {
+  await trigger.click();
+  await trigger.page().locator(`[role="option"][data-value="${value}"]`).click();
+}
 
 test.describe.configure({ mode: "default" });
 
@@ -309,10 +315,8 @@ test("administrative workflows persist commercial changes and keep external work
   await test.step("assign a plan, change subscription state and override a feature", async () => {
     await page.goto(`${adminOrigin}/en/tenants/${north}`);
     await page.getByRole("button", { name: "Change plan", exact: true }).click();
-    await dialog().getByLabel(/^Plan/u).selectOption(planKey);
-    await dialog()
-      .getByLabel(/^Rollout ring/u)
-      .selectOption("canary");
+    await chooseOption(dialog().getByLabel(/^Plan/u), planKey);
+    await chooseOption(dialog().getByLabel(/^Rollout ring/u), "canary");
     await dialog()
       .getByLabel(/^Reason/u)
       .fill(`${reason} assignment`);
@@ -329,9 +333,7 @@ test("administrative workflows persist commercial changes and keep external work
       ["active", "Active"],
     ] as const) {
       await page.getByRole("button", { name: "Change status", exact: true }).click();
-      await dialog()
-        .getByLabel(/^Status/u)
-        .selectOption(state);
+      await chooseOption(dialog().getByLabel(/^Status/u), state);
       await dialog()
         .getByLabel(/^Reason/u)
         .fill(`${reason} ${state}`);
@@ -351,9 +353,7 @@ test("administrative workflows persist commercial changes and keep external work
     await dialog()
       .getByLabel(/^Feature key/u)
       .fill("reports.advanced");
-    await dialog()
-      .getByLabel(/^Override/u)
-      .selectOption("no");
+    await chooseOption(dialog().getByLabel(/^Override/u), "no");
     await dialog()
       .getByLabel(/^Reason/u)
       .fill(`${reason} temporary override`);
@@ -384,9 +384,7 @@ test("administrative workflows persist commercial changes and keep external work
   await test.step("adding a domain queues verification and reports missing certificate honestly", async () => {
     const hostname = `book.e2e-${stamp}.example.invalid`;
     await page.getByRole("button", { name: "Add domain", exact: true }).click();
-    await dialog()
-      .getByLabel(/^Instance/u)
-      .selectOption(northInstance);
+    await chooseOption(dialog().getByLabel(/^Instance/u), northInstance);
     await dialog()
       .getByLabel(/^Hostname/u)
       .fill(hostname);
@@ -461,9 +459,7 @@ test("administrative workflows persist commercial changes and keep external work
     await expect(page.getByRole("heading", { level: 1, name: version })).toBeVisible();
     await page.getByRole("button", { name: "Create rollout", exact: true }).click();
     await expect(dialog().locator('input[name="rings"]:checked')).toHaveCount(0);
-    await dialog()
-      .locator(`input[name="instanceIds"][value="${northInstance}"]`)
-      .check();
+    await dialog().locator(`button[role="checkbox"][value="${northInstance}"]`).click();
     await dialog()
       .getByLabel(/^Reason/u)
       .fill(`${reason} specific instance rollout`);
@@ -514,9 +510,7 @@ test("administrative workflows persist commercial changes and keep external work
     await page
       .getByRole("button", { name: "Request support access", exact: true })
       .click();
-    await dialog()
-      .getByLabel(/^Tenant/u)
-      .selectOption(north);
+    await chooseOption(dialog().getByLabel(/^Tenant/u), north);
     await dialog()
       .getByLabel(/^Ticket reference/u)
       .fill(ticket);
@@ -594,7 +588,7 @@ test("administrative workflows persist commercial changes and keep external work
     await page.goto(`${adminOrigin}/en/settings`);
     await page.getByRole("button", { name: "New flag", exact: true }).click();
     await dialog().getByLabel(/^Key/u).fill(key);
-    await dialog().getByLabel(/^Kind/u).selectOption("feature");
+    await chooseOption(dialog().getByLabel(/^Kind/u), "feature");
     await dialog().getByRole("checkbox", { name: "On", exact: true }).check();
     await dialog()
       .getByLabel(/^Message \(English\)/u)

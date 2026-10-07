@@ -37,10 +37,17 @@ export function ValidatedForm({
   }
 
   return (
-    <form action={action} onInput={handleInput} onInvalid={handleInvalid}>
+    <form
+      action={action}
+      className="grid gap-5 pt-1"
+      onInput={handleInput}
+      // Foundation selects report their choice through a bubbling change event.
+      onChange={handleInput}
+      onInvalid={handleInvalid}
+    >
       {children}
       <p
-        className="team-resource-validation-error"
+        className="text-sm font-medium text-destructive"
         hidden={!showError}
         id={errorId}
         role="alert"

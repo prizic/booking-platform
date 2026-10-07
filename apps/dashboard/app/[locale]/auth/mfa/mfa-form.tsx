@@ -4,7 +4,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Checkbox,
+  Field,
+  FieldDescription,
+  Input,
+  Label,
+  RequiredMark,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Separator,
+} from "@wlbp/ui-foundation";
 import { authMessage, type AuthMessageKey } from "../../../_lib/auth-copy";
+import { textLinkClass as authLinkClass } from "../../../_lib/ui/text-link";
 import {
   enrollAuthenticator,
   verifyAuthenticator,
@@ -34,29 +52,52 @@ export function MfaForm({
     ? [...factors, { id: setup.factorId, friendlyName: message("factor") }]
     : factors;
   return (
-    <div className="auth-form">
-      {unavailable ? <p role="alert">{message("unavailable")}</p> : null}
+    <div className="grid gap-5">
+      {unavailable ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {message("unavailable")}
+          </AlertDescription>
+        </Alert>
+      ) : null}
       {result ? (
-        <p role={result === "verified" ? "status" : "alert"}>{message(result)}</p>
+        <Alert tone={result === "verified" ? "positive" : "danger"}>
+          <AlertDescription className="text-foreground">
+            {message(result)}
+          </AlertDescription>
+        </Alert>
       ) : null}
       {setup?.ok && setup.qrCode ? (
-        <section aria-label={message("setup")}>
-          <p>{message("setup")}</p>
+        <section
+          aria-label={message("setup")}
+          className="grid justify-items-center gap-3"
+        >
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {message("setup")}
+          </p>
+          {/* A QR code needs a light quiet zone to scan, in either theme, so
+              this is the one place a fixed white is deliberate. */}
           <Image
             unoptimized
             src={setup.qrCode}
             alt={message("qr")}
             width={240}
             height={240}
+            className="rounded-md border bg-white p-2"
           />
-          <p dir="ltr">{setup.secret}</p>
+          <p
+            dir="ltr"
+            className="font-latin text-sm font-semibold tracking-[0.08em] break-all [font-variant-numeric:tabular-nums]"
+          >
+            {setup.secret}
+          </p>
         </section>
       ) : null}
       {available.length === 0 ? (
-        <p>{message("noFactor")}</p>
+        <p className="text-sm text-muted-foreground">{message("noFactor")}</p>
       ) : (
         <form
-          className="auth-form"
+          className="grid gap-5"
           onSubmit={(event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -72,42 +113,56 @@ export function MfaForm({
             });
           }}
         >
-          <label>
-            {message("factor")}
-            <select
+          <Field>
+            <Label htmlFor="mfa-verify-factor">{message("factor")}</Label>
+            <Select
               key={setup?.factorId ?? "existing"}
-              className="wlbp-field__input"
               name="factorId"
-              defaultValue={setup?.factorId ?? factors[0]?.id}
+              defaultValue={setup?.factorId ?? factors[0]?.id ?? ""}
             >
-              {available.map((factor) => (
-                <option key={factor.id} value={factor.id}>
-                  {factor.friendlyName}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            {message("code")}
-            <input
-              className="wlbp-field__input"
+              <SelectTrigger id="mfa-verify-factor">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {available.map((factor) => (
+                  <SelectItem key={factor.id} value={factor.id}>
+                    {factor.friendlyName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field>
+            <Label htmlFor="mfa-code">
+              {message("code")}
+              <RequiredMark />
+            </Label>
+            <Input
+              id="mfa-code"
               name="code"
+              dir="ltr"
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9]{6}"
               required
               minLength={6}
               maxLength={6}
+              className="font-latin tracking-[0.3em]"
             />
-          </label>
-          <button className="wlbp-button" disabled={pending} type="submit">
-            {message(pending ? "pending" : "verify")}
-          </button>
+          </Field>
+          <Button
+            type="submit"
+            block
+            loading={pending}
+            loadingLabel={message("pending")}
+          >
+            {message("verify")}
+          </Button>
         </form>
       )}
       {!setup ? (
-        <button
-          className="wlbp-button wlbp-button--quiet"
+        <Button
+          variant="outline"
           disabled={pending}
           onClick={() =>
             start(async () => {
@@ -118,7 +173,7 @@ export function MfaForm({
           }
         >
           {message("enroll")}
-        </button>
+        </Button>
       ) : null}
       {[
         ...(setup?.factorId
@@ -126,9 +181,9 @@ export function MfaForm({
           : []),
         ...unfinished.filter((factor) => factor.id !== setup?.factorId),
       ].map((factor) => (
-        <button
+        <Button
           key={factor.id}
-          className="wlbp-button wlbp-button--quiet"
+          variant="ghost"
           disabled={pending}
           onClick={() =>
             start(async () => {
@@ -142,14 +197,14 @@ export function MfaForm({
           }
         >
           {message("cancelSetup")} — {factor.friendlyName}
-        </button>
+        </Button>
       ))}
       {factors.length ? (
-        <details>
-          <summary>{message("remove")}</summary>
-          <p>{message("removeHint")}</p>
+        <>
+          <Separator />
           <form
-            className="auth-form"
+            aria-labelledby="mfa-remove-title"
+            className="grid gap-4"
             onSubmit={(event) => {
               event.preventDefault();
               const data = new FormData(event.currentTarget);
@@ -162,27 +217,40 @@ export function MfaForm({
               });
             }}
           >
-            <label>
-              {message("factor")}
-              <select className="wlbp-field__input" name="factorId">
-                {factors.map((factor) => (
-                  <option key={factor.id} value={factor.id}>
-                    {factor.friendlyName}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              <input type="checkbox" required />
-              {message("removeHint")}
-            </label>
-            <button className="wlbp-button wlbp-button--quiet" disabled={pending}>
+            <div className="grid gap-1">
+              <h2 id="mfa-remove-title" className="text-base font-semibold">
+                {message("remove")}
+              </h2>
+              <FieldDescription>{message("removeHint")}</FieldDescription>
+            </div>
+            <Field>
+              <Label htmlFor="mfa-remove-factor">{message("factor")}</Label>
+              <Select name="factorId" defaultValue={factors[0]?.id ?? ""}>
+                <SelectTrigger id="mfa-remove-factor">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {factors.map((factor) => (
+                    <SelectItem key={factor.id} value={factor.id}>
+                      {factor.friendlyName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field orientation="horizontal">
+              <Checkbox id="mfa-remove-confirm" required />
+              <Label htmlFor="mfa-remove-confirm">{message("removeHint")}</Label>
+            </Field>
+            <Button type="submit" variant="destructive-outline" disabled={pending}>
               {message("remove")}
-            </button>
+            </Button>
           </form>
-        </details>
+        </>
       ) : null}
-      <Link href={returnTo}>{message("back")}</Link>
+      <Link className={authLinkClass} href={returnTo}>
+        {message("back")}
+      </Link>
     </div>
   );
 }

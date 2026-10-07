@@ -21,6 +21,7 @@ import {
   executeStaffDeactivation,
   type TeamResourcesCommandResult,
 } from "../../_lib/team-resources-commands";
+import { membershipChoice } from "./form-values";
 
 function localeFrom(formData: FormData): Locale {
   return formData.get("locale") === "ar" ? "ar" : "en";
@@ -130,7 +131,7 @@ export async function saveStaffProfileAction(formData: FormData): Promise<never>
         bio: formData.get("bio"),
         expectedRevision: formData.get("expectedRevision"),
         internalNotes: formData.get("internalNotes"),
-        membershipId: formData.get("membershipId"),
+        membershipId: membershipChoice(formData.get("membershipId")),
         offeredHoursPerWeek: formData.get("offeredHoursPerWeek"),
         publicName: formData.get("publicName"),
         reason: formData.get("reason"),

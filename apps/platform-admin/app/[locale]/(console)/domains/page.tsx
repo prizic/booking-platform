@@ -1,4 +1,5 @@
-import Link from "next/link";
+import { Alert } from "@wlbp/ui-foundation";
+import { TextLink } from "../../../_lib/ui/text";
 import { actionCopy as a } from "../../../_lib/action-copy";
 import { requestDomainVerificationAction } from "../../../_lib/actions/domains";
 import { copyFor, formCopy, say, stateCopy, statusCopy } from "../../../_lib/copy";
@@ -48,10 +49,11 @@ export default async function DomainsPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
-      <p className="notice">{say(locale, c.certificateNote)}</p>
+      <Alert tone="info">{say(locale, c.certificateNote)}</Alert>
       <FilterBar
         locale={locale}
         path={path}
@@ -90,9 +92,9 @@ export default async function DomainsPage({
               key: row.domain_id,
               cells: [
                 <bdi key="h">{row.hostname}</bdi>,
-                <Link key="t" href={`/${locale}/tenants/${row.tenant_id}#domains`}>
+                <TextLink key="t" href={`/${locale}/tenants/${row.tenant_id}#domains`}>
                   <bdi>{row.tenant_name}</bdi>
-                </Link>,
+                </TextLink>,
                 <bdi key="a">{row.application}</bdi>,
                 <>
                   <StatusBadge locale={locale} status={row.verification_status} />{" "}
@@ -112,9 +114,9 @@ export default async function DomainsPage({
                 ),
                 say(locale, row.active ? stateCopy.yes : stateCopy.no),
                 row.pending_job_id ? (
-                  <Link key="j" href={`/${locale}/jobs/${row.pending_job_id}`}>
+                  <TextLink key="j" href={`/${locale}/jobs/${row.pending_job_id}`}>
                     {copyFor(statusCopy, "queued", locale)}
-                  </Link>
+                  </TextLink>
                 ) : canQueue && row.verification_status !== "verified" ? (
                   <OperatorForm
                     key="q"
@@ -122,7 +124,7 @@ export default async function DomainsPage({
                     action={requestDomainVerificationAction}
                     submit={say(locale, a.verifyDomain.submit)}
                     successMessage={say(locale, a.verifyDomain.done)}
-                    className="inline-form"
+                    compact
                   >
                     <input type="hidden" name="domainId" value={row.domain_id} />
                     <input type="hidden" name="tenantId" value={row.tenant_id} />

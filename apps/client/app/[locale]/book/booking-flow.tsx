@@ -10,17 +10,36 @@ import {
   type CreateHoldV1Response,
   type HoldFormV1,
 } from "@wlbp/api-contracts";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
+import { formatCurrency, formatNumber, formatTimeZone, type Locale } from "@wlbp/i18n";
 import {
-  Badge,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  Facts,
+  Field,
+  FieldError,
+  FieldLegend,
+  FieldSet,
+  Label,
+  PageHeader,
+  ReferenceCode,
+  Separator,
+  StatusStamp,
   TextField,
+  cn,
 } from "@wlbp/ui-foundation";
+import { Check } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 
+import { formatWallDateTime } from "../../_lib/wall-time";
 import {
   AvailabilityPicker,
   type AvailabilityPickerCopy,
@@ -89,6 +108,72 @@ const errorCopyKeys: Readonly<Record<string, string>> = {
   slot_unavailable: "bookingErrorSlotUnavailable",
 };
 
+interface FieldProblem {
+  /** The id of the control the problem belongs to. */
+  readonly id: string;
+  /** Shorter text shown beside the control, when it differs from the summary. */
+  readonly inline?: string;
+  readonly message: string;
+}
+
+type Step = 1 | 2 | 3;
+
+function StepIndicator({
+  current,
+  label,
+  locale,
+  steps,
+}: {
+  current: Step;
+  label: string;
+  locale: Locale;
+  steps: readonly [string, string, string];
+}) {
+  return (
+    <nav aria-label={label}>
+      <ol className="grid grid-cols-3 gap-2">
+        {steps.map((name, index) => {
+          const number = (index + 1) as Step;
+          const done = number < current;
+          const active = number === current;
+          return (
+            <li
+              key={name}
+              aria-current={active ? "step" : undefined}
+              className={cn(
+                "grid gap-2 border-t-2 pt-3 text-sm",
+                active || done ? "border-primary" : "border-border",
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "grid size-6 shrink-0 place-items-center rounded-full text-xs font-bold",
+                    active && "bg-primary text-primary-foreground",
+                    done && "bg-primary-soft text-primary-ink",
+                    !active && !done && "bg-neutral-2 text-muted-foreground",
+                  )}
+                >
+                  {done ? <Check className="size-3.5" /> : formatNumber(number, locale)}
+                </span>
+                <span
+                  className={cn(
+                    "font-semibold",
+                    active ? "text-foreground" : "text-muted-foreground",
+                  )}
+                >
+                  {name}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
 export function BookingFlow({
   copy,
   locale,
@@ -102,7 +187,9 @@ export function BookingFlow({
   const [booking, setBooking] = useState<ConfirmBookingV1Response | null>(null);
   const [busy, setBusy] = useState(false);
   const [errorCode, setErrorCode] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<readonly string[]>([]);
+  // Each problem names the control it belongs to, so the summary can link to
+  // it and the control can carry its own message.
+  const [fieldErrors, setFieldErrors] = useState<readonly FieldProblem[]>([]);
   // Answers survive every failure: a lost slot never costs the customer the
   // details they already typed.
   const [fullName, setFullName] = useState("");
@@ -197,17 +284,31 @@ export function BookingFlow({
   async function confirm(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (held === null) return;
-    const problems: string[] = [];
-    if (fullName.trim().length === 0) problems.push(message("bookingNameRequired"));
+    const problems: FieldProblem[] = [];
+    if (fullName.trim().length === 0) {
+      problems.push({
+        id: "booking-full-name",
+        message: message("bookingNameRequired"),
+      });
+    }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email.trim())) {
-      problems.push(message("bookingEmailRequired"));
+      problems.push({ id: "booking-email", message: message("bookingEmailRequired") });
     }
     for (const field of held.form.fields) {
       if (field.required && (intake[field.key] ?? "").trim().length === 0) {
-        problems.push(`${field.label}: ${message("bookingFieldRequired")}`);
+        problems.push({
+          id: `booking-intake-${field.key}`,
+          inline: message("bookingFieldRequired"),
+          message: `${field.label}: ${message("bookingFieldRequired")}`,
+        });
       }
     }
-    if (!consented) problems.push(message("bookingConsentRequired"));
+    if (!consented) {
+      problems.push({
+        id: "booking-consent",
+        message: message("bookingConsentRequired"),
+      });
+    }
     setFieldErrors(problems);
     if (problems.length > 0) return;
 
@@ -277,6 +378,42 @@ export function BookingFlow({
     setFieldErrors([]);
   }
 
+  function problemFor(id: string): FieldProblem | undefined {
+    return fieldErrors.find((problem) => problem.id === id);
+  }
+
+  function inlineError(id: string): string | undefined {
+    const problem = problemFor(id);
+    return problem === undefined ? undefined : (problem.inline ?? problem.message);
+  }
+
+  const step: Step =
+    settlement !== null || checkout !== null || booking !== null
+      ? 3
+      : held === null
+        ? 1
+        : 2;
+
+  const header = (
+    <div className="grid gap-8">
+      <PageHeader
+        title={message("bookingTitle")}
+        titleId="booking-title"
+        description={message("bookingSummary")}
+      />
+      <StepIndicator
+        current={step}
+        label={message("bookingStepsLabel")}
+        locale={locale}
+        steps={[
+          message("bookingStepSlot"),
+          message("bookingStepDetails"),
+          message("bookingStepConfirmed"),
+        ]}
+      />
+    </div>
+  );
+
   if (settlement !== null) {
     // Every state a payment can land in has a sentence and a way forward. A
     // customer whose money moved but whose slot did not is told plainly, and is
@@ -287,111 +424,147 @@ export function BookingFlow({
       settlement.status === "failed" ||
       settlement.status === "cancelled";
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-payment-title"
-      >
-        <Badge tone={settled ? "positive" : failed ? "warning" : "neutral"}>
-          {message(
-            settled
-              ? "bookingStepConfirmed"
-              : failed
-                ? "bookingPaymentProblemStatus"
-                : "bookingPaymentPendingStatus",
-          )}
-        </Badge>
-        <h2 id="booking-payment-title">
-          {message(
-            settled
-              ? "bookingSuccessTitle"
-              : settlement.exceptionCode !== null
-                ? "bookingPaymentExceptionTitle"
-                : failed
-                  ? "bookingPaymentFailedTitle"
-                  : "bookingPaymentPendingTitle",
-          )}
-        </h2>
-        <p>
-          {message(
-            settled
-              ? "bookingSuccessSummary"
-              : settlement.exceptionCode !== null
-                ? "bookingPaymentExceptionSummary"
-                : failed
-                  ? "bookingPaymentFailedSummary"
-                  : "bookingPaymentPendingSummary",
-          )}
-        </p>
-        <dl className="booking-confirmed__facts">
-          {settlement.publicReference === null ? null : (
-            <div>
-              <dt>{message("bookingReferenceLabel")}</dt>
-              <dd dir="ltr">{settlement.publicReference}</dd>
-            </div>
-          )}
-          <div>
-            <dt>{message("bookingPaidTodayLabel")}</dt>
-            <dd>{formatCurrency(settlement.dueMinor, settlement.currency, locale)}</dd>
-          </div>
-          {settlement.balanceMinor === 0 ? null : (
-            <div>
-              <dt>{message("bookingBalanceDueLabel")}</dt>
-              <dd>
-                {formatCurrency(settlement.balanceMinor, settlement.currency, locale)}
-              </dd>
-            </div>
-          )}
-        </dl>
-        {settled ? (
-          <StatusMessage tone="positive">
-            {message("bookingNotificationQueued")}
-          </StatusMessage>
-        ) : (
-          <StatusMessage tone="warning">
-            {message(
-              settlement.exceptionCode === null
-                ? "bookingPaymentRetryHint"
-                : "bookingPaymentRefundHint",
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-payment-title" role="region">
+          <CardHeader>
+            <StatusStamp state={settled ? "confirmed" : failed ? "failed" : "pending"}>
+              {message(
+                settled
+                  ? "bookingStepConfirmed"
+                  : failed
+                    ? "bookingPaymentProblemStatus"
+                    : "bookingPaymentPendingStatus",
+              )}
+            </StatusStamp>
+            <CardTitle id="booking-payment-title" className="text-xl">
+              {message(
+                settled
+                  ? "bookingSuccessTitle"
+                  : settlement.exceptionCode !== null
+                    ? "bookingPaymentExceptionTitle"
+                    : failed
+                      ? "bookingPaymentFailedTitle"
+                      : "bookingPaymentPendingTitle",
+              )}
+            </CardTitle>
+            <CardDescription>
+              {message(
+                settled
+                  ? "bookingSuccessSummary"
+                  : settlement.exceptionCode !== null
+                    ? "bookingPaymentExceptionSummary"
+                    : failed
+                      ? "bookingPaymentFailedSummary"
+                      : "bookingPaymentPendingSummary",
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            {settlement.publicReference === null ? null : (
+              <div className="grid gap-1">
+                <p className="text-xs font-semibold text-muted-foreground">
+                  {message("bookingReferenceLabel")}
+                </p>
+                <ReferenceCode size="lg">{settlement.publicReference}</ReferenceCode>
+              </div>
             )}
-          </StatusMessage>
-        )}
-        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
-          {message("bookingChooseAnotherTime")}
-        </Button>
-      </Surface>
+            <Facts
+              items={[
+                {
+                  key: "paid",
+                  label: message("bookingPaidTodayLabel"),
+                  value: formatCurrency(
+                    settlement.dueMinor,
+                    settlement.currency,
+                    locale,
+                  ),
+                },
+                ...(settlement.balanceMinor === 0
+                  ? []
+                  : [
+                      {
+                        key: "balance",
+                        label: message("bookingBalanceDueLabel"),
+                        value: formatCurrency(
+                          settlement.balanceMinor,
+                          settlement.currency,
+                          locale,
+                        ),
+                      },
+                    ]),
+              ]}
+            />
+            {settled ? (
+              <Alert tone="positive">{message("bookingNotificationQueued")}</Alert>
+            ) : (
+              <Alert tone="warning">
+                {message(
+                  settlement.exceptionCode === null
+                    ? "bookingPaymentRetryHint"
+                    : "bookingPaymentRefundHint",
+                )}
+              </Alert>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button onClick={chooseAnotherTime} type="button" variant="outline">
+              {message("bookingRestart")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </section>
     );
   }
 
   if (checkout !== null) {
     // The attempt is priced and resumable; only the provider hand-off failed.
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-checkout-title"
-      >
-        <Badge tone="warning">{message("bookingPaymentProblemStatus")}</Badge>
-        <h2 id="booking-checkout-title">{message("bookingPaymentUnavailableTitle")}</h2>
-        <p>{message("bookingPaymentUnavailableSummary")}</p>
-        <dl className="booking-confirmed__facts">
-          <div>
-            <dt>{message("bookingDueTodayLabel")}</dt>
-            <dd>{formatCurrency(checkout.dueMinor, checkout.currency, locale)}</dd>
-          </div>
-          {checkout.balanceMinor === 0 ? null : (
-            <div>
-              <dt>{message("bookingBalanceDueLabel")}</dt>
-              <dd>
-                {formatCurrency(checkout.balanceMinor, checkout.currency, locale)}
-              </dd>
-            </div>
-          )}
-        </dl>
-        <Button onClick={chooseAnotherTime} type="button" variant="secondary">
-          {message("bookingChooseAnotherTime")}
-        </Button>
-      </Surface>
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-checkout-title" role="region">
+          <CardHeader>
+            <StatusStamp state="failed">
+              {message("bookingPaymentProblemStatus")}
+            </StatusStamp>
+            <CardTitle id="booking-checkout-title" className="text-xl">
+              {message("bookingPaymentUnavailableTitle")}
+            </CardTitle>
+            <CardDescription>
+              {message("bookingPaymentUnavailableSummary")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Facts
+              items={[
+                {
+                  key: "due",
+                  label: message("bookingDueTodayLabel"),
+                  value: formatCurrency(checkout.dueMinor, checkout.currency, locale),
+                },
+                ...(checkout.balanceMinor === 0
+                  ? []
+                  : [
+                      {
+                        key: "balance",
+                        label: message("bookingBalanceDueLabel"),
+                        value: formatCurrency(
+                          checkout.balanceMinor,
+                          checkout.currency,
+                          locale,
+                        ),
+                      },
+                    ]),
+              ]}
+            />
+          </CardContent>
+          <CardFooter>
+            <Button onClick={chooseAnotherTime} type="button" variant="outline">
+              {message("bookingRestart")}
+            </Button>
+          </CardFooter>
+        </Card>
+      </section>
     );
   }
 
@@ -400,117 +573,152 @@ export function BookingFlow({
     // customer is told exactly that rather than being shown a booked time.
     const pending = booking.status === "requested";
     return (
-      <Surface
-        as="section"
-        className="booking-confirmed"
-        labelledBy="booking-confirmed-title"
-      >
-        <Badge tone={pending ? "warning" : "positive"}>
-          {pending
-            ? message("bookingRequestedStatus")
-            : message("bookingStepConfirmed")}
-        </Badge>
-        <h2 id="booking-confirmed-title">
-          {pending ? message("bookingRequestedTitle") : message("bookingSuccessTitle")}
-        </h2>
-        <p>
-          {pending
-            ? message("bookingRequestedSummary")
-            : message("bookingSuccessSummary")}
-        </p>
-        <dl className="booking-confirmed__facts">
-          <div>
-            <dt>{message("bookingReferenceLabel")}</dt>
-            <dd dir="ltr">{booking.publicReference}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingServiceLabel")}</dt>
-            <dd>{booking.serviceName}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingLocationLabel")}</dt>
-            <dd>{booking.locationName}</dd>
-          </div>
-          <div>
-            <dt>{message("bookingWhenLabel")}</dt>
-            <dd>
-              {formatDateTime(booking.startAt, locale, booking.customerTimeZone)}{" "}
-              <span dir="ltr">({booking.customerTimeZone})</span>
-            </dd>
-          </div>
-          <div>
-            <dt>{message("bookingTotalLabel")}</dt>
-            <dd>
-              {formatCurrency(booking.price.minorUnits, booking.price.currency, locale)}
-            </dd>
-          </div>
-          <div>
-            <dt>{message("bookingStatusLabel")}</dt>
-            <dd>
+      <section aria-labelledby="booking-title" className="grid gap-8">
+        {header}
+        <Card aria-labelledby="booking-confirmed-title" role="region">
+          <CardHeader>
+            <StatusStamp state={pending ? "requested" : "confirmed"}>
               {pending
                 ? message("bookingRequestedStatus")
-                : message("bookingStatusConfirmed")}
-            </dd>
-          </div>
-          {booking.approvalDeadline === null ? null : (
-            <div>
-              <dt>{message("bookingDecisionDueLabel")}</dt>
-              <dd>
-                {formatDateTime(
-                  booking.approvalDeadline,
-                  locale,
-                  booking.customerTimeZone,
-                )}
-              </dd>
+                : message("bookingStepConfirmed")}
+            </StatusStamp>
+            <CardTitle id="booking-confirmed-title" className="text-xl">
+              {pending
+                ? message("bookingRequestedTitle")
+                : message("bookingSuccessTitle")}
+            </CardTitle>
+            <CardDescription>
+              {pending
+                ? message("bookingRequestedSummary")
+                : message("bookingSuccessSummary")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-5">
+            <div className="grid gap-1">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {message("bookingReferenceLabel")}
+              </p>
+              <ReferenceCode size="lg">{booking.publicReference}</ReferenceCode>
             </div>
-          )}
-          <div>
-            <dt>{message("bookingConsentVersionLabel")}</dt>
-            <dd dir="ltr">{booking.consentVersion}</dd>
-          </div>
-        </dl>
-        <StatusMessage tone="positive">
-          {message("bookingNotificationQueued")}
-        </StatusMessage>
-        <p>
-          {pending ? message("bookingRequestedNextSteps") : message("bookingNextSteps")}
-        </p>
-      </Surface>
+            <Facts
+              items={[
+                {
+                  key: "service",
+                  label: message("bookingServiceLabel"),
+                  value: booking.serviceName,
+                },
+                {
+                  key: "location",
+                  label: message("bookingLocationLabel"),
+                  value: booking.locationName,
+                },
+                {
+                  key: "when",
+                  label: message("bookingWhenLabel"),
+                  value: formatWallDateTime(
+                    booking.startAt,
+                    locale,
+                    booking.customerTimeZone,
+                  ),
+                },
+                {
+                  key: "zone",
+                  label: message("bookingTimeZoneLabel"),
+                  value: formatTimeZone(
+                    booking.startAt,
+                    locale,
+                    booking.customerTimeZone,
+                  ),
+                },
+                {
+                  key: "total",
+                  label: message("bookingTotalLabel"),
+                  value: formatCurrency(
+                    booking.price.minorUnits,
+                    booking.price.currency,
+                    locale,
+                  ),
+                },
+                {
+                  key: "status",
+                  label: message("bookingStatusLabel"),
+                  value: pending
+                    ? message("bookingRequestedStatus")
+                    : message("bookingStatusConfirmed"),
+                },
+                ...(booking.approvalDeadline === null
+                  ? []
+                  : [
+                      {
+                        key: "deadline",
+                        label: message("bookingDecisionDueLabel"),
+                        value: formatWallDateTime(
+                          booking.approvalDeadline,
+                          locale,
+                          booking.customerTimeZone,
+                        ),
+                      },
+                    ]),
+                {
+                  key: "consent",
+                  label: message("bookingConsentVersionLabel"),
+                  value: <bdi dir="ltr">{booking.consentVersion}</bdi>,
+                },
+              ]}
+            />
+            <Alert tone="positive">{message("bookingNotificationQueued")}</Alert>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {pending
+                ? message("bookingRequestedNextSteps")
+                : message("bookingNextSteps")}
+            </p>
+          </CardContent>
+        </Card>
+      </section>
     );
   }
 
   return (
-    <section aria-labelledby="booking-title" className="booking-flow">
-      <h1 id="booking-title">{message("bookingTitle")}</h1>
-      <p>{message("bookingSummary")}</p>
+    <section aria-labelledby="booking-title" className="grid gap-8">
+      {header}
 
       {errorCode === null && fieldErrors.length === 0 ? null : (
-        <ErrorSummary
-          focusTarget
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="booking-error"
-          title={message("bookingErrorTitle")}
+          tabIndex={-1}
+          tone="danger"
         >
-          {errorCode === null ? null : (
-            <p>{message(errorCopyKeys[errorCode] ?? "bookingErrorUnavailable")}</p>
-          )}
-          {fieldErrors.length === 0 ? null : (
-            <ul>
-              {fieldErrors.map((problem) => (
-                <li key={problem}>{problem}</li>
-              ))}
-            </ul>
-          )}
-          {held === null ? null : (
-            <Button onClick={chooseAnotherTime} variant="secondary">
-              {message("bookingRestart")}
-            </Button>
-          )}
-        </ErrorSummary>
+          <AlertTitle>{message("bookingErrorTitle")}</AlertTitle>
+          <AlertDescription className="grid justify-items-start gap-3">
+            {errorCode === null ? null : (
+              <p>{message(errorCopyKeys[errorCode] ?? "bookingErrorUnavailable")}</p>
+            )}
+            {fieldErrors.length === 0 ? null : (
+              <ul className="grid list-disc gap-1 ps-5">
+                {fieldErrors.map((problem) => (
+                  <li key={problem.id}>
+                    <a
+                      className="font-semibold text-destructive underline underline-offset-4"
+                      href={`#${problem.id}`}
+                    >
+                      {problem.message}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {held === null ? null : (
+              <Button onClick={chooseAnotherTime} variant="outline">
+                {message("bookingRestart")}
+              </Button>
+            )}
+          </AlertDescription>
+        </Alert>
       )}
 
       {held === null ? (
-        <>
-          <h2>{message("bookingStepSlot")}</h2>
+        <div className="grid gap-4">
           <AvailabilityPicker
             copy={copy.availability}
             locale={locale}
@@ -521,171 +729,230 @@ export function BookingFlow({
           />
           {slot === null ? null : (
             <Button
+              className="justify-self-end"
               loading={busy}
               loadingLabel={message("bookingHolding")}
               onClick={() => void hold()}
+              size="lg"
             >
               {message("bookingContinue")}
             </Button>
           )}
-        </>
+        </div>
       ) : (
-        <form noValidate onSubmit={confirm}>
-          <h2>{message("bookingStepDetails")}</h2>
-          <StatusMessage>
-            {message("bookingHoldExpires").replace(
-              "{time}",
-              formatDateTime(
-                held.hold.expiresAt,
-                locale,
-                customerTimeZone(locationTimeZone),
-              ),
-            )}
-          </StatusMessage>
-          <dl className="booking-flow__review">
-            <div>
-              <dt>{message("bookingServiceLabel")}</dt>
-              <dd>{held.form.serviceName}</dd>
-            </div>
-            <div>
-              <dt>{message("bookingLocationLabel")}</dt>
-              <dd>{held.form.locationName}</dd>
-            </div>
-            <div>
-              <dt>{message("bookingWhenLabel")}</dt>
-              <dd>
-                {formatDateTime(
-                  held.hold.slotStart,
-                  locale,
-                  customerTimeZone(locationTimeZone),
+        <Card aria-labelledby="booking-details-title" role="region">
+          <CardHeader>
+            <CardTitle id="booking-details-title">
+              {message("bookingStepDetails")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form noValidate onSubmit={confirm} className="grid gap-6">
+              <Alert tone="info">
+                {message("bookingHoldExpires").replace(
+                  "{time}",
+                  formatWallDateTime(
+                    held.hold.expiresAt,
+                    locale,
+                    customerTimeZone(locationTimeZone),
+                  ),
                 )}
-              </dd>
-            </div>
-            <div>
-              <dt>{message("bookingTotalLabel")}</dt>
-              <dd>
-                {formatCurrency(
-                  held.hold.price.minorUnits,
-                  held.hold.price.currency,
-                  locale,
-                )}
-              </dd>
-            </div>
-          </dl>
-
-          <TextField
-            autoComplete="name"
-            description={message("bookingNameDescription")}
-            id="booking-full-name"
-            label={message("bookingNameLabel")}
-            maxLength={160}
-            name="fullName"
-            onChange={(event) => setFullName(event.currentTarget.value)}
-            required
-            value={fullName}
-          />
-          <TextField
-            autoComplete="email"
-            description={message("bookingEmailDescription")}
-            id="booking-email"
-            label={message("bookingEmailLabel")}
-            maxLength={320}
-            name="email"
-            onChange={(event) => setEmail(event.currentTarget.value)}
-            required
-            type="email"
-            value={email}
-          />
-          <TextField
-            autoComplete="tel"
-            description={message("bookingPhoneDescription")}
-            id="booking-phone"
-            label={message("bookingPhoneLabel")}
-            maxLength={40}
-            name="phone"
-            onChange={(event) => setPhone(event.currentTarget.value)}
-            type="tel"
-            value={phone}
-          />
-
-          {held.form.fields.length === 0 ? null : (
-            <fieldset>
-              <legend>{message("bookingIntakeLegend")}</legend>
-              {held.form.fields.map((field) => (
-                <TextField
-                  id={`booking-intake-${field.key}`}
-                  key={field.key}
-                  label={field.label}
-                  maxLength={field.maxLength}
-                  name={`intake.${field.key}`}
-                  onChange={(event) => {
-                    // Read the value before the updater runs: React clears
-                    // currentTarget once the event handler returns.
-                    const answer = event.currentTarget.value;
-                    setIntake((current) => ({ ...current, [field.key]: answer }));
-                  }}
-                  required={field.required}
-                  value={intake[field.key] ?? ""}
-                />
-              ))}
-            </fieldset>
-          )}
-
-          {held.form.consentText === "" ? null : <p>{held.form.consentText}</p>}
-          <label className="booking-flow__consent" htmlFor="booking-consent">
-            <input
-              checked={consented}
-              id="booking-consent"
-              name="consent"
-              onChange={(event) => setConsented(event.currentTarget.checked)}
-              type="checkbox"
-            />
-            <span>{message("bookingConsentLabel")}</span>
-          </label>
-
-          {/* Issue #22. What this will cost, stated before the customer is sent
-              anywhere, and taken from the server's own figures. */}
-          {held.form.paymentMode === "none" ? null : (
-            <dl className="booking-confirmed__facts">
-              <div>
-                <dt>{message("bookingDueTodayLabel")}</dt>
-                <dd>
-                  {formatCurrency(held.form.dueMinor, held.hold.price.currency, locale)}
-                </dd>
-              </div>
-              {held.form.balanceMinor === 0 ? null : (
-                <div>
-                  <dt>{message("bookingBalanceDueLabel")}</dt>
-                  <dd>
-                    {formatCurrency(
-                      held.form.balanceMinor,
+              </Alert>
+              <Facts
+                items={[
+                  {
+                    key: "service",
+                    label: message("bookingServiceLabel"),
+                    value: held.form.serviceName,
+                  },
+                  {
+                    key: "location",
+                    label: message("bookingLocationLabel"),
+                    value: held.form.locationName,
+                  },
+                  {
+                    key: "when",
+                    label: message("bookingWhenLabel"),
+                    value: formatWallDateTime(
+                      held.hold.slotStart,
+                      locale,
+                      customerTimeZone(locationTimeZone),
+                    ),
+                  },
+                  {
+                    key: "zone",
+                    label: message("bookingTimeZoneLabel"),
+                    value: formatTimeZone(
+                      held.hold.slotStart,
+                      locale,
+                      customerTimeZone(locationTimeZone),
+                    ),
+                  },
+                  {
+                    key: "total",
+                    label: message("bookingTotalLabel"),
+                    value: formatCurrency(
+                      held.hold.price.minorUnits,
                       held.hold.price.currency,
                       locale,
-                    )}
-                  </dd>
-                </div>
-              )}
-            </dl>
-          )}
-          {held.form.paymentMode === "deposit" ? (
-            <StatusMessage tone="neutral">
-              {message("bookingDepositNotice")}
-            </StatusMessage>
-          ) : null}
+                    ),
+                  },
+                ]}
+              />
 
-          <Button
-            loading={busy}
-            loadingLabel={message("bookingSubmitting")}
-            type="submit"
-          >
-            {message(
-              held.form.paymentMode === "none" ? "bookingSubmit" : "bookingPayAction",
-            )}
-          </Button>
-          <Button onClick={chooseAnotherTime} variant="secondary">
-            {message("bookingRestart")}
-          </Button>
-        </form>
+              <Separator />
+
+              <div className="grid gap-5 md:grid-cols-2">
+                <TextField
+                  autoComplete="name"
+                  className="md:col-span-2"
+                  description={message("bookingNameDescription")}
+                  error={inlineError("booking-full-name")}
+                  id="booking-full-name"
+                  label={message("bookingNameLabel")}
+                  maxLength={160}
+                  name="fullName"
+                  onChange={(event) => setFullName(event.currentTarget.value)}
+                  required
+                  value={fullName}
+                />
+                <TextField
+                  autoComplete="email"
+                  description={message("bookingEmailDescription")}
+                  dir="ltr"
+                  error={inlineError("booking-email")}
+                  id="booking-email"
+                  label={message("bookingEmailLabel")}
+                  maxLength={320}
+                  name="email"
+                  onChange={(event) => setEmail(event.currentTarget.value)}
+                  required
+                  type="email"
+                  value={email}
+                />
+                <TextField
+                  autoComplete="tel"
+                  description={message("bookingPhoneDescription")}
+                  dir="ltr"
+                  id="booking-phone"
+                  label={message("bookingPhoneLabel")}
+                  maxLength={40}
+                  name="phone"
+                  onChange={(event) => setPhone(event.currentTarget.value)}
+                  type="tel"
+                  value={phone}
+                />
+              </div>
+
+              {held.form.fields.length === 0 ? null : (
+                <FieldSet>
+                  <FieldLegend>{message("bookingIntakeLegend")}</FieldLegend>
+                  {held.form.fields.map((field) => (
+                    <TextField
+                      error={inlineError(`booking-intake-${field.key}`)}
+                      id={`booking-intake-${field.key}`}
+                      key={field.key}
+                      label={field.label}
+                      maxLength={field.maxLength}
+                      name={`intake.${field.key}`}
+                      onChange={(event) => {
+                        // Read the value before the updater runs: React clears
+                        // currentTarget once the event handler returns.
+                        const answer = event.currentTarget.value;
+                        setIntake((current) => ({ ...current, [field.key]: answer }));
+                      }}
+                      required={field.required}
+                      value={intake[field.key] ?? ""}
+                    />
+                  ))}
+                </FieldSet>
+              )}
+
+              <Field invalid={problemFor("booking-consent") !== undefined}>
+                {held.form.consentText === "" ? null : (
+                  <p className="rounded-md bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                    {held.form.consentText}
+                  </p>
+                )}
+                <div className="flex items-start gap-3">
+                  <Checkbox
+                    aria-describedby={
+                      problemFor("booking-consent") === undefined
+                        ? undefined
+                        : "booking-consent-error"
+                    }
+                    aria-invalid={
+                      problemFor("booking-consent") === undefined ? undefined : true
+                    }
+                    checked={consented}
+                    className="mt-0.5"
+                    id="booking-consent"
+                    name="consent"
+                    onCheckedChange={(checked) => setConsented(checked === true)}
+                  />
+                  <Label htmlFor="booking-consent" className="font-medium">
+                    {message("bookingConsentLabel")}
+                  </Label>
+                </div>
+                <FieldError id="booking-consent-error">
+                  {inlineError("booking-consent")}
+                </FieldError>
+              </Field>
+
+              {/* Issue #22. What this will cost, stated before the customer is sent
+                  anywhere, and taken from the server's own figures. */}
+              {held.form.paymentMode === "none" ? null : (
+                <Facts
+                  items={[
+                    {
+                      key: "due",
+                      label: message("bookingDueTodayLabel"),
+                      value: formatCurrency(
+                        held.form.dueMinor,
+                        held.hold.price.currency,
+                        locale,
+                      ),
+                    },
+                    ...(held.form.balanceMinor === 0
+                      ? []
+                      : [
+                          {
+                            key: "balance",
+                            label: message("bookingBalanceDueLabel"),
+                            value: formatCurrency(
+                              held.form.balanceMinor,
+                              held.hold.price.currency,
+                              locale,
+                            ),
+                          },
+                        ]),
+                  ]}
+                />
+              )}
+              {held.form.paymentMode === "deposit" ? (
+                <Alert tone="info">{message("bookingDepositNotice")}</Alert>
+              ) : null}
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  loading={busy}
+                  loadingLabel={message("bookingSubmitting")}
+                  size="lg"
+                  type="submit"
+                >
+                  {message(
+                    held.form.paymentMode === "none"
+                      ? "bookingSubmit"
+                      : "bookingPayAction",
+                  )}
+                </Button>
+                <Button onClick={chooseAnotherTime} size="lg" variant="ghost">
+                  {message("bookingRestart")}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
       )}
     </section>
   );

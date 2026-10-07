@@ -1,12 +1,47 @@
 "use client";
 import { useActionState, useEffect, useId, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { RotateCw } from "lucide-react";
 import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  DatePicker,
+  DateTimePicker,
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
+  Input,
+  Label,
+  RequiredMark,
+  TimeSelect,
+} from "@wlbp/ui-foundation";
+import { workspaceMessage } from "../../_lib/workspace-copy";
 import type { ScheduleChoice } from "../../_lib/dashboard-access";
 import { saveScheduleAction, removeScheduleAction } from "../actions";
+import { ConfirmSubmit } from "../services/confirm-submit";
+import {
+  CheckboxRow,
+  ChoiceSelect,
+  FormActions,
+  keepUnsavedInput,
+  type ChoiceOption,
+} from "../services/form-kit";
 import { scheduleKinds, policyBounds, type ScheduleKind } from "./schedule-fields";
 import { scheduleMessage, type ScheduleMessage } from "./schedule-copy";
 import { scopeName, type RecordRow } from "./schedule-scope";
+
+/**
+ * Select value for "the local time is not repeated". The parser accepts only
+ * "0" or "1" as an explicit occurrence and treats every other value — this
+ * sentinel included — exactly as it treated the former empty choice.
+ */
+const UNAMBIGUOUS_FOLD = "auto";
+
 function localValue(instant: string | null, timeZone: string): string {
   if (!instant) return "";
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -76,14 +111,27 @@ export function ScheduleForm({
     record?.timeZone ??
     "Asia/Riyadh";
   const prefix = useId();
-  const field = (name: string, label: ScheduleMessage, control: ReactNode) => (
-    <label htmlFor={`${prefix}-${name}`}>
-      {message(label)}
+  const controlId = (name: string) => `${prefix}-${name}`;
+  const errorId = (name: string) => `${prefix}-${name}-error`;
+  const invalid = (name: string) => state.field === name;
+  const field = (
+    name: string,
+    label: ScheduleMessage,
+    control: ReactNode,
+    required = false,
+  ) => (
+    <Field invalid={invalid(name)}>
+      <Label htmlFor={controlId(name)}>
+        {message(label)}
+        {required ? <RequiredMark /> : null}
+      </Label>
       {control}
-      {state.field === name ? (
-        <span role="alert">{message(state.message ?? "invalid")}</span>
+      {invalid(name) ? (
+        <FieldError id={errorId(name)} role="alert">
+          {message(state.message ?? "invalid")}
+        </FieldError>
       ) : null}
-    </label>
+    </Field>
   );
   const input = (
     name: string,
@@ -95,64 +143,148 @@ export function ScheduleForm({
     field(
       name,
       label,
-      <input
-        id={`${prefix}-${name}`}
+      <Input
+        id={controlId(name)}
         name={name}
         type={type}
         defaultValue={value}
         required={required}
-        aria-invalid={state.field === name || undefined}
+        aria-invalid={invalid(name) || undefined}
+        aria-describedby={invalid(name) ? errorId(name) : undefined}
       />,
+      required,
+    );
+  // Date and time fields submit the same YYYY-MM-DD / HH:MM /
+  // YYYY-MM-DDTHH:MM strings the native inputs did, under the same names.
+  const describe = (name: string) => ({
+    ...(invalid(name)
+      ? { "aria-invalid": true, "aria-describedby": errorId(name) }
+      : {}),
+  });
+  const datePlaceholder = workspaceMessage(locale, "datePlaceholder");
+  const timePlaceholder = workspaceMessage(locale, "timePlaceholder");
+  const datePick = (name: string, label: ScheduleMessage, value: string) =>
+    field(
+      name,
+      label,
+      <DatePicker
+        id={controlId(name)}
+        name={name}
+        locale={locale}
+        defaultValue={value}
+        required
+        placeholder={datePlaceholder}
+        {...describe(name)}
+      />,
+      true,
+    );
+  const timePick = (name: string, label: ScheduleMessage, value: string) =>
+    field(
+      name,
+      label,
+      <TimeSelect
+        id={controlId(name)}
+        name={name}
+        locale={locale}
+        defaultValue={value}
+        required
+        placeholder={timePlaceholder}
+        {...describe(name)}
+      />,
+      true,
+    );
+  const dateTimePick = (name: string, label: ScheduleMessage, value: string) =>
+    field(
+      name,
+      label,
+      <DateTimePicker
+        id={controlId(name)}
+        name={name}
+        locale={locale}
+        defaultValue={value}
+        required
+        datePlaceholder={datePlaceholder}
+        timePlaceholder={timePlaceholder}
+        timeLabel={workspaceMessage(locale, "timeOf", { label: message(label) })}
+        {...describe(name)}
+      />,
+      true,
+    );
+  const choose = (
+    name: string,
+    label: ScheduleMessage,
+    options: readonly ChoiceOption[],
+    props: {
+      readonly value?: string;
+      readonly defaultValue?: string;
+      readonly onValueChange?: (value: string) => void;
+      readonly required?: boolean;
+      readonly disabled?: boolean;
+      readonly placeholder?: ReactNode;
+      readonly resetKey?: string;
+    } = {},
+  ) =>
+    field(
+      name,
+      label,
+      <ChoiceSelect
+        key={props.resetKey}
+        id={controlId(name)}
+        name={name}
+        options={options}
+        invalid={invalid(name)}
+        describedBy={invalid(name) ? errorId(name) : undefined}
+        {...(props.value === undefined ? {} : { value: props.value })}
+        {...(props.defaultValue === undefined
+          ? {}
+          : { defaultValue: props.defaultValue })}
+        {...(props.onValueChange ? { onValueChange: props.onValueChange } : {})}
+        {...(props.required ? { required: true } : {})}
+        {...(props.disabled ? { disabled: true } : {})}
+        {...(props.placeholder === undefined ? {} : { placeholder: props.placeholder })}
+      />,
+      props.required,
     );
   const select = (
     kind: ScheduleChoice["kind"],
     name: string,
     defaultValue: string | null | undefined,
   ) =>
-    field(
+    choose(
       name,
       kind,
-      <select
-        id={`${prefix}-${name}`}
-        name={name}
-        defaultValue={defaultValue ?? ""}
-        required
-      >
-        <option value="">{message("choose")}</option>
-        {choices
-          .filter(
-            (c) =>
-              c.kind === kind && (kind === "location" || c.locationId === locationId),
-          )
-          .map((c) => (
-            <option key={`${c.id}:${c.locationId}`} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-      </select>,
+      choices
+        .filter(
+          (c) =>
+            c.kind === kind && (kind === "location" || c.locationId === locationId),
+        )
+        .map((c) => ({ value: c.id, label: c.name })),
+      {
+        defaultValue: defaultValue ?? "",
+        required: true,
+        placeholder: message("choose"),
+        // The choices depend on the location; start over when it changes.
+        resetKey: `${name}:${locationId}`,
+      },
     );
   const fold = (name: string) =>
-    field(
+    choose(
       name,
       "fold",
-      <select
-        id={`${prefix}-${name}`}
-        name={name}
-        defaultValue={
-          record?.fold === null || record?.fold === undefined ? "" : record.fold
-        }
-      >
-        <option value="">{message("auto")}</option>
-        <option value="0">{message("first")}</option>
-        <option value="1">{message("second")}</option>
-      </select>,
+      [
+        { value: UNAMBIGUOUS_FOLD, label: message("auto") },
+        { value: "0", label: message("first") },
+        { value: "1", label: message("second") },
+      ],
+      {
+        defaultValue:
+          record?.fold === null || record?.fold === undefined
+            ? UNAMBIGUOUS_FOLD
+            : String(record.fold),
+      },
     );
   return (
-    <form
-      action={action}
-      className="catalog-form"
-      onReset={(event) => event.preventDefault()}
-    >
+    <form action={action} className="grid gap-5" {...keepUnsavedInput}>
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="requestId" value={requestId} />
       <input type="hidden" name="id" value={record?.id ?? ""} />
@@ -161,90 +293,77 @@ export function ScheduleForm({
         name="expectedRevision"
         value={recurring ? (scope?.revision ?? "") : (record?.revision ?? "")}
       />
-      <fieldset disabled={pending}>
-        <legend>{record ? message("edit") : message("create")}</legend>
-        {field(
-          "operation",
-          "operation",
-          <select
-            id={`${prefix}-operation`}
-            name="operation"
-            value={operation}
-            onChange={(event) => {
-              const next = event.target.value as ScheduleKind;
-              setOperation(next);
-              if (next === "maintenance") setScopeKind("resource");
-              else if (
-                next === "time_off" &&
-                !["staff", "resource"].includes(scopeKind)
+      <FieldSet disabled={pending}>
+        <FieldLegend className={record ? "sr-only" : undefined}>
+          {record ? message("edit") : message("create")}
+        </FieldLegend>
+        <FieldGroup columns={2}>
+          {choose(
+            "operation",
+            "operation",
+            scheduleKinds.map((kind) => ({ value: kind, label: message(kind) })),
+            {
+              value: operation,
+              disabled: !!record,
+              onValueChange: (value) => {
+                const next = value as ScheduleKind;
+                setOperation(next);
+                if (next === "maintenance") setScopeKind("resource");
+                else if (
+                  next === "time_off" &&
+                  !["staff", "resource"].includes(scopeKind)
+                )
+                  setScopeKind("staff");
+                else if (next === "blackout" || next === "holiday")
+                  setScopeKind("location");
+              },
+            },
+          )}
+          {record ? <input type="hidden" name="operation" value={operation} /> : null}
+          {recurring
+            ? choose(
+                "scopeId",
+                "scope",
+                scopes.map((row) => ({
+                  value: row.id,
+                  label: (
+                    <>
+                      {scopeName(row, choices)} · <bdi>{row.timeZone}</bdi> ·{" "}
+                      {message("revision")} {row.revision}
+                    </>
+                  ),
+                })),
+                {
+                  value: scopeId,
+                  required: true,
+                  disabled: !!record,
+                  placeholder: message("choose"),
+                  onValueChange: (value) => {
+                    setScopeId(value);
+                    setLocationId(scopes.find((s) => s.id === value)?.locationId ?? "");
+                  },
+                },
               )
-                setScopeKind("staff");
-              else if (next === "blackout" || next === "holiday")
-                setScopeKind("location");
-            }}
-            disabled={!!record}
-          >
-            {scheduleKinds.map((kind) => (
-              <option key={kind} value={kind}>
-                {message(kind)}
-              </option>
-            ))}
-          </select>,
-        )}
-        {record ? <input type="hidden" name="operation" value={operation} /> : null}
-        {recurring
-          ? field(
-              "scopeId",
-              "scope",
-              <select
-                id={`${prefix}-scopeId`}
-                name="scopeId"
-                value={scopeId}
-                required
-                onChange={(event) => {
-                  setScopeId(event.target.value);
-                  setLocationId(
-                    scopes.find((s) => s.id === event.target.value)?.locationId ?? "",
-                  );
-                }}
-                disabled={!!record}
-              >
-                <option value="">{message("choose")}</option>
-                {scopes.map((row) => (
-                  <option key={row.id} value={row.id}>
-                    {scopeName(row, choices)} · {row.timeZone} · {message("revision")}{" "}
-                    {row.revision}
-                  </option>
-                ))}
-              </select>,
-            )
-          : null}
-        {record && recurring ? (
-          <input type="hidden" name="scopeId" value={scopeId} />
-        ) : null}
-        {recurring ? (
-          <>
-            <input name="locationId" type="hidden" value={scope?.locationId ?? ""} />
-            <input name="staffId" type="hidden" value={scope?.staffId ?? ""} />
-            <input name="resourceId" type="hidden" value={scope?.resourceId ?? ""} />
-          </>
-        ) : null}
-        {operation === "scope" && record ? (
-          <input name="scopeId" type="hidden" value={record.id} />
-        ) : null}
-        {!recurring ? (
-          <>
-            {field(
-              "scopeKind",
-              "scopeKind",
-              <select
-                id={`${prefix}-scopeKind`}
-                name="scopeKind"
-                value={scopeKind}
-                onChange={(event) => setScopeKind(event.target.value)}
-                disabled={!!record}
-              >
-                {(operation === "policy"
+            : null}
+          {record && recurring ? (
+            <input type="hidden" name="scopeId" value={scopeId} />
+          ) : null}
+          {recurring ? (
+            <>
+              <input name="locationId" type="hidden" value={scope?.locationId ?? ""} />
+              <input name="staffId" type="hidden" value={scope?.staffId ?? ""} />
+              <input name="resourceId" type="hidden" value={scope?.resourceId ?? ""} />
+            </>
+          ) : null}
+          {operation === "scope" && record ? (
+            <input name="scopeId" type="hidden" value={record.id} />
+          ) : null}
+          {!recurring ? (
+            <>
+              {choose(
+                "scopeKind",
+                "scopeKind",
+                (operation === "policy"
                   ? ["tenant", "location", "service", "staff", "resource"]
                   : operation === "time_off"
                     ? ["staff", "resource"]
@@ -253,201 +372,208 @@ export function ScheduleForm({
                       : operation === "scope"
                         ? ["location", "staff", "resource"]
                         : ["location"]
-                ).map((kind) => (
-                  <option key={kind} value={kind}>
-                    {kind === "tenant"
-                      ? locale === "ar"
-                        ? "المؤسسة"
-                        : "Tenant"
-                      : message(kind as ScheduleMessage)}
-                  </option>
-                ))}
-              </select>,
-            )}
-            {record ? <input type="hidden" name="scopeKind" value={scopeKind} /> : null}
-            {scopeKind !== "tenant" && scopeKind !== "service"
-              ? field(
-                  "locationId",
-                  "location",
-                  <select
-                    id={`${prefix}-locationId`}
-                    name="locationId"
-                    value={locationId}
-                    required
-                    onChange={(event) => setLocationId(event.target.value)}
-                    disabled={!!record}
-                  >
-                    {choices
+                ).map((kind) => ({
+                  value: kind,
+                  label: message(kind as ScheduleMessage),
+                })),
+                {
+                  value: scopeKind,
+                  disabled: !!record,
+                  onValueChange: (value) => setScopeKind(value),
+                },
+              )}
+              {record ? (
+                <input type="hidden" name="scopeKind" value={scopeKind} />
+              ) : null}
+              {scopeKind !== "tenant" && scopeKind !== "service"
+                ? choose(
+                    "locationId",
+                    "location",
+                    choices
                       .filter((c) => c.kind === "location")
-                      .map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} · {c.timeZone}
-                        </option>
-                      ))}
-                  </select>,
-                )
-              : null}
-            {record && record.locationId ? (
-              <input type="hidden" name="locationId" value={record.locationId} />
+                      .map((c) => ({
+                        value: c.id,
+                        label: (
+                          <>
+                            {c.name} · <bdi>{c.timeZone}</bdi>
+                          </>
+                        ),
+                      })),
+                    {
+                      value: locationId,
+                      required: true,
+                      disabled: !!record,
+                      onValueChange: (value) => setLocationId(value),
+                    },
+                  )
+                : null}
+              {record && record.locationId ? (
+                <input type="hidden" name="locationId" value={record.locationId} />
+              ) : null}
+              {scopeKind === "staff"
+                ? select("staff", "staffId", record?.staffId)
+                : null}
+              {scopeKind === "resource"
+                ? select("resource", "resourceId", record?.resourceId)
+                : null}
+              {scopeKind === "service"
+                ? select("service", "serviceId", record?.serviceId ?? null)
+                : null}
+            </>
+          ) : null}
+          <Field invalid={invalid("timeZone")}>
+            <Label htmlFor={controlId("timeZone")}>
+              {message("timeZone")}
+              <RequiredMark />
+            </Label>
+            <Input
+              key={zone}
+              id={controlId("timeZone")}
+              name="timeZone"
+              type="text"
+              dir="ltr"
+              defaultValue={zone}
+              required
+              aria-invalid={invalid("timeZone") || undefined}
+              aria-describedby={
+                invalid("timeZone")
+                  ? `${controlId("timeZone")}-dst ${errorId("timeZone")}`
+                  : `${controlId("timeZone")}-dst`
+              }
+            />
+            <FieldDescription id={`${controlId("timeZone")}-dst`}>
+              {message("dst")}
+            </FieldDescription>
+            {invalid("timeZone") ? (
+              <FieldError id={errorId("timeZone")} role="alert">
+                {message(state.message ?? "invalid")}
+              </FieldError>
             ) : null}
-            {scopeKind === "staff" ? select("staff", "staffId", record?.staffId) : null}
-            {scopeKind === "resource"
-              ? select("resource", "resourceId", record?.resourceId)
-              : null}
-            {scopeKind === "service"
-              ? select("service", "serviceId", record?.serviceId ?? null)
-              : null}
-          </>
-        ) : null}
-        {field(
-          "timeZone",
-          "timeZone",
-          <input
-            key={zone}
-            id={`${prefix}-timeZone`}
-            name="timeZone"
-            type="text"
-            defaultValue={zone}
-            required
-          />,
-        )}
-        <p className="field-help">{message("dst")}</p>
-        {operation === "weekly" || operation === "break"
-          ? field(
-              "dayOfWeek",
-              "dayOfWeek",
-              <select
-                id={`${prefix}-dayOfWeek`}
-                name="dayOfWeek"
-                defaultValue={record?.dayOfWeek ?? 1}
-              >
-                {Array.from({ length: 7 }, (_, day) => (
-                  <option key={day} value={day}>
-                    {new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en", {
-                      weekday: "long",
-                      timeZone: "UTC",
-                    }).format(new Date(Date.UTC(2026, 0, 4 + day)))}
-                  </option>
-                ))}
-              </select>,
-            )
-          : null}
-        {operation === "exception" || operation === "holiday"
-          ? input("localDate", "localDate", "date", record?.localDate ?? "")
-          : null}
-        {operation === "exception" ? (
-          <>
-            {field(
-              "exceptionKind",
-              "exceptionKind",
-              <select
-                id={`${prefix}-exceptionKind`}
-                name="exceptionKind"
-                value={exceptionKind}
-                onChange={(event) =>
-                  setExceptionKind(event.target.value as "closed" | "override")
-                }
-              >
-                <option value="closed">{message("closed")}</option>
-                <option value="override">{message("override")}</option>
-              </select>,
-            )}
-            {fold("fold")}
-          </>
-        ) : null}
+          </Field>
+          {operation === "weekly" || operation === "break"
+            ? choose(
+                "dayOfWeek",
+                "dayOfWeek",
+                Array.from({ length: 7 }, (_, day) => ({
+                  value: String(day),
+                  label: new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en", {
+                    weekday: "long",
+                    timeZone: "UTC",
+                  }).format(new Date(Date.UTC(2026, 0, 4 + day))),
+                })),
+                { defaultValue: String(record?.dayOfWeek ?? 1) },
+              )
+            : null}
+          {operation === "exception" || operation === "holiday"
+            ? datePick("localDate", "localDate", record?.localDate ?? "")
+            : null}
+          {operation === "exception" ? (
+            <>
+              {choose(
+                "exceptionKind",
+                "exceptionKind",
+                [
+                  { value: "closed", label: message("closed") },
+                  { value: "override", label: message("override") },
+                ],
+                {
+                  value: exceptionKind,
+                  onValueChange: (value) =>
+                    setExceptionKind(value as "closed" | "override"),
+                },
+              )}
+              {fold("fold")}
+            </>
+          ) : null}
+        </FieldGroup>
         {operation === "weekly" ||
         operation === "break" ||
         (operation === "exception" && exceptionKind === "override") ? (
-          <div className="catalog-columns">
-            {input(
-              "startTime",
-              "startTime",
-              "time",
-              timeValue(record?.startMinute ?? 540),
-            )}
-            {input("endTime", "endTime", "time", timeValue(record?.endMinute ?? 1020))}
-            <label>
-              <input
-                type="checkbox"
-                name="endOfDay"
-                value="yes"
-                defaultChecked={record?.endMinute === 1440}
-              />
+          <FieldGroup columns={3} className="items-end">
+            {timePick("startTime", "startTime", timeValue(record?.startMinute ?? 540))}
+            {timePick("endTime", "endTime", timeValue(record?.endMinute ?? 1020))}
+            <CheckboxRow
+              id={controlId("endOfDay")}
+              name="endOfDay"
+              defaultChecked={record?.endMinute === 1440}
+            >
               {message("endOfDay")}
-            </label>
-          </div>
+            </CheckboxRow>
+          </FieldGroup>
         ) : null}
         {timed ? (
-          <div className="catalog-columns">
-            {input(
+          <FieldGroup columns={2}>
+            {dateTimePick(
               "startsAt",
               "startsAt",
-              "datetime-local",
               localValue(record?.startsAt ?? null, zone),
             )}
             {fold("startFold")}
-            {input(
-              "endsAt",
-              "endsAt",
-              "datetime-local",
-              localValue(record?.endsAt ?? null, zone),
-            )}
+            {dateTimePick("endsAt", "endsAt", localValue(record?.endsAt ?? null, zone))}
             {fold("endFold")}
-          </div>
+          </FieldGroup>
         ) : null}
-        {timed || operation === "holiday"
-          ? input(
+        {timed || operation === "holiday" ? (
+          <FieldGroup columns={2}>
+            {input(
               "reason",
               "reason",
               "text",
               record?.reason ?? "",
               operation === "holiday",
-            )
-          : null}
+            )}
+          </FieldGroup>
+        ) : null}
         {operation === "policy" ? (
-          <>
-            {field(
+          <FieldGroup columns={2}>
+            {choose(
               "policyKey",
               "policyKey",
-              <select
-                id={`${prefix}-policyKey`}
-                name="policyKey"
-                defaultValue={record?.policyKey ?? "minimum_notice_minutes"}
-              >
-                {Object.keys(policyBounds).map((key, index) => (
-                  <option key={key} value={key}>
-                    {message(
-                      (
-                        [
-                          "notice",
-                          "horizon",
-                          "interval",
-                          "daily",
-                          "before",
-                          "after",
-                          "turnover",
-                          "travel",
-                        ] as const
-                      )[index]!,
-                    )}
-                  </option>
-                ))}
-              </select>,
+              Object.keys(policyBounds).map((key, index) => ({
+                value: key,
+                label: message(
+                  (
+                    [
+                      "notice",
+                      "horizon",
+                      "interval",
+                      "daily",
+                      "before",
+                      "after",
+                      "turnover",
+                      "travel",
+                    ] as const
+                  )[index]!,
+                ),
+              })),
+              { defaultValue: record?.policyKey ?? "minimum_notice_minutes" },
             )}
             {input("value", "value", "number", record?.value ?? "", false)}
-          </>
+          </FieldGroup>
         ) : null}
-        <button className="wlbp-button" type="submit">
-          {message(pending ? "saving" : "save")}
-        </button>
-      </fieldset>
+        <FormActions>
+          <Button type="submit" loading={pending} loadingLabel={message("saving")}>
+            {message("save")}
+          </Button>
+        </FormActions>
+      </FieldSet>
       {state.message ? (
-        <p role={state.saved ? "status" : "alert"}>{message(state.message)}</p>
-      ) : null}
-      {state.message === "stale" ? (
-        <button type="button" onClick={() => router.refresh()}>
-          {message("reload")}
-        </button>
+        <Alert tone={state.saved ? "positive" : "danger"}>
+          <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
+            <span>{message(state.message)}</span>
+            {state.message === "stale" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={() => router.refresh()}
+              >
+                <RotateCw aria-hidden="true" />
+                {message("reload")}
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
       ) : null}
     </form>
   );
@@ -471,25 +597,34 @@ export function ScheduleRemove({
       router.refresh();
     }
   }, [state, router]);
+  const message = (key: ScheduleMessage) => scheduleMessage(locale, key);
   return (
-    <form action={action}>
+    <form action={action} className="grid gap-3">
       <input name="locale" type="hidden" value={locale} />
       <input name="requestId" type="hidden" value={requestId} />
       <input name="operation" type="hidden" value={record.kind} />
       <input name="id" type="hidden" value={record.id} />
       <input name="expectedRevision" type="hidden" value={record.revision} />
       <input name="expectedScopeRevision" type="hidden" value={scopeRevision ?? ""} />
-      <label>
-        <input name="confirm" type="checkbox" value="yes" required />
-        {scheduleMessage(locale, "confirm")}
-      </label>
-      <button disabled={pending} type="submit">
-        {scheduleMessage(locale, "remove")}
-      </button>
+      <div>
+        <ConfirmSubmit
+          destructive
+          variant="destructive-outline"
+          size="sm"
+          label={message("remove")}
+          pending={pending}
+          title={message("removeTitle")}
+          description={message("removeHint")}
+          confirmLabel={message("remove")}
+          cancelLabel={message("cancel")}
+        />
+      </div>
       {state.message ? (
-        <p role={state.saved ? "status" : "alert"}>
-          {scheduleMessage(locale, state.message)}
-        </p>
+        <Alert tone={state.saved ? "positive" : "danger"}>
+          <AlertDescription className="text-foreground">
+            {message(state.message)}
+          </AlertDescription>
+        </Alert>
       ) : null}
     </form>
   );

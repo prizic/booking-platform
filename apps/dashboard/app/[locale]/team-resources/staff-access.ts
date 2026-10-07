@@ -52,6 +52,17 @@ const copy = {
     account: "Staff account",
     noAccount: "No login account",
     currentAccount: "Current linked account",
+    cancel: "Cancel",
+    reload: "Reload access",
+    verify: "Verify your authenticator",
+    revokeTitle: "Revoke this member's access?",
+    revokeInvitationTitle: "Revoke this invitation?",
+    revokeInvitationConfirm:
+      "The invitation link stops working. You can send a new invitation later.",
+    invitations: "Invitations",
+    members: "Members",
+    noMembers: "No members have login access yet.",
+    inviteHint: "Send a sign-in invitation with a built-in role.",
   },
   ar: {
     title: "صلاحية الدخول",
@@ -99,6 +110,17 @@ const copy = {
     account: "حساب الموظف",
     noAccount: "دون حساب دخول",
     currentAccount: "الحساب المرتبط حاليًا",
+    cancel: "إلغاء",
+    reload: "إعادة تحميل الصلاحية",
+    verify: "التحقق بتطبيق المصادقة",
+    revokeTitle: "هل تريد إلغاء صلاحية دخول هذا العضو؟",
+    revokeInvitationTitle: "هل تريد إلغاء هذه الدعوة؟",
+    revokeInvitationConfirm:
+      "سيتوقف رابط الدعوة عن العمل. يمكنك إرسال دعوة جديدة لاحقًا.",
+    invitations: "الدعوات",
+    members: "الأعضاء",
+    noMembers: "لا يملك أي عضو صلاحية دخول بعد.",
+    inviteHint: "أرسل دعوة تسجيل دخول بدور معتمد.",
   },
 } as const;
 export type StaffAccessMessage = keyof typeof copy.en;

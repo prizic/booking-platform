@@ -1,6 +1,12 @@
 "use client";
 
-import { Button, ErrorSummary, TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  TextField,
+} from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
@@ -10,6 +16,7 @@ import {
   getPlatformAdminBrowserClient,
   verifyMfaCode,
 } from "../../_lib/supabase-browser";
+import { AuthFrame } from "../../_lib/ui/auth-frame";
 
 type Step = { kind: "credentials" } | { kind: "mfa"; factorId: string };
 
@@ -94,67 +101,77 @@ export default function LoginPage({ params }: { params: Promise<{ locale: Locale
   }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="login-title">
-        <h1 id="login-title">
-          {say(
-            locale,
-            step.kind === "credentials" ? authCopy.loginTitle : authCopy.mfaTitle,
-          )}
-        </h1>
-        {error ? (
-          <ErrorSummary title={say(locale, authCopy.errorTitle)}>
-            {say(locale, error)}
-          </ErrorSummary>
-        ) : null}
-        {step.kind === "credentials" ? (
-          <form key="credentials" onSubmit={onCredentials}>
-            <TextField
-              autoComplete="email"
-              id="email"
-              label={say(locale, authCopy.email)}
-              name="email"
-              required
-              type="email"
-            />
-            <TextField
-              autoComplete="current-password"
-              id="password"
-              label={say(locale, authCopy.password)}
-              name="password"
-              required
-              type="password"
-            />
-            <Button
-              loading={pending}
-              loadingLabel={say(locale, authCopy.signingIn)}
-              type="submit"
-            >
-              {say(locale, authCopy.signIn)}
-            </Button>
-          </form>
-        ) : (
-          <form key="mfa" onSubmit={(event) => onCode(event, step.factorId)}>
-            <TextField
-              autoComplete="one-time-code"
-              id="code"
-              inputMode="numeric"
-              label={say(locale, authCopy.code)}
-              maxLength={6}
-              minLength={6}
-              name="code"
-              required
-            />
-            <Button
-              loading={pending}
-              loadingLabel={say(locale, authCopy.verifying)}
-              type="submit"
-            >
-              {say(locale, authCopy.verify)}
-            </Button>
-          </form>
-        )}
-      </section>
-    </main>
+    <AuthFrame
+      locale={locale}
+      titleId="login-title"
+      title={say(
+        locale,
+        step.kind === "credentials" ? authCopy.loginTitle : authCopy.mfaTitle,
+      )}
+    >
+      {error ? (
+        <Alert tone="danger">
+          <AlertTitle>{say(locale, authCopy.errorTitle)}</AlertTitle>
+          <AlertDescription>{say(locale, error)}</AlertDescription>
+        </Alert>
+      ) : null}
+      {step.kind === "credentials" ? (
+        <form key="credentials" onSubmit={onCredentials} className="grid gap-5">
+          <TextField
+            autoComplete="email"
+            id="email"
+            label={say(locale, authCopy.email)}
+            name="email"
+            required
+            type="email"
+            dir="ltr"
+          />
+          <TextField
+            autoComplete="current-password"
+            id="password"
+            label={say(locale, authCopy.password)}
+            name="password"
+            required
+            type="password"
+            dir="ltr"
+          />
+          <Button
+            block
+            loading={pending}
+            loadingLabel={say(locale, authCopy.signingIn)}
+            type="submit"
+          >
+            {say(locale, authCopy.signIn)}
+          </Button>
+        </form>
+      ) : (
+        <form
+          key="mfa"
+          onSubmit={(event) => onCode(event, step.factorId)}
+          className="grid gap-5"
+        >
+          <TextField
+            autoComplete="one-time-code"
+            id="code"
+            inputMode="numeric"
+            label={say(locale, authCopy.code)}
+            maxLength={6}
+            minLength={6}
+            name="code"
+            required
+            dir="ltr"
+            className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.4em]"
+          />
+          <Button
+            block
+            loading={pending}
+            loadingLabel={say(locale, authCopy.verifying)}
+            type="submit"
+          >
+            {say(locale, authCopy.verify)}
+          </Button>
+        </form>
+      )}
+    </AuthFrame>
   );
 }

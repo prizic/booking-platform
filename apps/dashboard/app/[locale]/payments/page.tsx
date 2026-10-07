@@ -1,12 +1,46 @@
 import { workspaceStatus } from "../../_lib/workspace-status";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Button,
+  EmptyState,
+  Facts,
+  Field,
+  Label,
+  PageHeader,
+  ReferenceCode,
+  Section,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusStamp,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+  Toolbar,
+} from "@wlbp/ui-foundation";
+import { CircleCheck, Mail, ReceiptText } from "lucide-react";
 import Link from "next/link";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type { PaymentExceptionV1, RefundRowV1 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
+import { formatWhen, stampStateFor } from "../../_lib/booking-display";
+import { Money } from "../../_lib/ui/money";
+import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+import { ZoneNote } from "../../_lib/ui/zone-note";
+import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
+import { ResultAlert } from "../../_lib/ui/result-alert";
+import { textLinkClass } from "../../_lib/ui/text-link";
 import { requestRefundAction, resolveExceptionAction } from "./actions";
 import { paymentResultKeys, positivePaymentResults } from "./results";
 
@@ -78,198 +112,358 @@ export default async function PaymentsPage({
 
   return (
     <WorkspaceShell current="payments" labelledBy="payments-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="payments-title">
-        <h1 id="payments-title">{message("paymentsTitle")}</h1>
-        <p>{message("paymentsSummary")}</p>
-        {resultKey === null ? null : (
-          <StatusMessage
-            tone={positivePaymentResults.has(result ?? "") ? "positive" : "warning"}
+      <PageHeader
+        titleId="payments-title"
+        title={message("paymentsTitle")}
+        description={message("paymentsSummary")}
+        meta={<ZoneNote locale={locale} timeZone="UTC" />}
+        actions={
+          <Button asChild variant="outline">
+            <Link href={`/${locale}/communications`}>
+              <Mail aria-hidden="true" />
+              {message("navCommunications")}
+            </Link>
+          </Button>
+        }
+      />
+      {resultKey === null ? null : (
+        <ResultAlert positive={positivePaymentResults.has(result ?? "")}>
+          {message(resultKey)}
+        </ResultAlert>
+      )}
+
+      <form action={`/${locale}/payments`} method="get">
+        <Toolbar>
+          <Field>
+            <Label htmlFor="payments-status">{message("paymentsStatusLabel")}</Label>
+            <Select defaultValue={requested} name="status">
+              <SelectTrigger id="payments-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">{message("paymentsStatusOpen")}</SelectItem>
+                <SelectItem value="resolved">
+                  {message("paymentsStatusResolved")}
+                </SelectItem>
+                <SelectItem value="all">{message("paymentsStatusAll")}</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Button type="submit" variant="secondary">
+            {message("paymentsFilterAction")}
+          </Button>
+        </Toolbar>
+      </form>
+
+      {loaded === null ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {message("paymentsUnavailable")}
+          </AlertDescription>
+        </Alert>
+      ) : (
+        <>
+          <Section
+            id="payments-queue"
+            title={message("paymentsQueueTitle")}
+            actions={
+              loaded.exceptions.length > 0 ? (
+                <Badge tone="warning">
+                  {countLabel(locale, "items", loaded.exceptions.length)}
+                </Badge>
+              ) : null
+            }
           >
-            {message(resultKey)}
-          </StatusMessage>
-        )}
-
-        <form action={`/${locale}/payments`} className="calendar-filters" method="get">
-          <label htmlFor="payments-status">{message("paymentsStatusLabel")}</label>
-          <select defaultValue={requested} id="payments-status" name="status">
-            <option value="open">{message("paymentsStatusOpen")}</option>
-            <option value="resolved">{message("paymentsStatusResolved")}</option>
-            <option value="all">{message("paymentsStatusAll")}</option>
-          </select>
-          <Button type="submit">{message("paymentsFilterAction")}</Button>
-        </form>
-
-        {loaded === null ? (
-          <p>{message("paymentsUnavailable")}</p>
-        ) : (
-          <>
-            <section aria-labelledby="payments-queue-title">
-              <h2 id="payments-queue-title">{message("paymentsQueueTitle")}</h2>
-              {loaded.exceptions.length === 0 ? (
-                <p>{message("paymentsQueueEmpty")}</p>
-              ) : (
-                <ul
-                  aria-label={message("paymentsQueueTitle")}
-                  className="requests-list"
-                >
-                  {loaded.exceptions.map((item) => (
-                    <li key={item.exceptionId}>
-                      <article aria-labelledby={`exception-${item.exceptionId}`}>
-                        <h3 id={`exception-${item.exceptionId}`}>
+            {loaded.exceptions.length === 0 ? (
+              <EmptyState
+                icon={<CircleCheck aria-hidden="true" />}
+                title={message("paymentsQueueEmpty")}
+              />
+            ) : (
+              <ul aria-label={message("paymentsQueueTitle")} className="grid gap-4">
+                {loaded.exceptions.map((item) => (
+                  <li key={item.exceptionId}>
+                    <article
+                      aria-labelledby={`exception-${item.exceptionId}`}
+                      className="grid gap-5 rounded-lg border bg-card p-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]"
+                    >
+                      <div className="grid content-start gap-4">
+                        <h3
+                          id={`exception-${item.exceptionId}`}
+                          className="flex flex-wrap items-center gap-3"
+                        >
                           {/* A stable kind code. It is deliberately not
                               translated: operators search and escalate on these
                               strings, and a localized one cannot be searched. */}
-                          <span dir="ltr">{item.kind}</span>{" "}
+                          <span
+                            dir="ltr"
+                            className="font-latin text-base font-semibold"
+                          >
+                            {item.kind}
+                          </span>
                           <Badge
-                            tone={item.severity === "urgent" ? "warning" : "neutral"}
+                            tone={item.severity === "urgent" ? "danger" : "neutral"}
                           >
                             {workspaceStatus(locale, item.severity)}
                           </Badge>
                         </h3>
-                        <dl>
-                          <div>
-                            <dt>{message("paymentsDetailLabel")}</dt>
-                            {/* A stable code, never a provider body: this queue
-                                is read by operators and must never quote a
-                                customer back at them. */}
-                            <dd dir="ltr">{item.detailCode}</dd>
-                          </div>
-                          {item.amountMinorUnits === null ||
-                          item.currency === null ? null : (
-                            <div>
-                              <dt>{message("paymentsAmountLabel")}</dt>
-                              <dd>
-                                {formatCurrency(
-                                  item.amountMinorUnits,
-                                  item.currency,
-                                  locale,
-                                )}
-                              </dd>
-                            </div>
-                          )}
-                          <div>
-                            <dt>{message("paymentsRaisedLabel")}</dt>
-                            <dd>{formatDateTime(item.createdAt, locale, "UTC")}</dd>
-                          </div>
-                          {item.publicReference === null ||
-                          item.bookingId === null ? null : (
-                            <div>
-                              <dt>{message("bookingsTitle")}</dt>
-                              <dd>
-                                <Link
-                                  href={`/${locale}/bookings/${item.bookingId ?? ""}`}
-                                >
-                                  <bdi>{item.publicReference}</bdi>
-                                </Link>
-                              </dd>
-                            </div>
-                          )}
-                        </dl>
+                        <Facts
+                          items={[
+                            {
+                              key: "detail",
+                              label: message("paymentsDetailLabel"),
+                              // A stable code, never a provider body: this queue
+                              // is read by operators and must never quote a
+                              // customer back at them.
+                              value: (
+                                <span dir="ltr" className="font-latin">
+                                  {item.detailCode}
+                                </span>
+                              ),
+                            },
+                            ...(item.amountMinorUnits === null || item.currency === null
+                              ? []
+                              : [
+                                  {
+                                    key: "amount",
+                                    label: message("paymentsAmountLabel"),
+                                    value: (
+                                      <Money
+                                        minor={item.amountMinorUnits}
+                                        currency={item.currency}
+                                        locale={locale}
+                                      />
+                                    ),
+                                  },
+                                ]),
+                            {
+                              key: "raised",
+                              label: message("paymentsRaisedLabel"),
+                              value: formatWhen(item.createdAt, locale, "UTC"),
+                            },
+                            ...(item.publicReference === null || item.bookingId === null
+                              ? []
+                              : [
+                                  {
+                                    key: "booking",
+                                    label: message("bookingsTitle"),
+                                    value: (
+                                      <Link
+                                        className={textLinkClass}
+                                        href={`/${locale}/bookings/${item.bookingId ?? ""}`}
+                                      >
+                                        <ReferenceCode className="text-primary">
+                                          {item.publicReference}
+                                        </ReferenceCode>
+                                      </Link>
+                                    ),
+                                  },
+                                ]),
+                          ]}
+                        />
+                      </div>
 
-                        {item.status !== "open" ? (
-                          <p>
-                            {message("paymentsResolvedAs")}{" "}
+                      {item.status !== "open" ? (
+                        <p className="self-start text-sm">
+                          {message("paymentsResolvedAs")}{" "}
+                          <StatusStamp state="completed">
                             {workspaceStatus(locale, item.resolution ?? "open")}
-                          </p>
-                        ) : (
-                          <>
-                            {item.bookingId === null ? null : (
-                              <form action={requestRefundAction}>
-                                <input type="hidden" name="locale" value={locale} />
-                                <input
-                                  type="hidden"
-                                  name="bookingId"
-                                  value={item.bookingId}
-                                />
-                                <Button type="submit" variant="secondary">
-                                  {message("paymentsRetryRefund")}
-                                </Button>
-                              </form>
-                            )}
-                            <form action={resolveExceptionAction}>
+                          </StatusStamp>
+                        </p>
+                      ) : (
+                        <div className="grid content-start gap-4 border-t pt-4 lg:border-t-0 lg:border-s lg:ps-5 lg:pt-0">
+                          {item.bookingId === null ? null : (
+                            <form action={requestRefundAction}>
                               <input type="hidden" name="locale" value={locale} />
                               <input
                                 type="hidden"
-                                name="exceptionId"
-                                value={item.exceptionId}
+                                name="bookingId"
+                                value={item.bookingId}
                               />
-                              <label htmlFor={`note-${item.exceptionId}`}>
+                              <Button type="submit" variant="outline" block>
+                                {message("paymentsRetryRefund")}
+                              </Button>
+                            </form>
+                          )}
+                          <form action={resolveExceptionAction} className="grid gap-4">
+                            <input type="hidden" name="locale" value={locale} />
+                            <input
+                              type="hidden"
+                              name="exceptionId"
+                              value={item.exceptionId}
+                            />
+                            <Field>
+                              <Label htmlFor={`resolution-${item.exceptionId}`}>
+                                {message("paymentsResolutionLabel")}
+                              </Label>
+                              <Select defaultValue="reconciled" name="resolution">
+                                <SelectTrigger id={`resolution-${item.exceptionId}`}>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {resolutions.map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                      {workspaceStatus(locale, option)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </Field>
+                            <Field>
+                              <Label htmlFor={`note-${item.exceptionId}`}>
                                 {message("paymentsNoteLabel")}
-                              </label>
-                              <textarea
+                              </Label>
+                              <Textarea
                                 id={`note-${item.exceptionId}`}
                                 maxLength={500}
                                 name="note"
                                 rows={2}
                               />
-                              <label htmlFor={`resolution-${item.exceptionId}`}>
-                                {message("paymentsResolutionLabel")}
-                              </label>
-                              <select
-                                defaultValue="reconciled"
-                                id={`resolution-${item.exceptionId}`}
-                                name="resolution"
-                              >
-                                {resolutions.map((option) => (
-                                  <option key={option} value={option}>
-                                    {option}
-                                  </option>
-                                ))}
-                              </select>
-                              <Button type="submit">
-                                {message("paymentsResolveAction")}
-                              </Button>
-                            </form>
-                          </>
-                        )}
-                      </article>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                            </Field>
+                            <Button type="submit" block>
+                              {message("paymentsResolveAction")}
+                            </Button>
+                          </form>
+                        </div>
+                      )}
+                    </article>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
 
-            <p>
-              <Link href={`/${locale}/communications`}>
-                {message("navCommunications")}
-              </Link>
-            </p>
-
-            <section aria-labelledby="payments-refunds-title">
-              <h2 id="payments-refunds-title">{message("paymentsRefundsTitle")}</h2>
-              {loaded.refunds === null ? (
-                <p role="alert">{message("paymentsUnavailable")}</p>
-              ) : loaded.refunds.length === 0 ? (
-                <p>{message("paymentsRefundsEmpty")}</p>
-              ) : (
-                <ul aria-label={message("paymentsRefundsTitle")}>
+          <Section id="payments-refunds" title={message("paymentsRefundsTitle")}>
+            {loaded.refunds === null ? (
+              <Alert tone="danger">
+                <AlertDescription className="text-foreground">
+                  {message("paymentsUnavailable")}
+                </AlertDescription>
+              </Alert>
+            ) : loaded.refunds.length === 0 ? (
+              <EmptyState
+                icon={<ReceiptText aria-hidden="true" />}
+                title={message("paymentsRefundsEmpty")}
+              />
+            ) : (
+              <>
+                <TableFrame>
+                  <Table label={message("paymentsRefundsTitle")}>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{workspaceMessage(locale, "reference")}</TableHead>
+                        <TableHead className="text-end">
+                          {message("paymentsAmountLabel")}
+                        </TableHead>
+                        <TableHead>{message("bookingsStatusLabel")}</TableHead>
+                        <TableHead>
+                          {workspaceMessage(locale, "refundAttempts")}
+                        </TableHead>
+                        <TableHead>
+                          {workspaceMessage(locale, "refundFailure")}
+                        </TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loaded.refunds.map((refund) => (
+                        <TableRow key={refund.refundId}>
+                          <TableCell>
+                            {refund.publicReference === null ? (
+                              <span className="text-muted-foreground">—</span>
+                            ) : (
+                              <ReferenceCode>{refund.publicReference}</ReferenceCode>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-end whitespace-nowrap">
+                            <Money
+                              minor={refund.amountMinorUnits}
+                              currency={refund.currency}
+                              locale={locale}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <StatusStamp state={stampStateFor(refund.status)}>
+                              {workspaceStatus(locale, refund.status)}
+                            </StatusStamp>
+                          </TableCell>
+                          <TableCell>
+                            {refund.attempts === 0
+                              ? null
+                              : countLabel(locale, "attempts", refund.attempts)}
+                          </TableCell>
+                          <TableCell>
+                            {refund.failureCode === null ? null : (
+                              <span dir="ltr" className="font-latin text-xs">
+                                {refund.failureCode}
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableFrame>
+                <RecordCards label={message("paymentsRefundsTitle")}>
                   {loaded.refunds.map((refund) => (
-                    <li key={refund.refundId}>
-                      {formatCurrency(refund.amountMinorUnits, refund.currency, locale)}{" "}
-                      · {workspaceStatus(locale, refund.status)}
-                      {refund.publicReference === null ? null : (
-                        <>
-                          {" "}
-                          · <bdi>{refund.publicReference}</bdi>
-                        </>
-                      )}
-                      {refund.attempts === 0
-                        ? null
-                        : ` · ${refund.attempts} ${message("paymentsAttempts")}`}
-                      {refund.failureCode === null ? null : (
-                        <>
-                          {" "}
-                          · <span dir="ltr">{refund.failureCode}</span>
-                        </>
-                      )}
-                    </li>
+                    <RecordCard
+                      key={refund.refundId}
+                      title={
+                        refund.publicReference === null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <ReferenceCode>{refund.publicReference}</ReferenceCode>
+                        )
+                      }
+                      aside={
+                        <StatusStamp state={stampStateFor(refund.status)}>
+                          {workspaceStatus(locale, refund.status)}
+                        </StatusStamp>
+                      }
+                      facts={[
+                        {
+                          key: "amount",
+                          label: message("paymentsAmountLabel"),
+                          value: (
+                            <Money
+                              minor={refund.amountMinorUnits}
+                              currency={refund.currency}
+                              locale={locale}
+                            />
+                          ),
+                        },
+                        {
+                          key: "attempts",
+                          label: workspaceMessage(locale, "refundAttempts"),
+                          value:
+                            refund.attempts === 0
+                              ? "—"
+                              : countLabel(locale, "attempts", refund.attempts),
+                        },
+                        ...(refund.failureCode === null
+                          ? []
+                          : [
+                              {
+                                key: "failure",
+                                label: workspaceMessage(locale, "refundFailure"),
+                                value: (
+                                  <span
+                                    dir="ltr"
+                                    className="font-latin text-xs break-all"
+                                  >
+                                    {refund.failureCode}
+                                  </span>
+                                ),
+                              },
+                            ]),
+                      ]}
+                    />
                   ))}
-                </ul>
-              )}
-            </section>
-          </>
-        )}
-      </Surface>
+                </RecordCards>
+              </>
+            )}
+          </Section>
+        </>
+      )}
     </WorkspaceShell>
   );
 }

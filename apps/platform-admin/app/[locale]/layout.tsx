@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDirection, isLocale, type Locale } from "@wlbp/i18n";
+import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
+import { cookies } from "next/headers";
 import { say, shellCopy } from "../_lib/copy";
 import "../globals.css";
 
@@ -32,8 +34,14 @@ export async function generateMetadata({
 
 export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {
   const locale = requireLocale((await params).locale);
+  const theme = resolveTheme((await cookies()).get(THEME_COOKIE)?.value, "light", true);
   return (
-    <html lang={locale} dir={getDirection(locale)}>
+    <html
+      lang={locale}
+      dir={getDirection(locale)}
+      className={theme === "dark" ? "dark" : undefined}
+      suppressHydrationWarning
+    >
       <body>{children}</body>
     </html>
   );

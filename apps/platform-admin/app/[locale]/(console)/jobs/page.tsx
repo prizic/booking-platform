@@ -1,5 +1,5 @@
 import { formatNumber } from "@wlbp/i18n";
-import Link from "next/link";
+import { TextLink } from "../../../_lib/ui/text";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
@@ -61,6 +61,7 @@ export default async function JobsPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
@@ -106,24 +107,24 @@ export default async function JobsPage({
             rows={result.data.map((row) => ({
               key: row.job_id,
               cells: [
-                <Link key="k" href={`${path}/${row.job_id}`}>
+                <TextLink key="k" href={`${path}/${row.job_id}`}>
                   {kindLabel(row.kind)}
-                </Link>,
+                </TextLink>,
                 <>
                   <StatusBadge
                     locale={locale}
                     status={row.needs_approval ? "awaiting_approval" : row.status}
                   />
                   {row.last_error_code ? (
-                    <span className="secondary">
+                    <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                       <bdi>{row.last_error_code}</bdi>
                     </span>
                   ) : null}
                 </>,
                 row.tenant_id ? (
-                  <Link key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
+                  <TextLink key="t" href={`/${locale}/tenants/${row.tenant_id}`}>
                     <bdi>{row.tenant_name}</bdi>
-                  </Link>
+                  </TextLink>
                 ) : (
                   <Unknown key="t" locale={locale} kind="none" />
                 ),

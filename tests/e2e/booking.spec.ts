@@ -13,6 +13,7 @@ import {
 } from "@playwright/test";
 import {
   bookingQuery,
+  chooseDate,
   clientOrigin,
   confirmed,
   fillDetails,
@@ -474,9 +475,7 @@ test.describe("live database booking journey", () => {
     await page.goto(
       `${clientOrigin}/en/book?service=${liveServiceId}&location=${liveLocationId}`,
     );
-    const dateInput = page.locator('input[name="date"]');
-    await expect(dateInput).toBeEnabled();
-    await dateInput.fill(futureDate(daysFromNow));
+    await chooseDate(page, futureDate(daysFromNow));
     const availability = page.waitForResponse(
       (response) => new URL(response.url()).pathname === "/api/availability",
     );

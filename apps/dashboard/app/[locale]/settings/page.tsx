@@ -1,5 +1,13 @@
 import type { Locale } from "@wlbp/i18n";
-import { Badge, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  EmptyState,
+  Facts,
+  PageHeader,
+  Section,
+  StatusStamp,
+} from "@wlbp/ui-foundation";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type { TenantConfigurationV1 } from "../../_lib/dashboard-access";
@@ -7,6 +15,7 @@ import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { SettingsForm } from "./settings-form";
 import { positiveSettingsResults, settingsResultKeys } from "./results";
+import { featureLabel } from "./feature-label";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,38 +54,55 @@ export default async function SettingsPage({
 
   return (
     <WorkspaceShell current="settings" labelledBy="settings-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="settings-title">
-        <h1 id="settings-title">{message("settingsTitle")}</h1>
-        <p>{message("settingsSummary")}</p>
+      <div className="grid gap-10">
+        <PageHeader
+          titleId="settings-title"
+          title={message("settingsTitle")}
+          description={message("settingsSummary")}
+        />
         {resultKey === null ? null : (
-          <StatusMessage
+          <Alert
             tone={positiveSettingsResults.has(result ?? "") ? "positive" : "warning"}
           >
-            {message(resultKey)}
-          </StatusMessage>
+            <AlertDescription className="text-foreground">
+              {message(resultKey)}
+            </AlertDescription>
+          </Alert>
         )}
 
         {configuration === null ? (
-          <p>{message("settingsUnavailable")}</p>
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {message("settingsUnavailable")}
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
-            <section aria-labelledby="settings-plan-title">
-              <h2 id="settings-plan-title">{message("settingsPlanTitle")}</h2>
-              {/* Read-only on purpose. What the plan grants is not something
-                  anybody inside the tenant can edit, and the interface should
-                  not imply otherwise by offering a control. */}
-              <p>{message("settingsPlanHint")}</p>
+            {/* Read-only on purpose. What the plan grants is not something
+                anybody inside the tenant can edit, and the interface should
+                not imply otherwise by offering a control. */}
+            <Section
+              id="settings-plan"
+              title={message("settingsPlanTitle")}
+              description={message("settingsPlanHint")}
+            >
               {entitlementKeys.length === 0 ? (
-                <p>{message("settingsPlanEmpty")}</p>
+                <EmptyState title={message("settingsPlanEmpty")} />
               ) : (
-                <ul aria-label={message("settingsPlanTitle")}>
+                <ul
+                  aria-label={message("settingsPlanTitle")}
+                  className="grid divide-y rounded-lg border bg-card"
+                >
                   {entitlementKeys.map((key) => (
-                    <li key={key}>
-                      <bdi>{featureLabel(locale, key)}</bdi>{" "}
-                      <Badge
-                        tone={
+                    <li
+                      key={key}
+                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"
+                    >
+                      <bdi className="font-medium">{featureLabel(locale, key)}</bdi>
+                      <StatusStamp
+                        state={
                           configuration.entitlements[key] === true
-                            ? "positive"
+                            ? "confirmed"
                             : "neutral"
                         }
                       >
@@ -85,40 +111,48 @@ export default async function SettingsPage({
                             ? "settingsFeatureGranted"
                             : "settingsFeatureUnavailable",
                         )}
-                      </Badge>
+                      </StatusStamp>
                     </li>
                   ))}
                 </ul>
               )}
-            </section>
+            </Section>
 
-            <section aria-labelledby="settings-edit-title">
-              <h2 id="settings-edit-title">{message("settingsEditTitle")}</h2>
-              <p>{message("settingsEditHint")}</p>
+            <Section
+              id="settings-edit"
+              title={message("settingsEditTitle")}
+              description={message("settingsEditHint")}
+            >
               <SettingsForm locale={locale} configuration={configuration} />
-            </section>
+            </Section>
 
-            <section aria-labelledby="settings-versions-title">
-              <h2 id="settings-versions-title">{message("settingsVersionsTitle")}</h2>
-              <dl>
-                <div>
-                  <dt>{message("settingsConfigVersion")}</dt>
-                  <dd dir="ltr">{configuration.configVersion}</dd>
-                </div>
-                <div>
-                  <dt>{message("settingsFeatureVersion")}</dt>
-                  <dd dir="ltr">{configuration.featureVersion}</dd>
-                </div>
-                <div>
-                  <dt>{message("settingsDefaultLocale")}</dt>
-                  <dd dir="ltr">{configuration.defaultLocale}</dd>
-                </div>
-              </dl>
-            </section>
+            <Section id="settings-versions" title={message("settingsVersionsTitle")}>
+              <div className="rounded-lg border bg-card p-5">
+                <Facts
+                  columns={3}
+                  items={[
+                    {
+                      key: "config",
+                      label: message("settingsConfigVersion"),
+                      value: <bdi dir="ltr">{configuration.configVersion}</bdi>,
+                    },
+                    {
+                      key: "feature",
+                      label: message("settingsFeatureVersion"),
+                      value: <bdi dir="ltr">{configuration.featureVersion}</bdi>,
+                    },
+                    {
+                      key: "locale",
+                      label: message("settingsDefaultLocale"),
+                      value: <bdi dir="ltr">{configuration.defaultLocale}</bdi>,
+                    },
+                  ]}
+                />
+              </div>
+            </Section>
           </>
         )}
-      </Surface>
+      </div>
     </WorkspaceShell>
   );
 }
-import { featureLabel } from "./feature-label";

@@ -1,7 +1,14 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { Button, ErrorSummary, StatusMessage } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  FieldSet,
+  cn,
+} from "@wlbp/ui-foundation";
 import { usePathname, useRouter } from "next/navigation";
 import { useActionState, useEffect, useRef, type ReactNode } from "react";
 import type { ActionResult } from "../operator-action";
@@ -30,6 +37,10 @@ function download({ filename, body }: { filename: string; body: string }) {
  * One form behaviour for every mutation: pending state disables input, errors
  * are announced in text, a step-up challenge re-submits the same form, and a
  * success either navigates, downloads, or announces itself.
+ *
+ * `compact` renders a single small action (e.g. inside a table row);
+ * `className="inline-form"` from earlier callers means the same thing.
+ * `secondaryAction` sits beside the submit button (a dialog's Cancel).
  */
 export function OperatorForm({
   locale,
@@ -41,6 +52,8 @@ export function OperatorForm({
   onSuccess,
   submitDisabled,
   className,
+  compact,
+  secondaryAction,
 }: {
   locale: Locale;
   action: FormAction;
@@ -51,6 +64,8 @@ export function OperatorForm({
   onSuccess?: () => void;
   submitDisabled?: boolean;
   className?: string;
+  compact?: boolean;
+  secondaryAction?: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, initial);
   const form = useRef<HTMLFormElement>(null);
@@ -58,6 +73,7 @@ export function OperatorForm({
   const router = useRouter();
   const pathname = usePathname();
   const announce = useActionFeedback()?.announce;
+  const inline = compact ?? className === "inline-form";
 
   useEffect(() => {
     if (state === handled.current || state.kind !== "success") return;
@@ -70,38 +86,56 @@ export function OperatorForm({
   }, [state, router, onSuccess, announce, pathname, successMessage]);
 
   return (
-    <>
+    <div className={cn("grid gap-4", inline && "gap-2")}>
       {state.kind === "error" ? (
-        <ErrorSummary title={say(locale, formCopy.errorTitle)}>
-          <p>{copyFor(errorCopy, state.code, locale)}</p>
-          {state.reasons?.length ? (
-            <ul>
-              {state.reasons.map((reason) => (
-                <li key={reason}>
-                  {copyFor(reasonCopy, reason, locale)}{" "}
-                  <bdi className="secondary">{reason}</bdi>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </ErrorSummary>
+        <Alert tone="danger">
+          <AlertTitle>{say(locale, formCopy.errorTitle)}</AlertTitle>
+          <AlertDescription>
+            <p>{copyFor(errorCopy, state.code, locale)}</p>
+            {state.reasons?.length ? (
+              <ul className="mt-1 grid list-disc gap-1 ps-5">
+                {state.reasons.map((reason) => (
+                  <li key={reason}>
+                    {copyFor(reasonCopy, reason, locale)}{" "}
+                    <bdi className="font-latin text-xs text-muted-foreground">
+                      {reason}
+                    </bdi>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </AlertDescription>
+        </Alert>
       ) : null}
       {state.kind === "success" && !state.href && !onSuccess && !announce ? (
-        <StatusMessage tone="positive">{successMessage}</StatusMessage>
+        <Alert tone="positive">{successMessage}</Alert>
       ) : null}
-      <form ref={form} action={formAction} className={className}>
+      <form
+        ref={form}
+        action={formAction}
+        className={cn(
+          "grid gap-5",
+          inline && "gap-0",
+          className !== "inline-form" && className,
+        )}
+      >
         <input type="hidden" name="locale" value={locale} />
-        <fieldset disabled={pending}>{children}</fieldset>
-        <div className="form-actions">
+        {children ? (
+          <FieldSet disabled={pending} className={cn(inline && "contents")}>
+            {children}
+          </FieldSet>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
           <Button
             type="submit"
             loading={pending}
             loadingLabel={say(locale, formCopy.working)}
             disabled={submitDisabled ?? false}
-            className={danger ? "wlbp-button--danger" : ""}
+            variant={danger ? "destructive" : inline ? "outline" : "default"}
           >
             {submit}
           </Button>
+          {secondaryAction}
         </div>
       </form>
       {state.kind === "step-up" && !pending ? (
@@ -110,6 +144,6 @@ export function OperatorForm({
           onVerified={() => form.current?.requestSubmit()}
         />
       ) : null}
-    </>
+    </div>
   );
 }

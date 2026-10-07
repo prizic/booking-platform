@@ -1,6 +1,13 @@
 "use client";
 
-import { Button, ErrorSummary, TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  Skeleton,
+  TextField,
+} from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
@@ -10,6 +17,7 @@ import {
   getPlatformAdminBrowserClient,
   verifyMfaCode,
 } from "../../_lib/supabase-browser";
+import { AuthFrame } from "../../_lib/ui/auth-frame";
 
 type MfaEnrollPageProps = { params: Promise<{ locale: Locale }> };
 
@@ -85,47 +93,70 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
   }
 
   return (
-    <main className="auth-shell">
-      <section className="auth-card" aria-labelledby="mfa-enroll-title">
-        <h1 id="mfa-enroll-title">{say(locale, authCopy.enrollTitle)}</h1>
-        <p>{say(locale, authCopy.enrollBody)}</p>
-        {error === null ? null : (
-          <ErrorSummary title={say(locale, authCopy.errorTitle)}>{error}</ErrorSummary>
-        )}
-        {factor === null && error === null ? (
-          <p role="status">{say(locale, authCopy.preparing)}</p>
-        ) : null}
-        {factor === null ? null : (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
-            <img
-              alt={say(locale, authCopy.enrollQr)}
-              height={200}
-              src={factor.qrCode}
-              width={200}
-            />
-            <p>
-              <strong>{say(locale, authCopy.enrollKey)}:</strong>{" "}
-              <code dir="ltr">{factor.secret}</code>
-            </p>
-            <form onSubmit={handleVerify}>
-              <TextField
-                autoComplete="one-time-code"
-                id="code"
-                inputMode="numeric"
-                label={say(locale, authCopy.code)}
-                maxLength={6}
-                minLength={6}
-                name="code"
-                required
+    <AuthFrame
+      locale={locale}
+      titleId="mfa-enroll-title"
+      title={say(locale, authCopy.enrollTitle)}
+      description={say(locale, authCopy.enrollBody)}
+    >
+      {error === null ? null : (
+        <Alert tone="danger">
+          <AlertTitle>{say(locale, authCopy.errorTitle)}</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      {factor === null && error === null ? (
+        <div className="grid justify-items-center gap-3">
+          <Skeleton className="size-[200px]" />
+          <p role="status" className="text-sm text-muted-foreground">
+            {say(locale, authCopy.preparing)}
+          </p>
+        </div>
+      ) : null}
+      {factor === null ? null : (
+        <>
+          <div className="grid justify-items-center gap-4">
+            {/* A QR code needs a light quiet zone to scan, in the dark theme too. */}
+            <div className="rounded-lg border bg-white p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- next/image cannot optimize a dynamically generated data-URI SVG */}
+              <img
+                alt={say(locale, authCopy.enrollQr)}
+                height={200}
+                src={factor.qrCode}
+                width={200}
               />
-              <Button loading={pending} type="submit">
-                {say(locale, authCopy.enrollSubmit)}
-              </Button>
-            </form>
-          </>
-        )}
-      </section>
-    </main>
+            </div>
+            <div className="grid w-full gap-1 text-center">
+              <p className="text-xs font-semibold text-muted-foreground">
+                {say(locale, authCopy.enrollKey)}
+              </p>
+              <code
+                dir="ltr"
+                className="rounded-md bg-muted px-3 py-2 font-latin text-sm font-semibold tracking-[0.12em] break-all select-all"
+              >
+                {factor.secret}
+              </code>
+            </div>
+          </div>
+          <form onSubmit={handleVerify} className="grid gap-5">
+            <TextField
+              autoComplete="one-time-code"
+              id="code"
+              inputMode="numeric"
+              label={say(locale, authCopy.code)}
+              maxLength={6}
+              minLength={6}
+              name="code"
+              required
+              dir="ltr"
+              className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.4em]"
+            />
+            <Button block loading={pending} type="submit">
+              {say(locale, authCopy.enrollSubmit)}
+            </Button>
+          </form>
+        </>
+      )}
+    </AuthFrame>
   );
 }

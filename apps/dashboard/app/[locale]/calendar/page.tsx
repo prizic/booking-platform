@@ -1,14 +1,24 @@
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  EmptyState,
+  PageHeader,
+} from "@wlbp/ui-foundation";
+import { CalendarPlus, CalendarX } from "lucide-react";
 import type { TodayItemV1 } from "../../_lib/dashboard-access";
 import type { OperationalChoices } from "../../_lib/operational-choices";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
-import { DashboardAccessPanel } from "../../_lib/dashboard-access-panel";
 import { getDashboardMessage } from "../../_lib/copy";
 import { calendarRange, civilDate, validCivilDate } from "./calendar-range";
 import { CalendarView, type CalendarMode } from "./calendar-view";
 import { CalendarFilters } from "./calendar-filters";
+import { workspaceMessage } from "../../_lib/workspace-copy";
+import { textLinkClass } from "../../_lib/ui/text-link";
+import { intlLocale } from "../../_lib/booking-display";
 export const dynamic = "force-dynamic";
 export default async function CalendarPage({
   params,
@@ -23,9 +33,10 @@ export default async function CalendarPage({
     getDashboardMessage(locale, key);
   const request = await loadDashboardRequestAccess(locale);
   let body;
+  let canCreate = false;
   const value = (key: string) => (typeof query[key] === "string" ? query[key] : "");
-  if (request.state.kind !== "ready")
-    body = <DashboardAccessPanel locale={locale} state={request.state} />;
+  // The frame already explains a missing session, tenant or configuration.
+  if (request.state.kind !== "ready") body = null;
   else {
     const context = request.state.context;
     const loaded = await (async () => {
@@ -88,6 +99,7 @@ export default async function CalendarPage({
     })();
     if (loaded) {
       const { choices, date, view, timeZone, filters, rows, listQuery } = loaded;
+      canCreate = choices.offers.some((o) => o.canCreate);
       body = (
         <>
           <CalendarFilters
@@ -98,21 +110,26 @@ export default async function CalendarPage({
             timeZone={timeZone}
             filters={filters}
           />
-          <p>
-            <time dateTime={date}>{date}</time> · <bdi>{timeZone}</bdi>
-          </p>
-          {choices.offers.some((o) => o.canCreate) ? (
-            <Link className="wlbp-button" href={`/${locale}/bookings/new`}>
-              {locale === "ar" ? "حجز جديد" : "New booking"}
-            </Link>
-          ) : null}
-          <p>
-            <Link href={`/${locale}/calendar?${listQuery}`}>
+          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+            <span>
+              <time dateTime={date} className="font-semibold text-foreground">
+                {new Intl.DateTimeFormat(intlLocale(locale), {
+                  dateStyle: "full",
+                  timeZone: "UTC",
+                }).format(new Date(`${date}T12:00:00Z`))}
+              </time>{" "}
+              · <bdi>{timeZone}</bdi>
+            </span>
+            <Link className={textLinkClass} href={`/${locale}/calendar?${listQuery}`}>
               {m("calendarListAlternative")}
-            </Link>{" "}
-            · <Link href={`/${locale}/availability`}>{m("navAvailability")}</Link>
+            </Link>
+            <Link className={textLinkClass} href={`/${locale}/availability`}>
+              {m("navAvailability")}
+            </Link>
           </p>
-          {rows.length ? (
+          {/* Day and resource views always draw every lane, even on an
+              empty day; the list and week views state the empty result. */}
+          {rows.length || view === "day" || view === "resource" ? (
             <CalendarView
               locale={locale}
               choices={choices}
@@ -120,22 +137,43 @@ export default async function CalendarPage({
               view={view}
               date={date}
               timeZone={timeZone}
+              filters={filters}
             />
           ) : (
-            <p>{m("calendarEmpty")}</p>
+            <EmptyState
+              icon={<CalendarX aria-hidden="true" />}
+              title={m("calendarEmpty")}
+            />
           )}
         </>
       );
     } else {
-      body = <p role="alert">{m("calendarUnavailable")}</p>;
+      body = (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {m("calendarUnavailable")}
+          </AlertDescription>
+        </Alert>
+      );
     }
   }
   return (
     <WorkspaceShell locale={locale} current="calendar" labelledBy="calendar-title">
-      <header className="dashboard-intro">
-        <h1 id="calendar-title">{m("calendarTitle")}</h1>
-        <p>{m("calendarSummary")}</p>
-      </header>
+      <PageHeader
+        titleId="calendar-title"
+        title={m("calendarTitle")}
+        description={m("calendarSummary")}
+        actions={
+          canCreate ? (
+            <Button asChild>
+              <Link href={`/${locale}/bookings/new`}>
+                <CalendarPlus aria-hidden="true" />
+                {workspaceMessage(locale, "newBooking")}
+              </Link>
+            </Button>
+          ) : null
+        }
+      />
       {body}
     </WorkspaceShell>
   );

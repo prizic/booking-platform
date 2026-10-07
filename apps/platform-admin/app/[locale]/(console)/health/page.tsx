@@ -1,4 +1,4 @@
-import { Badge } from "@wlbp/ui-foundation";
+import { Alert, AlertDescription, Badge, Button, Section } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { healthCopy as c } from "../../../_lib/health-support-copy";
@@ -46,29 +46,36 @@ export default async function HealthPage({
     }),
   ]);
   const p = (path: string) => `/${locale}/${path}`;
+  const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
   return (
-    <>
+    <div className="grid gap-8">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
           <>
-            <Link href={p("jobs?status=queued")}>{say(locale, c.queuedJobs)}</Link>
-            <Link href={p("jobs?status=failed")}>{say(locale, c.failedJobs)}</Link>
-            <Link href={p("provisioning?state=waiting")}>
-              {say(locale, c.waitingRuns)}
-            </Link>
+            <Button asChild variant="outline" size="sm">
+              <Link href={p("jobs?status=queued")}>{say(locale, c.queuedJobs)}</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={p("jobs?status=failed")}>{say(locale, c.failedJobs)}</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={p("provisioning?state=waiting")}>
+                {say(locale, c.waitingRuns)}
+              </Link>
+            </Button>
           </>
         }
       />
-      <p className="notice">{say(locale, c.scope)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.scope)}</AlertDescription>
+      </Alert>
 
-      <section className="section" aria-labelledby="alerts-title">
-        <div className="section-header">
-          <h2 id="alerts-title">{say(locale, c.alerts)}</h2>
-        </div>
+      <Section id="alerts" title={say(locale, c.alerts)}>
         {!alerts.ok ? (
           <UnavailableState locale={locale} code={alerts.code} />
         ) : alerts.data.length === 0 ? (
@@ -103,7 +110,11 @@ export default async function HealthPage({
                   ] ?? overviewCopy.alerts,
                 ),
                 a.tenant_id ? (
-                  <Link key="t" href={p(`tenants/${a.tenant_id}`)}>
+                  <Link
+                    key="t"
+                    href={p(`tenants/${a.tenant_id}`)}
+                    className={linkClass}
+                  >
                     <bdi>{a.tenant_name}</bdi>
                   </Link>
                 ) : (
@@ -124,12 +135,9 @@ export default async function HealthPage({
             }))}
           />
         )}
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="obs-title">
-        <div className="section-header">
-          <h2 id="obs-title">{say(locale, c.observations)}</h2>
-        </div>
+      <Section id="obs" title={say(locale, c.observations)}>
         <FilterBar locale={locale} path={path}>
           <SelectFilter
             name="status"
@@ -172,14 +180,18 @@ export default async function HealthPage({
                 key: `${h.instance_id ?? h.subject_key}:${h.signal}:${index}`,
                 cells: [
                   h.instance_id ? (
-                    <Link key="i" href={p(`instances/${h.instance_id}`)}>
+                    <Link
+                      key="i"
+                      href={p(`instances/${h.instance_id}`)}
+                      className={linkClass}
+                    >
                       {say(locale, c.kinds.instance)}{" "}
                       <bdi>{h.instance_id.slice(0, 8)}</bdi>
                     </Link>
                   ) : (
-                    <>
+                    <span key="i" className="font-medium">
                       {say(locale, c.kinds.integration)} <bdi>{h.subject_key}</bdi>
-                    </>
+                    </span>
                   ),
                   h.tenant_name ? (
                     <bdi key="t">{h.tenant_name}</bdi>
@@ -189,14 +201,14 @@ export default async function HealthPage({
                   <bdi key="s">
                     {h.subject_key} · {h.signal}
                   </bdi>,
-                  <>
+                  <div key="st" className="grid justify-items-start gap-1">
                     <StatusBadge locale={locale} status={h.status} />
                     {h.error_code ? (
-                      <span className="secondary">
-                        <bdi>{h.error_code}</bdi>
-                      </span>
+                      <bdi className="text-xs text-muted-foreground">
+                        {h.error_code}
+                      </bdi>
                     ) : null}
-                  </>,
+                  </div>,
                   <StatusBadge key="f" locale={locale} status={h.freshness} />,
                   <TimeValue
                     key="o"
@@ -217,7 +229,7 @@ export default async function HealthPage({
             />
           </>
         )}
-      </section>
-    </>
+      </Section>
+    </div>
   );
 }

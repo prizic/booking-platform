@@ -1,5 +1,16 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import { TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Badge,
+  Checkbox,
+  Field,
+  FieldDescription,
+  Label,
+  ReferenceCode,
+  Textarea,
+  TextField,
+} from "@wlbp/ui-foundation";
 import { savePlanAction } from "../../../_lib/actions/plans";
 import { commercialCopy } from "../../../_lib/commercial-copy";
 import { fill, say, stateCopy } from "../../../_lib/copy";
@@ -24,6 +35,7 @@ function PlanFields({
   locale: Locale;
   plan?: { key: string; name: string; entitlements: string[]; active: boolean };
 }) {
+  const suffix = plan?.key ?? "new";
   return (
     <>
       <input type="hidden" name="mode" value={plan ? "edit" : "create"} />
@@ -42,27 +54,35 @@ function PlanFields({
         />
       )}
       <TextField
-        id={`plan-name-${plan?.key ?? "new"}`}
+        id={`plan-name-${suffix}`}
         name="name"
         label={say(locale, c.name)}
         defaultValue={plan?.name}
         required
         maxLength={80}
       />
-      <label className="field">
-        <span>{say(locale, c.features)}</span>
-        <textarea
+      <Field>
+        <Label htmlFor={`plan-features-${suffix}`}>{say(locale, c.features)}</Label>
+        <Textarea
+          id={`plan-features-${suffix}`}
           name="features"
           defaultValue={plan?.entitlements.join("\n")}
           rows={6}
           dir="ltr"
+          aria-describedby={`plan-features-${suffix}-hint`}
         />
-        <small>{say(locale, c.featuresHint)}</small>
-      </label>
-      <label className="checkbox">
-        <input type="checkbox" name="active" defaultChecked={plan?.active ?? true} />{" "}
-        {say(locale, c.active)}
-      </label>
+        <FieldDescription id={`plan-features-${suffix}-hint`}>
+          {say(locale, c.featuresHint)}
+        </FieldDescription>
+      </Field>
+      <Field orientation="horizontal">
+        <Checkbox
+          id={`plan-active-${suffix}`}
+          name="active"
+          defaultChecked={plan?.active ?? true}
+        />
+        <Label htmlFor={`plan-active-${suffix}`}>{say(locale, c.active)}</Label>
+      </Field>
     </>
   );
 }
@@ -82,9 +102,10 @@ export default async function PlansPage({
     : [];
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
@@ -104,12 +125,16 @@ export default async function PlansPage({
           ) : null
         }
       />
+      {!admin ? (
+        <Alert>
+          <AlertDescription>{say(locale, stateCopy.roleRequired)}</AlertDescription>
+        </Alert>
+      ) : null}
       {known.length ? (
-        <p className="secondary">
+        <p className="text-sm leading-relaxed text-muted-foreground">
           {fill(locale, c.knownFeatures, { keys: known.join(", ") })}
         </p>
       ) : null}
-      {!admin ? <p className="notice">{say(locale, stateCopy.roleRequired)}</p> : null}
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -130,20 +155,22 @@ export default async function PlansPage({
           rows={result.data.map((plan) => ({
             key: plan.key,
             cells: [
-              <>
-                {plan.name}
-                <span className="secondary">
-                  <bdi>{plan.key}</bdi>
-                </span>
-              </>,
-              <bdi key="f">
+              <div key="n" className="grid gap-0.5">
+                <span className="font-semibold text-foreground">{plan.name}</span>
+                <ReferenceCode className="text-xs font-medium text-muted-foreground">
+                  {plan.key}
+                </ReferenceCode>
+              </div>,
+              <bdi key="f" className="text-muted-foreground">
                 {plan.entitlements.join(", ") || say(locale, stateCopy.none)}
               </bdi>,
               formatNumber(Number(plan.subscriber_count), locale),
               plan.active ? (
                 <StatusBadge key="s" locale={locale} status="active" />
               ) : (
-                say(locale, c.inactive)
+                <Badge key="s" tone="neutral">
+                  {say(locale, c.inactive)}
+                </Badge>
               ),
               <TimeValue key="t" locale={locale} value={plan.created_at} />,
               admin ? (
@@ -166,6 +193,6 @@ export default async function PlansPage({
           }))}
         />
       )}
-    </>
+    </div>
   );
 }

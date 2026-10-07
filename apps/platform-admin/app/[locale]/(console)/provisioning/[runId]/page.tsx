@@ -1,5 +1,6 @@
+import { ReferenceCode } from "@wlbp/ui-foundation";
 import { formatNumber } from "@wlbp/i18n";
-import Link from "next/link";
+import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
 import {
   activateRunAction,
@@ -114,8 +115,10 @@ export default async function RunPage({
     <>
       <PageHeader
         locale={locale}
+        timesInUtc
         title={run.slug}
         breadcrumbs={[...crumbs, [run.slug]]}
+        meta={<ReferenceCode>{run.id}</ReferenceCode>}
         actions={
           <>
             <StatusBadge
@@ -164,7 +167,7 @@ export default async function RunPage({
         }
       />
 
-      <section className="section" aria-labelledby="run-facts">
+      <section className="grid gap-4" aria-labelledby="run-facts">
         <h2 id="run-facts" className="sr-only">
           {say(locale, c.run)}
         </h2>
@@ -172,9 +175,9 @@ export default async function RunPage({
           items={[
             [
               say(locale, c.tenant),
-              <Link key="t" href={`/${locale}/tenants/${run.tenant_id}`}>
+              <TextLink key="t" href={`/${locale}/tenants/${run.tenant_id}`}>
                 <bdi>{run.tenant_name}</bdi>
-              </Link>,
+              </TextLink>,
             ],
             [
               say(locale, c.waitingReason),
@@ -216,9 +219,11 @@ export default async function RunPage({
         />
       </section>
 
-      <section className="section" aria-labelledby="steps-title">
-        <div className="section-header">
-          <h2 id="steps-title">{say(locale, c.steps)}</h2>
+      <section className="grid gap-4" aria-labelledby="steps-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="steps-title" className="text-lg leading-snug font-semibold">
+            {say(locale, c.steps)}
+          </h2>
         </div>
         <DataTable
           id="steps-table"
@@ -238,7 +243,7 @@ export default async function RunPage({
             cells: [
               <>
                 {stepName(s.step_key)}
-                <span className="secondary">
+                <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                   <bdi>{s.step_key}</bdi>
                   {s.external_id ? (
                     <>
@@ -256,19 +261,19 @@ export default async function RunPage({
               <>
                 <StatusBadge locale={locale} status={s.status} />
                 {s.waiting_reason ? (
-                  <span className="secondary">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                     {copyFor(reasonCopy, `waiting_${s.waiting_reason}`, locale)}
                   </span>
                 ) : null}
                 {s.error_code ? (
-                  <span className="secondary">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                     <bdi>{s.error_code}</bdi>
                   </span>
                 ) : null}
                 {s.status === "pending" &&
                 s.provider &&
                 externalProviders.has(s.provider) ? (
-                  <span className="secondary">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                     {fill(locale, c.externalWorker, {
                       worker: say(
                         locale,
@@ -289,21 +294,26 @@ export default async function RunPage({
         />
       </section>
 
-      <section className="section" aria-labelledby="timeline-title">
-        <div className="section-header">
-          <h2 id="timeline-title">{say(locale, c.timeline)}</h2>
+      <section className="grid gap-4" aria-labelledby="timeline-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <h2 id="timeline-title" className="text-lg leading-snug font-semibold">
+            {say(locale, c.timeline)}
+          </h2>
         </div>
-        <ol className="timeline">
+        <ol className="divide-y rounded-lg border bg-card">
           {run.timeline.map((e, index) => (
-            <li key={`${e.at}:${index}`}>
+            <li
+              key={`${e.at}:${index}`}
+              className="grid gap-1.5 px-4 py-3 text-sm md:grid-cols-[13rem_minmax(0,1fr)] md:gap-4"
+            >
               <TimeValue locale={locale} value={e.at} />
-              <div>
+              <div className="min-w-0 leading-relaxed">
                 <strong>{copyFor(statusCopy, e.event, locale)}</strong>{" "}
                 <bdi>{e.event}</bdi>
                 {e.step_key ? <> · {stepName(e.step_key)}</> : null}
                 {e.attempt !== null ? <> · #{formatNumber(e.attempt, locale)}</> : null}
                 {e.error_code ? (
-                  <span className="secondary">
+                  <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
                     <bdi>{e.error_code}</bdi>
                   </span>
                 ) : null}

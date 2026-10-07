@@ -193,9 +193,60 @@ export async function stubDepositCheckout(
   );
 }
 
+/**
+ * Picks a day in the design-system date picker the way a customer does: open
+ * the calendar, page month by month to the target, and take the day. The
+ * picker submits the same YYYY-MM-DD string under `name="date"`.
+ */
+export async function chooseDate(
+  page: Page,
+  isoDate: string,
+  label: RegExp = /^(starting date|تاريخ البدء)$/iu,
+) {
+  const trigger = page.getByRole("button", { name: label });
+  await expect(trigger).toBeEnabled();
+  await trigger.click();
+  await expect(page.getByRole("grid")).toBeVisible();
+  // The Arabic grid uses Arabic-Indic numerals, its day keys included.
+  const day = page.locator(
+    [isoDate, arabicDigits(isoDate)]
+      .map((key) => `[data-day="${key}"]:not([data-outside]) button`)
+      .join(", "),
+  );
+  for (let attempt = 0; attempt < 600 && (await day.count()) === 0; attempt += 1) {
+    const shown = latinDigits(
+      (await page
+        .locator("[data-day]:not([data-outside])")
+        .first()
+        .getAttribute("data-day")) ?? isoDate,
+    );
+    // Page by year while more than a year away, then by month.
+    const months = monthIndex(isoDate) - monthIndex(shown);
+    const key = months > 0 ? "PageDown" : "PageUp";
+    await page.keyboard.press(Math.abs(months) >= 12 ? `Shift+${key}` : key);
+  }
+  await day.click();
+  await expect(page.getByRole("grid")).toBeHidden();
+  await expect(page.locator('input[name="date"]')).toHaveValue(isoDate);
+}
+
+function arabicDigits(value: string): string {
+  return value.replace(/[0-9]/gu, (digit) =>
+    String.fromCharCode(0x0660 + Number(digit)),
+  );
+}
+
+function latinDigits(value: string): string {
+  return value.replace(/[٠-٩]/gu, (digit) => String(digit.charCodeAt(0) - 0x0660));
+}
+
+function monthIndex(isoDate: string): number {
+  return Number(isoDate.slice(0, 4)) * 12 + Number(isoDate.slice(5, 7));
+}
+
 export async function reachDetailsStep(page: Page, locale: "en" | "ar") {
   await page.goto(`${clientOrigin}/${locale}/book${bookingQuery}`);
-  await page.locator('input[name="date"]').fill("2035-09-24");
+  await chooseDate(page, "2035-09-24");
   await page.getByRole("button", { name: /find times|البحث عن أوقات/iu }).click();
   await page
     .getByRole("button", { name: /^(select|اختيار)$/iu })

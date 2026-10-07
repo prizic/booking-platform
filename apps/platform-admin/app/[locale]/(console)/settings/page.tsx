@@ -1,5 +1,17 @@
 import type { Locale } from "@wlbp/i18n";
-import { TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Checkbox,
+  DateTimePicker,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  Label,
+  Section,
+  Textarea,
+  TextField,
+} from "@wlbp/ui-foundation";
 import Link from "next/link";
 import {
   requestIntegrationCheckAction,
@@ -7,7 +19,7 @@ import {
   saveReferencesAction,
 } from "../../../_lib/actions/settings";
 import { settingsCopy as c } from "../../../_lib/admin-copy";
-import { say, stateCopy } from "../../../_lib/copy";
+import { fill, formCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator, type RpcRow } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
@@ -30,7 +42,10 @@ const kinds = [
   "kill_switch",
 ] as const;
 
+const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
+
 function FlagFields({ locale, flag }: { locale: Locale; flag?: Flag }) {
+  const id = (field: string) => `flag-${flag?.key ?? "new"}-${field}`;
   return (
     <>
       {flag ? (
@@ -51,48 +66,64 @@ function FlagFields({ locale, flag }: { locale: Locale; flag?: Flag }) {
         value={flag?.kind ?? "incident_banner"}
         options={kinds.map((k) => [k, say(locale, c.kinds[k])] as const)}
       />
-      <label className="checkbox">
-        <input type="checkbox" name="enabled" defaultChecked={flag?.enabled ?? false} />{" "}
-        {say(locale, c.enabled)}
-      </label>
-      <label className="field">
-        <span>{say(locale, c.messageEn)}</span>
-        <textarea
+      <Field orientation="horizontal">
+        <Checkbox
+          id={id("enabled")}
+          name="enabled"
+          defaultChecked={flag?.enabled ?? false}
+        />
+        <Label htmlFor={id("enabled")}>{say(locale, c.enabled)}</Label>
+      </Field>
+      <Field>
+        <Label htmlFor={id("message-en")}>{say(locale, c.messageEn)}</Label>
+        <Textarea
+          id={id("message-en")}
           name="messageEn"
           lang="en"
           dir="ltr"
           maxLength={500}
           defaultValue={flag?.message_en ?? ""}
         />
-      </label>
-      <label className="field">
-        <span>{say(locale, c.messageAr)}</span>
-        <textarea
+      </Field>
+      <Field>
+        <Label htmlFor={id("message-ar")}>{say(locale, c.messageAr)}</Label>
+        <Textarea
+          id={id("message-ar")}
           name="messageAr"
           lang="ar"
           dir="rtl"
           maxLength={500}
           defaultValue={flag?.message_ar ?? ""}
         />
-      </label>
-      <div className="form-grid">
-        <label className="field">
-          <span>{say(locale, c.startsAt)}</span>
-          <input
-            type="datetime-local"
+      </Field>
+      <FieldGroup columns={2}>
+        <Field>
+          <Label htmlFor={id("starts")}>{say(locale, c.startsAt)}</Label>
+          <DateTimePicker
+            id={id("starts")}
             name="startsAt"
-            defaultValue={flag?.starts_at?.slice(0, 16)}
+            locale={locale}
+            datePlaceholder={say(locale, formCopy.pickDate)}
+            timePlaceholder={say(locale, formCopy.pickTime)}
+            timeLabel={fill(locale, formCopy.timeOf, {
+              field: say(locale, c.startsAt),
+            })}
+            {...(flag?.starts_at ? { defaultValue: flag.starts_at.slice(0, 16) } : {})}
           />
-        </label>
-        <label className="field">
-          <span>{say(locale, c.endsAt)}</span>
-          <input
-            type="datetime-local"
+        </Field>
+        <Field>
+          <Label htmlFor={id("ends")}>{say(locale, c.endsAt)}</Label>
+          <DateTimePicker
+            id={id("ends")}
             name="endsAt"
-            defaultValue={flag?.ends_at?.slice(0, 16)}
+            locale={locale}
+            datePlaceholder={say(locale, formCopy.pickDate)}
+            timePlaceholder={say(locale, formCopy.pickTime)}
+            timeLabel={fill(locale, formCopy.timeOf, { field: say(locale, c.endsAt) })}
+            {...(flag?.ends_at ? { defaultValue: flag.ends_at.slice(0, 16) } : {})}
           />
-        </label>
-      </div>
+        </Field>
+      </FieldGroup>
     </>
   );
 }
@@ -113,18 +144,24 @@ export default async function SettingsPage({
   const canQueue = atLeast(operator.role, "operator");
 
   return (
-    <>
+    <div className="grid gap-8">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
-      {!admin ? <p className="notice">{say(locale, stateCopy.roleRequired)}</p> : null}
+      {!admin ? (
+        <Alert>
+          <AlertDescription>{say(locale, stateCopy.roleRequired)}</AlertDescription>
+        </Alert>
+      ) : null}
 
-      <section className="section" aria-labelledby="flags-title">
-        <div className="section-header">
-          <h2 id="flags-title">{say(locale, c.flags)}</h2>
-          {admin ? (
+      <Section
+        id="flags"
+        title={say(locale, c.flags)}
+        actions={
+          admin ? (
             <ActionDialog
               locale={locale}
               action={saveFlagAction}
@@ -137,8 +174,9 @@ export default async function SettingsPage({
             >
               <FlagFields locale={locale} />
             </ActionDialog>
-          ) : null}
-        </div>
+          ) : null
+        }
+      >
         {!flags.ok ? (
           <UnavailableState locale={locale} code={flags.code} />
         ) : flags.data.length === 0 ? (
@@ -160,29 +198,31 @@ export default async function SettingsPage({
             rows={flags.data.map((flag) => ({
               key: flag.key,
               cells: [
-                <bdi key="k">{flag.key}</bdi>,
+                <bdi key="k" className="font-semibold">
+                  {flag.key}
+                </bdi>,
                 say(
                   locale,
                   c.kinds[flag.kind as keyof typeof c.kinds] ?? c.kinds.feature,
                 ),
                 say(locale, flag.enabled ? stateCopy.yes : stateCopy.no),
                 flag.message_en ? (
-                  <>
+                  <div key="m" className="grid gap-0.5">
                     <span lang="en" dir="ltr">
                       {flag.message_en}
                     </span>
-                    <span className="secondary" lang="ar" dir="rtl">
+                    <span className="text-xs text-muted-foreground" lang="ar" dir="rtl">
                       {flag.message_ar}
                     </span>
-                  </>
+                  </div>
                 ) : (
-                  <Unknown locale={locale} kind="none" />
+                  <Unknown key="m" locale={locale} kind="none" />
                 ),
                 <TimeValue key="e" locale={locale} value={flag.ends_at} empty="none" />,
-                <>
-                  <bdi>{flag.updated_by_email ?? "—"}</bdi>{" "}
+                <div key="u" className="grid gap-0.5">
+                  <bdi>{flag.updated_by_email ?? "—"}</bdi>
                   <TimeValue locale={locale} value={flag.updated_at} />
-                </>,
+                </div>,
                 admin ? (
                   <ActionDialog
                     key="x"
@@ -203,13 +243,12 @@ export default async function SettingsPage({
             }))}
           />
         )}
-      </section>
+      </Section>
 
-      <section className="section" aria-labelledby="integrations-title">
-        <div className="section-header">
-          <h2 id="integrations-title">{say(locale, c.integrations)}</h2>
-        </div>
-        <p className="notice">{say(locale, c.integrationsNote)}</p>
+      <Section id="integrations" title={say(locale, c.integrations)}>
+        <Alert>
+          <AlertDescription>{say(locale, c.integrationsNote)}</AlertDescription>
+        </Alert>
         {!integrations.ok ? (
           <UnavailableState locale={locale} code={integrations.code} />
         ) : (
@@ -228,31 +267,38 @@ export default async function SettingsPage({
             rows={integrations.data.map((i) => ({
               key: i.provider,
               cells: [
-                <bdi key="p">{i.provider}</bdi>,
-                <>
+                <bdi key="p" className="font-semibold">
+                  {i.provider}
+                </bdi>,
+                <div key="s" className="grid justify-items-start gap-1">
                   <StatusBadge locale={locale} status={i.status} />
                   {i.status !== "verified" ? (
-                    <span className="secondary">{say(locale, c.remaining)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {say(locale, c.remaining)}
+                    </span>
                   ) : null}
-                </>,
-                <bdi key="r">
+                </div>,
+                <bdi key="r" className="text-muted-foreground">
                   {i.secret_references.join(", ") || say(locale, stateCopy.none)}
                 </bdi>,
                 i.last_check_at ? (
-                  <>
-                    <TimeValue locale={locale} value={i.last_check_at} />{" "}
-                    <bdi>
+                  <div key="l" className="grid gap-0.5">
+                    <TimeValue locale={locale} value={i.last_check_at} />
+                    <bdi className="text-xs text-muted-foreground">
                       {i.last_check_outcome}
                       {i.last_check_error_code ? ` · ${i.last_check_error_code}` : ""}
                     </bdi>
-                  </>
+                  </div>
                 ) : (
-                  <Unknown locale={locale} kind="never" />
+                  <Unknown key="l" locale={locale} kind="never" />
                 ),
                 <TimeValue key="v" locale={locale} value={i.verified_at} />,
-                <div key="a" className="page-actions">
+                <div key="a" className="flex flex-wrap items-center gap-2">
                   {i.pending_check_job_id ? (
-                    <Link href={`/${locale}/jobs/${i.pending_check_job_id}`}>
+                    <Link
+                      href={`/${locale}/jobs/${i.pending_check_job_id}`}
+                      className={linkClass}
+                    >
                       {say(locale, c.checkPending)}
                     </Link>
                   ) : canQueue ? (
@@ -261,7 +307,7 @@ export default async function SettingsPage({
                       action={requestIntegrationCheckAction}
                       submit={say(locale, c.check)}
                       successMessage={say(locale, c.checkQueued)}
-                      className="inline-form"
+                      className="flex items-center"
                     >
                       <input type="hidden" name="provider" value={i.provider} />
                     </OperatorForm>
@@ -277,16 +323,22 @@ export default async function SettingsPage({
                       successMessage={say(locale, c.referencesSaved)}
                       hidden={{ provider: i.provider }}
                     >
-                      <label className="field">
-                        <span>{say(locale, c.references)}</span>
-                        <textarea
+                      <Field>
+                        <Label htmlFor={`references-${i.provider}`}>
+                          {say(locale, c.references)}
+                        </Label>
+                        <Textarea
+                          id={`references-${i.provider}`}
                           name="references"
                           dir="ltr"
                           rows={5}
                           defaultValue={i.secret_references.join("\n")}
+                          aria-describedby={`references-${i.provider}-hint`}
                         />
-                        <small>{say(locale, c.referencesHint)}</small>
-                      </label>
+                        <FieldDescription id={`references-${i.provider}-hint`}>
+                          {say(locale, c.referencesHint)}
+                        </FieldDescription>
+                      </Field>
                     </ActionDialog>
                   ) : null}
                 </div>,
@@ -294,7 +346,7 @@ export default async function SettingsPage({
             }))}
           />
         )}
-      </section>
-    </>
+      </Section>
+    </div>
   );
 }

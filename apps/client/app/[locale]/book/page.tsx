@@ -1,12 +1,8 @@
 import type { Locale } from "@wlbp/i18n";
-import { BrandShell } from "@wlbp/white-label-ui";
-import Image from "next/image";
-import Link from "next/link";
 
-import { clientBrand } from "../../_lib/brand";
 import { loadPublishedCatalog } from "../../_lib/catalog-data-source";
 import { availabilityPickerCopy, bookingFlowCopy } from "../../_lib/copy";
-import { getClientMessage } from "../../_lib/copy";
+import { SiteFrame } from "../../_lib/ui/site-frame";
 import { BookingFlow } from "./booking-flow";
 
 type BookingPageProps = {
@@ -45,39 +41,8 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
       : (catalog[0] ?? null));
 
   return (
-    <BrandShell
-      className="client-shell"
-      labelledBy="booking-title"
-      tokens={clientBrand.tokens}
-    >
-      <header className="client-header">
-        <Link className="wordmark" href={`/${locale}`} aria-label={clientBrand.name}>
-          <Image
-            alt=""
-            aria-hidden="true"
-            height={40}
-            src={clientBrand.assets.icon}
-            width={40}
-          />
-          <span>{clientBrand.name}</span>
-        </Link>
-        <nav aria-label={getClientMessage(locale, "languageNavigation")}>
-          <Link aria-current={locale === "en" ? "page" : undefined} href="/en/book">
-            <span aria-hidden="true">EN</span>
-            <span className="sr-only">
-              {getClientMessage(locale, "languageEnglish")}
-            </span>
-          </Link>
-          <Link aria-current={locale === "ar" ? "page" : undefined} href="/ar/book">
-            <span aria-hidden="true">عربي</span>
-            <span className="sr-only">
-              {getClientMessage(locale, "languageArabic")}
-            </span>
-          </Link>
-        </nav>
-      </header>
-
-      <div className="client-main">
+    <SiteFrame locale={locale} switchPath="/book">
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 md:px-6 md:py-14">
         <BookingFlow
           copy={{
             availability: availabilityPickerCopy(locale),
@@ -89,6 +54,6 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
           serviceId={first?.serviceId ?? null}
         />
       </div>
-    </BrandShell>
+    </SiteFrame>
   );
 }

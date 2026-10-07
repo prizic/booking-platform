@@ -7,8 +7,26 @@ import type {
   StaffAccessMemberV1,
 } from "@wlbp/api-contracts";
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import { Badge, Surface } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  EmptyState,
+  Facts,
+  Field,
+  FieldGroup,
+  Input,
+  Label,
+  PageHeader,
+  RequiredMark,
+  Section,
+  StatusStamp,
+  Textarea,
+  type StampState,
+} from "@wlbp/ui-foundation";
+import { ChevronDown, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { authMessage } from "../../_lib/auth-copy";
 import { staffAccessMessage } from "./staff-access";
 
@@ -18,6 +36,8 @@ import {
 } from "../../_lib/team-resources-copy";
 import type { TeamResourcesWorkspaceState } from "../../_lib/team-resources-workspace";
 import type { TeamResourcesRetry } from "../../_lib/team-resources-retry";
+import { ChoiceSelect, FormActions } from "../services/form-kit";
+import { NO_LINKED_ACCOUNT } from "./form-values";
 import { ValidatedForm } from "./validated-form";
 
 type ManagementAction = (formData: FormData) => Promise<void>;
@@ -57,6 +77,13 @@ function statusKey(
   return status === "deactivation_pending" ? "deactivationPending" : status;
 }
 
+function statusStamp(status: StaffResourceWorkspaceItemV1["status"]): StampState {
+  if (status === "active") return "confirmed";
+  if (status === "maintenance") return "requested";
+  if (status === "deactivation_pending") return "pending";
+  return "cancelled";
+}
+
 function hasTenantCapability(
   context: DashboardContextV1,
   capability: CapabilityName,
@@ -90,49 +117,49 @@ function UnavailableState({
     getTeamResourcesMessage(locale, key);
   if (state.kind === "backend-unavailable") {
     return (
-      <div role="alert">
-        <Surface as="section" className="team-resources-notice">
-          <p>{message("backendUnavailable")}</p>
-        </Surface>
-      </div>
+      <Alert tone="danger">
+        <AlertDescription className="text-foreground">
+          {message("backendUnavailable")}
+        </AlertDescription>
+      </Alert>
     );
   }
   if (state.kind !== "access-unavailable") return null;
   if (state.reason === "location-scope-unavailable") {
     return (
-      <Surface
-        as="section"
-        className="team-resources-notice"
-        labelledBy="location-scope-title"
-      >
-        <h2 id="location-scope-title">{message("locationScopeTitle")}</h2>
-        <p>{message("locationScopeSummary")}</p>
-      </Surface>
+      <Section
+        id="location-scope"
+        title={message("locationScopeTitle")}
+        description={message("locationScopeSummary")}
+      />
     );
   }
   if (state.reason === "step-up-required") {
     return (
-      <Surface
-        as="section"
-        className="team-resources-notice"
-        labelledBy="team-step-up-title"
+      <Section
+        id="team-step-up"
+        title={message("stepUpTitle")}
+        description={message("stepUpSummary")}
       >
-        <h2 id="team-step-up-title">{message("stepUpTitle")}</h2>
-        <p>{message("stepUpSummary")}</p>
-        <Link
-          href={`/${locale}/auth/mfa?returnTo=${encodeURIComponent(`/${locale}/team-resources`)}`}
-        >
-          {authMessage(locale, "verify")}
-        </Link>
-      </Surface>
+        <div>
+          <Button asChild>
+            <Link
+              href={`/${locale}/auth/mfa?returnTo=${encodeURIComponent(`/${locale}/team-resources`)}`}
+            >
+              <ShieldCheck aria-hidden="true" />
+              {authMessage(locale, "verify")}
+            </Link>
+          </Button>
+        </div>
+      </Section>
     );
   }
   return (
-    <div role="alert">
-      <Surface as="section" className="team-resources-notice">
-        <p>{message("backendUnavailable")}</p>
-      </Surface>
-    </div>
+    <Alert tone="danger">
+      <AlertDescription className="text-foreground">
+        {message("backendUnavailable")}
+      </AlertDescription>
+    </Alert>
   );
 }
 
@@ -146,26 +173,68 @@ function ItemFacts({
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
   return (
-    <dl className="team-resource-facts">
-      {item.resourceTypeName === null ? null : (
-        <div>
-          <dt>{message("resourceType")}</dt>
-          <dd>{item.resourceTypeName}</dd>
-        </div>
-      )}
-      <div>
-        <dt>{message("locations")}</dt>
-        <dd>{formatNumber(item.locationIds.length, locale)}</dd>
-      </div>
-      <div>
-        <dt>{message("services")}</dt>
-        <dd>{formatNumber(item.serviceIds.length, locale)}</dd>
-      </div>
-      <div>
-        <dt>{message("futureAllocations")}</dt>
-        <dd>{formatNumber(item.futureAllocationCount, locale)}</dd>
-      </div>
-    </dl>
+    <Facts
+      columns={3}
+      items={[
+        ...(item.resourceTypeName === null
+          ? []
+          : [
+              {
+                key: "type",
+                label: message("resourceType"),
+                value: item.resourceTypeName,
+              },
+            ]),
+        {
+          key: "locations",
+          label: message("locations"),
+          value: formatNumber(item.locationIds.length, locale),
+        },
+        {
+          key: "services",
+          label: message("services"),
+          value: formatNumber(item.serviceIds.length, locale),
+        },
+        {
+          key: "allocations",
+          label: message("futureAllocations"),
+          value: formatNumber(item.futureAllocationCount, locale),
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * A disclosure that holds one editor. Native <details> keeps the editors
+ * closed by default without client state; the summary is a full-width target.
+ */
+function Editor({
+  summary,
+  tone = "default",
+  children,
+}: {
+  readonly summary: ReactNode;
+  readonly tone?: "default" | "danger";
+  readonly children: ReactNode;
+}) {
+  return (
+    <details className="group border-t first:border-t-0">
+      <summary
+        className={
+          tone === "danger"
+            ? "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 py-2 text-sm font-semibold text-destructive outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+            : "flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 rounded-md px-1 py-2 text-sm font-semibold text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden"
+        }
+      >
+        {summary}
+        <ChevronDown
+          aria-hidden="true"
+          className="size-4 text-muted-foreground transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div className="pb-5">{children}</div>
+    </details>
   );
 }
 
@@ -207,23 +276,20 @@ function ChoiceField({
   readonly value?: string | undefined;
 }) {
   return (
-    <label className="team-resource-field" htmlFor={id}>
-      <span>{label}</span>
-      <select
-        className="wlbp-field__input"
-        defaultValue={value ?? ""}
+    <Field>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <RequiredMark /> : null}
+      </Label>
+      <ChoiceSelect
         id={id}
         name={name}
         required={required}
-      >
-        <option value="">—</option>
-        {choices.map((choice) => (
-          <option key={choice.id} value={choice.id}>
-            {choice.name}
-          </option>
-        ))}
-      </select>
-    </label>
+        defaultValue={value ?? ""}
+        placeholder="—"
+        options={choices.map((choice) => ({ value: choice.id, label: choice.name }))}
+      />
+    </Field>
   );
 }
 
@@ -231,16 +297,13 @@ function ReasonField({ id, locale }: { readonly id: string; readonly locale: Loc
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
   return (
-    <label className="team-resource-field" htmlFor={id}>
-      <span>{message("deactivateReason")}</span>
-      <input
-        className="wlbp-field__input"
-        id={id}
-        maxLength={500}
-        name="reason"
-        required
-      />
-    </label>
+    <Field>
+      <Label htmlFor={id}>
+        {message("deactivateReason")}
+        <RequiredMark />
+      </Label>
+      <Input id={id} maxLength={500} name="reason" required />
+    </Field>
   );
 }
 
@@ -261,87 +324,103 @@ function StaffForm({
     getTeamResourcesMessage(locale, key);
   const prefix = item === undefined ? "new-staff" : `staff-${item.id}`;
   return (
-    <details className="team-resource-editor">
-      <summary>
-        {item === undefined ? message("addStaff") : message("editStaff")}
-      </summary>
+    <Editor summary={item === undefined ? message("addStaff") : message("editStaff")}>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="staffId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
-        <label className="team-resource-field" htmlFor={`${prefix}-name`}>
-          <span>{message("publicName")}</span>
-          <input
-            className="wlbp-field__input"
-            defaultValue={item?.name}
-            id={`${prefix}-name`}
-            maxLength={160}
-            name="publicName"
-            required
-          />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-membership`}>
-          <span>{staffAccessMessage(locale, "account")}</span>
-          <select
-            className="wlbp-field__input"
-            id={`${prefix}-membership`}
-            name="membershipId"
-            defaultValue={item?.membershipId ?? ""}
-          >
-            <option value="">{staffAccessMessage(locale, "noAccount")}</option>
-            {item?.membershipId &&
-            !members.some((member) => member.id === item.membershipId) ? (
-              <option value={item.membershipId}>
-                {staffAccessMessage(locale, "currentAccount")}
-              </option>
-            ) : null}
-            {members.map((member) => (
-              <option key={member.id} value={member.id}>
-                {member.name} — {member.email}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-bio`}>
-          <span>{message("publicBio")}</span>
-          <textarea
-            defaultValue={item?.publicBio ?? ""}
-            id={`${prefix}-bio`}
-            maxLength={2000}
-            name="bio"
-            rows={3}
-          />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-notes`}>
-          <span>{message("internalNotes")}</span>
-          <textarea
-            defaultValue={item?.internalNotes ?? ""}
-            id={`${prefix}-notes`}
-            maxLength={2000}
-            name="internalNotes"
-            rows={3}
-          />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-hours`}>
-          <span>{message("offeredHours")}</span>
-          <input
-            className="wlbp-field__input"
-            defaultValue={item?.offeredHoursPerWeek ?? 40}
-            id={`${prefix}-hours`}
-            max="168"
-            min="0.25"
-            name="offeredHoursPerWeek"
-            required
-            step="0.25"
-            type="number"
-          />
-        </label>
-        <ReasonField id={`${prefix}-reason`} locale={locale} />
-        <button className="wlbp-button" type="submit">
-          {message(item === undefined ? "submitStaff" : "saveStaff")}
-        </button>
+        <FieldGroup columns={2}>
+          <Field>
+            <Label htmlFor={`${prefix}-name`}>
+              {message("publicName")}
+              <RequiredMark />
+            </Label>
+            <Input
+              defaultValue={item?.name}
+              id={`${prefix}-name`}
+              maxLength={160}
+              name="publicName"
+              required
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-membership`}>
+              {staffAccessMessage(locale, "account")}
+            </Label>
+            <ChoiceSelect
+              id={`${prefix}-membership`}
+              name="membershipId"
+              defaultValue={item?.membershipId ?? NO_LINKED_ACCOUNT}
+              options={[
+                {
+                  value: NO_LINKED_ACCOUNT,
+                  label: staffAccessMessage(locale, "noAccount"),
+                },
+                ...(item?.membershipId &&
+                !members.some((member) => member.id === item.membershipId)
+                  ? [
+                      {
+                        value: item.membershipId,
+                        label: staffAccessMessage(locale, "currentAccount"),
+                      },
+                    ]
+                  : []),
+                ...members.map((member) => ({
+                  value: member.id,
+                  label: (
+                    <>
+                      {member.name} — <bdi>{member.email}</bdi>
+                    </>
+                  ),
+                })),
+              ]}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-bio`}>{message("publicBio")}</Label>
+            <Textarea
+              defaultValue={item?.publicBio ?? ""}
+              id={`${prefix}-bio`}
+              maxLength={2000}
+              name="bio"
+              rows={3}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-notes`}>{message("internalNotes")}</Label>
+            <Textarea
+              defaultValue={item?.internalNotes ?? ""}
+              id={`${prefix}-notes`}
+              maxLength={2000}
+              name="internalNotes"
+              rows={3}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-hours`}>
+              {message("offeredHours")}
+              <RequiredMark />
+            </Label>
+            <Input
+              id={`${prefix}-hours`}
+              max="168"
+              min="0.25"
+              required
+              step="0.25"
+              type="number"
+              name="offeredHoursPerWeek"
+              defaultValue={item?.offeredHoursPerWeek ?? 40}
+            />
+          </Field>
+          <ReasonField id={`${prefix}-reason`} locale={locale} />
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit">
+            {message(item === undefined ? "submitStaff" : "saveStaff")}
+          </Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -360,12 +439,20 @@ function ResourceTypeForm({
     getTeamResourcesMessage(locale, key);
   const prefix = `resource-type-${resourceType?.id ?? "new"}`;
   return (
-    <details className="team-resource-editor">
-      <summary>
-        {resourceType === undefined
-          ? message("addResourceType")
-          : message("editResourceType")}
-      </summary>
+    <Editor
+      summary={
+        resourceType === undefined ? (
+          message("addResourceType")
+        ) : (
+          <span>
+            {message("editResourceType")} ·{" "}
+            <span className="font-normal text-muted-foreground">
+              {resourceType.name}
+            </span>
+          </span>
+        )
+      }
+    >
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="resourceTypeId" type="hidden" value={resourceType?.id ?? ""} />
@@ -375,44 +462,50 @@ function ResourceTypeForm({
           value={resourceType?.revision ?? ""}
         />
         <input name="exclusive" type="hidden" value="true" />
-        <label
-          className="team-resource-field"
-          htmlFor={`type-${resourceType?.id ?? "new"}-key`}
-        >
-          <span>{message("key")}</span>
-          <input
-            autoComplete="off"
-            className="wlbp-field__input"
-            defaultValue={resourceType?.key}
-            id={`type-${resourceType?.id ?? "new"}-key`}
-            maxLength={80}
-            name="key"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            required
+        <FieldGroup columns={2}>
+          <Field>
+            <Label htmlFor={`type-${resourceType?.id ?? "new"}-key`}>
+              {message("key")}
+              <RequiredMark />
+            </Label>
+            <Input
+              autoComplete="off"
+              defaultValue={resourceType?.key}
+              dir="ltr"
+              id={`type-${resourceType?.id ?? "new"}-key`}
+              maxLength={80}
+              name="key"
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              required
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`type-${resourceType?.id ?? "new"}-name`}>
+              {message("name")}
+              <RequiredMark />
+            </Label>
+            <Input
+              defaultValue={resourceType?.name}
+              id={`type-${resourceType?.id ?? "new"}-name`}
+              maxLength={160}
+              name="name"
+              required
+            />
+          </Field>
+          <ReasonField
+            id={`type-${resourceType?.id ?? "new"}-reason`}
+            locale={locale}
           />
-        </label>
-        <label
-          className="team-resource-field"
-          htmlFor={`type-${resourceType?.id ?? "new"}-name`}
-        >
-          <span>{message("name")}</span>
-          <input
-            className="wlbp-field__input"
-            defaultValue={resourceType?.name}
-            id={`type-${resourceType?.id ?? "new"}-name`}
-            maxLength={160}
-            name="name"
-            required
-          />
-        </label>
-        <ReasonField id={`type-${resourceType?.id ?? "new"}-reason`} locale={locale} />
-        <button className="wlbp-button" type="submit">
-          {message(
-            resourceType === undefined ? "submitResourceType" : "saveResourceType",
-          )}
-        </button>
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit">
+            {message(
+              resourceType === undefined ? "submitResourceType" : "saveResourceType",
+            )}
+          </Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -433,73 +526,81 @@ function ResourceForm({
     getTeamResourcesMessage(locale, key);
   const prefix = item === undefined ? "new-resource" : `resource-${item.id}`;
   return (
-    <details className="team-resource-editor">
-      <summary>
-        {item === undefined ? message("addResource") : message("editResource")}
-      </summary>
+    <Editor
+      summary={item === undefined ? message("addResource") : message("editResource")}
+    >
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input name="resourceId" type="hidden" value={item?.id ?? ""} />
         <input name="expectedRevision" type="hidden" value={item?.revision ?? ""} />
-        <ChoiceField
-          choices={resourceTypes}
-          id={`${prefix}-type`}
-          label={message("resourceTypeId")}
-          name="resourceTypeId"
-          value={item?.resourceTypeId ?? undefined}
-        />
-        <label className="team-resource-field" htmlFor={`${prefix}-key`}>
-          <span>{message("key")}</span>
-          <input
-            autoComplete="off"
-            className="wlbp-field__input"
-            defaultValue={item?.key ?? ""}
-            id={`${prefix}-key`}
-            maxLength={80}
-            name="key"
-            pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
-            required
+        <FieldGroup columns={2}>
+          <ChoiceField
+            choices={resourceTypes}
+            id={`${prefix}-type`}
+            label={message("resourceTypeId")}
+            name="resourceTypeId"
+            value={item?.resourceTypeId ?? undefined}
           />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-name`}>
-          <span>{message("publicName")}</span>
-          <input
-            className="wlbp-field__input"
-            defaultValue={item?.name}
-            id={`${prefix}-name`}
-            maxLength={160}
-            name="publicName"
-            required
-          />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-notes`}>
-          <span>{message("internalNotes")}</span>
-          <textarea
-            defaultValue={item?.internalNotes ?? ""}
-            id={`${prefix}-notes`}
-            maxLength={2000}
-            name="internalNotes"
-            rows={3}
-          />
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-status`}>
-          <span>{message("status")}</span>
-          <select
-            className="wlbp-field__input"
-            defaultValue={item?.status === "maintenance" ? "maintenance" : "active"}
-            id={`${prefix}-status`}
-            name="status"
-          >
-            <option value="active">{message("active")}</option>
-            <option value="maintenance">{message("maintenance")}</option>
-          </select>
-        </label>
-        <ReasonField id={`${prefix}-reason`} locale={locale} />
-        <button className="wlbp-button" type="submit">
-          {message(item === undefined ? "submitResource" : "saveResource")}
-        </button>
+          <Field>
+            <Label htmlFor={`${prefix}-key`}>
+              {message("key")}
+              <RequiredMark />
+            </Label>
+            <Input
+              autoComplete="off"
+              defaultValue={item?.key ?? ""}
+              dir="ltr"
+              id={`${prefix}-key`}
+              maxLength={80}
+              name="key"
+              pattern="[a-z0-9]+(?:-[a-z0-9]+)*"
+              required
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-name`}>
+              {message("publicName")}
+              <RequiredMark />
+            </Label>
+            <Input
+              defaultValue={item?.name}
+              id={`${prefix}-name`}
+              maxLength={160}
+              name="publicName"
+              required
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-status`}>{message("status")}</Label>
+            <ChoiceSelect
+              defaultValue={item?.status === "maintenance" ? "maintenance" : "active"}
+              id={`${prefix}-status`}
+              name="status"
+              options={[
+                { value: "active", label: message("active") },
+                { value: "maintenance", label: message("maintenance") },
+              ]}
+            />
+          </Field>
+          <Field className="md:col-span-2">
+            <Label htmlFor={`${prefix}-notes`}>{message("internalNotes")}</Label>
+            <Textarea
+              defaultValue={item?.internalNotes ?? ""}
+              id={`${prefix}-notes`}
+              maxLength={2000}
+              name="internalNotes"
+              rows={3}
+            />
+          </Field>
+          <ReasonField id={`${prefix}-reason`} locale={locale} />
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit">
+            {message(item === undefined ? "submitResource" : "saveResource")}
+          </Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -519,40 +620,41 @@ function RequirementForm({
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
   return (
-    <details className="team-resource-editor">
-      <summary>{message("resourceRequirement")}</summary>
+    <Editor summary={message("resourceRequirement")}>
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId="resource-requirement" locale={locale} retry={retry} />
-        <ChoiceField
-          choices={services}
-          id="requirement-service"
-          label={message("serviceId")}
-          name="serviceId"
-        />
-        <ChoiceField
-          choices={resourceTypes}
-          id="requirement-type"
-          label={message("resourceTypeId")}
-          name="resourceTypeId"
-        />
-        <label className="team-resource-field" htmlFor="requirement-state">
-          <span>{message("resourceRequired")}</span>
-          <select
-            className="wlbp-field__input"
-            defaultValue="true"
-            id="requirement-state"
-            name="required"
-          >
-            <option value="true">{message("setEligible")}</option>
-            <option value="false">{message("setIneligible")}</option>
-          </select>
-        </label>
-        <ReasonField id="requirement-reason" locale={locale} />
-        <button className="wlbp-button" type="submit">
-          {message("updateRequirement")}
-        </button>
+        <FieldGroup columns={2}>
+          <ChoiceField
+            choices={services}
+            id="requirement-service"
+            label={message("serviceId")}
+            name="serviceId"
+          />
+          <ChoiceField
+            choices={resourceTypes}
+            id="requirement-type"
+            label={message("resourceTypeId")}
+            name="resourceTypeId"
+          />
+          <Field>
+            <Label htmlFor="requirement-state">{message("resourceRequired")}</Label>
+            <ChoiceSelect
+              defaultValue="true"
+              id="requirement-state"
+              name="required"
+              options={[
+                { value: "true", label: message("setEligible") },
+                { value: "false", label: message("setIneligible") },
+              ]}
+            />
+          </Field>
+          <ReasonField id="requirement-reason" locale={locale} />
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit">{message("updateRequirement")}</Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -575,12 +677,13 @@ function EligibilityForm({
     getTeamResourcesMessage(locale, key);
   const prefix = `${item.kind}-${item.id}-eligibility`;
   return (
-    <details className="team-resource-editor">
-      <summary>
-        {item.kind === "staff"
+    <Editor
+      summary={
+        item.kind === "staff"
           ? message("updateEligibility")
-          : message("resourceLocationEligibility")}
-      </summary>
+          : message("resourceLocationEligibility")
+      }
+    >
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input
@@ -588,38 +691,42 @@ function EligibilityForm({
           type="hidden"
           value={item.id}
         />
-        {item.kind === "staff" ? (
+        <FieldGroup columns={2}>
+          {item.kind === "staff" ? (
+            <ChoiceField
+              choices={services}
+              id={`${prefix}-service`}
+              label={message("serviceId")}
+              name="serviceId"
+            />
+          ) : null}
           <ChoiceField
-            choices={services}
-            id={`${prefix}-service`}
-            label={message("serviceId")}
-            name="serviceId"
+            choices={locations}
+            id={`${prefix}-location`}
+            label={message("locationId")}
+            name="locationId"
           />
-        ) : null}
-        <ChoiceField
-          choices={locations}
-          id={`${prefix}-location`}
-          label={message("locationId")}
-          name="locationId"
-        />
-        <label className="team-resource-field" htmlFor={`${prefix}-state`}>
-          <span>{message("updateEligibility")}</span>
-          <select
-            className="wlbp-field__input"
-            defaultValue="true"
-            id={`${prefix}-state`}
-            name="eligible"
-          >
-            <option value="true">{message("setEligible")}</option>
-            <option value="false">{message("setIneligible")}</option>
-          </select>
-        </label>
-        <ReasonField id={`${prefix}-reason`} locale={locale} />
-        <button className="wlbp-button wlbp-button--secondary" type="submit">
-          {message("updateEligibility")}
-        </button>
+          <Field>
+            <Label htmlFor={`${prefix}-state`}>{message("updateEligibility")}</Label>
+            <ChoiceSelect
+              defaultValue="true"
+              id={`${prefix}-state`}
+              name="eligible"
+              options={[
+                { value: "true", label: message("setEligible") },
+                { value: "false", label: message("setIneligible") },
+              ]}
+            />
+          </Field>
+          <ReasonField id={`${prefix}-reason`} locale={locale} />
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit" variant="outline">
+            {message("updateEligibility")}
+          </Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -642,8 +749,7 @@ function DeactivationForm({
   const replacementName =
     item.kind === "staff" ? "replacementStaffId" : "replacementResourceId";
   return (
-    <details className="team-resource-editor team-resource-editor--danger">
-      <summary>{message("deactivate")}</summary>
+    <Editor summary={message("deactivate")} tone="danger">
       <ValidatedForm action={action} invalidMessage={message("fieldError")}>
         <HiddenContext formId={prefix} locale={locale} retry={retry} />
         <input
@@ -651,49 +757,55 @@ function DeactivationForm({
           type="hidden"
           value={item.id}
         />
-        <label className="team-resource-field" htmlFor={`${prefix}-resolution`}>
-          <span>{message("deactivateResolution")}</span>
-          <select
-            className="wlbp-field__input"
-            defaultValue="defer"
-            id={`${prefix}-resolution`}
-            name="resolution"
-          >
-            <option value="defer">{message("deferDeactivation")}</option>
-            <option value="cancel">{message("cancelFuture")}</option>
-            <option disabled={replacements.length === 0} value="reassign">
-              {message("reassignFuture")}
-            </option>
-          </select>
-        </label>
-        <label className="team-resource-field" htmlFor={`${prefix}-replacement`}>
-          <span>
-            {message(
-              item.kind === "staff" ? "replacementStaff" : "replacementResource",
-            )}
-          </span>
-          <select
-            className="wlbp-field__input"
-            defaultValue={replacements.at(0)?.id ?? ""}
-            disabled={replacements.length === 0}
-            id={`${prefix}-replacement`}
-            name={replacementName}
-            required={replacements.length > 0}
-          >
-            <option value="">—</option>
-            {replacements.map((replacement) => (
-              <option key={replacement.id} value={replacement.id}>
-                {replacement.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <ReasonField id={`${prefix}-reason`} locale={locale} />
-        <button className="wlbp-button wlbp-button--danger" type="submit">
-          {message("submitDeactivation")}
-        </button>
+        <FieldGroup columns={2}>
+          <Field>
+            <Label htmlFor={`${prefix}-resolution`}>
+              {message("deactivateResolution")}
+            </Label>
+            <ChoiceSelect
+              defaultValue="defer"
+              id={`${prefix}-resolution`}
+              name="resolution"
+              options={[
+                { value: "defer", label: message("deferDeactivation") },
+                { value: "cancel", label: message("cancelFuture") },
+                {
+                  value: "reassign",
+                  label: message("reassignFuture"),
+                  disabled: replacements.length === 0,
+                },
+              ]}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`${prefix}-replacement`}>
+              {message(
+                item.kind === "staff" ? "replacementStaff" : "replacementResource",
+              )}
+              {replacements.length > 0 ? <RequiredMark /> : null}
+            </Label>
+            <ChoiceSelect
+              defaultValue={replacements.at(0)?.id ?? ""}
+              disabled={replacements.length === 0}
+              id={`${prefix}-replacement`}
+              name={replacementName}
+              required={replacements.length > 0}
+              placeholder="—"
+              options={replacements.map((replacement) => ({
+                value: replacement.id,
+                label: replacement.name,
+              }))}
+            />
+          </Field>
+          <ReasonField id={`${prefix}-reason`} locale={locale} />
+        </FieldGroup>
+        <FormActions>
+          <Button type="submit" variant="destructive">
+            {message("submitDeactivation")}
+          </Button>
+        </FormActions>
       </ValidatedForm>
-    </details>
+    </Editor>
   );
 }
 
@@ -730,72 +842,67 @@ function ItemList({
 }) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
-  if (items.length === 0) return <p>{message(emptyMessage)}</p>;
+  if (items.length === 0) return <EmptyState title={message(emptyMessage)} />;
   return (
-    <ul className="team-resource-list">
+    <ul className="grid divide-y rounded-lg border bg-card">
       {items.map((item) => (
         <li key={item.id}>
-          <article>
-            <header>
-              <h3>{item.name}</h3>
-              <Badge
-                tone={
-                  item.status === "active"
-                    ? "positive"
-                    : item.status === "maintenance" ||
-                        item.status === "deactivation_pending"
-                      ? "warning"
-                      : "neutral"
-                }
-              >
+          <article className="grid gap-4 p-5">
+            <header className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-base font-semibold text-foreground">{item.name}</h3>
+              <StatusStamp state={statusStamp(item.status)}>
                 {message(statusKey(item.status))}
-              </Badge>
+              </StatusStamp>
             </header>
             <ItemFacts item={item} locale={locale} />
-            {canEdit ? (
-              item.kind === "staff" ? (
-                <StaffForm
-                  action={editAction}
-                  item={item}
-                  members={members}
-                  locale={locale}
-                  retry={retry}
-                />
-              ) : (
-                <ResourceForm
-                  action={editAction}
-                  item={item}
-                  locale={locale}
-                  resourceTypes={resourceTypes}
-                  retry={retry}
-                />
-              )
-            ) : null}
-            {canManageEligibility ? (
-              <EligibilityForm
-                action={action}
-                item={item}
-                locale={locale}
-                locations={locations}
-                retry={retry}
-                services={services}
-              />
-            ) : null}
-            {canDeactivate && item.status !== "inactive" ? (
-              <DeactivationForm
-                action={deactivateAction}
-                item={item}
-                locale={locale}
-                replacements={items.filter(
-                  (candidate) =>
-                    candidate.id !== item.id &&
-                    candidate.kind === item.kind &&
-                    candidate.status === "active" &&
-                    (item.kind === "staff" ||
-                      candidate.resourceTypeId === item.resourceTypeId),
-                )}
-                retry={retry}
-              />
+            {canEdit || canManageEligibility || canDeactivate ? (
+              <div className="grid">
+                {canEdit ? (
+                  item.kind === "staff" ? (
+                    <StaffForm
+                      action={editAction}
+                      item={item}
+                      members={members}
+                      locale={locale}
+                      retry={retry}
+                    />
+                  ) : (
+                    <ResourceForm
+                      action={editAction}
+                      item={item}
+                      locale={locale}
+                      resourceTypes={resourceTypes}
+                      retry={retry}
+                    />
+                  )
+                ) : null}
+                {canManageEligibility ? (
+                  <EligibilityForm
+                    action={action}
+                    item={item}
+                    locale={locale}
+                    locations={locations}
+                    retry={retry}
+                    services={services}
+                  />
+                ) : null}
+                {canDeactivate && item.status !== "inactive" ? (
+                  <DeactivationForm
+                    action={deactivateAction}
+                    item={item}
+                    locale={locale}
+                    replacements={items.filter(
+                      (candidate) =>
+                        candidate.id !== item.id &&
+                        candidate.kind === item.kind &&
+                        candidate.status === "active" &&
+                        (item.kind === "staff" ||
+                          candidate.resourceTypeId === item.resourceTypeId),
+                    )}
+                    retry={retry}
+                  />
+                ) : null}
+              </div>
             ) : null}
           </article>
         </li>
@@ -818,6 +925,14 @@ function resultKey(
   return "backendUnavailable";
 }
 
+const positiveResults: ReadonlySet<string> = new Set([
+  "saved",
+  "cancelled",
+  "deactivated",
+  "deferred",
+  "reassigned",
+]);
+
 export function TeamResourcesView({
   actions,
   locale,
@@ -829,17 +944,18 @@ export function TeamResourcesView({
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
   const intro = (
-    <section className="dashboard-intro team-resources-intro">
-      <h1 id="team-resources-title">{message("title")}</h1>
-      <p>{message("summary")}</p>
-    </section>
+    <PageHeader
+      titleId="team-resources-title"
+      title={message("title")}
+      description={message("summary")}
+    />
   );
   if (state.kind !== "ready")
     return (
-      <>
+      <div className="grid gap-8">
         {intro}
         <UnavailableState locale={locale} state={state} />
-      </>
+      </div>
     );
   const staff = state.workspace.items.filter((item) => item.kind === "staff");
   const resources = state.workspace.items.filter((item) => item.kind === "resource");
@@ -848,67 +964,66 @@ export function TeamResourcesView({
   const canManageStaffEligibility = hasCapability(state.context, "staff.manage");
   const canManageResourceEligibility = hasCapability(state.context, "catalog.edit");
   return (
-    <>
+    <div className="grid gap-8">
       {intro}
-      <p className="team-resources-result" role="status" aria-live="polite">
-        {result === undefined ? "" : message(resultKey(result))}
-      </p>
-      <Surface
-        as="section"
-        className="team-resources-management"
-        labelledBy="team-resources-management-title"
+      {result === undefined ? null : (
+        <Alert tone={positiveResults.has(result) ? "positive" : "danger"}>
+          <AlertDescription className="text-foreground">
+            {message(resultKey(result))}
+          </AlertDescription>
+        </Alert>
+      )}
+      <Section
+        id="team-resources-management"
+        title={message("createStaff")}
+        description={message("createEditUnavailable")}
       >
-        <h2 id="team-resources-management-title">{message("createStaff")}</h2>
-        <p>{message("createEditUnavailable")}</p>
-        <div className="team-resource-form-grid">
-          {canManageStaff ? (
-            <StaffForm
-              action={actions.saveStaffProfile}
-              members={members}
-              locale={locale}
-              retry={retry}
-            />
-          ) : null}
-          {canManageCatalog ? (
-            <>
-              <ResourceTypeForm
-                action={actions.saveResourceType}
+        {canManageStaff || canManageCatalog ? (
+          <div className="grid rounded-lg border bg-card px-5 py-1">
+            {canManageStaff ? (
+              <StaffForm
+                action={actions.saveStaffProfile}
+                members={members}
                 locale={locale}
                 retry={retry}
               />
-              {state.workspace.resourceTypes.map((resourceType) => (
+            ) : null}
+            {canManageCatalog ? (
+              <>
                 <ResourceTypeForm
                   action={actions.saveResourceType}
-                  key={resourceType.id}
                   locale={locale}
-                  resourceType={resourceType}
                   retry={retry}
                 />
-              ))}
-              <ResourceForm
-                action={actions.saveResource}
-                locale={locale}
-                resourceTypes={state.workspace.resourceTypes}
-                retry={retry}
-              />
-              <RequirementForm
-                action={actions.setResourceRequirement}
-                locale={locale}
-                resourceTypes={state.workspace.resourceTypes}
-                retry={retry}
-                services={state.workspace.services}
-              />
-            </>
-          ) : null}
-        </div>
-      </Surface>
-      <div className="team-resources-columns">
-        <Surface
-          as="section"
-          className="team-resources-section"
-          labelledBy="staff-list-title"
-        >
-          <h2 id="staff-list-title">{message("staffTitle")}</h2>
+                {state.workspace.resourceTypes.map((resourceType) => (
+                  <ResourceTypeForm
+                    action={actions.saveResourceType}
+                    key={resourceType.id}
+                    locale={locale}
+                    resourceType={resourceType}
+                    retry={retry}
+                  />
+                ))}
+                <ResourceForm
+                  action={actions.saveResource}
+                  locale={locale}
+                  resourceTypes={state.workspace.resourceTypes}
+                  retry={retry}
+                />
+                <RequirementForm
+                  action={actions.setResourceRequirement}
+                  locale={locale}
+                  resourceTypes={state.workspace.resourceTypes}
+                  retry={retry}
+                  services={state.workspace.services}
+                />
+              </>
+            ) : null}
+          </div>
+        ) : null}
+      </Section>
+      <div className="grid gap-8 xl:grid-cols-2">
+        <Section id="staff-list" title={message("staffTitle")}>
           <ItemList
             action={actions.setStaffEligibility}
             canDeactivate={canManageStaff}
@@ -925,13 +1040,8 @@ export function TeamResourcesView({
             retry={retry}
             services={state.workspace.services}
           />
-        </Surface>
-        <Surface
-          as="section"
-          className="team-resources-section"
-          labelledBy="resource-list-title"
-        >
-          <h2 id="resource-list-title">{message("resourcesTitle")}</h2>
+        </Section>
+        <Section id="resource-list" title={message("resourcesTitle")}>
           <ItemList
             action={actions.setResourceLocationEligibility}
             canDeactivate={canManageStaff}
@@ -947,8 +1057,8 @@ export function TeamResourcesView({
             retry={retry}
             services={state.workspace.services}
           />
-        </Surface>
+        </Section>
       </div>
-    </>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { TextField } from "@wlbp/ui-foundation";
+import { Alert, FieldGroup, TextField } from "@wlbp/ui-foundation";
 import { randomUUID } from "node:crypto";
 import { requestProvisioningAction } from "../../../../_lib/actions/operations";
 import { say, stateCopy } from "../../../../_lib/copy";
@@ -42,7 +42,7 @@ export default async function RequestProvisioningPage({
     return (
       <>
         {header}
-        <p className="notice">{say(locale, stateCopy.roleRequired)}</p>
+        <Alert tone="info">{say(locale, stateCopy.roleRequired)}</Alert>
       </>
     );
 
@@ -96,7 +96,7 @@ export default async function RequestProvisioningPage({
   return (
     <>
       {header}
-      <section className="section">
+      <section className="max-w-4xl rounded-lg border bg-card p-5 md:p-6">
         <OperatorForm
           locale={locale}
           action={requestProvisioningAction}
@@ -104,8 +104,8 @@ export default async function RequestProvisioningPage({
           successMessage={say(locale, c.submitted)}
         >
           <input type="hidden" name="idempotencyKey" value={randomUUID()} />
-          <div className="form-grid">
-            <div className="full">
+          <FieldGroup columns={2}>
+            <div className="md:col-span-2">
               <SelectField
                 name="target"
                 label={say(locale, c.target)}
@@ -187,7 +187,7 @@ export default async function RequestProvisioningPage({
               maxLength={253}
               autoComplete="off"
             />
-          </div>
+          </FieldGroup>
         </OperatorForm>
       </section>
     </>

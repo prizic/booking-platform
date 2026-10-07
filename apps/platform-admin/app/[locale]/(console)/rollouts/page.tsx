@@ -1,4 +1,5 @@
 import { formatNumber } from "@wlbp/i18n";
+import { ReferenceCode } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
@@ -13,6 +14,7 @@ import { Pagination } from "../../../_lib/ui/pagination";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
+import { ProgressRow } from "./progress-row";
 
 export const dynamic = "force-dynamic";
 
@@ -49,9 +51,10 @@ export default async function RolloutsPage({
   const n = (value: number) => formatNumber(value, locale);
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
       />
@@ -89,19 +92,41 @@ export default async function RolloutsPage({
               { label: say(locale, c.createdBy) },
               { label: say(locale, c.started) },
             ]}
-            rows={result.data.map((row) => ({
-              key: row.rollout_id,
-              cells: [
-                <Link key="v" href={`${path}/${row.rollout_id}`}>
-                  <bdi>{row.version}</bdi>
-                </Link>,
-                <StatusBadge key="s" locale={locale} status={row.status} />,
-                row.target_rings.map(status).join(", ") || "—",
-                `${n(Number(row.targets_succeeded))} / ${n(Number(row.targets_failed))} / ${n(Number(row.targets_queued))} / ${n(Number(row.targets_total))}`,
-                <bdi key="b">{row.created_by_email ?? "—"}</bdi>,
-                <TimeValue key="t" locale={locale} value={row.started_at} />,
-              ],
-            }))}
+            rows={result.data.map((row) => {
+              const succeeded = Number(row.targets_succeeded);
+              const failed = Number(row.targets_failed);
+              const queued = Number(row.targets_queued);
+              const total = Number(row.targets_total);
+              return {
+                key: row.rollout_id,
+                cells: [
+                  <Link
+                    key="v"
+                    href={`${path}/${row.rollout_id}`}
+                    className="font-semibold text-primary underline-offset-4 hover:underline"
+                  >
+                    <ReferenceCode className="text-primary">
+                      {row.version}
+                    </ReferenceCode>
+                  </Link>,
+                  <StatusBadge key="s" locale={locale} status={row.status} />,
+                  row.target_rings.map(status).join(", ") || "—",
+                  <ProgressRow
+                    key="p"
+                    total={total}
+                    segments={[
+                      { key: "succeeded", value: succeeded, tone: "positive" },
+                      { key: "failed", value: failed, tone: "danger" },
+                      { key: "queued", value: queued, tone: "warning" },
+                    ]}
+                  >
+                    {`${n(succeeded)} / ${n(failed)} / ${n(queued)} / ${n(total)}`}
+                  </ProgressRow>,
+                  <bdi key="b">{row.created_by_email ?? "—"}</bdi>,
+                  <TimeValue key="t" locale={locale} value={row.started_at} />,
+                ],
+              };
+            })}
           />
           <Pagination
             locale={locale}
@@ -112,6 +137,6 @@ export default async function RolloutsPage({
           />
         </>
       )}
-    </>
+    </div>
   );
 }

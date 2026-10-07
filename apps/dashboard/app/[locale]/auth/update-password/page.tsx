@@ -1,9 +1,9 @@
 import type { Locale } from "@wlbp/i18n";
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import Link from "next/link";
-import { BrandShell } from "@wlbp/white-label-ui";
-import { dashboardBrand } from "../../../_lib/brand";
 import { authMessage } from "../../../_lib/auth-copy";
 import { AuthForm } from "../../../_lib/auth-form";
+import { AuthFrame, authLinkClass } from "../../../_lib/auth-frame";
 import { normalizeAuthReturnPath } from "../../../_lib/auth-return-path";
 import { updatePassword } from "./actions";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
@@ -23,27 +23,30 @@ export default async function Page({
   if (!client || !(await isRecoverySession(client)))
     redirect(`/${locale}/auth/recover?error=expired`);
   return (
-    <BrandShell
-      className="auth-shell"
-      labelledBy="auth-title"
-      tokens={dashboardBrand.tokens}
+    <AuthFrame
+      locale={locale}
+      titleId="auth-title"
+      title={authMessage(locale, "updateTitle")}
+      path="/auth/update-password"
+      footer={
+        <Link className={authLinkClass} href={`/${locale}/auth/sign-in`}>
+          {authMessage(locale, "signIn")}
+        </Link>
+      }
     >
-      <div className="access-panel">
-        <Link href={`/${locale}/today`}>{dashboardBrand.name}</Link>
-        <h1 id="auth-title">{authMessage(locale, "updateTitle")}</h1>
-        {query.error ? <p role="alert">{authMessage(locale, "expired")}</p> : null}
-        <AuthForm
-          action={updatePassword}
-          mode="update-password"
-          locale={locale}
-          returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
-        />
-        <Link href={`/${locale}/auth/sign-in`}>{authMessage(locale, "signIn")}</Link>
-        <nav aria-label={locale === "en" ? "Language" : "اللغة"}>
-          <Link href="/en/auth/update-password">English</Link>{" "}
-          <Link href="/ar/auth/update-password">العربية</Link>
-        </nav>
-      </div>
-    </BrandShell>
+      {query.error ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {authMessage(locale, "expired")}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <AuthForm
+        action={updatePassword}
+        mode="update-password"
+        locale={locale}
+        returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
+      />
+    </AuthFrame>
   );
 }

@@ -356,3 +356,29 @@ export function loadInstanceBrand(appDirectory) {
   copyConfiguredAssets(appDirectory, brandPath, value);
   return Object.freeze({ path: brandPath, serialized: JSON.stringify(value) });
 }
+
+/**
+ * Loads the instance's localized text (content/en.json and content/ar.json)
+ * from the same instance directory as brand.json. A fixture brand that ships
+ * no content falls back to the canonical instance content.
+ */
+export function loadInstanceContent(appDirectory) {
+  const repositoryRoot = path.resolve(appDirectory, "../..");
+  const brandDirectory = path.dirname(resolveBrandPath(repositoryRoot));
+  const candidates = [
+    path.join(brandDirectory, "content"),
+    path.join(repositoryRoot, "instance", "content"),
+    path.join(repositoryRoot, "instance-template", "instance", "content"),
+  ];
+  const directory = candidates.find((candidate) =>
+    existsSync(path.join(candidate, "en.json")),
+  );
+  if (!directory) {
+    throw new Error(`No instance content found. Checked: ${candidates.join(", ")}`);
+  }
+  const content = {
+    en: JSON.parse(readFileSync(path.join(directory, "en.json"), "utf8")),
+    ar: JSON.parse(readFileSync(path.join(directory, "ar.json"), "utf8")),
+  };
+  return Object.freeze({ path: directory, serialized: JSON.stringify(content) });
+}

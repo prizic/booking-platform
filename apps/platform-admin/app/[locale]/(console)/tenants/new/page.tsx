@@ -1,4 +1,4 @@
-import { TextField } from "@wlbp/ui-foundation";
+import { Alert, TextField } from "@wlbp/ui-foundation";
 import { randomUUID } from "node:crypto";
 import { say, stateCopy } from "../../../../_lib/copy";
 import { createTenantAction } from "../../../../_lib/actions/tenants";
@@ -29,7 +29,7 @@ export default async function NewTenantPage({
           [say(locale, c.newTitle)],
         ]}
       />
-      <section className="section">
+      <section className="max-w-2xl rounded-lg border bg-card p-5 md:p-6">
         {atLeast(operator.role, "admin") ? (
           <OperatorForm
             locale={locale}
@@ -57,7 +57,7 @@ export default async function NewTenantPage({
             />
           </OperatorForm>
         ) : (
-          <p className="notice">{say(locale, stateCopy.roleRequired)}</p>
+          <Alert tone="info">{say(locale, stateCopy.roleRequired)}</Alert>
         )}
       </section>
     </>

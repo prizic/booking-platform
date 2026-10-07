@@ -1,18 +1,39 @@
 "use client";
-import { catalogPriceInput } from "./catalog-fields";
+import { CATALOG_NO_LINK, catalogPriceInput } from "./catalog-fields";
 import { useActionState, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { Plus, RotateCw, Trash2 } from "lucide-react";
 import type {
   CatalogEntityV1,
   CatalogKindV1,
   CatalogWorkspaceV1,
 } from "@wlbp/api-contracts";
-import type { Locale } from "@wlbp/i18n";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
+  Input,
+  Label,
+  RequiredMark,
+  Section,
+  StatusStamp,
+  Textarea,
+} from "@wlbp/ui-foundation";
 import { catalogMessage, type CatalogMessageKey } from "./catalog-copy";
 import { saveCatalogDraftAction, publishCatalogAction } from "./actions";
+import { ConfirmSubmit } from "./confirm-submit";
+import { CheckboxRow, ChoiceSelect, FormActions, keepUnsavedInput } from "./form-kit";
 
-function Field({
+const panel = "grid gap-5 rounded-lg border bg-card p-5 md:p-6";
+
+function TextInputField({
   name,
   label,
   value,
@@ -22,6 +43,8 @@ function Field({
   min,
   max,
   required = true,
+  description,
+  className,
 }: {
   name: string;
   label: string;
@@ -32,14 +55,19 @@ function Field({
   min?: number;
   max?: number;
   required?: boolean;
+  description?: string;
+  className?: string;
 }) {
   const id = useId();
+  const descriptionId = description ? `${id}-description` : undefined;
   return (
-    <label className="team-resource-field" htmlFor={id}>
-      <span>{label}</span>
+    <Field {...(className ? { className } : {})}>
+      <Label htmlFor={id}>
+        {label}
+        {required ? <RequiredMark /> : null}
+      </Label>
       {type === "textarea" ? (
-        <textarea
-          className="wlbp-field__input"
+        <Textarea
           id={id}
           name={name}
           defaultValue={value ?? ""}
@@ -47,10 +75,10 @@ function Field({
           maxLength={maxLength}
           dir={dir}
           rows={3}
+          aria-describedby={descriptionId}
         />
       ) : (
-        <input
-          className="wlbp-field__input"
+        <Input
           id={id}
           name={name}
           type={type}
@@ -61,9 +89,13 @@ function Field({
           min={min}
           max={max}
           step={type === "number" ? 1 : undefined}
+          aria-describedby={descriptionId}
         />
       )}
-    </label>
+      {description ? (
+        <FieldDescription id={descriptionId}>{description}</FieldDescription>
+      ) : null}
+    </Field>
   );
 }
 function intakeFields(entity?: CatalogEntityV1) {
@@ -120,6 +152,7 @@ export function CatalogForm({
 }) {
   const message = (key: CatalogMessageKey) => catalogMessage(locale, key);
   const router = useRouter();
+  const id = useId();
   const [state, action, pending] = useActionState(saveCatalogDraftAction, {});
   const attempt = state.nextRequestId ?? requestId;
   const [questions, setQuestions] = useState(() => intakeFields(entity));
@@ -138,61 +171,61 @@ export function CatalogForm({
     }
   }, [state, router]);
   const full = workspace.canPublish;
+  const name = (row: CatalogEntityV1) => (locale === "ar" ? row.name_ar : row.name_en);
   return (
-    <form
-      action={action}
-      className="catalog-form"
-      onReset={(event) => event.preventDefault()}
-    >
+    <form action={action} className="grid gap-6" {...keepUnsavedInput}>
       <input type="hidden" name="locale" value={locale} />
       <input type="hidden" name="kind" value={kind} />
       <input type="hidden" name="entityId" value={entity?.id ?? ""} />
       <input type="hidden" name="expectedRevision" value={entity?.revision ?? ""} />
       <input type="hidden" name="requestId" value={attempt} />
       {state.message ? (
-        <p role={state.saved ? "status" : "alert"}>
-          {message(state.message)}
-          {state.message === "revision_conflict" ? (
-            <>
-              {" "}
-              <button
-                className="wlbp-button wlbp-button--quiet"
+        <Alert tone={state.saved ? "positive" : "danger"}>
+          <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
+            <span>{message(state.message)}</span>
+            {state.message === "revision_conflict" ? (
+              <Button
+                variant="outline"
+                size="sm"
                 type="button"
                 onClick={() => router.refresh()}
               >
+                <RotateCw aria-hidden="true" />
                 {message("reload")}
-              </button>
-            </>
-          ) : null}
-        </p>
+              </Button>
+            ) : null}
+          </AlertDescription>
+        </Alert>
       ) : null}
-      <fieldset disabled={pending}>
-        <legend>{message("content")}</legend>
+      <FieldSet disabled={pending} className={panel}>
+        <FieldLegend>{message("content")}</FieldLegend>
         {full ? (
-          <Field
-            name="key"
-            label={message("key")}
-            value={entity?.metadata.key}
-            dir="ltr"
-            maxLength={100}
-          />
+          <FieldGroup columns={2}>
+            <TextInputField
+              name="key"
+              label={message("key")}
+              value={entity?.metadata.key}
+              dir="ltr"
+              maxLength={100}
+            />
+          </FieldGroup>
         ) : null}
-        <div className="catalog-field-columns">
-          <Field
+        <FieldGroup columns={2}>
+          <TextInputField
             name="name_en"
             label={message("nameEn")}
             value={entity?.name_en}
             dir="ltr"
             maxLength={160}
           />
-          <Field
+          <TextInputField
             name="name_ar"
             label={message("nameAr")}
             value={entity?.name_ar}
             dir="rtl"
             maxLength={160}
           />
-          <Field
+          <TextInputField
             name="description_en"
             label={message("descriptionEn")}
             value={entity?.description_en}
@@ -201,7 +234,7 @@ export function CatalogForm({
             required={false}
             maxLength={2000}
           />
-          <Field
+          <TextInputField
             name="description_ar"
             label={message("descriptionAr")}
             value={entity?.description_ar}
@@ -210,57 +243,63 @@ export function CatalogForm({
             required={false}
             maxLength={2000}
           />
-        </div>
-      </fieldset>
+        </FieldGroup>
+      </FieldSet>
       {full && kind === "category" ? (
-        <fieldset disabled={pending}>
-          <Field
-            name="sort_order"
-            type="number"
-            label={message("sort")}
-            value={entity?.metadata.sort_order ?? 0}
-            min={0}
-            max={100000}
-          />
-        </fieldset>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldGroup columns={2}>
+            <TextInputField
+              name="sort_order"
+              type="number"
+              label={message("sort")}
+              value={entity?.metadata.sort_order ?? 0}
+              min={0}
+              max={100000}
+            />
+          </FieldGroup>
+        </FieldSet>
       ) : null}
       {full && kind === "location" ? (
-        <fieldset disabled={pending}>
-          <legend>{message("locations")}</legend>
-          <Field
-            name="time_zone"
-            label={message("timeZone")}
-            value={entity?.metadata.time_zone ?? "America/New_York"}
-            dir="ltr"
-            maxLength={100}
-          />
-          <p>{message("timeZoneHint")}</p>
-          <Field
-            name="address_en"
-            label={message("addressEn")}
-            value={entity?.address_en}
-            type="textarea"
-            dir="ltr"
-            required={false}
-            maxLength={2000}
-          />
-          <Field
-            name="address_ar"
-            label={message("addressAr")}
-            value={entity?.address_ar}
-            type="textarea"
-            dir="rtl"
-            required={false}
-            maxLength={2000}
-          />
-        </fieldset>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>{message("locations")}</FieldLegend>
+          <FieldGroup columns={2}>
+            <TextInputField
+              name="time_zone"
+              label={message("timeZone")}
+              value={entity?.metadata.time_zone ?? "America/New_York"}
+              dir="ltr"
+              maxLength={100}
+              description={message("timeZoneHint")}
+            />
+          </FieldGroup>
+          <FieldGroup columns={2}>
+            <TextInputField
+              name="address_en"
+              label={message("addressEn")}
+              value={entity?.address_en}
+              type="textarea"
+              dir="ltr"
+              required={false}
+              maxLength={2000}
+            />
+            <TextInputField
+              name="address_ar"
+              label={message("addressAr")}
+              value={entity?.address_ar}
+              type="textarea"
+              dir="rtl"
+              required={false}
+              maxLength={2000}
+            />
+          </FieldGroup>
+        </FieldSet>
       ) : null}
       {full && kind === "service" ? (
         <>
-          <fieldset disabled={pending}>
-            <legend>{message("scheduling")}</legend>
-            <div className="catalog-field-columns">
-              <Field
+          <FieldSet disabled={pending} className={panel}>
+            <FieldLegend>{message("scheduling")}</FieldLegend>
+            <FieldGroup columns={3}>
+              <TextInputField
                 name="duration_minutes"
                 label={message("duration")}
                 value={entity?.duration_minutes ?? 30}
@@ -268,7 +307,7 @@ export function CatalogForm({
                 min={1}
                 max={1440}
               />
-              <Field
+              <TextInputField
                 name="buffer_before_minutes"
                 label={message("before")}
                 value={entity?.buffer_before_minutes ?? 0}
@@ -276,7 +315,7 @@ export function CatalogForm({
                 min={0}
                 max={1440}
               />
-              <Field
+              <TextInputField
                 name="buffer_after_minutes"
                 label={message("after")}
                 value={entity?.buffer_after_minutes ?? 0}
@@ -284,294 +323,309 @@ export function CatalogForm({
                 min={0}
                 max={1440}
               />
-            </div>
-            <label>
-              {message("category")}
-              <select
-                className="wlbp-field__input"
-                name="category_id"
-                defaultValue={entity?.metadata.category_id ?? ""}
-              >
-                <option value="">{message("noCategory")}</option>
+            </FieldGroup>
+            <FieldGroup columns={2}>
+              <Field>
+                <Label htmlFor={`${id}-category`}>{message("category")}</Label>
+                <ChoiceSelect
+                  id={`${id}-category`}
+                  name="category_id"
+                  defaultValue={entity?.metadata.category_id ?? CATALOG_NO_LINK}
+                  options={[
+                    { value: CATALOG_NO_LINK, label: message("noCategory") },
+                    ...workspace.entities
+                      .filter(
+                        (row) => row.kind === "category" && row.state !== "retired",
+                      )
+                      .map((row) => ({ value: row.id, label: name(row) })),
+                  ]}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor={`${id}-booking-mode`}>{message("bookingMode")}</Label>
+                <ChoiceSelect
+                  id={`${id}-booking-mode`}
+                  name="booking_mode"
+                  defaultValue={entity?.booking_mode ?? "appointment"}
+                  options={(["appointment", "exclusive_resource"] as const).map(
+                    (value) => ({ value, label: message(value) }),
+                  )}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor={`${id}-assignment`}>{message("assignment")}</Label>
+                <ChoiceSelect
+                  id={`${id}-assignment`}
+                  name="assignment_mode"
+                  value={assignment}
+                  onValueChange={(value) => setAssignment(value as typeof assignment)}
+                  options={(
+                    [
+                      "any_available",
+                      "customer_choice",
+                      "round_robin",
+                      "fixed_staff",
+                    ] as const
+                  ).map((value) => ({ value, label: message(value) }))}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor={`${id}-fixed-staff`}>
+                  {message("fixedStaff")}
+                  {assignment === "fixed_staff" ? <RequiredMark /> : null}
+                </Label>
+                <ChoiceSelect
+                  id={`${id}-fixed-staff`}
+                  name="fixed_staff_id"
+                  required={assignment === "fixed_staff"}
+                  defaultValue={entity?.metadata.fixed_staff_id ?? ""}
+                  placeholder="—"
+                  options={workspace.staff.map((staff) => ({
+                    value: staff.id,
+                    label: staff.name,
+                  }))}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor={`${id}-resource-type`}>{message("resourceType")}</Label>
+                <ChoiceSelect
+                  id={`${id}-resource-type`}
+                  name="resource_type_id"
+                  defaultValue={entity?.metadata.resource_type_id ?? CATALOG_NO_LINK}
+                  options={[
+                    { value: CATALOG_NO_LINK, label: message("noResource") },
+                    ...workspace.resourceTypes.map((type) => ({
+                      value: type.id,
+                      label: type.name,
+                    })),
+                  ]}
+                />
+              </Field>
+            </FieldGroup>
+            <FieldSet className="gap-1">
+              <FieldLegend className="text-sm">
+                {message("chooseLocations")}
+              </FieldLegend>
+              <div className="grid gap-x-6 md:grid-cols-2">
                 {workspace.entities
-                  .filter((row) => row.kind === "category" && row.state !== "retired")
+                  .filter((row) => row.kind === "location" && row.state !== "retired")
                   .map((row) => (
-                    <option key={row.id} value={row.id}>
-                      {locale === "ar" ? row.name_ar : row.name_en}
-                    </option>
-                  ))}
-              </select>
-            </label>
-            <fieldset>
-              <legend>{message("chooseLocations")}</legend>
-              {workspace.entities
-                .filter((row) => row.kind === "location" && row.state !== "retired")
-                .map((row) => (
-                  <label className="workspace-checkbox" key={row.id}>
-                    <input
-                      type="checkbox"
+                    <CheckboxRow
+                      key={row.id}
+                      id={`${id}-location-${row.id}`}
                       name="location_ids"
                       value={row.id}
                       defaultChecked={entity?.metadata.location_ids?.includes(row.id)}
-                    />
-                    {locale === "ar" ? row.name_ar : row.name_en} ·{" "}
-                    <bdi>{row.metadata.time_zone}</bdi>
-                  </label>
-                ))}
-            </fieldset>
-            <label>
-              {message("bookingMode")}
-              <select
-                className="wlbp-field__input"
-                name="booking_mode"
-                defaultValue={entity?.booking_mode ?? "appointment"}
-              >
-                {(["appointment", "exclusive_resource"] as const).map((value) => (
-                  <option key={value} value={value}>
-                    {message(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {message("assignment")}
-              <select
-                className="wlbp-field__input"
-                name="assignment_mode"
-                value={assignment}
-                onChange={(event) =>
-                  setAssignment(event.target.value as typeof assignment)
-                }
-              >
-                {(
-                  [
-                    "any_available",
-                    "customer_choice",
-                    "round_robin",
-                    "fixed_staff",
-                  ] as const
-                ).map((value) => (
-                  <option key={value} value={value}>
-                    {message(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {message("fixedStaff")}
-              <select
-                className="wlbp-field__input"
-                name="fixed_staff_id"
-                required={assignment === "fixed_staff"}
-                defaultValue={entity?.metadata.fixed_staff_id ?? ""}
-              >
-                <option value="">—</option>
-                {workspace.staff.map((staff) => (
-                  <option key={staff.id} value={staff.id}>
-                    {staff.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {message("resourceType")}
-              <select
-                className="wlbp-field__input"
-                name="resource_type_id"
-                defaultValue={entity?.metadata.resource_type_id ?? ""}
-              >
-                <option value="">{message("noResource")}</option>
-                {workspace.resourceTypes.map((type) => (
-                  <option key={type.id} value={type.id}>
-                    {type.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="workspace-checkbox">
-              <input
-                type="checkbox"
-                name="approval_required"
-                value="yes"
-                defaultChecked={entity?.approval_required}
-              />
+                    >
+                      {name(row)} ·{" "}
+                      <bdi className="text-muted-foreground">
+                        {row.metadata.time_zone}
+                      </bdi>
+                    </CheckboxRow>
+                  ))}
+              </div>
+            </FieldSet>
+            <CheckboxRow
+              id={`${id}-approval`}
+              name="approval_required"
+              defaultChecked={entity?.approval_required}
+            >
               {message("approval")}
-            </label>
-          </fieldset>
-          <fieldset disabled={pending}>
-            <legend>{message("financial")}</legend>
-            <Field
-              name="currency"
-              label={message("currency")}
-              value={entity?.currency ?? "USD"}
-              dir="ltr"
-              maxLength={3}
-            />
-            <Field
-              name="price"
-              label={message("price")}
-              value={catalogPriceInput(entity?.price_minor ?? 0)}
-              dir="ltr"
-              maxLength={30}
-            />
-            <p>{message("currencyHint")}</p>
-            <Field
-              name="tax_rate_bps"
-              label={message("tax")}
-              value={entity?.tax_rate_bps ?? 0}
-              type="number"
-              min={0}
-              max={3000}
-            />
-            <label>
-              {message("payment")}
-              <select
-                className="wlbp-field__input"
-                name="payment_mode"
-                value={payment}
-                onChange={(event) => setPayment(event.target.value as typeof payment)}
-              >
-                {(["none", "deposit", "full"] as const).map((value) => (
-                  <option key={value} value={value}>
-                    {message(value)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Field
-              name="deposit_percent_bps"
-              label={message("depositBps")}
-              value={
-                typeof entity?.policy.deposit_percent_bps === "number"
-                  ? entity.policy.deposit_percent_bps
-                  : 5000
-              }
-              type="number"
-              min={0}
-              max={10000}
-            />
-          </fieldset>
-          <fieldset disabled={pending}>
-            <legend>{message("legal")}</legend>
-            <Field
-              name="consent_version"
-              label={message("consentVersion")}
-              value={
-                typeof entity?.policy.consent_version === "string"
-                  ? entity.policy.consent_version
-                  : "1"
-              }
-              maxLength={40}
-            />
-            <Field
-              name="consent_en"
-              label={message("consentEn")}
-              value={
-                typeof entity?.policy.consent_text === "string"
-                  ? entity.policy.consent_text
-                  : ""
-              }
-              type="textarea"
-              dir="ltr"
-              maxLength={10000}
-            />
-            <Field
-              name="consent_ar"
-              label={message("consentAr")}
-              value={
-                typeof entity?.policy_ar.consent_text === "string"
-                  ? entity.policy_ar.consent_text
-                  : ""
-              }
-              type="textarea"
-              dir="rtl"
-              maxLength={10000}
-            />
-            <h3>{message("intake")}</h3>
-            <input type="hidden" name="intake_count" value={questions.length} />
-            {questions.map((question, index) => (
-              <fieldset key={question.rowId}>
-                <Field
-                  name={`intake_key.${index}`}
-                  label={message("intakeKey")}
-                  value={question.key}
-                  maxLength={64}
-                  dir="ltr"
+            </CheckboxRow>
+          </FieldSet>
+          <FieldSet disabled={pending} className={panel}>
+            <FieldLegend>{message("financial")}</FieldLegend>
+            <FieldGroup columns={2}>
+              <TextInputField
+                name="currency"
+                label={message("currency")}
+                value={entity?.currency ?? "USD"}
+                dir="ltr"
+                maxLength={3}
+              />
+              <TextInputField
+                name="price"
+                label={message("price")}
+                value={catalogPriceInput(entity?.price_minor ?? 0)}
+                dir="ltr"
+                maxLength={30}
+                description={message("currencyHint")}
+              />
+              <TextInputField
+                name="tax_rate_bps"
+                label={message("tax")}
+                value={entity?.tax_rate_bps ?? 0}
+                type="number"
+                min={0}
+                max={3000}
+              />
+              <Field>
+                <Label htmlFor={`${id}-payment`}>{message("payment")}</Label>
+                <ChoiceSelect
+                  id={`${id}-payment`}
+                  name="payment_mode"
+                  value={payment}
+                  onValueChange={(value) => setPayment(value as typeof payment)}
+                  options={(["none", "deposit", "full"] as const).map((value) => ({
+                    value,
+                    label: message(value),
+                  }))}
                 />
-                <Field
-                  name={`intake_en.${index}`}
-                  label={message("questionEn")}
-                  value={question.en}
-                  maxLength={500}
-                  dir="ltr"
-                />
-                <Field
-                  name={`intake_ar.${index}`}
-                  label={message("questionAr")}
-                  value={question.ar}
-                  maxLength={500}
-                  dir="rtl"
-                />
-                <label className="workspace-checkbox">
-                  <input
-                    type="checkbox"
-                    name={`intake_required.${index}`}
-                    value="yes"
-                    defaultChecked={question.required}
-                  />
-                  {message("required")}
-                </label>
-                <button
-                  className="wlbp-button wlbp-button--quiet"
+              </Field>
+              <TextInputField
+                name="deposit_percent_bps"
+                label={message("depositBps")}
+                value={
+                  typeof entity?.policy.deposit_percent_bps === "number"
+                    ? entity.policy.deposit_percent_bps
+                    : 5000
+                }
+                type="number"
+                min={0}
+                max={10000}
+              />
+            </FieldGroup>
+          </FieldSet>
+          <FieldSet disabled={pending} className={panel}>
+            <FieldLegend>{message("legal")}</FieldLegend>
+            <FieldGroup columns={2}>
+              <TextInputField
+                name="consent_version"
+                label={message("consentVersion")}
+                value={
+                  typeof entity?.policy.consent_version === "string"
+                    ? entity.policy.consent_version
+                    : "1"
+                }
+                maxLength={40}
+              />
+            </FieldGroup>
+            <FieldGroup columns={2}>
+              <TextInputField
+                name="consent_en"
+                label={message("consentEn")}
+                value={
+                  typeof entity?.policy.consent_text === "string"
+                    ? entity.policy.consent_text
+                    : ""
+                }
+                type="textarea"
+                dir="ltr"
+                maxLength={10000}
+              />
+              <TextInputField
+                name="consent_ar"
+                label={message("consentAr")}
+                value={
+                  typeof entity?.policy_ar.consent_text === "string"
+                    ? entity.policy_ar.consent_text
+                    : ""
+                }
+                type="textarea"
+                dir="rtl"
+                maxLength={10000}
+              />
+            </FieldGroup>
+            <div className="grid gap-4 border-t pt-5">
+              <h3 className="text-base font-semibold">{message("intake")}</h3>
+              <input type="hidden" name="intake_count" value={questions.length} />
+              {questions.map((question, index) => (
+                <FieldSet
+                  key={question.rowId}
+                  className="gap-4 border-b pb-5 last-of-type:border-b-0"
+                >
+                  <FieldLegend className="text-sm text-muted-foreground">
+                    {message("question")} {formatNumber(index + 1, locale)}
+                  </FieldLegend>
+                  <FieldGroup columns={3}>
+                    <TextInputField
+                      name={`intake_key.${index}`}
+                      label={message("intakeKey")}
+                      value={question.key}
+                      maxLength={64}
+                      dir="ltr"
+                    />
+                    <TextInputField
+                      name={`intake_en.${index}`}
+                      label={message("questionEn")}
+                      value={question.en}
+                      maxLength={500}
+                      dir="ltr"
+                    />
+                    <TextInputField
+                      name={`intake_ar.${index}`}
+                      label={message("questionAr")}
+                      value={question.ar}
+                      maxLength={500}
+                      dir="rtl"
+                    />
+                  </FieldGroup>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <CheckboxRow
+                      id={`${id}-intake-required-${question.rowId}`}
+                      name={`intake_required.${index}`}
+                      defaultChecked={question.required}
+                    >
+                      {message("required")}
+                    </CheckboxRow>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      type="button"
+                      onClick={() =>
+                        setQuestions((items) => items.filter((_, row) => row !== index))
+                      }
+                    >
+                      <Trash2 aria-hidden="true" />
+                      {message("removeQuestion")}
+                    </Button>
+                  </div>
+                </FieldSet>
+              ))}
+              <div>
+                <Button
+                  variant="outline"
                   type="button"
+                  disabled={questions.length >= 20}
                   onClick={() =>
-                    setQuestions((items) => items.filter((_, row) => row !== index))
+                    setQuestions((items) => [
+                      ...items,
+                      {
+                        rowId: crypto.randomUUID(),
+                        key: "",
+                        en: "",
+                        ar: "",
+                        required: false,
+                      },
+                    ])
                   }
                 >
-                  {message("removeQuestion")}
-                </button>
-              </fieldset>
-            ))}
-            <button
-              className="wlbp-button wlbp-button--quiet"
-              type="button"
-              disabled={questions.length >= 20}
-              onClick={() =>
-                setQuestions((items) => [
-                  ...items,
-                  {
-                    rowId: crypto.randomUUID(),
-                    key: "",
-                    en: "",
-                    ar: "",
-                    required: false,
-                  },
-                ])
-              }
-            >
-              {message("addQuestion")}
-            </button>
-          </fieldset>
+                  <Plus aria-hidden="true" />
+                  {message("addQuestion")}
+                </Button>
+              </div>
+            </div>
+          </FieldSet>
         </>
       ) : null}
       {full && entity ? (
-        <fieldset disabled={pending}>
-          <legend>{message("retire")}</legend>
-          <p>{message("retireHint")}</p>
-          <label className="workspace-checkbox">
-            <input
-              type="checkbox"
-              name="retire"
-              value="yes"
-              defaultChecked={entity.metadata.retire}
-            />
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>{message("retire")}</FieldLegend>
+          <CheckboxRow
+            id={`${id}-retire`}
+            name="retire"
+            defaultChecked={entity.metadata.retire}
+            description={message("retireHint")}
+          >
             {message("retire")}
-          </label>
-        </fieldset>
+          </CheckboxRow>
+        </FieldSet>
       ) : null}
-      <button className="wlbp-button" disabled={pending}>
-        {message(pending ? "working" : "save")}
-      </button>
+      <FormActions sticky>
+        <Button type="submit" loading={pending} loadingLabel={message("working")}>
+          {message("save")}
+        </Button>
+      </FormActions>
     </form>
   );
 }
@@ -597,26 +651,45 @@ export function CatalogPublicationForm({
   if (!workspace.canPublish) return null;
   if (!drafts.length)
     return state.saved && state.message ? (
-      <p role="status">{message(state.message)}</p>
+      <Alert tone="positive">
+        <AlertDescription className="text-foreground">
+          {message(state.message)}
+        </AlertDescription>
+      </Alert>
     ) : null;
   return (
-    <section className="workspace-section" aria-labelledby="publish-title">
-      <h2 id="publish-title">{message("publish")}</h2>
-      <p>{message("publishHint")}</p>
-      <ul>
+    <Section
+      id="publish"
+      title={message("publish")}
+      description={message("publishHint")}
+    >
+      <ul className="grid divide-y rounded-lg border bg-card">
         {drafts.map((draft) => (
-          <li key={draft.id}>
+          <li
+            key={draft.id}
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-4 py-3 text-sm"
+          >
             <Link
+              className="font-semibold text-primary underline-offset-4 hover:underline"
               href={`/${locale}/${draft.kind === "service" ? "services" : draft.kind === "category" ? "categories" : "locations"}/${draft.id}`}
             >
               {locale === "ar" ? draft.name_ar : draft.name_en}
-            </Link>{" "}
-            · {message("revision")} {draft.revision}
-            {draft.metadata.retire ? ` · ${message("pendingRetirement")}` : ""}
+            </Link>
+            <span className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <StatusStamp state="pending">{message("draft")}</StatusStamp>
+              <span>
+                {message("revision")} {formatNumber(draft.revision, locale)}
+              </span>
+              {draft.metadata.retire ? (
+                <StatusStamp state="cancelled">
+                  {message("pendingRetirement")}
+                </StatusStamp>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>
-      <form action={action} className="auth-form">
+      <form action={action} className="grid gap-4">
         <input type="hidden" name="locale" value={locale} />
         <input type="hidden" name="requestId" value={attempt} />
         <input
@@ -627,22 +700,24 @@ export function CatalogPublicationForm({
           )}
         />
         {state.message ? (
-          <p role={state.saved ? "status" : "alert"}>{message(state.message)}</p>
+          <Alert tone={state.saved ? "positive" : "danger"}>
+            <AlertDescription className="text-foreground">
+              {message(state.message)}
+            </AlertDescription>
+          </Alert>
         ) : null}
-        <label className="workspace-checkbox">
-          <input
-            type="checkbox"
-            name="confirm"
-            value="yes"
-            required
-            disabled={pending}
+        <FormActions>
+          <ConfirmSubmit
+            label={message("publish")}
+            pending={pending}
+            pendingLabel={message("working")}
+            title={message("publishConfirmTitle")}
+            description={message("confirmPublish")}
+            confirmLabel={message("publishConfirmAction")}
+            cancelLabel={message("cancel")}
           />
-          {message("confirmPublish")}
-        </label>
-        <button className="wlbp-button" disabled={pending}>
-          {message(pending ? "working" : "publish")}
-        </button>
+        </FormActions>
       </form>
-    </section>
+    </Section>
   );
 }

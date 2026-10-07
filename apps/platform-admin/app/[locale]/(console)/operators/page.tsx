@@ -1,4 +1,12 @@
-import { TextField } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Field,
+  FieldDescription,
+  DateTimePicker,
+  Label,
+  TextField,
+} from "@wlbp/ui-foundation";
 import {
   addOperatorAction,
   disableOperatorAction,
@@ -6,7 +14,7 @@ import {
   setOperatorRoleAction,
 } from "../../../_lib/actions/operators";
 import { operatorsCopy as c } from "../../../_lib/admin-copy";
-import { copyFor, roleCopy, say, stateCopy } from "../../../_lib/copy";
+import { copyFor, fill, formCopy, roleCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
@@ -35,7 +43,7 @@ export default async function OperatorsPage({
   const now = Date.now();
   const admin = atLeast(operator.role, "admin");
   const roleOptions = roles.map((r) => [r, copyFor(roleCopy, r, locale)] as const);
-  const roleFields = (role?: string, expires?: string | null) => (
+  const roleFields = (suffix: string, role?: string, expires?: string | null) => (
     <>
       <SelectField
         name="role"
@@ -43,22 +51,30 @@ export default async function OperatorsPage({
         value={role ?? "viewer"}
         options={roleOptions}
       />
-      <label className="field">
-        <span>{say(locale, c.expiresAt)}</span>
-        <input
-          type="datetime-local"
+      <Field>
+        <Label htmlFor={`operator-expires-${suffix}`}>{say(locale, c.expiresAt)}</Label>
+        <DateTimePicker
+          id={`operator-expires-${suffix}`}
           name="expiresAt"
-          defaultValue={expires?.slice(0, 16)}
+          locale={locale}
+          datePlaceholder={say(locale, formCopy.pickDate)}
+          timePlaceholder={say(locale, formCopy.pickTime)}
+          timeLabel={fill(locale, formCopy.timeOf, { field: say(locale, c.expiresAt) })}
+          {...(expires ? { defaultValue: expires.slice(0, 16) } : {})}
+          aria-describedby={`operator-expires-${suffix}-hint`}
         />
-        <small>{say(locale, c.expiresHint)}</small>
-      </label>
+        <FieldDescription id={`operator-expires-${suffix}-hint`}>
+          {say(locale, c.expiresHint)}
+        </FieldDescription>
+      </Field>
     </>
   );
 
   return (
-    <>
+    <div className="grid gap-6">
       <PageHeader
         locale={locale}
+        timesInUtc
         title={say(locale, c.title)}
         description={say(locale, c.description)}
         actions={
@@ -82,14 +98,18 @@ export default async function OperatorsPage({
                 required
                 autoComplete="off"
               />
-              {roleFields()}
+              {roleFields("new")}
             </ActionDialog>
           ) : null
         }
       />
-      <p className="notice">{say(locale, c.roles)}</p>
+      <Alert>
+        <AlertDescription>{say(locale, c.roles)}</AlertDescription>
+      </Alert>
       {!admin ? (
-        <p className="secondary">{say(locale, stateCopy.roleRequired)}</p>
+        <p className="text-sm text-muted-foreground">
+          {say(locale, stateCopy.roleRequired)}
+        </p>
       ) : null}
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
@@ -117,13 +137,22 @@ export default async function OperatorsPage({
             return {
               key: row.operator_id,
               cells: [
-                <>
-                  <bdi>{row.email}</bdi>
-                  {self ? <> {say(locale, c.you)}</> : null}
+                <div key="m" className="grid gap-0.5">
+                  <span className="font-semibold text-foreground">
+                    <bdi>{row.email}</bdi>
+                    {self ? (
+                      <span className="font-normal text-muted-foreground">
+                        {" "}
+                        {say(locale, c.you)}
+                      </span>
+                    ) : null}
+                  </span>
                   {row.usable_admin ? (
-                    <span className="secondary">{say(locale, c.usable)}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {say(locale, c.usable)}
+                    </span>
                   ) : null}
-                </>,
+                </div>,
                 <RoleBadge key="r" locale={locale} role={row.role} />,
                 say(locale, row.mfa_verified ? c.verified : c.missing),
                 <StatusBadge key="s" locale={locale} status={state} />,
@@ -135,7 +164,7 @@ export default async function OperatorsPage({
                 />,
                 <TimeValue key="l" locale={locale} value={row.last_sign_in_at} />,
                 admin ? (
-                  <div key="a" className="page-actions">
+                  <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
                       action={setOperatorRoleAction}
@@ -147,7 +176,7 @@ export default async function OperatorsPage({
                       reason={{ minLength: 5 }}
                       hidden={{ operatorId: row.operator_id }}
                     >
-                      {roleFields(row.role, row.expires_at)}
+                      {roleFields(row.operator_id, row.role, row.expires_at)}
                     </ActionDialog>
                     {row.disabled_at ? (
                       <ActionDialog
@@ -183,6 +212,6 @@ export default async function OperatorsPage({
           })}
         />
       )}
-    </>
+    </div>
   );
 }

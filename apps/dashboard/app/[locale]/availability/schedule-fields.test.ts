@@ -12,6 +12,14 @@ describe("civil schedule fields", () => {
       "2026-11-01T06:30:00.000Z",
     );
   });
+  it("treats the editor's unambiguous-time sentinel like the former empty choice", () => {
+    expect(() =>
+      civilInstant("2026-11-01T01:30", "America/New_York", "auto", "startsAt"),
+    ).toThrow("fold");
+    expect(
+      civilInstant("2026-11-01T12:30", "America/New_York", "auto", "startsAt"),
+    ).toBe(civilInstant("2026-11-01T12:30", "America/New_York", "", "startsAt"));
+  });
   it("keeps exclusive midnight explicit", () => {
     expect(minuteInput("24:00", true)).toBe(1440);
     expect(() => minuteInput("24:00")).toThrow();

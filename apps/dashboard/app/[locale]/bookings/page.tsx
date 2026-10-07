@@ -1,12 +1,54 @@
 import { workspaceStatus } from "../../_lib/workspace-status";
-import { formatCurrency, formatDateTime, type Locale } from "@wlbp/i18n";
-import { Badge, Button, StatusMessage, Surface } from "@wlbp/ui-foundation";
+import type { Locale } from "@wlbp/i18n";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  DateTimePicker,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  EmptyState,
+  Field,
+  Input,
+  Label,
+  PageHeader,
+  ReferenceCode,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusStamp,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Textarea,
+  Toolbar,
+} from "@wlbp/ui-foundation";
+import { CalendarClock, CalendarX, Search } from "lucide-react";
 import Link from "next/link";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type { BookingSearchRowV1 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
+import { dominantZone, stampStateFor } from "../../_lib/booking-display";
+import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
+import { FoldSelect } from "../../_lib/ui/fold-select";
+import { ResultAlert } from "../../_lib/ui/result-alert";
+import { Money } from "../../_lib/ui/money";
+import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+import { ServiceDye } from "../../_lib/ui/service-dye";
+import { When } from "../../_lib/ui/when";
+import { ZoneNote } from "../../_lib/ui/zone-note";
 import { changeBookingAction } from "./actions";
 import { listResultKeys, positiveResults } from "./results";
 
@@ -30,6 +72,10 @@ const statuses = [
   "no_show",
   "cancelled",
 ] as const;
+
+// Radix Select cannot carry an empty value. "all" is not one of the statuses
+// above, so the filter below reads it as "no status filter".
+const anyStatus = "all";
 
 function single(value: string | string[] | undefined): string | null {
   const candidate = Array.isArray(value) ? value[0] : value;
@@ -87,187 +133,383 @@ export default async function BookingsPage({
     result !== null && result in listResultKeys
       ? listResultKeys[result as keyof typeof listResultKeys]
       : null;
+  // Times are shown in the zone most rows use, named once in the header.
+  const viewZone = dominantZone(
+    (bookings ?? []).map((booking) => booking.locationTimeZone),
+    "Asia/Riyadh",
+  );
 
   return (
     <WorkspaceShell current="bookings" labelledBy="bookings-title" locale={locale}>
-      <Surface as="section" className="requests-queue" labelledBy="bookings-title">
-        <h1 id="bookings-title">{message("bookingsTitle")}</h1>
-        <p>{message("bookingsSummary")}</p>
-        {resultKey === null ? null : (
-          <StatusMessage
-            tone={positiveResults.has(result ?? "") ? "positive" : "warning"}
-          >
-            {message(resultKey)}
-          </StatusMessage>
-        )}
+      <PageHeader
+        titleId="bookings-title"
+        title={message("bookingsTitle")}
+        description={message("bookingsSummary")}
+        meta={
+          bookings && bookings.length > 0 ? (
+            <ZoneNote locale={locale} timeZone={viewZone} />
+          ) : null
+        }
+      />
+      {resultKey === null ? null : (
+        <ResultAlert positive={positiveResults.has(result ?? "")}>
+          {message(resultKey)}
+        </ResultAlert>
+      )}
 
-        <form action={`/${locale}/bookings`} className="calendar-filters" method="get">
-          <label htmlFor="bookings-query">{message("bookingsSearchLabel")}</label>
-          <input
-            defaultValue={filters.query ?? ""}
-            id="bookings-query"
-            name="q"
-            type="search"
-          />
-          <label htmlFor="bookings-status">
-            {message("bookingsStatusFilterLabel")}
-          </label>
-          <select
-            defaultValue={filters.status ?? ""}
-            id="bookings-status"
-            name="status"
-          >
-            <option value="">{message("bookingsStatusAll")}</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {workspaceStatus(locale, status)}
-              </option>
-            ))}
-          </select>
-          <Button type="submit">{message("bookingsSearchAction")}</Button>
-        </form>
+      <form action={`/${locale}/bookings`} method="get" role="search">
+        <Toolbar>
+          <Field className="md:min-w-80">
+            <Label htmlFor="bookings-query">{message("bookingsSearchLabel")}</Label>
+            <Input
+              defaultValue={filters.query ?? ""}
+              id="bookings-query"
+              name="q"
+              type="search"
+            />
+          </Field>
+          <Field>
+            <Label htmlFor="bookings-status">
+              {message("bookingsStatusFilterLabel")}
+            </Label>
+            <Select defaultValue={filters.status ?? anyStatus} name="status">
+              <SelectTrigger id="bookings-status">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={anyStatus}>
+                  {message("bookingsStatusAll")}
+                </SelectItem>
+                {statuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {workspaceStatus(locale, status)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Button type="submit" variant="secondary">
+            <Search aria-hidden="true" />
+            {message("bookingsSearchAction")}
+          </Button>
+        </Toolbar>
+      </form>
 
-        {bookings === null ? (
-          <p>{message("bookingsUnavailable")}</p>
-        ) : bookings.length === 0 ? (
-          <p>{message("bookingsEmpty")}</p>
-        ) : (
-          <ul aria-label={message("bookingsListLabel")} className="requests-list">
+      {bookings === null ? (
+        <Alert tone="danger">
+          <AlertDescription className="text-foreground">
+            {message("bookingsUnavailable")}
+          </AlertDescription>
+        </Alert>
+      ) : bookings.length === 0 ? (
+        <EmptyState
+          icon={<CalendarX aria-hidden="true" />}
+          title={message("bookingsEmpty")}
+        />
+      ) : (
+        <>
+          <TableFrame>
+            <Table label={message("bookingsListLabel")}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{workspaceMessage(locale, "reference")}</TableHead>
+                  <TableHead>{message("bookingsWhenLabel")}</TableHead>
+                  <TableHead>{message("requestsCustomerLabel")}</TableHead>
+                  <TableHead>{message("bookingsStatusLabel")}</TableHead>
+                  <TableHead>{message("detailPaymentLabel")}</TableHead>
+                  <TableHead>{message("bookingsDeliveryLabel")}</TableHead>
+                  <TableHead className="text-end">
+                    {message("detailPriceLabel")}
+                  </TableHead>
+                  <TableHead className="w-14">
+                    <span className="sr-only">
+                      {workspaceMessage(locale, "actions")}
+                    </span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {bookings.map((booking) => (
+                  <TableRow key={booking.bookingId}>
+                    <TableCell className="min-w-44">
+                      <div className="grid gap-1">
+                        {/* The reference opens the detail, where the lifecycle
+                            lives, so this list never becomes a second place
+                            where status can change. */}
+                        <Link
+                          href={`/${locale}/bookings/${booking.bookingId}`}
+                          aria-describedby={`booking-${booking.bookingId}`}
+                          className="w-fit rounded-sm underline-offset-4 outline-none hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                        >
+                          <ReferenceCode className="text-primary">
+                            {booking.publicReference}
+                          </ReferenceCode>
+                          <span className="sr-only">
+                            {" "}
+                            {message("bookingsOpenDetail")}
+                          </span>
+                        </Link>
+                        <span
+                          id={`booking-${booking.bookingId}`}
+                          className="text-sm font-medium text-foreground"
+                        >
+                          <ServiceDye name={booking.serviceName} />
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {countLabel(locale, "notes", booking.noteCount)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="min-w-40 whitespace-normal">
+                      <When
+                        instant={booking.startAt}
+                        locale={locale}
+                        timeZone={booking.locationTimeZone}
+                        viewTimeZone={viewZone}
+                      />
+                    </TableCell>
+                    <TableCell className="max-w-48 break-words whitespace-normal">
+                      {booking.customerDisplayName ?? message("requestsCustomerHidden")}
+                    </TableCell>
+                    <TableCell>
+                      <StatusStamp state={stampStateFor(booking.status)}>
+                        {workspaceStatus(locale, booking.status)}
+                      </StatusStamp>
+                    </TableCell>
+                    <TableCell className="max-w-36 whitespace-normal">
+                      {workspaceStatus(locale, booking.paymentStatus)}
+                    </TableCell>
+                    <TableCell className="max-w-36 whitespace-normal">
+                      {workspaceStatus(locale, booking.notificationStatus)}
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <Money
+                        minor={booking.priceMinor}
+                        currency={booking.currency}
+                        locale={locale}
+                      />
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <ChangeBookingDialog
+                        booking={booking}
+                        locale={locale}
+                        describedBy={`booking-${booking.bookingId}`}
+                        compact
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableFrame>
+          <RecordCards label={message("bookingsListLabel")}>
             {bookings.map((booking) => (
-              <li key={booking.bookingId}>
-                <article aria-labelledby={`booking-${booking.bookingId}`}>
-                  <h2 id={`booking-${booking.bookingId}`}>
-                    {booking.serviceName} · <bdi>{booking.publicReference}</bdi>
-                  </h2>
-                  <dl>
-                    <div>
-                      <dt>{message("bookingsWhenLabel")}</dt>
-                      <dd>
-                        {formatDateTime(
-                          booking.startAt,
-                          locale,
-                          booking.locationTimeZone,
-                        )}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{message("bookingsStatusLabel")}</dt>
-                      <dd>{workspaceStatus(locale, booking.status)}</dd>
-                    </div>
-                    <div>
-                      <dt>{message("detailPaymentLabel")}</dt>
-                      <dd>{workspaceStatus(locale, booking.paymentStatus)}</dd>
-                    </div>
-                    <div>
-                      <dt>{message("bookingsDeliveryLabel")}</dt>
-                      <dd>{workspaceStatus(locale, booking.notificationStatus)}</dd>
-                    </div>
-                    <div>
-                      <dt>{message("requestsCustomerLabel")}</dt>
-                      <dd>
-                        {booking.customerDisplayName ??
-                          message("requestsCustomerHidden")}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>{message("detailPriceLabel")}</dt>
-                      <dd>
-                        {formatCurrency(booking.priceMinor, booking.currency, locale)}
-                      </dd>
-                    </div>
-                  </dl>
-                  {/* The lifecycle lives on the detail, so this list never
-                      becomes a second place where status can change. */}
-                  <Link href={`/${locale}/bookings/${booking.bookingId}`}>
-                    {message("bookingsOpenDetail")}{" "}
-                    <Badge>
-                      {booking.noteCount} {message("bookingsNotesLabel")}
-                    </Badge>
-                  </Link>
-
-                  <form action={changeBookingAction}>
-                    <input type="hidden" name="locale" value={locale} />
-                    <input type="hidden" name="bookingId" value={booking.bookingId} />
-                    <input
-                      type="hidden"
-                      name="expectedRevision"
-                      value={booking.bookingRevision}
-                    />
-                    <input
-                      type="hidden"
-                      name="locationTimeZone"
-                      value={booking.locationTimeZone}
-                    />
-                    <label>
-                      {locale === "ar"
-                        ? "وقوع الوقت عند تكراره"
-                        : "Occurrence for a repeated local time"}
-                      <select name="fold" defaultValue="">
-                        <option value="">
-                          {locale === "ar" ? "وقت غير مكرر" : "Unambiguous time"}
-                        </option>
-                        <option value="0">
-                          {locale === "ar" ? "الوقوع الأول" : "First occurrence"}
-                        </option>
-                        <option value="1">
-                          {locale === "ar" ? "الوقوع الثاني" : "Second occurrence"}
-                        </option>
-                      </select>
-                    </label>
-                    <label htmlFor={`new-start-${booking.bookingId}`}>
-                      {message("bookingsNewTimeLabel")}
-                    </label>
-                    <input
-                      id={`new-start-${booking.bookingId}`}
-                      name="newStartAt"
-                      type="datetime-local"
-                    />
-                    <label htmlFor={`public-${booking.bookingId}`}>
-                      {message("requestsPublicReasonLabel")}
-                    </label>
-                    <textarea
-                      id={`public-${booking.bookingId}`}
-                      maxLength={500}
-                      name="publicReason"
-                      rows={2}
-                    />
-                    <label htmlFor={`internal-${booking.bookingId}`}>
-                      {message("requestsInternalReasonLabel")}
-                    </label>
-                    <textarea
-                      id={`internal-${booking.bookingId}`}
-                      maxLength={500}
-                      name="internalReason"
-                      rows={2}
-                    />
-                    <div className="requests-actions">
-                      <Button name="action" type="submit" value="reschedule">
-                        {message("bookingsReschedule")}
-                      </Button>
-                      <Button
-                        name="action"
-                        type="submit"
-                        value="cancel"
-                        variant="secondary"
+              <RecordCard
+                key={booking.bookingId}
+                title={
+                  <>
+                    <ReferenceCode>{booking.publicReference}</ReferenceCode>
+                    <span
+                      id={`booking-card-${booking.bookingId}`}
+                      className="font-semibold text-foreground"
+                    >
+                      <ServiceDye name={booking.serviceName} />
+                    </span>
+                  </>
+                }
+                aside={
+                  <StatusStamp state={stampStateFor(booking.status)}>
+                    {workspaceStatus(locale, booking.status)}
+                  </StatusStamp>
+                }
+                facts={[
+                  {
+                    key: "when",
+                    label: message("bookingsWhenLabel"),
+                    value: (
+                      <When
+                        instant={booking.startAt}
+                        locale={locale}
+                        timeZone={booking.locationTimeZone}
+                        viewTimeZone={viewZone}
+                      />
+                    ),
+                  },
+                  {
+                    key: "customer",
+                    label: message("requestsCustomerLabel"),
+                    value:
+                      booking.customerDisplayName ?? message("requestsCustomerHidden"),
+                  },
+                  {
+                    key: "payment",
+                    label: message("detailPaymentLabel"),
+                    value: workspaceStatus(locale, booking.paymentStatus),
+                  },
+                  {
+                    key: "delivery",
+                    label: message("bookingsDeliveryLabel"),
+                    value: workspaceStatus(locale, booking.notificationStatus),
+                  },
+                  {
+                    key: "price",
+                    label: message("detailPriceLabel"),
+                    value: (
+                      <Money
+                        minor={booking.priceMinor}
+                        currency={booking.currency}
+                        locale={locale}
+                      />
+                    ),
+                  },
+                  {
+                    key: "notes",
+                    label: message("bookingsNotesLabel"),
+                    value: countLabel(locale, "notes", booking.noteCount),
+                  },
+                ]}
+                actions={
+                  <>
+                    <Button asChild variant="outline" size="sm">
+                      <Link
+                        href={`/${locale}/bookings/${booking.bookingId}`}
+                        aria-describedby={`booking-card-${booking.bookingId}`}
                       >
-                        {message("bookingsCancel")}
-                      </Button>
-                      <Button
-                        name="action"
-                        type="submit"
-                        value="resend"
-                        variant="secondary"
-                      >
-                        {message("bookingsResend")}
-                      </Button>
-                    </div>
-                  </form>
-                </article>
-              </li>
+                        {message("bookingsOpenDetail")}
+                      </Link>
+                    </Button>
+                    <ChangeBookingDialog
+                      booking={booking}
+                      locale={locale}
+                      describedBy={`booking-card-${booking.bookingId}`}
+                    />
+                  </>
+                }
+              />
             ))}
-          </ul>
-        )}
-      </Surface>
+          </RecordCards>
+        </>
+      )}
     </WorkspaceShell>
+  );
+}
+
+/**
+ * Reschedule, cancel or resend in a dialog named by the booking. The table
+ * uses the compact icon trigger; the phone cards show the words.
+ */
+function ChangeBookingDialog({
+  booking,
+  locale,
+  describedBy,
+  compact = false,
+}: {
+  readonly booking: BookingSearchRowV1;
+  readonly locale: Locale;
+  readonly describedBy: string;
+  readonly compact?: boolean;
+}) {
+  const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
+    getDashboardMessage(locale, key);
+  const changeLabel = workspaceMessage(locale, "rescheduleOrCancel");
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button
+          variant="outline"
+          size={compact ? "icon" : "sm"}
+          aria-describedby={describedBy}
+          {...(compact ? { "aria-label": changeLabel, title: changeLabel } : {})}
+        >
+          <CalendarClock aria-hidden="true" />
+          {compact ? null : changeLabel}
+        </Button>
+      </DialogTrigger>
+      <DialogContent closeLabel={workspaceMessage(locale, "closeDialog")}>
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-baseline gap-x-2">
+            {booking.serviceName}
+            <ReferenceCode>{booking.publicReference}</ReferenceCode>
+          </DialogTitle>
+          <DialogDescription>
+            <When
+              instant={booking.startAt}
+              locale={locale}
+              timeZone={booking.locationTimeZone}
+            />{" "}
+            · <bdi>{booking.locationTimeZone}</bdi>
+          </DialogDescription>
+        </DialogHeader>
+        <form action={changeBookingAction} className="grid gap-5">
+          <input type="hidden" name="locale" value={locale} />
+          <input type="hidden" name="bookingId" value={booking.bookingId} />
+          <input
+            type="hidden"
+            name="expectedRevision"
+            value={booking.bookingRevision}
+          />
+          <input
+            type="hidden"
+            name="locationTimeZone"
+            value={booking.locationTimeZone}
+          />
+          <Field>
+            <Label htmlFor={`new-start-${booking.bookingId}`}>
+              {message("bookingsNewTimeLabel")}
+            </Label>
+            <DateTimePicker
+              id={`new-start-${booking.bookingId}`}
+              name="newStartAt"
+              locale={locale}
+              datePlaceholder={workspaceMessage(locale, "datePlaceholder")}
+              timePlaceholder={workspaceMessage(locale, "timePlaceholder")}
+              timeLabel={workspaceMessage(locale, "timeOf", {
+                label: message("bookingsNewTimeLabel"),
+              })}
+            />
+          </Field>
+          <FoldSelect id={`fold-${booking.bookingId}`} locale={locale} />
+          <Field>
+            <Label htmlFor={`public-${booking.bookingId}`}>
+              {message("requestsPublicReasonLabel")}
+            </Label>
+            <Textarea
+              id={`public-${booking.bookingId}`}
+              maxLength={500}
+              name="publicReason"
+              rows={2}
+            />
+          </Field>
+          <Field>
+            <Label htmlFor={`internal-${booking.bookingId}`}>
+              {message("requestsInternalReasonLabel")}
+            </Label>
+            <Textarea
+              id={`internal-${booking.bookingId}`}
+              maxLength={500}
+              name="internalReason"
+              rows={2}
+            />
+          </Field>
+          <DialogFooter className="sm:justify-start">
+            <Button name="action" type="submit" value="reschedule">
+              {message("bookingsReschedule")}
+            </Button>
+            <Button name="action" type="submit" value="resend" variant="outline">
+              {message("bookingsResend")}
+            </Button>
+            <Button
+              name="action"
+              type="submit"
+              value="cancel"
+              variant="destructive-outline"
+              className="sm:ms-auto"
+            >
+              {message("bookingsCancel")}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

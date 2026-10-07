@@ -1,30 +1,33 @@
 "use client";
-import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { Locale } from "@wlbp/i18n";
+import { LocaleSwitch } from "@wlbp/ui-foundation";
 import { getDashboardMessage } from "./copy";
 import { workspaceLocaleHref } from "./workspace-locale-links";
 
-export function WorkspaceLocaleNavigation({ locale }: { readonly locale: Locale }) {
+/** Each language's own name, so a reader finds theirs whatever is shown. */
+const ownNames: Record<Locale, string> = { ar: "العربية", en: "English" };
+
+export function WorkspaceLocaleNavigation({
+  locale,
+  tone = "default",
+}: {
+  readonly locale: Locale;
+  readonly tone?: "default" | "rail";
+}) {
   const pathname = usePathname();
   const search = useSearchParams();
   return (
-    <nav aria-label={getDashboardMessage(locale, "languageNavigation")}>
-      {(["en", "ar"] as const).map((target) => (
-        <Link
-          key={target}
-          href={workspaceLocaleHref(target, pathname, search.toString())}
-          aria-current={locale === target ? "page" : undefined}
-        >
-          <span aria-hidden="true">{target === "en" ? "EN" : "عربي"}</span>
-          <span className="sr-only">
-            {getDashboardMessage(
-              locale,
-              target === "en" ? "languageEnglish" : "languageArabic",
-            )}
-          </span>
-        </Link>
-      ))}
-    </nav>
+    <LocaleSwitch
+      label={getDashboardMessage(locale, "languageNavigation")}
+      tone={tone}
+      options={(["ar", "en"] as const).map((target) => ({
+        locale: target,
+        // Keeps supported filters, drops credentials and auth-only paths.
+        href: workspaceLocaleHref(target, pathname, search.toString()),
+        label: ownNames[target],
+        current: locale === target,
+      }))}
+    />
   );
 }

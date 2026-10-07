@@ -1,13 +1,41 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from "react";
+import {
+  Button,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+  Field,
+  FieldDescription,
+  Input,
+  Label,
+  RequiredMark,
+  Textarea,
+  type ButtonVariant,
+} from "@wlbp/ui-foundation";
+import { useCallback, useId, useState, type ReactNode } from "react";
 import { fill, formCopy, say } from "../copy";
 import { OperatorForm, type FormAction } from "./operator-form";
 
+function triggerStyle(
+  variant: "primary" | "secondary" | "quiet",
+  danger: boolean,
+): ButtonVariant {
+  if (variant === "primary") return danger ? "destructive" : "default";
+  if (danger) return "destructive-outline";
+  return variant === "quiet" ? "ghost" : "outline";
+}
+
 /**
- * A native modal <dialog>: focus moves in, Escape closes, focus returns to the
- * trigger. Destructive and high-impact actions always go through one.
+ * A modal dialog: focus moves to the first field, Escape closes, focus returns
+ * to the trigger. Destructive and high-impact actions always go through one.
+ * The form is mounted fresh on every open, so an earlier error or step-up
+ * never lingers.
  */
 export function ActionDialog({
   locale,
@@ -38,39 +66,33 @@ export function ActionDialog({
   confirmText?: string;
   children?: ReactNode;
 }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  const titleId = useId();
   const fieldId = useId();
+  const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
-  // A fresh form on every open, so a previous error or step-up does not linger.
-  const [generation, setGeneration] = useState(0);
-  useEffect(() => {
-    // Open after the fresh keyed form commits, so initial focus is not removed.
-    if (generation > 0) dialog.current?.showModal();
-  }, [generation]);
-
-  const close = useCallback(() => dialog.current?.close(), []);
-  const onSuccess = useCallback(() => {
-    dialog.current?.close();
-  }, []);
+  const onSuccess = useCallback(() => setOpen(false), []);
 
   return (
-    <>
-      <button
-        type="button"
-        className={`wlbp-button wlbp-button--${danger && triggerVariant === "primary" ? "primary wlbp-button--danger" : triggerVariant}`}
-        onClick={() => {
-          setTyped("");
-          setGeneration((value) => value + 1);
-        }}
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setTyped("");
+        setOpen(next);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant={triggerStyle(triggerVariant, danger ?? false)}>
+          {trigger}
+        </Button>
+      </DialogTrigger>
+      <DialogContent
+        closeLabel={say(locale, formCopy.close)}
+        {...(description ? {} : { "aria-describedby": undefined })}
       >
-        {trigger}
-      </button>
-      <dialog ref={dialog} className="dialog" aria-labelledby={titleId}>
-        <h2 id={titleId}>{title}</h2>
-        {description ? <p>{description}</p> : null}
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? <DialogDescription>{description}</DialogDescription> : null}
+        </DialogHeader>
         <OperatorForm
-          key={generation}
           locale={locale}
           action={action}
           submit={submit}
@@ -78,15 +100,23 @@ export function ActionDialog({
           danger={danger ?? false}
           onSuccess={onSuccess}
           submitDisabled={confirmText !== undefined && typed !== confirmText}
+          secondaryAction={
+            <DialogClose asChild>
+              <Button variant="ghost">{say(locale, formCopy.cancel)}</Button>
+            </DialogClose>
+          }
         >
           {Object.entries(hidden ?? {}).map(([name, value]) => (
             <input key={name} type="hidden" name={name} value={value} />
           ))}
           {children}
           {reason ? (
-            <label className="field" htmlFor={`${fieldId}-reason`}>
-              <span>{say(locale, formCopy.reason)}</span>
-              <textarea
+            <Field>
+              <Label htmlFor={`${fieldId}-reason`}>
+                {say(locale, formCopy.reason)}
+                <RequiredMark />
+              </Label>
+              <Textarea
                 id={`${fieldId}-reason`}
                 name="reason"
                 required
@@ -94,17 +124,18 @@ export function ActionDialog({
                 maxLength={500}
                 aria-describedby={`${fieldId}-reason-hint`}
               />
-              <small id={`${fieldId}-reason-hint`}>
+              <FieldDescription id={`${fieldId}-reason-hint`}>
                 {fill(locale, formCopy.reasonHint, { n: String(reason.minLength) })}
-              </small>
-            </label>
+              </FieldDescription>
+            </Field>
           ) : null}
           {confirmText !== undefined ? (
-            <label className="field" htmlFor={`${fieldId}-confirm`}>
-              <span>
+            <Field>
+              <Label htmlFor={`${fieldId}-confirm`}>
                 {fill(locale, formCopy.typeToConfirm, { value: confirmText })}
-              </span>
-              <input
+                <RequiredMark />
+              </Label>
+              <Input
                 id={`${fieldId}-confirm`}
                 name="confirmation"
                 value={typed}
@@ -112,19 +143,10 @@ export function ActionDialog({
                 onChange={(event) => setTyped(event.target.value)}
                 required
               />
-            </label>
+            </Field>
           ) : null}
         </OperatorForm>
-        <div className="form-actions">
-          <button
-            type="button"
-            className="wlbp-button wlbp-button--quiet"
-            onClick={close}
-          >
-            {say(locale, formCopy.cancel)}
-          </button>
-        </div>
-      </dialog>
-    </>
+      </DialogContent>
+    </Dialog>
   );
 }

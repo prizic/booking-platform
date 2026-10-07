@@ -1,14 +1,51 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import type { CatalogKindV1 } from "@wlbp/api-contracts";
-import { formatCurrency, formatNumber, type Locale } from "@wlbp/i18n";
+import { ArrowLeft, Plus, Search } from "lucide-react";
+import type { CatalogEntityV1, CatalogKindV1 } from "@wlbp/api-contracts";
+import { formatNumber, type Locale } from "@wlbp/i18n";
+import { Money } from "../../_lib/ui/money";
+import { ServiceDye } from "../../_lib/ui/service-dye";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  EmptyState,
+  Field,
+  Input,
+  Label,
+  PageHeader,
+  Section,
+  StatusStamp,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  Toolbar,
+  type StampState,
+} from "@wlbp/ui-foundation";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { loadCatalogWorkspace } from "./catalog-data-source";
 import { CatalogForm, CatalogPublicationForm } from "./catalog-forms";
-import { catalogMessage } from "./catalog-copy";
+import { catalogMessage, type CatalogMessageKey } from "./catalog-copy";
+import { ChoiceSelect } from "./form-kit";
 
 const section = (kind: CatalogKindV1) =>
   kind === "service" ? "services" : kind === "category" ? "categories" : "locations";
+
+/** Stamp and word for a catalog record state; meaning never rests on colour alone. */
+function stateStamp(
+  state: CatalogEntityV1["state"],
+): readonly [StampState, CatalogMessageKey] {
+  if (state === "published") return ["confirmed", "publishedState"];
+  if (state === "draft") return ["pending", "draft"];
+  return ["neutral", "retired"];
+}
+
+/** Filter value meaning "every state"; Radix selects cannot submit "". */
+const ALL_STATES = "all";
+
 export async function CatalogListPage({
   locale,
   kind,
@@ -19,8 +56,7 @@ export async function CatalogListPage({
   query: Record<string, string | string[] | undefined>;
 }) {
   const current = section(kind);
-  const message = (key: Parameters<typeof catalogMessage>[1]) =>
-    catalogMessage(locale, key);
+  const message = (key: CatalogMessageKey) => catalogMessage(locale, key);
   const state = await loadCatalogWorkspace(locale);
   const search = typeof query.q === "string" ? query.q.slice(0, 100) : "";
   const status =
@@ -42,122 +78,155 @@ export async function CatalogListPage({
       : [];
   return (
     <WorkspaceShell locale={locale} current={current} labelledBy="catalog-title">
-      <div>
-        <header className="dashboard-intro">
-          <h1 id="catalog-title">{message(current)}</h1>
-          <p>{message("intro")}</p>
-          {state.kind === "ready" && state.workspace.canPublish ? (
-            <Link className="wlbp-button" href={`/${locale}/${current}/new`}>
-              {message("new")}
-            </Link>
-          ) : null}
-        </header>
+      <div className="grid gap-8">
+        <PageHeader
+          titleId="catalog-title"
+          title={message(current)}
+          description={message("intro")}
+          actions={
+            state.kind === "ready" && state.workspace.canPublish ? (
+              <Button asChild>
+                <Link href={`/${locale}/${current}/new`}>
+                  <Plus aria-hidden="true" />
+                  {message("new")}
+                </Link>
+              </Button>
+            ) : null
+          }
+        />
         {state.kind !== "ready" ? (
-          <p role="alert">{message(state.kind)}</p>
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {message(state.kind)}
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
-            <form className="workspace-filter-bar" method="get">
-              <label>
-                {message("search")}
-                <input
-                  className="wlbp-field__input"
-                  name="q"
-                  type="search"
-                  defaultValue={search}
-                  maxLength={100}
-                />
-              </label>
-              <label>
-                {message("status")}
-                <select
-                  className="wlbp-field__input"
-                  name="status"
-                  defaultValue={status}
-                >
-                  <option value="">{message("all")}</option>
-                  {(["draft", "published", "retired"] as const).map((value) => (
-                    <option key={value} value={value}>
-                      {message(value)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="wlbp-button wlbp-button--quiet">
-                {message("filter")}
-              </button>
+            <form method="get">
+              <Toolbar>
+                <Field className="md:min-w-64">
+                  <Label htmlFor="catalog-search">{message("search")}</Label>
+                  <Input
+                    id="catalog-search"
+                    name="q"
+                    type="search"
+                    defaultValue={search}
+                    maxLength={100}
+                  />
+                </Field>
+                <Field className="md:min-w-48">
+                  <Label htmlFor="catalog-status">{message("status")}</Label>
+                  <ChoiceSelect
+                    id="catalog-status"
+                    name="status"
+                    defaultValue={status || ALL_STATES}
+                    options={[
+                      { value: ALL_STATES, label: message("all") },
+                      ...(["draft", "published", "retired"] as const).map((value) => ({
+                        value,
+                        label: message(stateStamp(value)[1]),
+                      })),
+                    ]}
+                  />
+                </Field>
+                <Button type="submit" variant="outline">
+                  <Search aria-hidden="true" />
+                  {message("filter")}
+                </Button>
+              </Toolbar>
             </form>
             {rows.length ? (
-              <div
-                className="workspace-table-scroll"
-                role="region"
-                aria-label={message(current)}
-                tabIndex={0}
-              >
-                <table className="workspace-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">
-                        {message(locale === "ar" ? "nameAr" : "nameEn")}
-                      </th>
-                      <th scope="col">{message("status")}</th>
-                      {kind === "service" ? (
-                        <>
-                          <th scope="col">{message("duration")}</th>
-                          <th scope="col">{message("price")}</th>
-                        </>
-                      ) : kind === "location" ? (
-                        <th scope="col">{message("timeZone")}</th>
-                      ) : (
-                        <th scope="col">{message("sort")}</th>
-                      )}
-                      <th scope="col">{message("revision")}</th>
-                      <th scope="col">{message("edit")}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.id}>
-                        <th scope="row">
-                          {locale === "ar" ? row.name_ar : row.name_en}
-                          <small className="workspace-secondary">
+              <Table label={message(current)}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>
+                      {message(locale === "ar" ? "nameAr" : "nameEn")}
+                    </TableHead>
+                    <TableHead>{message("status")}</TableHead>
+                    {kind === "service" ? (
+                      <>
+                        <TableHead className="text-end">
+                          {message("duration")}
+                        </TableHead>
+                        <TableHead className="text-end">{message("price")}</TableHead>
+                      </>
+                    ) : kind === "location" ? (
+                      <TableHead>{message("timeZone")}</TableHead>
+                    ) : (
+                      <TableHead className="text-end">{message("sort")}</TableHead>
+                    )}
+                    <TableHead className="text-end">{message("revision")}</TableHead>
+                    <TableHead className="text-end">
+                      <span className="sr-only">{message("edit")}</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {rows.map((row) => {
+                    const [stamp, label] = stateStamp(row.state);
+                    const name = locale === "ar" ? row.name_ar : row.name_en;
+                    return (
+                      <TableRow key={row.id}>
+                        <TableHead
+                          scope="row"
+                          className="h-auto py-3 text-sm font-semibold whitespace-normal text-foreground"
+                        >
+                          {/* A service carries the dye it wears on the bands. */}
+                          {kind === "service" ? <ServiceDye name={name} /> : name}
+                          <span className="block text-xs font-normal text-muted-foreground">
                             <bdi>{row.metadata.key}</bdi>
-                          </small>
-                        </th>
-                        <td>
-                          {message(row.state)}
-                          {row.metadata.retire && row.state === "draft" ? (
-                            <small className="workspace-secondary">
-                              {message("pendingRetirement")}
-                            </small>
-                          ) : null}
-                        </td>
+                          </span>
+                        </TableHead>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <StatusStamp state={stamp}>{message(label)}</StatusStamp>
+                            {row.metadata.retire && row.state === "draft" ? (
+                              <StatusStamp state="cancelled">
+                                {message("pendingRetirement")}
+                              </StatusStamp>
+                            ) : null}
+                          </div>
+                        </TableCell>
                         {kind === "service" ? (
                           <>
-                            <td>{formatNumber(row.duration_minutes, locale)}</td>
-                            <td>
-                              {formatCurrency(row.price_minor, row.currency, locale)}
-                            </td>
+                            <TableCell className="text-end">
+                              {formatNumber(row.duration_minutes, locale)}
+                            </TableCell>
+                            <TableCell className="text-end">
+                              <Money
+                                minor={row.price_minor}
+                                currency={row.currency}
+                                locale={locale}
+                              />
+                            </TableCell>
                           </>
                         ) : kind === "location" ? (
-                          <td>
+                          <TableCell>
                             <bdi>{row.metadata.time_zone}</bdi>
-                          </td>
+                          </TableCell>
                         ) : (
-                          <td>{formatNumber(row.metadata.sort_order ?? 0, locale)}</td>
+                          <TableCell className="text-end">
+                            {formatNumber(row.metadata.sort_order ?? 0, locale)}
+                          </TableCell>
                         )}
-                        <td>{formatNumber(row.revision, locale)}</td>
-                        <td>
-                          <Link href={`/${locale}/${current}/${row.id}`}>
-                            {message("edit")}
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        <TableCell className="text-end">
+                          {formatNumber(row.revision, locale)}
+                        </TableCell>
+                        <TableCell className="text-end">
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/${locale}/${current}/${row.id}`}>
+                              {message("edit")}
+                              <span className="sr-only"> {name}</span>
+                            </Link>
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
             ) : (
-              <p>{message("empty")}</p>
+              <EmptyState title={message("empty")} description={message("emptyHint")} />
             )}
             <CatalogPublicationForm
               locale={locale}
@@ -188,40 +257,65 @@ export async function CatalogEditorPage({
     notFound();
   const current = section(kind);
   const state = await loadCatalogWorkspace(locale);
-  const message = (key: Parameters<typeof catalogMessage>[1]) =>
-    catalogMessage(locale, key);
+  const message = (key: CatalogMessageKey) => catalogMessage(locale, key);
   const entity =
     state.kind === "ready"
       ? state.workspace.entities.find((row) => row.kind === kind && row.id === id)
       : undefined;
   if (state.kind === "ready" && id !== "new" && !entity) notFound();
+  const stamp = entity ? stateStamp(entity.state) : null;
   return (
     <WorkspaceShell locale={locale} current={current} labelledBy="catalog-editor-title">
-      <div>
-        <header className="dashboard-intro">
-          <Link href={`/${locale}/${current}`}>{message("back")}</Link>
-          <h1 id="catalog-editor-title">
-            {entity
-              ? locale === "ar"
-                ? entity.name_ar
-                : entity.name_en
-              : message("new")}
-          </h1>
-          {entity ? (
-            <p>
-              {message(entity.state)} · {message("revision")}{" "}
-              {formatNumber(entity.revision, locale)}
-            </p>
-          ) : null}
-        </header>
+      <div className="grid gap-8">
+        <div className="grid gap-3">
+          <Link
+            className="inline-flex w-fit items-center gap-1.5 text-sm font-semibold text-primary underline-offset-4 hover:underline"
+            href={`/${locale}/${current}`}
+          >
+            <ArrowLeft aria-hidden="true" className="size-4 rtl:-scale-x-100" />
+            {message("back")}
+          </Link>
+          <PageHeader
+            titleId="catalog-editor-title"
+            title={
+              entity
+                ? locale === "ar"
+                  ? entity.name_ar
+                  : entity.name_en
+                : message("new")
+            }
+            meta={
+              entity && stamp ? (
+                <>
+                  <StatusStamp state={stamp[0]}>{message(stamp[1])}</StatusStamp>
+                  <span className="text-sm text-muted-foreground">
+                    {message("revision")} {formatNumber(entity.revision, locale)}
+                  </span>
+                </>
+              ) : null
+            }
+          />
+        </div>
         {state.kind !== "ready" ? (
-          <p role="alert">{message(state.kind)}</p>
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {message(state.kind)}
+            </AlertDescription>
+          </Alert>
         ) : id === "new" && !state.workspace.canPublish ? (
-          <p role="alert">{message("denied")}</p>
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {message("denied")}
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
             {result === "saved" && entity ? (
-              <p role="status">{message("saved")}</p>
+              <Alert tone="positive">
+                <AlertDescription className="text-foreground">
+                  {message("saved")}
+                </AlertDescription>
+              </Alert>
             ) : null}
             <CatalogForm
               locale={locale}
@@ -231,32 +325,51 @@ export async function CatalogEditorPage({
               requestId={crypto.randomUUID()}
             />
             {entity ? (
-              <section
-                className="workspace-section"
-                aria-labelledby="catalog-preview-title"
+              <Section
+                id="catalog-preview"
+                title={message("preview")}
+                description={message("previewHint")}
               >
-                <h2 id="catalog-preview-title">{message("preview")}</h2>
-                <p>{message("previewHint")}</p>
-                <div className="catalog-field-columns">
-                  <article lang="en" dir="ltr">
-                    <h3>{entity.name_en}</h3>
-                    <p>{entity.description_en}</p>
-                    {kind === "location" ? <p>{entity.address_en}</p> : null}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <article
+                    lang="en"
+                    dir="ltr"
+                    className="grid content-start gap-2 rounded-lg border bg-card p-5"
+                  >
+                    <h3 className="text-base font-semibold">{entity.name_en}</h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {entity.description_en}
+                    </p>
+                    {kind === "location" ? (
+                      <p className="text-sm">{entity.address_en}</p>
+                    ) : null}
                   </article>
-                  <article lang="ar" dir="rtl">
-                    <h3>{entity.name_ar}</h3>
-                    <p>{entity.description_ar}</p>
-                    {kind === "location" ? <p>{entity.address_ar}</p> : null}
+                  <article
+                    lang="ar"
+                    dir="rtl"
+                    className="grid content-start gap-2 rounded-lg border bg-card p-5 font-arabic"
+                  >
+                    <h3 className="text-base font-semibold">{entity.name_ar}</h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {entity.description_ar}
+                    </p>
+                    {kind === "location" ? (
+                      <p className="text-sm">{entity.address_ar}</p>
+                    ) : null}
                   </article>
                 </div>
                 {kind === "service" ? (
-                  <p>
-                    {formatCurrency(entity.price_minor, entity.currency, locale)} ·{" "}
-                    {formatNumber(entity.duration_minutes, locale)}{" "}
+                  <p className="text-sm font-medium [font-variant-numeric:tabular-nums]">
+                    <Money
+                      minor={entity.price_minor}
+                      currency={entity.currency}
+                      locale={locale}
+                    />{" "}
+                    · {formatNumber(entity.duration_minutes, locale)}{" "}
                     {message("duration")}
                   </p>
                 ) : null}
-              </section>
+              </Section>
             ) : null}
             <CatalogPublicationForm
               locale={locale}

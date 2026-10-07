@@ -67,12 +67,17 @@ const copy = {
     after: "Buffer after (minutes)",
     turnover: "Turnover (minutes)",
     travel: "Travel (minutes)",
+    tenant: "Tenant",
+    cancel: "Cancel",
+    removeTitle: "Remove this rule?",
+    removeHint:
+      "Future availability changes immediately. Existing appointments keep their original time and policy.",
   },
   ar: {
     title: "التوافر",
     summary:
       "إدارة ساعات العمل والإغلاق المستقبلية. تحتفظ المواعيد الحالية بوقتها وسياستها الأصلية.",
-    create: "إضافة قاعدة للجدول",
+    create: "إضافة قاعدة إلى الجدول",
     existing: "الجدول الحالي",
     scope: "نطاق الجدول",
     weekly: "ساعات أسبوعية",
@@ -98,7 +103,7 @@ const copy = {
     startsAt: "البداية (الوقت المحلي)",
     endsAt: "النهاية (الوقت المحلي)",
     reason: "سبب خاص / اسم العطلة",
-    exceptionKind: "إعداد التاريخ",
+    exceptionKind: "نوع الاستثناء",
     closed: "مغلق",
     override: "ساعات استثنائية",
     fold: "الوقت المحلي المتكرر",
@@ -107,7 +112,7 @@ const copy = {
     second: "المرة الثانية",
     policyKey: "السياسة",
     value: "القيمة",
-    revision: "المراجعة",
+    revision: "الإصدار",
     edit: "تعديل",
     remove: "إزالة",
     confirm: "تأكيد إزالة هذه القاعدة",
@@ -133,8 +138,13 @@ const copy = {
     daily: "الحد اليومي للموظف (فارغ = موروث)",
     before: "الفاصل قبل (دقائق)",
     after: "الفاصل بعد (دقائق)",
-    turnover: "التبديل (دقائق)",
-    travel: "الانتقال (دقائق)",
+    turnover: "وقت التجهيز بين المواعيد (دقائق)",
+    travel: "وقت التنقل (دقائق)",
+    tenant: "المنشأة",
+    cancel: "إلغاء",
+    removeTitle: "هل تريد إزالة هذه القاعدة؟",
+    removeHint:
+      "يتغير التوافر المستقبلي فورًا. تحتفظ المواعيد الحالية بوقتها وسياستها الأصلية.",
   },
 } as const;
 export type ScheduleMessage = keyof typeof copy.en;

@@ -3,11 +3,12 @@
 import { parseProposalResponseV1, type ProposalResponseV1 } from "@wlbp/api-contracts";
 import { formatDateTime, type Locale } from "@wlbp/i18n";
 import {
-  Badge,
+  Alert,
+  AlertDescription,
+  AlertTitle,
   Button,
-  ErrorSummary,
-  StatusMessage,
-  Surface,
+  PageHeader,
+  ReferenceCode,
 } from "@wlbp/ui-foundation";
 import { useState } from "react";
 
@@ -60,52 +61,61 @@ export function ProposalResponse({
   if (result !== null) {
     const accepted = result.proposalState === "accepted";
     return (
-      <Surface as="section" className="booking-confirmed" labelledBy="proposal-result">
-        <Badge tone={accepted ? "positive" : "neutral"}>{result.publicReference}</Badge>
-        <h1 id="proposal-result">
-          {accepted
-            ? message("proposalAcceptedTitle")
-            : message("proposalDeclinedTitle")}
-        </h1>
-        <p>
-          {accepted
-            ? message("proposalAcceptedSummary")
-            : message("proposalDeclinedSummary")}
-        </p>
+      <section aria-labelledby="proposal-result" className="grid gap-6">
+        <PageHeader
+          title={
+            accepted
+              ? message("proposalAcceptedTitle")
+              : message("proposalDeclinedTitle")
+          }
+          titleId="proposal-result"
+          description={
+            accepted
+              ? message("proposalAcceptedSummary")
+              : message("proposalDeclinedSummary")
+          }
+          meta={<ReferenceCode>{result.publicReference}</ReferenceCode>}
+        />
         {accepted ? (
-          <StatusMessage tone="positive">
+          <Alert tone="positive">
             {formatDateTime(result.startAt, locale, timeZone)}
-          </StatusMessage>
+          </Alert>
         ) : null}
-      </Surface>
+      </section>
     );
   }
 
   return (
-    <Surface as="section" className="booking-flow" labelledBy="proposal-title">
-      <h1 id="proposal-title">{message("proposalTitle")}</h1>
-      <p>{message("proposalSummary")}</p>
+    <section aria-labelledby="proposal-title" className="grid gap-6">
+      <PageHeader
+        title={message("proposalTitle")}
+        titleId="proposal-title"
+        description={message("proposalSummary")}
+      />
       {errorCode === null ? null : (
-        <ErrorSummary
-          focusTarget
+        <Alert
+          className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="proposal-error"
-          title={message("proposalErrorTitle")}
+          tabIndex={-1}
+          tone="danger"
         >
-          <p>
+          <AlertTitle>{message("proposalErrorTitle")}</AlertTitle>
+          <AlertDescription>
             {errorCode === "revision_conflict" || errorCode === "slot_unavailable"
               ? message("proposalErrorExpired")
               : message("proposalErrorUnavailable")}
-          </p>
-        </ErrorSummary>
+          </AlertDescription>
+        </Alert>
       )}
       {actionToken === null ? (
-        <p>{message("proposalMissingToken")}</p>
+        <Alert tone="info">{message("proposalMissingToken")}</Alert>
       ) : (
-        <div className="booking-flow__actions">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             loading={busy === "accept"}
             loadingLabel={message("proposalAccepting")}
             onClick={() => void respond("accept")}
+            size="lg"
           >
             {message("proposalAccept")}
           </Button>
@@ -113,12 +123,13 @@ export function ProposalResponse({
             loading={busy === "decline"}
             loadingLabel={message("proposalDeclining")}
             onClick={() => void respond("decline")}
-            variant="secondary"
+            size="lg"
+            variant="outline"
           >
             {message("proposalDecline")}
           </Button>
         </div>
       )}
-    </Surface>
+    </section>
   );
 }
