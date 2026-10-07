@@ -12,6 +12,7 @@ import {
   type TenantChoiceV1,
   type RoleCatalogV1,
   type RolesV1,
+  type SaveRoleV1Input,
 } from "@wlbp/api-contracts";
 import type { VerifiedIdentity } from "@wlbp/auth";
 import type { StaffAccessWorkspaceV1 } from "@wlbp/api-contracts";
@@ -104,6 +105,13 @@ export interface DashboardDataSource {
   getStaffAccessWorkspace?: (tenantId: string) => Promise<StaffAccessWorkspaceV1>;
   getRoleCatalog?: (tenantId: string) => Promise<RoleCatalogV1>;
   listRoles?: (tenantId: string) => Promise<RolesV1>;
+  saveRole?: (input: SaveRoleV1Input) => Promise<unknown>;
+  archiveRole?: (input: {
+    tenantId: string;
+    requestId: string;
+    roleId: string;
+    expectedRevision: number;
+  }) => Promise<unknown>;
   changeStaffAccess?: (request: {
     tenantId: string;
     requestId: string;

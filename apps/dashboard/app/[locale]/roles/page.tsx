@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { EmptyState, Section } from "@wlbp/ui-foundation";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
+import { RoleEditor } from "./role-editor";
 
 type Props = Readonly<{ params: Promise<{ locale: string }> }>;
 
@@ -20,6 +21,14 @@ export default async function RolesPage({ params }: Props) {
     request.state.kind === "ready" &&
     request.source.listRoles
       ? await request.source.listRoles(request.state.context.tenantId).catch(() => null)
+      : null;
+  const catalog =
+    request.source !== null &&
+    request.state.kind === "ready" &&
+    request.source.getRoleCatalog
+      ? await request.source
+          .getRoleCatalog(request.state.context.tenantId)
+          .catch(() => null)
       : null;
   const ar = locale === "ar";
 
@@ -58,40 +67,45 @@ export default async function RolesPage({ params }: Props) {
               }
             />
           ) : (
-            <div className="grid gap-3" data-testid="roles-list">
-              {workspace.roles.map((role) => (
-                <article
-                  key={role.id}
-                  className="rounded-xl border border-border bg-card p-4 shadow-sm"
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="font-semibold">
-                      {role.kind === "builtin"
-                        ? role.key
-                        : ar
-                          ? role.nameAr
-                          : role.nameEn}
-                    </h2>
-                    <span className="text-sm text-muted-foreground">
-                      {role.archived
-                        ? ar
-                          ? "مؤرشف"
-                          : "Archived"
-                        : role.kind === "builtin"
-                          ? ar
-                            ? "مضمن"
-                            : "Built-in"
+            <>
+              {catalog !== null && workspace.canManageRoles ? (
+                <RoleEditor locale={locale} permissions={catalog.permissions} />
+              ) : null}
+              <div className="grid gap-3" data-testid="roles-list">
+                {workspace.roles.map((role) => (
+                  <article
+                    key={role.id}
+                    className="rounded-xl border border-border bg-card p-4 shadow-sm"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="font-semibold">
+                        {role.kind === "builtin"
+                          ? role.key
                           : ar
-                            ? "مخصص"
-                            : "Custom"}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    {role.grants.length} {ar ? "صلاحيات" : "permissions"}
-                  </p>
-                </article>
-              ))}
-            </div>
+                            ? role.nameAr
+                            : role.nameEn}
+                      </h2>
+                      <span className="text-sm text-muted-foreground">
+                        {role.archived
+                          ? ar
+                            ? "مؤرشف"
+                            : "Archived"
+                          : role.kind === "builtin"
+                            ? ar
+                              ? "مضمن"
+                              : "Built-in"
+                            : ar
+                              ? "مخصص"
+                              : "Custom"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      {role.grants.length} {ar ? "صلاحيات" : "permissions"}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </>
           )}
         </Section>
       </main>

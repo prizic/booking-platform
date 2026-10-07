@@ -4,6 +4,9 @@ import {
   parseStaffAccessWorkspaceV1,
   parseRoleCatalogV1,
   parseRolesV1,
+  buildArchiveRoleV1Request,
+  buildSaveRoleV1Request,
+  type SaveRoleV1Input,
   parseCatalogWorkspaceV1,
   normalizeAvailabilityV1TransportRow,
   parseAvailabilityV1Response,
@@ -698,6 +701,10 @@ export function createDashboardDataSource(
       parseRolesV1(
         assertRpc(await api.rpc("list_roles_v1", { p_tenant_id: tenantId })),
       ),
+    saveRole: async (input: SaveRoleV1Input) =>
+      assertRpc(await api.rpc("save_role_v1", buildSaveRoleV1Request(input))),
+    archiveRole: async (input) =>
+      assertRpc(await api.rpc("archive_role_v1", buildArchiveRoleV1Request(input))),
     changeStaffAccess: async (request) =>
       assertRpc(
         await api.rpc("change_staff_access_v1", {
