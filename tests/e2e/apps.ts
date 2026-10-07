@@ -82,14 +82,16 @@ export function getBrandSurfaceOrigin(
 
 export async function settleBrandRender(page: Page) {
   await page.evaluate(async () => {
-    await Promise.all(
-      document
-        .getAnimations()
-        .filter((animation) => {
-          const endTime = animation.effect?.getComputedTiming().endTime;
-          return typeof endTime === "number" && Number.isFinite(endTime);
-        })
-        .map((animation) => animation.finished.catch(() => undefined)),
-    );
+    const finiteAnimations = document.getAnimations().filter((animation) => {
+      const endTime = animation.effect?.getComputedTiming().endTime;
+      return typeof endTime === "number" && Number.isFinite(endTime);
+    });
+
+    await Promise.race([
+      Promise.all(
+        finiteAnimations.map((animation) => animation.finished.catch(() => undefined)),
+      ),
+      new Promise((resolve) => window.setTimeout(resolve, 1_000)),
+    ]);
   });
 }
