@@ -585,8 +585,8 @@ test.describe("live database booking journey", () => {
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
     await expect(
-      page.getByRole("heading", {
-        name: new RegExp(`Live consultation · ${booking.publicReference}`, "u"),
+      page.getByRole("link", {
+        name: new RegExp(booking.publicReference, "u"),
       }),
     ).toBeVisible();
   });
