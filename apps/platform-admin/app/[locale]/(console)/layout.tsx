@@ -1,5 +1,5 @@
 import { isLocale } from "@wlbp/i18n";
-import { Badge, Button, ThemeToggle } from "@wlbp/ui-foundation";
+import { AppToaster, Badge, Button, ThemeToggle } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { cookies } from "next/headers";
@@ -197,6 +197,7 @@ export default async function ConsoleLayout({
         <ActionFeedbackNotice />
         {children}
       </ConsoleShell>
+      <AppToaster locale={locale} />
     </ActionFeedbackProvider>
   );
 }

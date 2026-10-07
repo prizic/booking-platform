@@ -40,6 +40,7 @@ import {
 } from "./schedule-schema";
 import { scheduleMessage, type ScheduleMessage } from "./schedule-copy";
 import { scopeName, type RecordRow } from "./schedule-scope";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 const errorKeys = [
   "invalid",
@@ -182,6 +183,7 @@ export function ScheduleForm({
   useAuthoritativeDefaults(form, defaults);
   const control = form.control;
   const mutation = useActionMutation(saveScheduleAction, {
+    toast: dashboardToast(locale, { messages, success: message("saved") }),
     onFailure: (result) => applyActionErrors(form, result),
   });
   const pending = mutation.isPending;
@@ -584,10 +586,14 @@ export function ScheduleRemove({
   attempt: string;
 }) {
   const [nextAttempt, setNextAttempt] = useState<string | null>(null);
+  const message = (key: ScheduleMessage) => scheduleMessage(locale, key);
   const mutation = useActionMutation(removeScheduleAction, {
+    toast: dashboardToast(locale, {
+      messages: scheduleErrorMessages(locale),
+      success: message("removed"),
+    }),
     onSuccess: () => setNextAttempt(newAttemptId()),
   });
-  const message = (key: ScheduleMessage) => scheduleMessage(locale, key);
   return (
     <div className="grid gap-3" data-schedule-remove={record.id}>
       <div>

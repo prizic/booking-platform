@@ -10,6 +10,8 @@ import {
   type DashboardContextV1,
   type ResolvePublicTenantV1Response,
   type TenantChoiceV1,
+  type RoleCatalogV1,
+  type RolesV1,
 } from "@wlbp/api-contracts";
 import type { VerifiedIdentity } from "@wlbp/auth";
 import type { StaffAccessWorkspaceV1 } from "@wlbp/api-contracts";
@@ -100,6 +102,8 @@ export interface DashboardDataSource {
     revisions: Readonly<Record<string, number>>;
   }) => Promise<unknown>;
   getStaffAccessWorkspace?: (tenantId: string) => Promise<StaffAccessWorkspaceV1>;
+  getRoleCatalog?: (tenantId: string) => Promise<RoleCatalogV1>;
+  listRoles?: (tenantId: string) => Promise<RolesV1>;
   changeStaffAccess?: (request: {
     tenantId: string;
     requestId: string;

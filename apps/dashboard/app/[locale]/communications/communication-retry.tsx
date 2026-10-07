@@ -6,6 +6,7 @@ import { useResultNavigation } from "../services/form-hooks";
 import { MutationFeedback } from "../services/mutation-feedback";
 import { retryCommunication } from "./actions";
 import { dashboardFormMessages } from "../../_lib/form-messages";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 export function CommunicationRetry({
   bookingId,
@@ -15,15 +16,17 @@ export function CommunicationRetry({
   locale: Locale;
 }) {
   const navigate = useResultNavigation();
-  const mutation = useActionMutation(retryCommunication, {
-    refresh: false,
-    onSuccess: (data) => navigate(data.destination),
-  });
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
   const refused = m(
     "Retry refused or unavailable. Check permission and suppression status.",
     "رُفضت إعادة المحاولة أو أنها غير متاحة. تحقّق من الصلاحيات وحالة منع الإرسال.",
   );
+  const messages = { ...dashboardFormMessages(locale), refused, invalid: refused };
+  const mutation = useActionMutation(retryCommunication, {
+    refresh: false,
+    toast: dashboardToast(locale, { messages }),
+    onSuccess: (data) => navigate(data.destination),
+  });
   return (
     <div className="grid justify-items-end gap-2" data-communication-retry={bookingId}>
       <ConfirmAction
@@ -45,7 +48,7 @@ export function CommunicationRetry({
         <MutationFeedback
           locale={locale}
           // Every refusal (validation, permission, suppression, provider) reads the same.
-          messages={{ ...dashboardFormMessages(locale), refused, invalid: refused }}
+          messages={messages}
           result={mutation.data?.ok === false ? mutation.data : undefined}
           transportFailed={mutation.isError}
         />

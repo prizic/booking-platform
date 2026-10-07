@@ -51,6 +51,7 @@ import {
   reminderPresetMinutes,
   type NotificationSettingsInput,
 } from "./notification-settings-schema";
+import { dashboardToast } from "../../../_lib/ui/use-workspace-mutation";
 
 const panel = "grid gap-4 rounded-lg border bg-card p-5 md:p-6";
 const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
@@ -379,6 +380,7 @@ export function NotificationSettingsForm({
   const control = form.control as unknown as SettingsControl;
   const [preview, setPreview] = useState<NotificationTemplateKeyV1 | null>(null);
   const mutation = useActionMutation(saveNotificationSettingsAction, {
+    toast: dashboardToast(locale, { messages, success: t("settingsSaved") }),
     onFailure: (result) => applyActionErrors(form, result),
     // A later save is a new request; a retry after a failure reuses this id.
     onSuccess: () => form.setValue("requestId", newAttemptId()),

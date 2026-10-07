@@ -77,6 +77,7 @@ const sectionIcons: Record<WorkspaceSection, LucideIcon> = {
   integrations: Plug,
   settings: Settings,
   audit: ScrollText,
+  roles: ShieldCheck,
 };
 
 const groupLabels = {

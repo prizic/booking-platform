@@ -4,6 +4,7 @@ import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
   Button,
+  actionToastCopy,
   FieldSet,
   Form,
   FormRootError,
@@ -82,6 +83,8 @@ export type OperatorFormProps<K extends OperationKey> = {
  * schema), a React Query mutation, error codes rendered in the form's
  * language, a step-up challenge that re-sends the same submission (same
  * idempotency key), and a success that navigates, downloads, or announces.
+ * A promise toast ("Saving…" then the success message or "Could not save"
+ * with the reason) runs alongside; the on-page alerts stay authoritative.
  *
  * Operator standing, MFA, step-up freshness and two-person rules are decided
  * by the database; this kit only presents the outcome.
@@ -119,6 +122,19 @@ export function OperatorForm<K extends OperationKey>({
   );
   const form = useZodForm(spec.schema, { defaultValues: defaults as never });
   const messages = useMemo(() => operatorFormMessages(locale), [locale]);
+  const toast = useMemo(() => {
+    const copy = actionToastCopy<OperatorOutcome>(locale, {
+      messages,
+      success: successMessage,
+    });
+    const error = copy.error as (failure: { code: string }) => ReactNode;
+    // The step-up prompt below is the response to that refusal, not an error.
+    return {
+      ...copy,
+      error: ({ code }: { code: string }) =>
+        code === stepUpCode ? null : error({ code }),
+    };
+  }, [locale, messages, successMessage]);
   const router = useRouter();
   const pathname = usePathname();
   const announce = useActionFeedback()?.announce;
@@ -134,6 +150,7 @@ export function OperatorForm<K extends OperationKey>({
   const mutation = useActionMutation<Input, OperatorOutcome>(action, {
     // Navigation or a refresh is chosen per result below.
     refresh: false,
+    toast,
     onFailure: (result) => {
       if (result.formError === stepUpCode) {
         setStepUp(true);

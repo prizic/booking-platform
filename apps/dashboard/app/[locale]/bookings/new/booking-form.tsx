@@ -51,7 +51,10 @@ import {
 } from "./on-behalf-schema";
 import { formatWhen } from "../../../_lib/booking-display";
 import { dashboardFormMessages } from "../../../_lib/form-messages";
-import { useSyncedValue } from "../../../_lib/ui/use-workspace-mutation";
+import {
+  dashboardToast,
+  useSyncedValue,
+} from "../../../_lib/ui/use-workspace-mutation";
 import { workspaceMessage } from "../../../_lib/workspace-copy";
 import { Money } from "../../../_lib/ui/money";
 
@@ -209,6 +212,7 @@ export function OnBehalfBookingForm({
   });
   const confirm = useActionMutation(confirmOnBehalf, {
     refresh: false,
+    toast: dashboardToast(locale, { messages }),
     onSuccess: (data) => {
       router.push(`/${locale}/bookings/${data.bookingId}`);
       router.refresh();

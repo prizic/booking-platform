@@ -132,7 +132,10 @@ export function SignInForm({
   const form = useZodForm(signInSchema, {
     defaultValues: { locale, email: "", password: "", returnTo },
   });
-  const mutation = useWorkspaceMutation(action, form, { refresh: false });
+  const mutation = useWorkspaceMutation(action, form, {
+    refresh: false,
+    toast: false,
+  });
   return (
     <AuthFormFrame
       form={form}
@@ -177,6 +180,7 @@ export function RecoverForm({
   const form = useZodForm(recoverSchema, { defaultValues: { locale, email: "" } });
   const mutation = useWorkspaceMutation(action, form, {
     refresh: false,
+    toast: false,
     onSuccess: () => setSent(true),
   });
   return (
@@ -207,7 +211,10 @@ export function UpdatePasswordForm({
   const form = useZodForm(updatePasswordSchema, {
     defaultValues: { locale, password: "", confirmation: "" },
   });
-  const mutation = useWorkspaceMutation(action, form, { refresh: false });
+  const mutation = useWorkspaceMutation(action, form, {
+    refresh: false,
+    toast: false,
+  });
   return (
     <AuthFormFrame
       form={form}

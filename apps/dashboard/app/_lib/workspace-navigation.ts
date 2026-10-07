@@ -18,7 +18,8 @@ export type WorkspaceSection =
   | "brand"
   | "integrations"
   | "settings"
-  | "audit";
+  | "audit"
+  | "roles";
 export type WorkspaceGroup = "operations" | "catalog" | "administration";
 export interface WorkspaceNavigationItem {
   readonly section: WorkspaceSection;
@@ -50,6 +51,7 @@ const registry: readonly [WorkspaceSection, WorkspaceGroup, DashboardMessageKey]
   ["integrations", "administration", "navIntegrations"],
   ["settings", "administration", "navSettings"],
   ["audit", "administration", "navAudit"],
+  ["roles", "administration", "navRoles"],
 ];
 // Add destinations only when their page and authorized read exist.
 export const implementedWorkspaceSections: readonly WorkspaceSection[] = [
@@ -70,6 +72,7 @@ export const implementedWorkspaceSections: readonly WorkspaceSection[] = [
   "communications",
   "integrations",
   "audit",
+  "roles",
 ];
 export function getWorkspaceNavigation(
   input: WorkspaceNavigationInput,

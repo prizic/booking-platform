@@ -1,3 +1,9 @@
+import {
+  capabilityNames,
+  type CapabilityName,
+  type CapabilityScope,
+} from "./capabilities.js";
+
 /** Version carried by the api_v1 DTOs in this module, not the deployed range. */
 export const apiV1ContractVersion = 1 as const;
 export {
@@ -9,11 +15,68 @@ export {
 } from "./catalog.js";
 export {
   parseStaffAccessWorkspaceV1,
+  parseStaffAccessWorkspaceV2,
   type BuiltInStaffRole,
+  type StaffRoleV2,
+  type StaffAccessWorkspaceV2,
   type StaffAccessWorkspaceV1,
   type StaffAccessMemberV1,
   type StaffAccessInvitationV1,
 } from "./staff-access.js";
+export {
+  actorCanGrant,
+  buildArchiveRoleV1Request,
+  buildSaveRoleV1Request,
+  builtInRoleKeys,
+  customRoleKeyPattern,
+  dominates,
+  grantCovers,
+  grantKindsV1,
+  grantScopeAllowedInMode,
+  grantScopesV1,
+  isReservedPermissionV1,
+  parseArchiveRoleResultV1,
+  parseRoleCatalogV1,
+  parseRoleMutationErrorV1,
+  parseRolesV1,
+  parseSaveRoleResultV1,
+  permissionGroupsV1,
+  reservedPermissionKeysV1,
+  roleDescriptionMaxLengthV1,
+  roleGrantLimitV1,
+  roleModesV1,
+  roleMutationErrorCodesV1,
+  roleNameMaxLengthV1,
+  uncoveredGrants,
+  validateCustomRoleGrantsV1,
+  type ArchiveRoleResultV1,
+  type BuiltInRoleKey,
+  type BuiltInRoleV1,
+  type CustomRoleV1,
+  type GrantActorV1,
+  type GrantKindV1,
+  type GrantScopeV1,
+  type GrantTargetV1,
+  type PermissionGroupV1,
+  type PermissionMetaV1,
+  type RoleCatalogV1,
+  type RoleGrantInputV1,
+  type RoleGrantIssueCodeV1,
+  type RoleGrantIssueV1,
+  type RoleGrantV1,
+  type RoleModeV1,
+  type RoleMutationErrorCodeV1,
+  type RoleMutationErrorV1,
+  type RolesV1,
+  type RoleV1,
+  type SaveRoleResultV1,
+  type SaveRoleV1Input,
+} from "./roles.js";
+export {
+  builtInRoleTemplateGrants,
+  roleCoverageCases,
+  type RoleCoverageCase,
+} from "./roles.fixtures.js";
 export {
   buildEnqueueTestNotificationV1Request,
   buildSaveMyNotificationPreferencesV1Request,
@@ -60,42 +123,13 @@ export type BookingId = string;
 export type IdempotencyKey = string;
 export type ContractLocale = "en" | "ar";
 
-export const capabilityNames = [
-  "booking.view.own",
-  "booking.view.any",
-  "booking.create_on_behalf",
-  "booking.approve",
-  "booking.reschedule",
-  "booking.cancel",
-  "refund.issue",
-  "booking.check_in",
-  "booking.check_in_override",
-  "booking.mark_no_show",
-  "booking.complete",
-  "booking.correct_status",
-  "catalog.edit",
-  "schedule.edit",
-  "staff.manage",
-  "policy.edit",
-  "customer.pii.view",
-  "customer.data.export",
-  "customer.data.export_on_behalf",
-  "customer.data.correct",
-  "customer.data.delete",
-  "customer.data.restrict",
-  "brand.manage",
-  "integration.manage",
-  "billing.view",
-  "billing.change_plan",
-  "support.grant_access",
-  "audit.read",
-  "instance.request_update",
-  "tenant.owner_transfer",
-  "tenant.read_other_tenant",
-] as const;
-
-export type CapabilityName = (typeof capabilityNames)[number];
-export type CapabilityScope = "location" | "own" | "tenant";
+export {
+  capabilityKeyPattern,
+  capabilityNames,
+  isKnownCapability,
+  type CapabilityName,
+  type CapabilityScope,
+} from "./capabilities.js";
 
 export interface CapabilityGrantDto {
   readonly capability: CapabilityName;
@@ -2096,7 +2130,7 @@ function requirePositiveRevision(value: unknown): number {
 
 /**
  * Parses one grant. A well-formed grant for a capability this release does not
- * know yet (added by a newer backend, e.g. role.manage) is skipped rather than
+ * know yet (added by a newer backend) is skipped rather than
  * failing the whole context: N-1 clients ignore permissions they cannot use.
  * Malformed grants still fail closed.
  */

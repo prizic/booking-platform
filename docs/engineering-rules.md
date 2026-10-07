@@ -112,11 +112,19 @@ Run `SELECT`, `INSERT`, `UPDATE`, `DELETE`, RPC, Storage, and Realtime cases for
 | Multi-tenant user | Correct rows and capability scope under each membership |
 | Revoked / stale session | Current membership check denies the sensitive action |
 | Tenant administrator | Elevated privileges only within their own tenant |
+| Custom-role member | Exactly the role's grants at their scope and locations; zero location rows on an assigned-mode role means no location access |
 | Platform support | Only the active support-grant scope; actor remains attributable |
 | Service worker | Server-only, explicit asserted tenant, idempotent and audited |
 | Missing / null / malformed identity | Default denial |
 
 Every policy change ships positive and negative tests. Coverage must include views, nested relationships, RPC execution grants, `SECURITY DEFINER` functions, Storage paths, Realtime topics, and cross-tenant composite foreign-key attempts.
+
+Custom roles ([ADR-0019](adr/0019-tenant-custom-roles.md)) make the set of roles unbounded, so role coverage is tested by grant **shape**, not by role:
+
+- A data-driven pgTAP matrix (actor × permission × helper × location × expected) covers the four built-ins plus narrow, duplicated, and location-scoped custom roles, a Tenant B member, and a multi-tenant user.
+- The delegation truth table `roleCoverageCases` in `@wlbp/api-contracts` is the single list of expected `grant_covers` / dominance results; the pgTAP delegation test and the contract unit tests assert the same rows. Change both together.
+- Every role-administration path (save, duplicate, archive, invite, edit membership, demotion) has an escalation refusal test, and a drift test proves each tenant's built-in grants equal the platform template.
+- Never authorize on a role key string; a role key identifies a built-in only for locking and labels.
 
 ## 8. Required concurrency cases (§24.3)
 

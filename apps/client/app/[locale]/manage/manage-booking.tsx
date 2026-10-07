@@ -17,6 +17,7 @@ import {
   Alert,
   AlertDescription,
   AlertTitle,
+  AppToaster,
   Button,
   Card,
   CardContent,
@@ -40,13 +41,18 @@ import {
   Skeleton,
   StatusStamp,
   TimeSelect,
+  actionError,
+  actionOk,
+  actionToastCopy,
+  startActionToast,
   useZodForm,
   type StampState,
 } from "@wlbp/ui-foundation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 import type { z } from "zod";
 
 import { formatWallDateTime } from "../../_lib/wall-time";
@@ -98,7 +104,29 @@ function manageViewKey(token: string | null) {
   return ["manage", "view", token] as const;
 }
 
-export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
+const noSubscription = () => () => {};
+
+/**
+ * The manage page with its toast region. The region is portalled to <body>,
+ * outside <main>, once the page runs in the browser.
+ */
+export function ManageBooking(props: ManageBookingProps) {
+  const inBrowser = useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  );
+  return (
+    <>
+      <ManageBookingView {...props} />
+      {inBrowser
+        ? createPortal(<AppToaster locale={props.locale} />, document.body)
+        : null}
+    </>
+  );
+}
+
+function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
   const message = (key: string) => copy[key] ?? key;
   const queryClient = useQueryClient();
   const formMessages = useMemo(
@@ -128,13 +156,35 @@ export function ManageBooking({ copy, locale, token }: ManageBookingProps) {
     readonly action: AppliedAction;
     readonly booking: GrantedView["booking"];
   } | null>(null);
+  // Cancel and reschedule also answer with a toast. A refusal says only what
+  // the on-page alert says: nothing changed, and the newest email is current.
+  const actionToast = actionToastCopy<ManagementActionV1>(locale, {
+    success: (result) =>
+      result?.outcome === "applied" && result.status === "cancelled"
+        ? message("manageCancelled")
+        : message("manageRescheduled"),
+    error: message("manageActionFailed"),
+    messages: { conflict: message("manageActionConflict") },
+  });
   const act = useMutation({
     mutationFn: async ({
       body,
     }: {
       body: ManageActionInput;
       booking: GrantedView["booking"];
-    }) => parseManagementActionV1(await callManage(body)),
+    }) => {
+      const feedback = startActionToast(actionToast);
+      try {
+        const result = parseManagementActionV1(await callManage(body));
+        feedback.settle(
+          result.outcome === "applied" ? actionOk(result) : actionError("conflict"),
+        );
+        return result;
+      } catch (error) {
+        feedback.fail(error);
+        throw error;
+      }
+    },
     // The confirmation keeps the booking the customer acted on, whatever the
     // refreshed view later says about the link.
     onSuccess: (result, { booking }) => {

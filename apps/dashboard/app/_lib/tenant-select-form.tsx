@@ -32,7 +32,7 @@ export function TenantSelectForm({
   readonly disabled?: boolean;
 }) {
   const form = useZodForm(tenantSelectSchema, { defaultValues: { locale, tenantId } });
-  const mutation = useWorkspaceMutation(selectTenant, form);
+  const mutation = useWorkspaceMutation(selectTenant, form, { toast: false });
   return (
     <Form form={form} locale={locale} messages={dashboardFormMessages(locale)}>
       <form

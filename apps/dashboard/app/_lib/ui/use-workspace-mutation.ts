@@ -1,8 +1,16 @@
 "use client";
 
-import { applyActionErrors, useActionMutation } from "@wlbp/ui-foundation";
+import type { Locale } from "@wlbp/i18n";
+import {
+  actionToastCopy,
+  applyActionErrors,
+  isNavigationSignal,
+  useActionMutation,
+  type ActionToastCopy,
+  type ActionToastOption,
+} from "@wlbp/ui-foundation";
 import type { ActionResult } from "@wlbp/ui-foundation/actions";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import type {
   FieldPath,
@@ -11,7 +19,25 @@ import type {
   UseFormReturn,
 } from "react-hook-form";
 
-import { isNavigationSignal } from "./mutation-errors";
+import { dashboardFormMessages } from "../form-messages";
+
+/**
+ * The Dashboard's promise toast for a create/update/delete: "Saving…" then
+ * "Saved" (or the action's own success line) or "Could not save" with the
+ * refusal's reason in the operator's language. On-page messages stay.
+ */
+export function dashboardToast<TData>(
+  locale: Locale,
+  options: {
+    readonly messages?: Readonly<Record<string, string>>;
+    readonly success?: ActionToastCopy<TData>["success"];
+  } = {},
+): ActionToastCopy<TData> {
+  return actionToastCopy<TData>(locale, {
+    messages: options.messages ?? dashboardFormMessages(locale),
+    ...(options.success === undefined ? {} : { success: options.success }),
+  });
+}
 
 /**
  * A Dashboard form's mutation. Field errors from the server land on their
@@ -20,6 +46,8 @@ import { isNavigationSignal } from "./mutation-errors";
  * form keeps every value they typed. When the action commits and redirects to
  * its outcome, the free-text fields named in `clearOnCommit` are emptied, as a
  * full page submit used to do; technical values follow the page's props.
+ * A promise toast is on by default; pass `toast: false` (sign-in, workspace
+ * selection) or an action-specific copy.
  */
 export function useWorkspaceMutation<TInput, TData, TValues extends FieldValues>(
   action: (input: TInput) => Promise<ActionResult<TData>>,
@@ -32,10 +60,13 @@ export function useWorkspaceMutation<TInput, TData, TValues extends FieldValues>
       input: TInput,
     ) => void;
     readonly refresh?: boolean;
+    readonly toast?: ActionToastOption<TData>;
   } = {},
 ) {
   const router = useRouter();
+  const { locale } = useParams<{ locale: Locale }>();
   return useActionMutation(action, {
+    toast: options.toast ?? dashboardToast<TData>(locale === "en" ? "en" : "ar"),
     ...(options.refresh === undefined ? {} : { refresh: options.refresh }),
     onFailure: (result) => {
       applyActionErrors(form, result);

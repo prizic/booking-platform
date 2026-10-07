@@ -187,6 +187,15 @@ join (
 ) as permission(role_key, permission_key, grant_kind, scope_kind)
   on permission.role_key = role.key;
 
+-- The grants above are the platform's built-in role template (ADR-0019). The
+-- installer adds what the template has beyond them - role.manage for Tenant
+-- admin - exactly as the custom-roles migration does for existing tenants.
+do $seed_roles$
+begin
+  perform private.install_builtin_roles_v1(t.id) from app.tenants as t;
+end;
+$seed_roles$;
+
 insert into app.memberships (
   id, tenant_id, auth_user_id, role_id, status, revision, joined_at, revoked_at
 )

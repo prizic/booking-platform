@@ -805,7 +805,7 @@ async function concurrentLastAdministrator() {
   runSql(`
     insert into app.tenants(id,name) values('${tenant}','Synthetic administrator contention') on conflict do nothing;
     insert into app.roles(id,tenant_id,key,location_scope_mode) values('${role}','${tenant}','tenant_admin','tenant') on conflict do nothing;
-    insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind) values('${tenant}','${role}','staff.manage','direct','tenant'),('${tenant}','${role}','tenant.owner_transfer','approval','tenant') on conflict do nothing;
+    insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind) values('${tenant}','${role}','staff.manage','direct','tenant'),('${tenant}','${role}','tenant.owner_transfer','approval','tenant'),('${tenant}','${role}','role.manage','approval','tenant') on conflict do nothing;
     insert into app.memberships(id,tenant_id,auth_user_id,role_id)
       values('${members[0]}','${tenant}','${actors[0]}','${role}'),('${members[1]}','${tenant}','${actors[1]}','${role}')
       on conflict(id) do update set status='active',revoked_at=null;
@@ -858,6 +858,296 @@ async function concurrentLastAdministrator() {
   );
 }
 
+// Custom roles (ADR-0019). A dedicated tenant with two administrators and one
+// member, created and removed by the gate itself.
+const rolesTenant = "f0c00000-0000-4000-8000-0000000000a1";
+const rolesAdmins = [
+  "a1000000-0000-0000-0000-000000000002",
+  "b1000000-0000-0000-0000-000000000001",
+];
+const rolesAdminMembers = [
+  "f3c00000-0000-4000-8000-0000000000a1",
+  "f3c00000-0000-4000-8000-0000000000a2",
+];
+const rolesMember = "c1000000-0000-0000-0000-000000000001";
+const rolesMemberId = "f3c00000-0000-4000-8000-0000000000a3";
+const loopRole = "f2c00000-0000-4000-8000-0000000000a1";
+const viewAny =
+  '{"permission_key":"booking.view.any","grant_kind":"direct","scope_kind":"tenant"}';
+const cancelAny =
+  '{"permission_key":"booking.cancel","grant_kind":"direct","scope_kind":"tenant"}';
+
+function steppedUp(sub) {
+  return `select set_config('request.jwt.claims',jsonb_build_object('sub','${sub}','role','authenticated','aal','aal2','amr',jsonb_build_array(jsonb_build_object('method','totp','timestamp',extract(epoch from statement_timestamp())::bigint)))::text,true);`;
+}
+
+function asAdmin(sub, call) {
+  return `begin; ${steppedUp(sub)} set local role authenticated; ${call} commit;`;
+}
+
+function lastLine(output) {
+  return output.split("\n").filter(Boolean).at(-1) ?? "";
+}
+
+function rolesCleanup() {
+  runSql(`
+    set local session_replication_role = 'replica';
+    delete from app.role_change_events where tenant_id='${rolesTenant}';
+    delete from app.staff_access_events where tenant_id='${rolesTenant}';
+    delete from private.staff_invitation_deliveries where tenant_id='${rolesTenant}';
+    delete from app.invitation_location_scopes where tenant_id='${rolesTenant}';
+    delete from app.invitations where tenant_id='${rolesTenant}';
+    delete from app.membership_location_scopes where tenant_id='${rolesTenant}';
+    delete from app.memberships where tenant_id='${rolesTenant}';
+    delete from app.role_permissions where tenant_id='${rolesTenant}';
+    delete from app.roles where tenant_id='${rolesTenant}';
+    delete from app.tenants where id='${rolesTenant}';
+    set local session_replication_role = 'origin';
+  `);
+}
+
+function rolesSetup() {
+  rolesCleanup();
+  runSql(`
+    insert into app.tenants(id,name) values('${rolesTenant}','Synthetic custom-role contention');
+    select private.install_builtin_roles_v1('${rolesTenant}');
+    insert into app.memberships(id,tenant_id,auth_user_id,role_id)
+    select m.id,'${rolesTenant}',m.auth_user_id,r.id
+    from (values ('${rolesAdminMembers[0]}'::uuid,'${rolesAdmins[0]}'::uuid),('${rolesAdminMembers[1]}'::uuid,'${rolesAdmins[1]}'::uuid)) m(id,auth_user_id)
+    join app.roles r on r.tenant_id='${rolesTenant}' and r.key='tenant_admin';
+    insert into app.roles(id,tenant_id,key,location_scope_mode,name_en,name_ar)
+      values('${loopRole}','${rolesTenant}','custom_00000000000c0a11','tenant','Loop','حلقة');
+    insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
+      values('${rolesTenant}','${loopRole}','booking.view.any','direct','tenant'),('${rolesTenant}','${loopRole}','booking.cancel','direct','tenant');
+    insert into app.memberships(id,tenant_id,auth_user_id,role_id) values('${rolesMemberId}','${rolesTenant}','${rolesMember}','${loopRole}');
+  `);
+}
+
+/** Twenty administrators' tabs save the same role revision; one wins. */
+async function concurrentRoleSaves() {
+  const roleId = lastLine(
+    runSql(
+      asAdmin(
+        rolesAdmins[0],
+        `select api_v1.save_role_v1(p_tenant_id=>'${rolesTenant}',p_request_id=>'${randomUUID()}',p_name_en=>'Gate role',p_name_ar=>'دور البوابة',p_location_scope_mode=>'tenant',p_grants=>'[${viewAny}]')->>'role_id';`,
+      ),
+    ),
+  );
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, (_, index) =>
+      attempt(
+        asAdmin(
+          rolesAdmins[index % 2],
+          `select api_v1.save_role_v1(p_tenant_id=>'${rolesTenant}',p_request_id=>'${randomUUID()}',p_role_id=>'${roleId}',p_expected_revision=>1,p_name_en=>'Gate role ${index}',p_name_ar=>'دور البوابة ${index}',p_location_scope_mode=>'tenant',p_grants=>'[${viewAny},${cancelAny}]')->>'revision';`,
+        ),
+        at,
+      ),
+    ),
+  );
+  report(
+    attempts.filter((x) => x.ok).length === 1,
+    `${lifecycleContenders} concurrent saves of one role revision commit exactly one`,
+    attempts.map((x) => x.error || x.value).join(" | "),
+  );
+  report(
+    attempts.filter((x) => !x.ok).every((x) => x.error === "revision_conflict"),
+    "every losing save is told it acted on a stale revision",
+    [...new Set(attempts.filter((x) => !x.ok).map((x) => x.error))].join(" | "),
+  );
+  report(
+    runSql(
+      `select revision||':'||(select count(*) from app.role_change_events e where e.role_id=r.id)||':'||(select count(*) from app.role_permissions p where p.role_id=r.id) from app.roles r where r.id='${roleId}';`,
+    ) === "2:2:2",
+    "the role moved one revision, with one ledger row per committed save and the winner's grants",
+  );
+  return roleId;
+}
+
+/** The same save, retried twenty times at once, writes once. */
+async function duplicatedRoleSave(roleId) {
+  const requestId = randomUUID();
+  const at = fireAt();
+  const attempts = await Promise.all(
+    Array.from({ length: lifecycleContenders }, () =>
+      attempt(
+        asAdmin(
+          rolesAdmins[0],
+          `select api_v1.save_role_v1(p_tenant_id=>'${rolesTenant}',p_request_id=>'${requestId}',p_role_id=>'${roleId}',p_expected_revision=>2,p_name_en=>'Gate role replayed',p_name_ar=>'دور معاد',p_location_scope_mode=>'tenant',p_grants=>'[${viewAny}]')->>'revision';`,
+        ),
+        at,
+      ),
+    ),
+  );
+  report(
+    attempts.every((x) => x.ok && x.value === "3"),
+    "a role save retried under one request id answers every caller with the same revision",
+    [...new Set(attempts.map((x) => x.error || x.value))].join(" | "),
+  );
+  report(
+    runSql(
+      `select (select count(*) from app.role_change_events where tenant_id='${rolesTenant}' and request_id='${requestId}')||':'||(select revision from app.roles where id='${roleId}');`,
+    ) === "1:3",
+    "the retried save wrote one ledger row and one revision",
+  );
+}
+
+/**
+ * A member keeps asking "may I?" while an administrator removes the grant.
+ * Once the administrator's commit has returned, no later check may say yes.
+ */
+async function authorizationShrinkRace() {
+  const loopStart = fireAt(1500);
+  const shrinkAt = fireAt(2700);
+  const [loop, shrink] = await Promise.all([
+    attempt(
+      `
+    create temp table seen(at timestamptz, allowed boolean);
+    do $loop$
+    declare v boolean; v_at timestamptz; v_until timestamptz := clock_timestamp() + interval '3 seconds';
+    begin
+      perform set_config('request.jwt.claims','{"sub":"${rolesMember}","role":"authenticated","aal":"aal1"}',false);
+      while clock_timestamp() < v_until loop
+        v_at := clock_timestamp();
+        select private.has_direct_capability('${rolesTenant}','booking.view.any') into v;
+        insert into seen values (v_at, v);
+      end loop;
+    end
+    $loop$;
+    select coalesce(to_char(max(at) filter (where allowed) at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US'),'none')||'|'||count(*) filter (where allowed)||'|'||count(*) filter (where not allowed) from seen;
+  `,
+      loopStart,
+    ),
+    attempt(
+      `${asAdmin(
+        rolesAdmins[0],
+        `select api_v1.save_role_v1(p_tenant_id=>'${rolesTenant}',p_request_id=>'${randomUUID()}',p_role_id=>'${loopRole}',p_expected_revision=>1,p_name_en=>'Loop',p_name_ar=>'حلقة',p_location_scope_mode=>'tenant',p_grants=>'[${cancelAny}]')->>'revision';`,
+      )} select to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US');`,
+      shrinkAt,
+    ),
+  ]);
+  const [lastAllow, allows, denies] = loop.value.split("|");
+  const committed = shrink.value;
+  report(
+    loop.ok && shrink.ok && Number(allows) > 0 && Number(denies) > 0,
+    "the member was allowed before the shrink and refused after it",
+    `${loop.error || loop.value} / ${shrink.error || shrink.value}`,
+  );
+  report(
+    lastAllow === "none" || lastAllow < committed,
+    "no authorization check that began after the shrink committed was allowed",
+    `last allow ${lastAllow}, commit observed ${committed}`,
+  );
+}
+
+/** Two administrators demote each other onto a custom role at once. */
+async function mutualAdministratorDemotion() {
+  const revisions = rolesAdminMembers.map((id) =>
+    Number(runSql(`select revision from app.memberships where id='${id}';`)),
+  );
+  const at = fireAt();
+  const attempts = await Promise.all(
+    rolesAdmins.map((actor, index) => {
+      const target = 1 - index;
+      return attempt(
+        asAdmin(
+          actor,
+          `select api_v1.change_staff_access_v1('${rolesTenant}','${randomUUID()}','edit_membership','${rolesAdminMembers[target]}',${revisions[target]},'${loopRole}','{}')->>'revision';`,
+        ),
+        at,
+      );
+    }),
+  );
+  report(
+    attempts.filter((x) => x.ok).length === 1,
+    "two administrators demoting each other commit exactly one demotion",
+    attempts.map((x) => x.error || "committed").join(" | "),
+  );
+  report(
+    attempts
+      .filter((x) => !x.ok)
+      .every((x) =>
+        ["not_authorized", "last_administrator_required"].includes(x.error),
+      ),
+    "the loser lost its authority or met the last-administrator rule",
+    attempts
+      .filter((x) => !x.ok)
+      .map((x) => x.error)
+      .join(" | "),
+  );
+  const survivors = runSql(
+    `select string_agg(m.auth_user_id::text,',') from app.memberships m where m.tenant_id='${rolesTenant}' and m.status='active' and private.role_is_administrator(m.tenant_id,m.role_id);`,
+  );
+  report(
+    survivors.split(",").filter(Boolean).length === 1,
+    "exactly one administrator survives the mutual demotion",
+    survivors,
+  );
+  return survivors.split(",")[0];
+}
+
+/** Archive races an invitation to the same role; never both. */
+async function archiveRacingInvite(admin) {
+  const rounds = 8;
+  let singleWinner = true;
+  const detail = [];
+  for (let round = 0; round < rounds; round += 1) {
+    const roleId = lastLine(
+      runSql(
+        asAdmin(
+          admin,
+          `select api_v1.save_role_v1(p_tenant_id=>'${rolesTenant}',p_request_id=>'${randomUUID()}',p_name_en=>'Race ${round}',p_name_ar=>'سباق ${round}',p_location_scope_mode=>'tenant',p_grants=>'[${viewAny}]')->>'role_id';`,
+        ),
+      ),
+    );
+    const at = fireAt(800);
+    const [archive, invite] = await Promise.all([
+      attempt(
+        asAdmin(
+          admin,
+          `select api_v1.archive_role_v1('${rolesTenant}','${randomUUID()}','${roleId}',1)->>'revision';`,
+        ),
+        at,
+      ),
+      attempt(
+        asAdmin(
+          admin,
+          `select api_v1.change_staff_access_v1('${rolesTenant}','${randomUUID()}','invite',null,null,'${roleId}','{}','race-${round}@example.invalid')->>'revision';`,
+        ),
+        at,
+      ),
+    ]);
+    if ([archive, invite].filter((x) => x.ok).length !== 1) singleWinner = false;
+    detail.push(
+      `${archive.ok ? "archived" : archive.error}/${invite.ok ? "invited" : invite.error}`,
+    );
+  }
+  report(
+    singleWinner,
+    "in every archive-versus-invite race exactly one side commits",
+    detail.join(" | "),
+  );
+  report(
+    runSql(
+      `select count(*) from app.invitations i join app.roles r on r.tenant_id=i.tenant_id and r.id=i.role_id where i.tenant_id='${rolesTenant}' and i.status='pending' and r.archived_at is not null;`,
+    ) === "0",
+    "no pending invitation ever points at an archived role",
+  );
+}
+
+async function concurrentCustomRoles() {
+  rolesSetup();
+  try {
+    const roleId = await concurrentRoleSaves();
+    await duplicatedRoleSave(roleId);
+    await authorizationShrinkRace();
+    const survivor = await mutualAdministratorDemotion();
+    await archiveRacingInvite(survivor);
+  } finally {
+    rolesCleanup();
+  }
+}
+
 async function main() {
   requireConnectionHeadroom();
   setup();
@@ -874,6 +1164,7 @@ async function main() {
     await concurrentSettlement(slotAt("09:00"));
     await concurrentProvisioningStep();
     await concurrentLastAdministrator();
+    await concurrentCustomRoles();
     noOverlapSurvives();
   } finally {
     cleanup();

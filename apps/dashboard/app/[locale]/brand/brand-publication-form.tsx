@@ -8,6 +8,8 @@ import { useResultNavigation } from "../services/form-hooks";
 import { MutationFeedback } from "../services/mutation-feedback";
 import { previewBrandAction, publishBrandAction, rollbackBrandAction } from "./actions";
 import { brandFormMessages } from "./results";
+import { getDashboardMessage } from "../../_lib/copy";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 type Change =
   | {
@@ -45,8 +47,21 @@ export function BrandPublicationForm({
     refresh: false,
     onSuccess: (data: { destination: string }) => navigate(data.destination),
   };
-  const publish = useActionMutation(publishBrandAction, options);
-  const rollback = useActionMutation(rollbackBrandAction, options);
+  const messages = brandFormMessages(locale);
+  const publish = useActionMutation(publishBrandAction, {
+    ...options,
+    toast: dashboardToast(locale, {
+      messages,
+      success: getDashboardMessage(locale, "brandResultPublished"),
+    }),
+  });
+  const rollback = useActionMutation(rollbackBrandAction, {
+    ...options,
+    toast: dashboardToast(locale, {
+      messages,
+      success: getDashboardMessage(locale, "brandResultRolledBack"),
+    }),
+  });
   const mutation = change.kind === "publish" ? publish : rollback;
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
   return (
@@ -86,7 +101,7 @@ export function BrandPublicationForm({
       <div className="text-start">
         <MutationFeedback
           locale={locale}
-          messages={brandFormMessages(locale)}
+          messages={messages}
           result={mutation.data?.ok === false ? mutation.data : undefined}
           transportFailed={mutation.isError}
         />

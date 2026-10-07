@@ -1,6 +1,6 @@
 begin;
 
-select plan(49);
+select plan(53);
 
 select has_table('app'::name, 'tenants'::name);
 select has_table('app'::name, 'permissions'::name);
@@ -16,6 +16,8 @@ select has_table('app'::name, 'memberships'::name);
 select has_table('app'::name, 'membership_location_scopes'::name);
 select has_table('app'::name, 'invitations'::name);
 select has_table('app'::name, 'invitation_location_scopes'::name);
+select has_table('app'::name, 'permission_meta'::name);
+select has_table('app'::name, 'role_change_events'::name);
 
 select col_not_null('app'::name, 'brands'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'brand_revisions'::name, 'tenant_id'::name);
@@ -29,6 +31,8 @@ select col_not_null('app'::name, 'memberships'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'membership_location_scopes'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'invitations'::name, 'tenant_id'::name);
 select col_not_null('app'::name, 'invitation_location_scopes'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'role_change_events'::name, 'tenant_id'::name);
+select col_not_null('app'::name, 'roles'::name, 'revision'::name);
 
 select ok(
   not exists (
@@ -178,6 +182,7 @@ select is(
     'private.active_support_grant_v1(uuid)',
     'private.add_booking_note_v1(uuid,uuid,text,text,uuid)',
     'private.advance_tenant_offboarding_v1(uuid,text)',
+    'private.archive_role_v1(uuid,uuid,uuid,bigint)',
     'private.attach_checkout_reference_v1(uuid,uuid,text)',
     'private.authorize_payment_onboarding_v1(uuid,text,text,uuid)',
     'private.begin_checkout_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text)',
@@ -238,9 +243,11 @@ select is(
     'private.get_published_brand_v1(text,text)',
     'private.get_report_export_v1(uuid,uuid)',
     'private.get_revenue_report_v1(uuid,date,date,text)',
+    'private.get_role_catalog_v1(uuid)',
     'private.get_runtime_entitlements_v1(uuid)',
     'private.get_schedule_choices_v1(uuid)',
     'private.get_staff_access_workspace_v1(uuid)',
+    'private.get_staff_access_workspace_v2(uuid)',
     'private.get_staff_resource_choices_v1(uuid,text)',
     'private.get_support_context_v1()',
     'private.get_tenant_configuration_v1(uuid)',
@@ -256,6 +263,7 @@ select is(
     'private.issue_management_token_v1(uuid,uuid,text,uuid)',
     'private.link_booking_contact_customer()',
     'private.list_dashboard_audit_v1(uuid,text,timestamp with time zone,timestamp with time zone,uuid,jsonb)',
+    'private.list_roles_v1(uuid)',
     'private.list_staff_notification_preferences_v1(uuid)',
     'private.mint_management_otp_code_v1(uuid)',
     'private.offered_minutes_v1(uuid,timestamp with time zone,timestamp with time zone,uuid,uuid)',
@@ -298,6 +306,7 @@ select is(
     'private.save_notification_settings_v1(uuid,jsonb,integer[],bigint,uuid)',
     'private.save_resource_type_v1(uuid,uuid,text,text,boolean,bigint,uuid,text)',
     'private.save_resource_v1(uuid,uuid,uuid,text,text,text,text,bigint,uuid,text)',
+    'private.save_role_v1(uuid,uuid,uuid,bigint,uuid,text,text,text,text,text,jsonb)',
     'private.save_schedule_config_v1(uuid,text,jsonb,bigint,uuid)',
     'private.save_staff_profile_v1(uuid,uuid,uuid,text,text,text,numeric,bigint,uuid,text)',
     'private.save_tenant_settings_v1(uuid,jsonb,jsonb,jsonb,bigint)',

@@ -2,6 +2,8 @@ import { parseOperationalChoices } from "./operational-choices";
 import {
   capabilityNames,
   parseStaffAccessWorkspaceV1,
+  parseRoleCatalogV1,
+  parseRolesV1,
   parseCatalogWorkspaceV1,
   normalizeAvailabilityV1TransportRow,
   parseAvailabilityV1Response,
@@ -687,6 +689,14 @@ export function createDashboardDataSource(
         assertRpc(
           await api.rpc("get_staff_access_workspace_v1", { p_tenant_id: tenantId }),
         ),
+      ),
+    getRoleCatalog: async (tenantId) =>
+      parseRoleCatalogV1(
+        assertRpc(await api.rpc("get_role_catalog_v1", { p_tenant_id: tenantId })),
+      ),
+    listRoles: async (tenantId) =>
+      parseRolesV1(
+        assertRpc(await api.rpc("list_roles_v1", { p_tenant_id: tenantId })),
       ),
     changeStaffAccess: async (request) =>
       assertRpc(

@@ -37,6 +37,7 @@ import {
   whatsAppConfigSchema,
   type WhatsAppConfigInput,
 } from "./whatsapp-schema";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 const panel = "grid gap-5 rounded-lg border bg-card p-5 md:p-6";
 
@@ -86,6 +87,7 @@ export function WhatsAppForm({
   useAuthoritativeDefaults(form, defaults);
   const control = form.control as unknown as Control<WhatsAppConfigInput>;
   const mutation = useActionMutation(saveWhatsAppConfigAction, {
+    toast: dashboardToast(locale, { messages, success: t("waSaved") }),
     onFailure: (result) => applyActionErrors(form, result),
     onSuccess: () => {
       form.setValue("requestId", newAttemptId());

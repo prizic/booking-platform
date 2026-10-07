@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDirection, isLocale, type Locale } from "@wlbp/i18n";
-import { QueryProvider } from "@wlbp/ui-foundation";
+import { AppToaster, QueryProvider } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { createBrandStyle } from "@wlbp/white-label-ui";
 import { cookies } from "next/headers";
@@ -71,6 +71,7 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     >
       <body>
         <QueryProvider>{children}</QueryProvider>
+        <AppToaster locale={locale} />
         <PwaRegistration
           defaultLocale={instanceLocalePolicy.defaultLocale}
           version={process.env.WLBP_PWA_VERSION ?? "dev"}

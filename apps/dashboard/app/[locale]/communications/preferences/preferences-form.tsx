@@ -37,6 +37,7 @@ import {
   staffAlertKeys,
   type MyPreferencesInput,
 } from "./preferences-schema";
+import { dashboardToast } from "../../../_lib/ui/use-workspace-mutation";
 
 const panel = "grid gap-4 rounded-lg border bg-card p-5 md:p-6";
 
@@ -137,6 +138,7 @@ export function MyPreferencesForm({
     preferences.items.map((item) => [item.templateKey, item.tenantEnabled]),
   );
   const mutation = useActionMutation(saveMyNotificationPreferencesAction, {
+    toast: dashboardToast(locale, { messages, success: t("prefsSaved") }),
     onFailure: (result) => applyActionErrors(form, result),
     onSuccess: () => form.setValue("requestId", newAttemptId()),
   });

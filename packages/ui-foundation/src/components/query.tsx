@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation.js";
 import { useState, type ReactNode } from "react";
 
 import type { ActionResult } from "../forms/action-result.js";
+import { runActionWithToast, type ActionToastOption } from "./action-toast.js";
 
 /** One QueryClient per browser tab, created lazily so server renders never share it. */
 export function QueryProvider({ children }: { children: ReactNode }) {
@@ -33,12 +34,19 @@ export function QueryProvider({ children }: { children: ReactNode }) {
  * successful round-trip (the caller shows field errors); a thrown error is a
  * transport failure. On success it invalidates the given query keys and
  * refreshes server-rendered data (router.refresh) unless `refresh: false`.
+ *
+ * With `toast` it also shows a promise toast: loading while the action runs,
+ * then success (a committed result, or the navigation signal of an action that
+ * redirects to its outcome) or error (a refusal, or a transport failure). A
+ * refusal that only carries field validation errors closes the toast silently.
+ * Toasts are additive: on-page status messages and field errors still render.
  */
 export function useActionMutation<TInput, TData = undefined>(
   action: (input: TInput) => Promise<ActionResult<TData>>,
   options: {
     invalidate?: readonly QueryKey[];
     refresh?: boolean;
+    toast?: ActionToastOption<TData>;
     onSuccess?: (data: TData, message: string | undefined, input: TInput) => void;
     onFailure?: (
       result: Extract<ActionResult<TData>, { ok: false }>,
@@ -51,9 +59,9 @@ export function useActionMutation<TInput, TData = undefined>(
 ) {
   const queryClient = useQueryClient();
   const router = useRouter();
-  const { invalidate, refresh = true, onSuccess, onFailure, ...rest } = options;
+  const { invalidate, refresh = true, toast, onSuccess, onFailure, ...rest } = options;
   return useMutation<ActionResult<TData>, Error, TInput>({
-    mutationFn: (input) => action(input),
+    mutationFn: (input) => runActionWithToast(action, input, toast),
     ...rest,
     onSuccess: async (result, input) => {
       if (!result.ok) {

@@ -132,3 +132,11 @@ Rules for the register:
 - [ADR-0009: Analytics definitions](./0009-analytics-definitions.md)
 - [ADR-0018: WhatsApp notification channel](./0018-whatsapp-notification-channel.md) — amends the SMS/WhatsApp row
 - [References](../references.md)
+
+## Amendment 2026-10-07 (ADR-0019)
+
+By owner decision, the **custom roles** half of the "Custom roles and approval workflows" row (#50) moves forward under [ADR-0019: Tenant custom roles](./0019-tenant-custom-roles.md). The table and seams above are kept as history; read them with these changes:
+
+- **Now built:** a tenant-local role editor in the Dashboard, per-tenant custom role rows over the existing capability vocabulary, and the `role.manage` capability. Built-in roles stay fixed and locked. There is no Platform Admin roles feature.
+- **Still deferred to #50:** approval chains beyond the single request-to-book approval step and the step-up that satisfies approval grants. Do not build configurable approvers, multi-step approval queues, or delegated approval rules.
+- **The roles seam held.** Checks were already written against capabilities, so custom roles reuse every existing check. The unbounded-matrix concern is answered by testing grant shapes (permission × scope × kind) with a data-driven pgTAP matrix and a shared truth table, plus server-side dominance, reserved-permission, and scope rules (ADR-0019 Consequences).

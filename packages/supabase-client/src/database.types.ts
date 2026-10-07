@@ -106,6 +106,15 @@ export type Database = {
           status: string;
         }[];
       };
+      archive_role_v1: {
+        Args: {
+          p_expected_revision: number;
+          p_request_id: string;
+          p_role_id: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
+      };
       assign_subscription_v1: {
         Args: {
           p_plan_key: string;
@@ -1101,6 +1110,7 @@ export type Database = {
           unsettled_payments: number;
         }[];
       };
+      get_role_catalog_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_rollout_v1: { Args: { p_rollout_id: string }; Returns: Json };
       get_schedule_choices_v1: { Args: { p_tenant_id: string }; Returns: Json };
       get_schedule_editor_details_v1: {
@@ -1131,6 +1141,10 @@ export type Database = {
         }[];
       };
       get_staff_access_workspace_v1: {
+        Args: { p_tenant_id: string };
+        Returns: Json;
+      };
+      get_staff_access_workspace_v2: {
         Args: { p_tenant_id: string };
         Returns: Json;
       };
@@ -1707,6 +1721,7 @@ export type Database = {
           status: string;
         }[];
       };
+      list_roles_v1: { Args: { p_tenant_id: string }; Returns: Json };
       list_rollouts_v1: {
         Args: {
           p_limit?: number;
@@ -2485,6 +2500,22 @@ export type Database = {
           resource_id: string;
           revision: number;
         }[];
+      };
+      save_role_v1: {
+        Args: {
+          p_description_ar?: string;
+          p_description_en?: string;
+          p_expected_revision?: number;
+          p_grants?: Json;
+          p_location_scope_mode?: string;
+          p_name_ar?: string;
+          p_name_en?: string;
+          p_request_id: string;
+          p_role_id?: string;
+          p_source_role_id?: string;
+          p_tenant_id: string;
+        };
+        Returns: Json;
       };
       save_schedule_config_v1: {
         Args: {

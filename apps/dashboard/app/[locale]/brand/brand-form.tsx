@@ -38,6 +38,7 @@ import { FormActions } from "../services/form-kit";
 import { SelectField, TextField } from "../services/form-fields";
 import { useAuthoritativeDefaults } from "../services/form-hooks";
 import { MutationFeedback } from "../services/mutation-feedback";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 const colorLabels = {
   background: ["Background", "الخلفية"],
@@ -174,6 +175,10 @@ export function BrandForm({
   useAuthoritativeDefaults(form, defaults);
   const control = form.control as unknown as Control<BrandEditorInput>;
   const mutation = useActionMutation(saveStructuredBrandAction, {
+    toast: dashboardToast(locale, {
+      messages,
+      success: getDashboardMessage(locale, "brandResultDrafted"),
+    }),
     onFailure: (result) => applyActionErrors(form, result),
   });
   const pending = mutation.isPending;

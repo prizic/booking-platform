@@ -51,6 +51,7 @@ import {
   useResultNavigation,
 } from "./form-hooks";
 import { MutationFeedback } from "./mutation-feedback";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 const panel = "grid gap-5 rounded-lg border bg-card p-5 md:p-6";
 
@@ -182,6 +183,7 @@ export function CatalogForm({
   const assignment = useWatch({ control, name: "assignment_mode" });
   const mutation = useActionMutation(saveCatalogDraftAction, {
     refresh: false,
+    toast: dashboardToast(locale, { messages }),
     onFailure: (result) => applyActionErrors(form, result),
     onSuccess: (data) => navigate(data.destination),
   });
@@ -619,11 +621,12 @@ export function CatalogPublicationForm({
   requestId: string;
 }) {
   const [nextAttempt, setNextAttempt] = useState<string | null>(null);
-  const mutation = useActionMutation(publishCatalogAction, {
-    onSuccess: () => setNextAttempt(newAttemptId()),
-  });
   const message = (key: CatalogMessageKey) => catalogMessage(locale, key);
   const messages = catalogErrorMessages(locale);
+  const mutation = useActionMutation(publishCatalogAction, {
+    toast: dashboardToast(locale, { messages, success: message("published") }),
+    onSuccess: () => setNextAttempt(newAttemptId()),
+  });
   const drafts = workspace.entities.filter((row) => row.state === "draft");
   const published = mutation.data?.ok === true;
   if (!workspace.canPublish) return null;

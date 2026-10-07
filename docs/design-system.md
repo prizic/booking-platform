@@ -222,6 +222,8 @@ raw form controls (`button`, `input` other than hidden, `select`, `textarea`,
 - **Dependencies.** `radix-ui`, `class-variance-authority`, `clsx`,
   `tailwind-merge`, `lucide-react`, `tw-animate-css`, `react-day-picker`,
   `date-fns`, `react-hook-form`, `@hookform/resolvers`, `zod`,
-  `@tanstack/react-query` (all MIT/ISC/Apache-2.0) in the distributed `ui-foundation`
-  package; `tailwindcss` and `@tailwindcss/postcss` as app build tooling.
+  `@tanstack/react-query`, `sonner` (promise toasts: one `<AppToaster>` per app
+  outside `<main>`, `useActionMutation({ toast })`; additive to on-page status
+  messages, toast content never takes `role="status"`) (all MIT/ISC/Apache-2.0)
+  in the distributed `ui-foundation` package; `tailwindcss` and `@tailwindcss/postcss` as app build tooling.
   Versions are pinned in the pnpm catalog and respect the release-age policy.

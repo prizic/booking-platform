@@ -43,5 +43,28 @@ reset role;
 select is((select count(*)::integer from app.memberships where tenant_id='a0000000-0000-0000-0000-000000000001' and auth_user_id='d1000000-0000-0000-0000-000000000001'),1,'acceptance creates exactly one membership');
 select is((select count(*)::integer from private.staff_invitation_deliveries where invitation_id=current_setting('test.invitation_id')::uuid),1,'invitation replay created one delivery job');
 select throws_like($$update app.staff_access_events set action='changed'$$,'%booking_immutable%','audit rows are append-only');
+
+-- Custom roles (ADR-0019) through the same staff-access RPC.
+select set_config('request.jwt.claims',jsonb_build_object('sub','a1000000-0000-0000-0000-000000000002','role','authenticated','aal','aal2','amr',jsonb_build_array(jsonb_build_object('method','totp','timestamp',extract(epoch from statement_timestamp())::bigint)))::text,true);
+set local role authenticated;
+select is((api_v1.get_staff_access_workspace_v2('a0000000-0000-0000-0000-000000000001')->>'version')::integer,2,'administrator reads the v2 workspace');
+select ok((select bool_and((r->>'assignable')::boolean) from jsonb_array_elements(api_v1.get_staff_access_workspace_v2('a0000000-0000-0000-0000-000000000001')->'roles') r where (r->>'is_builtin')::boolean),'an administrator may assign every built-in role');
+select set_config('test.greeter',api_v1.save_role_v1(p_tenant_id=>'a0000000-0000-0000-0000-000000000001',p_request_id=>'a9f00000-0000-4000-8000-000000000020',
+  p_name_en=>'Greeter',p_name_ar=>'المرحب',p_location_scope_mode=>'tenant',p_grants=>'[{"permission_key":"booking.view.any","grant_kind":"direct","scope_kind":"tenant"}]')->>'role_id',true);
+select is((api_v1.change_staff_access_v1('a0000000-0000-0000-0000-000000000001','a9f00000-0000-4000-8000-000000000021','edit_membership','a3000000-0000-0000-0000-000000000001',1,current_setting('test.greeter')::uuid,'{}')->>'revision')::integer,2,'a member moves onto a custom role');
+select ok((api_v1.change_staff_access_v1('a0000000-0000-0000-0000-000000000001','a9f00000-0000-4000-8000-000000000022','invite',null,null,current_setting('test.greeter')::uuid,'{}','greeter@example.invalid')->>'id') is not null,'an invitation names a custom role');
+select is((select r->>'name_en' from jsonb_array_elements(api_v1.get_staff_access_workspace_v2('a0000000-0000-0000-0000-000000000001')->'roles') r where r->>'id'=current_setting('test.greeter')),'Greeter','v2 names custom roles');
+reset role;
+select case when to_regprocedure('realtime.send(jsonb,text,text,boolean)') is not null then
+  ok(exists(select 1 from realtime.messages where event='authorization_changed' and topic='tenant:a0000000-0000-0000-0000-000000000001'
+    and payload->>'membership_id'='a3000000-0000-0000-0000-000000000001'),'a membership change tells open sessions to re-authorize')
+  else pass('realtime is not installed; the broadcast is skipped') end;
+select case when to_regprocedure('realtime.send(jsonb,text,text,boolean)') is not null then
+  ok(not exists(select 1 from realtime.messages where event='authorization_changed' and (payload::text like '%@%' or payload ? 'grants')),'the broadcast carries identifiers only')
+  else pass('realtime is not installed; the broadcast is skipped') end;
+select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000003","role":"authenticated","aal":"aal2"}',true);
+set local role authenticated;
+select throws_like($$select api_v1.get_staff_access_workspace_v2('a0000000-0000-0000-0000-000000000001')$$,'%not_authorized%','a location manager cannot read the v2 workspace');
+reset role;
 select * from finish();
 rollback;

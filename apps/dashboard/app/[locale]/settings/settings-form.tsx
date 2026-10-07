@@ -26,6 +26,7 @@ import { CheckboxField, SelectField, TextField } from "../services/form-fields";
 import { newAttemptId, useAuthoritativeDefaults } from "../services/form-hooks";
 import { MutationFeedback } from "../services/mutation-feedback";
 import { dashboardFormMessages } from "../../_lib/form-messages";
+import { dashboardToast } from "../../_lib/ui/use-workspace-mutation";
 
 const panel = "grid gap-5 rounded-lg border bg-card p-5 md:p-6";
 
@@ -96,6 +97,13 @@ export function SettingsForm({
   const control = form.control;
   const items = useFieldArray({ control, name: "navigation", keyName: "fieldId" });
   const mutation = useActionMutation(saveStructuredSettingsAction, {
+    toast: dashboardToast(locale, {
+      messages,
+      success: (data) =>
+        data === undefined
+          ? getDashboardMessage(locale, "settingsResultSaved")
+          : getDashboardMessage(locale, data.message),
+    }),
     onFailure: (result) => applyActionErrors(form, result),
   });
   const pending = mutation.isPending;

@@ -7,6 +7,7 @@ export type DashboardMessageKey =
   | "navCommunications"
   | "navIntegrations"
   | "navAudit"
+  | "navRoles"
   | "workspaceOperations"
   | "workspaceCatalog"
   | "workspaceAdministration"
@@ -444,6 +445,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCommunications: "Communications",
     navIntegrations: "Integrations",
     navAudit: "Audit",
+    navRoles: "Roles",
     workspaceOperations: "Operations",
     workspaceCatalog: "Catalog",
     workspaceAdministration: "Administration",
@@ -939,6 +941,7 @@ export const dashboardCopy: Record<Locale, Record<DashboardMessageKey, string>> 
     navCommunications: "الاتصالات",
     navIntegrations: "التكاملات",
     navAudit: "سجل التدقيق",
+    navRoles: "الأدوار",
     workspaceOperations: "العمليات",
     workspaceCatalog: "الكتالوج",
     workspaceAdministration: "الإدارة",

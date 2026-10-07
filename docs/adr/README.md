@@ -58,19 +58,19 @@ Files are named `NNNN-kebab-title.md`: a zero-padded four-digit sequence number,
 | 0004 | [Guest-first booking and management links](./0004-guest-first-booking-and-management-links.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | Accounts become mandatory, or a link-security incident or abuse pattern appears |
 | 0005 | [Booking policy defaults](./0005-booking-policy-defaults.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A tenant needs a default the model cannot express, or no-show/cancellation rates breach agreed thresholds |
 | 0006 | [Policy snapshot rules](./0006-policy-snapshot-rules.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A dispute turns on which policy applied, or policy versioning changes shape |
-| 0007 | [Roles and capabilities](./0007-roles-and-capabilities.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | Custom or per-tenant roles are requested, or a capability crosses the tenant isolation boundary |
+| 0007 | [Roles and capabilities](./0007-roles-and-capabilities.md) — amended by 0019 | Accepted | @SEIFSEIF4 | 2026-09-04 | Custom or per-tenant roles are requested, or a capability crosses the tenant isolation boundary |
 | 0008 | [Privacy, retention, and support access](./0008-privacy-retention-and-support-access.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A new jurisdiction, a new data category, or a change to support impersonation |
 | 0009 | [Analytics definitions](./0009-analytics-definitions.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A metric definition changes, or a reported number stops reconciling with the booking record |
-| 0010 | [Deferred scope](./0010-deferred-scope.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | Any deferred item is pulled into a release, or a customer commitment depends on one |
+| 0010 | [Deferred scope](./0010-deferred-scope.md) — amended by 0018, 0019 | Accepted | @SEIFSEIF4 | 2026-09-04 | Any deferred item is pulled into a release, or a customer commitment depends on one |
 | 0011 | [Distribution allowlist, contract versions, and locale URLs](./0011-distribution-allowlist-and-contract-versions.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A package is added to or removed from the allowlist, the export check finds platform-only code in a distributed tree, or `backendContract` widens or narrows |
 | 0012 | [Instance ownership and support tiers](./0012-instance-ownership-and-support-tiers.md) | Accepted | @SEIFSEIF4 | 2026-09-04 | A repository transfer is requested, a stated response target is missed twice in one quarter, or a voided tier is disputed |
-| 0013 | [Tenant context and live authorization](./0013-tenant-context-and-live-authorization.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | A cross-tenant test fails, custom roles replace fixed bundles, or a new surface cannot use the live-membership/audited-grant model |
+| 0013 | [Tenant context and live authorization](./0013-tenant-context-and-live-authorization.md) — amended by 0019 | Accepted | @SEIFSEIF4 | 2026-09-05 | A cross-tenant test fails, custom roles replace fixed bundles, or a new surface cannot use the live-membership/audited-grant model |
 | 0014 | [Catalog publication boundary and public DTO](./0014-catalog-publication-and-public-dto.md) | Accepted | @SEIFSEIF4 | 2026-09-05 | Custom roles, a new locale, multi-brand publishing, or booking snapshots need a new revision shape |
-
 | 0015 | [Staff and resource assignment boundary](./0015-staff-and-resource-assignment-boundary.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Multi-resource services, custom roles, group capacity, or non-exclusive inventory changes the MVP model |
 | 0016 | [Civil-time schedules and policy bounds](./0016-schedule-civil-time-and-policy-bounds.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | A new schedule kind, policy bound, or DST interpretation is required |
 | 0017 | [Availability contract and advisory semantics](./0017-availability-contract-and-advisory-semantics.md) | Accepted | @SEIFSEIF4 | 2026-09-06 | Query/result bounds change, atomic holds need a new slot identity, or a deferred availability dimension activates |
 | 0018 | [WhatsApp notification channel](./0018-whatsapp-notification-channel.md) | Accepted | @SEIFSEIF4 | 2026-10-07 | Vault token resolution is needed, Graph API v25.0 is deprecated, a duplicate delivery is reported, or a market requires a BSP or new consent record |
+| 0019 | [Tenant custom roles](./0019-tenant-custom-roles.md) | Accepted | @SEIFSEIF4 | 2026-10-07 | A reserved permission or `role.manage` delegation is requested, approval chains (#50) are scheduled, a dominance/scope/last-administrator test fails, or a Platform Admin roles feature is proposed |
 
 Dates are `—` while status is `Proposed` and undated; set the date when the status changes.
 
