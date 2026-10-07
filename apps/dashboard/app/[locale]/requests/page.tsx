@@ -4,18 +4,11 @@ import {
   Alert,
   AlertDescription,
   Badge,
-  Button,
-  DateTimePicker,
   EmptyState,
   Facts,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  Label,
   PageHeader,
   ReferenceCode,
   StatusStamp,
-  Textarea,
 } from "@wlbp/ui-foundation";
 import { Inbox } from "lucide-react";
 import type { BookingRequestV1 } from "@wlbp/api-contracts";
@@ -24,16 +17,15 @@ import { getDashboardMessage } from "../../_lib/copy";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { workspaceStatus } from "../../_lib/workspace-status";
-import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
+import { countLabel } from "../../_lib/workspace-copy";
 import { dominantZone } from "../../_lib/booking-display";
 import { Money } from "../../_lib/ui/money";
 import { ServiceDye } from "../../_lib/ui/service-dye";
 import { When } from "../../_lib/ui/when";
 import { ZoneNote } from "../../_lib/ui/zone-note";
-import { FoldSelect } from "../../_lib/ui/fold-select";
 import { ResultAlert } from "../../_lib/ui/result-alert";
 import { textLinkClass } from "../../_lib/ui/text-link";
-import { decideRequestAction } from "./actions";
+import { RequestDecisionForm } from "./request-decision-form";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -232,95 +224,12 @@ export default async function RequestsPage({
                   </Alert>
                 )}
 
-                <form action={decideRequestAction} className="grid gap-5">
-                  <input type="hidden" name="locale" value={locale} />
-                  <input type="hidden" name="bookingId" value={booking.bookingId} />
-                  <input
-                    type="hidden"
-                    name="expectedRevision"
-                    value={booking.bookingRevision}
-                  />
-                  <input
-                    type="hidden"
-                    name="locationTimeZone"
-                    value={booking.locationTimeZone}
-                  />
-                  <FieldGroup columns={2}>
-                    <Field>
-                      <Label htmlFor={`public-${booking.bookingId}`}>
-                        {message("requestsPublicReasonLabel")}
-                      </Label>
-                      <FieldDescription id={`public-hint-${booking.bookingId}`}>
-                        {message("requestsPublicReasonHint")}
-                      </FieldDescription>
-                      <Textarea
-                        aria-describedby={`public-hint-${booking.bookingId}`}
-                        id={`public-${booking.bookingId}`}
-                        maxLength={500}
-                        name="publicReason"
-                        rows={2}
-                      />
-                    </Field>
-                    <Field>
-                      <Label htmlFor={`internal-${booking.bookingId}`}>
-                        {message("requestsInternalReasonLabel")}
-                      </Label>
-                      <FieldDescription id={`internal-hint-${booking.bookingId}`}>
-                        {message("requestsInternalReasonHint")}
-                      </FieldDescription>
-                      <Textarea
-                        aria-describedby={`internal-hint-${booking.bookingId}`}
-                        id={`internal-${booking.bookingId}`}
-                        maxLength={500}
-                        name="internalReason"
-                        rows={2}
-                      />
-                    </Field>
-                    <Field>
-                      <Label htmlFor={`proposed-${booking.bookingId}`}>
-                        {message("requestsProposeTimeLabel")}
-                      </Label>
-                      <DateTimePicker
-                        id={`proposed-${booking.bookingId}`}
-                        name="proposedStartAt"
-                        locale={locale}
-                        datePlaceholder={workspaceMessage(locale, "datePlaceholder")}
-                        timePlaceholder={workspaceMessage(locale, "timePlaceholder")}
-                        timeLabel={workspaceMessage(locale, "timeOf", {
-                          label: message("requestsProposeTimeLabel"),
-                        })}
-                      />
-                    </Field>
-                    <FoldSelect id={`fold-${booking.bookingId}`} locale={locale} />
-                  </FieldGroup>
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      name="action"
-                      type="submit"
-                      value="accept"
-                      variant="success"
-                    >
-                      {message("requestsAccept")}
-                    </Button>
-                    <Button
-                      name="action"
-                      type="submit"
-                      value="propose"
-                      variant="outline"
-                    >
-                      {message("requestsPropose")}
-                    </Button>
-                    <Button
-                      name="action"
-                      type="submit"
-                      value="reject"
-                      variant="destructive-outline"
-                      className="sm:ms-auto"
-                    >
-                      {message("requestsReject")}
-                    </Button>
-                  </div>
-                </form>
+                <RequestDecisionForm
+                  locale={locale}
+                  bookingId={booking.bookingId}
+                  bookingRevision={booking.bookingRevision}
+                  locationTimeZone={booking.locationTimeZone}
+                />
               </article>
             </li>
           ))}

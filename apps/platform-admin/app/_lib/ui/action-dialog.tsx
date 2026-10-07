@@ -1,6 +1,5 @@
 "use client";
 
-import type { Locale } from "@wlbp/i18n";
 import {
   Button,
   Dialog,
@@ -10,17 +9,13 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  Field,
-  FieldDescription,
-  Input,
-  Label,
-  RequiredMark,
-  Textarea,
   type ButtonVariant,
 } from "@wlbp/ui-foundation";
 import { useCallback, useId, useState, type ReactNode } from "react";
 import { fill, formCopy, say } from "../copy";
-import { OperatorForm, type FormAction } from "./operator-form";
+import { operations, type OperationKey, type OperationSpec } from "../schemas";
+import { TextFormField, TextareaFormField } from "./form-fields";
+import { OperatorForm, type OperatorFormProps } from "./operator-form";
 
 function triggerStyle(
   variant: "primary" | "secondary" | "quiet",
@@ -34,12 +29,13 @@ function triggerStyle(
 /**
  * A modal dialog: focus moves to the first field, Escape closes, focus returns
  * to the trigger. Destructive and high-impact actions always go through one.
- * The form is mounted fresh on every open, so an earlier error or step-up
- * never lingers.
+ * The form mounts fresh on every open, so an earlier error, step-up or
+ * idempotency key never lingers. The operation decides whether an audit
+ * reason is required and its minimum length.
  */
-export function ActionDialog({
+export function ActionDialog<K extends OperationKey>({
   locale,
-  action,
+  operation,
   trigger,
   title,
   description,
@@ -48,37 +44,35 @@ export function ActionDialog({
   danger,
   triggerVariant = "secondary",
   hidden,
-  reason,
+  values,
   confirmText,
   children,
-}: {
-  locale: Locale;
-  action: FormAction;
+}: Pick<
+  OperatorFormProps<K>,
+  "locale" | "operation" | "submit" | "successMessage" | "hidden" | "values"
+> & {
   trigger: string;
   title: string;
   description?: string | undefined;
-  submit: string;
-  successMessage: string;
   danger?: boolean;
   triggerVariant?: "primary" | "secondary" | "quiet";
-  hidden?: Record<string, string>;
-  reason?: { minLength: number };
+  /** The operator must type this exact text before submitting. */
   confirmText?: string;
   children?: ReactNode;
 }) {
   const fieldId = useId();
   const [open, setOpen] = useState(false);
-  const [typed, setTyped] = useState("");
   const onSuccess = useCallback(() => setOpen(false), []);
+  const spec: OperationSpec = operations[operation];
+  const reasonMin = spec.reason;
+  const startingValues = {
+    ...(reasonMin !== undefined ? { reason: "" } : {}),
+    ...(confirmText !== undefined ? { confirmation: "" } : {}),
+    ...values,
+  } as OperatorFormProps<K>["values"];
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (next) setTyped("");
-        setOpen(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant={triggerStyle(triggerVariant, danger ?? false)}>
           {trigger}
@@ -94,56 +88,40 @@ export function ActionDialog({
         </DialogHeader>
         <OperatorForm
           locale={locale}
-          action={action}
+          operation={operation}
           submit={submit}
           successMessage={successMessage}
           danger={danger ?? false}
           onSuccess={onSuccess}
-          submitDisabled={confirmText !== undefined && typed !== confirmText}
+          {...(hidden ? { hidden } : {})}
+          {...(startingValues ? { values: startingValues } : {})}
+          {...(confirmText !== undefined ? { confirmText } : {})}
           secondaryAction={
             <DialogClose asChild>
               <Button variant="ghost">{say(locale, formCopy.cancel)}</Button>
             </DialogClose>
           }
         >
-          {Object.entries(hidden ?? {}).map(([name, value]) => (
-            <input key={name} type="hidden" name={name} value={value} />
-          ))}
           {children}
-          {reason ? (
-            <Field>
-              <Label htmlFor={`${fieldId}-reason`}>
-                {say(locale, formCopy.reason)}
-                <RequiredMark />
-              </Label>
-              <Textarea
-                id={`${fieldId}-reason`}
-                name="reason"
-                required
-                minLength={reason.minLength}
-                maxLength={500}
-                aria-describedby={`${fieldId}-reason-hint`}
-              />
-              <FieldDescription id={`${fieldId}-reason-hint`}>
-                {fill(locale, formCopy.reasonHint, { n: String(reason.minLength) })}
-              </FieldDescription>
-            </Field>
+          {reasonMin !== undefined ? (
+            <TextareaFormField
+              id={`${fieldId}-reason`}
+              name="reason"
+              label={say(locale, formCopy.reason)}
+              description={fill(locale, formCopy.reasonHint, { n: String(reasonMin) })}
+              required
+              minLength={reasonMin}
+              maxLength={500}
+            />
           ) : null}
           {confirmText !== undefined ? (
-            <Field>
-              <Label htmlFor={`${fieldId}-confirm`}>
-                {fill(locale, formCopy.typeToConfirm, { value: confirmText })}
-                <RequiredMark />
-              </Label>
-              <Input
-                id={`${fieldId}-confirm`}
-                name="confirmation"
-                value={typed}
-                autoComplete="off"
-                onChange={(event) => setTyped(event.target.value)}
-                required
-              />
-            </Field>
+            <TextFormField
+              id={`${fieldId}-confirm`}
+              name="confirmation"
+              label={fill(locale, formCopy.typeToConfirm, { value: confirmText })}
+              autoComplete="off"
+              required
+            />
           ) : null}
         </OperatorForm>
       </DialogContent>

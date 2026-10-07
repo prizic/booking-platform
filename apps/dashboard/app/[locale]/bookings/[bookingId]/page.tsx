@@ -7,18 +7,10 @@ import {
   Button,
   EmptyState,
   Facts,
-  Field,
-  Label,
   PageHeader,
   ReferenceCode,
   Section,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
   StatusStamp,
-  Textarea,
 } from "@wlbp/ui-foundation";
 import { ArrowLeft, StickyNote } from "lucide-react";
 import Link from "next/link";
@@ -35,7 +27,7 @@ import { Money } from "../../../_lib/ui/money";
 import { ServiceDye } from "../../../_lib/ui/service-dye";
 import { When } from "../../../_lib/ui/when";
 import { ZoneNote } from "../../../_lib/ui/zone-note";
-import { addBookingNoteAction, transitionBookingAction } from "../actions";
+import { BookingNoteForm, BookingTransitionForm } from "./booking-detail-forms";
 import { detailResultKeys, positiveResults } from "../results";
 
 export const dynamic = "force-dynamic";
@@ -46,17 +38,6 @@ type BookingDetailPageProps = {
   readonly params: Promise<{ bookingId: string; locale: Locale }>;
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-// Every action is offered; the database decides which one this booking can
-// actually make. Hiding a control is presentation, never authorization, and a
-// hidden control would also hide the honest refusal that teaches an operator
-// what state the booking is really in.
-const actions = [
-  { key: "check_in", label: "detailCheckIn" },
-  { key: "complete", label: "detailComplete" },
-  { key: "no_show", label: "detailNoShow" },
-  { key: "correct", label: "detailCorrect" },
-] as const;
 
 const actorKeys = {
   staff: "actorStaff",
@@ -319,43 +300,12 @@ export default async function BookingDetailPage({
             title={message("detailLifecycleTitle")}
             description={message("detailLifecycleHint")}
           >
-            <form
-              action={transitionBookingAction}
-              aria-label={workspaceMessage(locale, "lifecycleActions")}
-              className="grid max-w-2xl gap-4"
-            >
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="bookingId" value={booking.bookingId} />
-              <input
-                type="hidden"
-                name="expectedRevision"
-                value={booking.bookingRevision}
-              />
-              <Field>
-                <Label htmlFor="transition-reason">
-                  {message("detailReasonLabel")}
-                </Label>
-                <Textarea
-                  id="transition-reason"
-                  maxLength={500}
-                  name="reason"
-                  rows={2}
-                />
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                {actions.map((action) => (
-                  <Button
-                    key={action.key}
-                    name="action"
-                    type="submit"
-                    value={action.key}
-                    variant={action.key === "check_in" ? "default" : "outline"}
-                  >
-                    {message(action.label)}
-                  </Button>
-                ))}
-              </div>
-            </form>
+            <BookingTransitionForm
+              key={booking.bookingId}
+              locale={locale}
+              bookingId={booking.bookingId}
+              bookingRevision={booking.bookingRevision}
+            />
           </Section>
 
           <div className="grid items-start gap-8 lg:grid-cols-2">
@@ -431,42 +381,11 @@ export default async function BookingDetailPage({
                 </ul>
               )}
 
-              <form
-                action={addBookingNoteAction}
-                aria-labelledby="detail-add-note-title"
-                className="grid gap-4 border-t pt-4"
-              >
-                <h3 id="detail-add-note-title" className="text-base font-semibold">
-                  {message("detailAddNoteTitle")}
-                </h3>
-                <input type="hidden" name="locale" value={locale} />
-                <input type="hidden" name="bookingId" value={booking.bookingId} />
-                <Field>
-                  <Label htmlFor="note-body">{message("detailNoteBodyLabel")}</Label>
-                  <Textarea id="note-body" maxLength={2000} name="body" rows={3} />
-                </Field>
-                <Field>
-                  <Label htmlFor="note-visibility">
-                    {message("detailNoteVisibilityLabel")}
-                  </Label>
-                  <Select name="visibility" defaultValue="operational">
-                    <SelectTrigger id="note-visibility">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="operational">
-                        {message("detailNoteOperational")}
-                      </SelectItem>
-                      <SelectItem value="sensitive">
-                        {message("detailNoteSensitive")}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </Field>
-                <Button type="submit" className="w-fit">
-                  {message("detailAddNote")}
-                </Button>
-              </form>
+              <BookingNoteForm
+                key={booking.bookingId}
+                locale={locale}
+                bookingId={booking.bookingId}
+              />
             </Section>
           </div>
         </>

@@ -2,9 +2,8 @@ import type { Locale } from "@wlbp/i18n";
 import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { authMessage } from "../../../_lib/auth-copy";
-import { AuthForm } from "../../../_lib/auth-form";
+import { UpdatePasswordForm } from "../../../_lib/auth-form";
 import { AuthFrame, authLinkClass } from "../../../_lib/auth-frame";
-import { normalizeAuthReturnPath } from "../../../_lib/auth-return-path";
 import { updatePassword } from "./actions";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
 import { isRecoverySession } from "../../../_lib/auth-recovery-session";
@@ -41,12 +40,7 @@ export default async function Page({
           </AlertDescription>
         </Alert>
       ) : null}
-      <AuthForm
-        action={updatePassword}
-        mode="update-password"
-        locale={locale}
-        returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
-      />
+      <UpdatePasswordForm action={updatePassword} locale={locale} />
     </AuthFrame>
   );
 }

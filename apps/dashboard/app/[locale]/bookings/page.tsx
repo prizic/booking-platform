@@ -4,11 +4,9 @@ import {
   Alert,
   AlertDescription,
   Button,
-  DateTimePicker,
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -30,7 +28,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Textarea,
   Toolbar,
 } from "@wlbp/ui-foundation";
 import { CalendarClock, CalendarX, Search } from "lucide-react";
@@ -42,14 +39,13 @@ import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { dominantZone, stampStateFor } from "../../_lib/booking-display";
 import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
-import { FoldSelect } from "../../_lib/ui/fold-select";
 import { ResultAlert } from "../../_lib/ui/result-alert";
 import { Money } from "../../_lib/ui/money";
 import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
 import { ServiceDye } from "../../_lib/ui/service-dye";
 import { When } from "../../_lib/ui/when";
 import { ZoneNote } from "../../_lib/ui/zone-note";
-import { changeBookingAction } from "./actions";
+import { BookingChangeForm } from "./booking-change-form";
 import { listResultKeys, positiveResults } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -409,8 +405,6 @@ function ChangeBookingDialog({
   readonly describedBy: string;
   readonly compact?: boolean;
 }) {
-  const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
-    getDashboardMessage(locale, key);
   const changeLabel = workspaceMessage(locale, "rescheduleOrCancel");
   return (
     <Dialog>
@@ -440,75 +434,12 @@ function ChangeBookingDialog({
             · <bdi>{booking.locationTimeZone}</bdi>
           </DialogDescription>
         </DialogHeader>
-        <form action={changeBookingAction} className="grid gap-5">
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="bookingId" value={booking.bookingId} />
-          <input
-            type="hidden"
-            name="expectedRevision"
-            value={booking.bookingRevision}
-          />
-          <input
-            type="hidden"
-            name="locationTimeZone"
-            value={booking.locationTimeZone}
-          />
-          <Field>
-            <Label htmlFor={`new-start-${booking.bookingId}`}>
-              {message("bookingsNewTimeLabel")}
-            </Label>
-            <DateTimePicker
-              id={`new-start-${booking.bookingId}`}
-              name="newStartAt"
-              locale={locale}
-              datePlaceholder={workspaceMessage(locale, "datePlaceholder")}
-              timePlaceholder={workspaceMessage(locale, "timePlaceholder")}
-              timeLabel={workspaceMessage(locale, "timeOf", {
-                label: message("bookingsNewTimeLabel"),
-              })}
-            />
-          </Field>
-          <FoldSelect id={`fold-${booking.bookingId}`} locale={locale} />
-          <Field>
-            <Label htmlFor={`public-${booking.bookingId}`}>
-              {message("requestsPublicReasonLabel")}
-            </Label>
-            <Textarea
-              id={`public-${booking.bookingId}`}
-              maxLength={500}
-              name="publicReason"
-              rows={2}
-            />
-          </Field>
-          <Field>
-            <Label htmlFor={`internal-${booking.bookingId}`}>
-              {message("requestsInternalReasonLabel")}
-            </Label>
-            <Textarea
-              id={`internal-${booking.bookingId}`}
-              maxLength={500}
-              name="internalReason"
-              rows={2}
-            />
-          </Field>
-          <DialogFooter className="sm:justify-start">
-            <Button name="action" type="submit" value="reschedule">
-              {message("bookingsReschedule")}
-            </Button>
-            <Button name="action" type="submit" value="resend" variant="outline">
-              {message("bookingsResend")}
-            </Button>
-            <Button
-              name="action"
-              type="submit"
-              value="cancel"
-              variant="destructive-outline"
-              className="sm:ms-auto"
-            >
-              {message("bookingsCancel")}
-            </Button>
-          </DialogFooter>
-        </form>
+        <BookingChangeForm
+          locale={locale}
+          bookingId={booking.bookingId}
+          bookingRevision={booking.bookingRevision}
+          locationTimeZone={booking.locationTimeZone}
+        />
       </DialogContent>
     </Dialog>
   );

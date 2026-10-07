@@ -1,21 +1,6 @@
-import {
-  Alert,
-  AlertDescription,
-  Field,
-  FieldDescription,
-  Input,
-  Label,
-  ReferenceCode,
-  RequiredMark,
-  TextField,
-} from "@wlbp/ui-foundation";
+import { Alert, AlertDescription, ReferenceCode } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { actionCopy as a } from "../../../_lib/action-copy";
-import {
-  approveSupportAction,
-  requestSupportAction,
-  revokeSupportAction,
-} from "../../../_lib/actions/support";
 import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { supportCopy as c } from "../../../_lib/health-support-copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
@@ -26,8 +11,8 @@ import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import { SelectFormField, TextFormField } from "../../../_lib/ui/form-fields";
 import { Pagination } from "../../../_lib/ui/pagination";
-import { SelectField } from "../../../_lib/ui/select-field";
 import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -77,47 +62,37 @@ export default async function SupportPage({
           operatorRole && tenants?.ok && tenants.data.length ? (
             <ActionDialog
               locale={locale}
-              action={requestSupportAction}
+              operation="requestSupport"
               trigger={say(locale, a.requestSupport.trigger)}
               triggerVariant="primary"
               title={say(locale, a.requestSupport.title)}
               description={say(locale, a.requestSupport.body)}
               submit={say(locale, a.requestSupport.submit)}
               successMessage={say(locale, a.requestSupport.done)}
-              reason={{ minLength: 10 }}
+              values={{ tenantId: list.filters.tenant, ticket: "", minutes: "60" }}
             >
-              <SelectField
+              <SelectFormField
                 name="tenantId"
                 label={say(locale, c.tenantField)}
-                value={list.filters.tenant}
                 options={tenants.data.map((t) => [t.tenant_id, t.name] as const)}
               />
-              <TextField
+              <TextFormField
                 id="support-ticket"
                 name="ticket"
                 label={say(locale, a.fields.ticket)}
                 required
                 maxLength={120}
               />
-              <Field>
-                <Label htmlFor="support-minutes">
-                  {say(locale, a.fields.minutes)}
-                  <RequiredMark />
-                </Label>
-                <Input
-                  id="support-minutes"
-                  type="number"
-                  name="minutes"
-                  min={5}
-                  max={480}
-                  defaultValue={60}
-                  required
-                  aria-describedby="support-minutes-hint"
-                />
-                <FieldDescription id="support-minutes-hint">
-                  {say(locale, a.fields.minutesHint)}
-                </FieldDescription>
-              </Field>
+              <TextFormField
+                id="support-minutes"
+                name="minutes"
+                type="number"
+                label={say(locale, a.fields.minutes)}
+                description={say(locale, a.fields.minutesHint)}
+                min={5}
+                max={480}
+                required
+              />
             </ActionDialog>
           ) : null
         }
@@ -184,44 +159,38 @@ export default async function SupportPage({
                   {g.status === "pending" && atLeast(operator.role, "admin") ? (
                     <ActionDialog
                       locale={locale}
-                      action={approveSupportAction}
+                      operation="approveSupport"
                       trigger={say(locale, c.approve)}
                       triggerVariant="quiet"
                       title={say(locale, c.approveTitle)}
                       description={say(locale, c.approveBody)}
                       submit={say(locale, c.approve)}
                       successMessage={say(locale, c.approved)}
-                      hidden={{ grantId: g.grant_id, tenantId: g.tenant_id }}
+                      hidden={{ grantId: g.grant_id }}
+                      values={{ minutes: "60" }}
                     >
-                      <Field>
-                        <Label htmlFor={`approve-minutes-${g.grant_id}`}>
-                          {say(locale, c.duration)}
-                          <RequiredMark />
-                        </Label>
-                        <Input
-                          id={`approve-minutes-${g.grant_id}`}
-                          type="number"
-                          name="minutes"
-                          min={5}
-                          max={480}
-                          defaultValue={60}
-                          required
-                        />
-                      </Field>
+                      <TextFormField
+                        id={`approve-minutes-${g.grant_id}`}
+                        name="minutes"
+                        type="number"
+                        label={say(locale, c.duration)}
+                        min={5}
+                        max={480}
+                        required
+                      />
                     </ActionDialog>
                   ) : null}
                   {(g.status === "pending" || g.status === "active") && operatorRole ? (
                     <ActionDialog
                       locale={locale}
-                      action={revokeSupportAction}
+                      operation="revokeSupport"
                       trigger={say(locale, c.revoke)}
                       triggerVariant="quiet"
                       danger
                       title={say(locale, c.revokeTitle)}
                       submit={say(locale, c.revoke)}
                       successMessage={say(locale, c.revoked)}
-                      reason={{ minLength: 5 }}
-                      hidden={{ grantId: g.grant_id, tenantId: g.tenant_id }}
+                      hidden={{ grantId: g.grant_id }}
                     />
                   ) : null}
                 </div>,

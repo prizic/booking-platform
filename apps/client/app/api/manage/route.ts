@@ -1,5 +1,12 @@
-import type { ManagementIntentV1 } from "@wlbp/api-contracts";
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
 
+import {
+  manageActionSchema,
+  manageTokenSchema,
+  manageViewSchema,
+  requestStepUpSchema,
+  verifyStepUpSchema,
+} from "../../[locale]/manage/manage-schema";
 import { createManagementDataSource } from "../../_lib/management-data-source";
 import {
   contractErrorResponse,
@@ -8,31 +15,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const intents = new Set<ManagementIntentV1>([
-  "view",
-  "reschedule",
-  "cancel",
-  "refund_request",
-  "request_alternative",
-  "data_export",
-  "data_correction_request",
-  "data_deletion_request",
-  "data_restriction_request",
-]);
-
-interface ManageRequestBody {
-  readonly action?: unknown;
-  readonly code?: unknown;
-  readonly expectedRevision?: unknown;
-  readonly intent?: unknown;
-  readonly newStartAt?: unknown;
-  readonly token?: unknown;
-}
-
 /**
  * One endpoint for the whole link surface. It answers with the same shape for
  * every refusal, sets no-store, and keeps the token out of the URL so it never
- * reaches a referrer header, a browser history entry, or an access log.
+ * reaches a referrer header, a browser history entry, or an access log. Each
+ * body is validated with the schema the page's own form or call uses.
  */
 export async function POST(request: Request): Promise<Response> {
   const headers = {
@@ -41,53 +28,41 @@ export async function POST(request: Request): Promise<Response> {
     "X-Content-Type-Options": "nosniff",
     "X-Robots-Tag": "noindex, nofollow",
   };
+  const unavailable = () => Response.json({ outcome: "unavailable" }, { headers });
   try {
     const context = await createPublicApiContext();
     if (context === null) return contractErrorResponse("availability_unavailable", 503);
-    const body = (await request.json()) as ManageRequestBody;
-    if (typeof body.token !== "string" || !/^[a-f0-9]{64}$/u.test(body.token)) {
-      return Response.json({ outcome: "unavailable" }, { headers });
-    }
+    const body: unknown = await request.json();
+    const token = parseActionInput(manageTokenSchema, body);
+    if (!token.ok) return unavailable();
     const source = createManagementDataSource(context.api, context.hostname);
+    const action = (body as { action?: unknown }).action;
 
-    if (body.action === "request-step-up") {
-      return Response.json(await source.requestStepUp(body.token), { headers });
+    if (action === "request-step-up") {
+      const input = parseActionInput(requestStepUpSchema, body);
+      if (!input.ok) return unavailable();
+      return Response.json(await source.requestStepUp(input.data.token), { headers });
     }
-    if (body.action === "verify-step-up") {
+    if (action === "verify-step-up") {
+      // A malformed code is simply a code that did not verify.
+      const input = parseActionInput(verifyStepUpSchema, body);
       const verified =
-        typeof body.code === "string" &&
-        /^[0-9]{6}$/u.test(body.code) &&
-        (await source.verifyStepUp(body.token, body.code));
+        input.ok && (await source.verifyStepUp(input.data.token, input.data.code));
       return Response.json({ verified }, { headers });
     }
-    if (body.action === "cancel" || body.action === "reschedule") {
-      const expectedRevision = Number(body.expectedRevision);
-      const newStartAt = typeof body.newStartAt === "string" ? body.newStartAt : null;
+    if (action === "cancel" || action === "reschedule") {
       // A move needs a time and a cancellation must not carry one, and the
       // revision the caller acted on has to be a real one.
-      if (
-        !Number.isSafeInteger(expectedRevision) ||
-        expectedRevision < 1 ||
-        (body.action === "reschedule") !== (newStartAt !== null)
-      ) {
-        return Response.json({ outcome: "unavailable" }, { headers });
-      }
-      return Response.json(
-        await source.act({
-          action: body.action,
-          expectedRevision,
-          newStartAt,
-          token: body.token,
-        }),
-        { headers },
-      );
+      const input = parseActionInput(manageActionSchema, body);
+      if (!input.ok) return unavailable();
+      return Response.json(await source.act(input.data), { headers });
     }
-    const intent =
-      typeof body.intent === "string" && intents.has(body.intent as ManagementIntentV1)
-        ? (body.intent as ManagementIntentV1)
-        : "view";
-    return Response.json(await source.redeem(body.token, intent), { headers });
+    const input = parseActionInput(manageViewSchema, body);
+    if (!input.ok) return unavailable();
+    return Response.json(await source.redeem(input.data.token, input.data.intent), {
+      headers,
+    });
   } catch {
-    return Response.json({ outcome: "unavailable" }, { headers });
+    return unavailable();
   }
 }

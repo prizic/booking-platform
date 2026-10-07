@@ -5,19 +5,23 @@ import {
   AlertDescription,
   AlertTitle,
   Button,
+  Form,
+  FormRootError,
   Skeleton,
-  TextField,
+  useActionMutation,
+  useZodForm,
 } from "@wlbp/ui-foundation";
 import type { Locale } from "@wlbp/i18n";
 import { useRouter } from "next/navigation";
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useMemo, useState } from "react";
+import { verifyFactorCode } from "../../_lib/auth-flow";
 import { say } from "../../_lib/copy";
 import { authCopy } from "../../_lib/auth-copy";
-import {
-  getPlatformAdminBrowserClient,
-  verifyMfaCode,
-} from "../../_lib/supabase-browser";
+import { authFormMessages } from "../../_lib/form-messages";
+import { totpCodeSchema, type TotpCodeInput } from "../../_lib/schemas/auth";
+import { getPlatformAdminBrowserClient } from "../../_lib/supabase-browser";
 import { AuthFrame } from "../../_lib/ui/auth-frame";
+import { TextFormField } from "../../_lib/ui/form-fields";
 
 type MfaEnrollPageProps = { params: Promise<{ locale: Locale }> };
 
@@ -31,7 +35,6 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
     secret: string;
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -72,25 +75,6 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
       cancelled = true;
     };
   }, [locale]);
-
-  async function handleVerify(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!factor) return;
-    setError(null);
-    setPending(true);
-    const form = new FormData(event.currentTarget);
-    const code = String(form.get("code") ?? "");
-
-    const client = getPlatformAdminBrowserClient();
-    const { error: verifyError } = await verifyMfaCode(client, factor.id, code);
-    if (verifyError) {
-      setError(say(locale, authCopy.invalidCode));
-      setPending(false);
-      return;
-    }
-    router.replace(`/${locale}`);
-    router.refresh();
-  }
 
   return (
     <AuthFrame
@@ -138,25 +122,68 @@ export default function MfaEnrollPage({ params }: MfaEnrollPageProps) {
               </code>
             </div>
           </div>
-          <form onSubmit={handleVerify} className="grid gap-5">
-            <TextField
-              autoComplete="one-time-code"
-              id="code"
-              inputMode="numeric"
-              label={say(locale, authCopy.code)}
-              maxLength={6}
-              minLength={6}
-              name="code"
-              required
-              dir="ltr"
-              className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.4em]"
-            />
-            <Button block loading={pending} type="submit">
-              {say(locale, authCopy.enrollSubmit)}
-            </Button>
-          </form>
+          <VerifyForm
+            locale={locale}
+            factorId={factor.id}
+            onVerified={() => {
+              router.replace(`/${locale}`);
+              router.refresh();
+            }}
+          />
         </>
       )}
     </AuthFrame>
+  );
+}
+
+function VerifyForm({
+  locale,
+  factorId,
+  onVerified,
+}: {
+  locale: Locale;
+  factorId: string;
+  onVerified: () => void;
+}) {
+  const form = useZodForm(totpCodeSchema, { defaultValues: { code: "" } });
+  const messages = useMemo(() => authFormMessages(locale), [locale]);
+  const mutation = useActionMutation(
+    (input: TotpCodeInput) => verifyFactorCode(factorId, input),
+    { refresh: false, onSuccess: () => onVerified() },
+  );
+  const failed =
+    mutation.data && !mutation.data.ok ? mutation.data.formError : undefined;
+  // Stays busy after success while the console loads.
+  const busy = mutation.isPending || mutation.data?.ok === true;
+  return (
+    <Form form={form} locale={locale} messages={messages}>
+      <FormRootError code={failed} />
+      {mutation.isError ? <FormRootError code="auth_unavailable" /> : null}
+      <form
+        noValidate
+        onSubmit={(event) =>
+          void form.handleSubmit(() =>
+            mutation.mutate(form.getValues() as TotpCodeInput),
+          )(event)
+        }
+        className="grid gap-5"
+      >
+        <TextFormField
+          autoComplete="one-time-code"
+          id="code"
+          inputMode="numeric"
+          label={say(locale, authCopy.code)}
+          maxLength={6}
+          minLength={6}
+          name="code"
+          required
+          dir="ltr"
+          className="[&_input]:text-center [&_input]:text-lg [&_input]:tracking-[0.4em]"
+        />
+        <Button block loading={busy} type="submit">
+          {say(locale, authCopy.enrollSubmit)}
+        </Button>
+      </form>
+    </Form>
   );
 }

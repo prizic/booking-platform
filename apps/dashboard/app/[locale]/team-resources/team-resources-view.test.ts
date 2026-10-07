@@ -3,9 +3,18 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
+import { withFormProviders } from "../services/form-test-providers";
+import {
+  resourceFormDefaults,
+  resourceTypeFormDefaults,
+  staffFormDefaults,
+  teamResourcesFormMessages,
+} from "./team-resources-forms";
 import { TeamResourcesView } from "./team-resources-view";
 
-const action = async (_formData: FormData) => undefined;
+const action = async () => ({ ok: true as const, data: { destination: "/en" } });
+const render = (props: Parameters<typeof TeamResourcesView>[0]) =>
+  renderToStaticMarkup(withFormProviders(createElement(TeamResourcesView, props)));
 
 const workspace: StaffResourceWorkspaceV1 = {
   tenantId: "tenant-a",
@@ -89,35 +98,33 @@ const workspace: StaffResourceWorkspaceV1 = {
 describe("Team and resources workspace view", () => {
   it("renders labelled creation, revision-safe edit, and eligibility forms", () => {
     const retryRequestId = "a9000000-0000-4000-8000-000000000001";
-    const html = renderToStaticMarkup(
-      createElement(TeamResourcesView, {
-        locale: "en",
-        retry: { formId: "new-staff", requestId: retryRequestId },
-        state: {
-          context: {
-            aal2: true,
-            grants: [
-              { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
-              { capability: "catalog.edit", requiresApproval: false, scope: "tenant" },
-            ],
-            locationIds: [],
-            tenantId: "tenant-a",
-          } as never,
-          kind: "ready",
-          workspace,
-        },
-        actions: {
-          deactivateResource: action,
-          deactivateStaff: action,
-          saveResource: action,
-          saveResourceType: action,
-          saveStaffProfile: action,
-          setResourceLocationEligibility: action,
-          setResourceRequirement: action,
-          setStaffEligibility: action,
-        },
-      }),
-    );
+    const html = render({
+      locale: "en",
+      retry: { formId: "new-staff", requestId: retryRequestId },
+      state: {
+        context: {
+          aal2: true,
+          grants: [
+            { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
+            { capability: "catalog.edit", requiresApproval: false, scope: "tenant" },
+          ],
+          locationIds: [],
+          tenantId: "tenant-a",
+        } as never,
+        kind: "ready",
+        workspace,
+      },
+      actions: {
+        deactivateResource: action,
+        deactivateStaff: action,
+        saveResource: action,
+        saveResourceType: action,
+        saveStaffProfile: action,
+        setResourceLocationEligibility: action,
+        setResourceRequirement: action,
+        setStaffEligibility: action,
+      },
+    });
 
     expect(html).toContain("Team and resources");
     expect(html).toContain("Layla Hassan");
@@ -128,20 +135,27 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain('name="serviceId"');
     expect(html).toContain("Create team member");
     expect(html).toContain("Update exact eligibility");
-    expect(html).toContain('name="expectedRevision" value="2"');
+    // Expected revisions are form values (not hidden inputs): each editor starts
+    // from the revision it rendered.
+    const common = { locale: "en" as const, formId: "edit", requestId: retryRequestId };
+    expect(staffFormDefaults(common, workspace.items[0]).expectedRevision).toBe("2");
+    expect(staffFormDefaults(common, workspace.items[2]).expectedRevision).toBe("1");
+    expect(resourceFormDefaults(common, workspace.items[1]).expectedRevision).toBe("3");
+    expect(
+      resourceTypeFormDefaults(common, workspace.resourceTypes[0]).expectedRevision,
+    ).toBe("1");
+    expect(staffFormDefaults(common).expectedRevision).toBe("");
     // The linked login account stays preselected; the select trigger names it
     // in server markup (Radix renders its options only after hydration).
     expect(html).toMatch(
-      /id="staff-a8000000-0000-0000-0000-000000000001-membership"><span data-slot="select-value"[^>]*>Current linked account</u,
+      /data-form-id="staff-a8000000-0000-0000-0000-000000000001"(?:(?!<\/form>).)*<span data-slot="select-value"[^>]*>Current linked account</su,
     );
     expect(html).toContain("Booking specialist</textarea>");
     expect(html).toContain("Morning shifts</textarea>");
     expect(html).toContain('name="offeredHoursPerWeek"');
-    expect(html).toContain('name="offeredHoursPerWeek" value="40"');
-    expect(html).toContain('name="expectedRevision" value="1"');
-    expect(html).toContain('id="type-type-a-key"');
-    expect(html).toContain('value="room"');
-    expect(html).toContain('name="expectedRevision" value="3"');
+    expect(html).toMatch(/name="offeredHoursPerWeek"[^>]*value="40"/u);
+    expect(html).toContain('data-form-id="resource-type-type-a"');
+    expect(html).toMatch(/name="key"[^>]*value="room"/u);
     expect(html).toContain('value="room-one"');
     expect(html).not.toContain('option value="inactive"');
     expect(html).toContain("Save team member");
@@ -151,10 +165,10 @@ describe("Team and resources workspace view", () => {
     expect(html).toContain('name="replacementStaffId"');
     expect(html).toContain('name="replacementResourceId"');
     expect(html).toContain("Apply safe resolution");
-    expect(html).toContain("Enter a valid value for this field, then submit again.");
-    const requestIds = [
-      ...html.matchAll(/type="hidden" name="requestId" value="([^"]+)"/gu),
-    ]
+    expect(teamResourcesFormMessages("en").invalid).toBe(
+      "Enter a valid value for this field, then submit again.",
+    );
+    const requestIds = [...html.matchAll(/data-request-id="([^"]+)"/gu)]
       .map(([, requestId]) => requestId)
       .filter((requestId): requestId is string => requestId !== undefined);
     expect(requestIds).toHaveLength(html.match(/<form/gu)?.length ?? 0);
@@ -162,49 +176,47 @@ describe("Team and resources workspace view", () => {
     expect(requestIds.filter((requestId) => requestId === retryRequestId)).toEqual([
       retryRequestId,
     ]);
-    expect(html).toContain('type="hidden" name="formId" value="new-staff"');
+    expect(html).toContain('data-form-id="new-staff"');
     expect(requestIds.every((requestId) => /^[0-9a-f-]{36}$/u.test(requestId))).toBe(
       true,
     );
   });
 
   it("keeps tenant-wide editors hidden for a location-scoped operator", () => {
-    const html = renderToStaticMarkup(
-      createElement(TeamResourcesView, {
-        locale: "en",
-        state: {
-          context: {
-            aal2: true,
-            grants: [
-              {
-                capability: "staff.manage",
-                requiresApproval: true,
-                scope: "location",
-              },
-              {
-                capability: "catalog.edit",
-                requiresApproval: true,
-                scope: "location",
-              },
-            ],
-            locationIds: ["location-a"],
-            tenantId: "tenant-a",
-          } as never,
-          kind: "ready",
-          workspace,
-        },
-        actions: {
-          deactivateResource: action,
-          deactivateStaff: action,
-          saveResource: action,
-          saveResourceType: action,
-          saveStaffProfile: action,
-          setResourceLocationEligibility: action,
-          setResourceRequirement: action,
-          setStaffEligibility: action,
-        },
-      }),
-    );
+    const html = render({
+      locale: "en",
+      state: {
+        context: {
+          aal2: true,
+          grants: [
+            {
+              capability: "staff.manage",
+              requiresApproval: true,
+              scope: "location",
+            },
+            {
+              capability: "catalog.edit",
+              requiresApproval: true,
+              scope: "location",
+            },
+          ],
+          locationIds: ["location-a"],
+          tenantId: "tenant-a",
+        } as never,
+        kind: "ready",
+        workspace,
+      },
+      actions: {
+        deactivateResource: action,
+        deactivateStaff: action,
+        saveResource: action,
+        saveResourceType: action,
+        saveStaffProfile: action,
+        setResourceLocationEligibility: action,
+        setResourceRequirement: action,
+        setStaffEligibility: action,
+      },
+    });
 
     expect(html).not.toContain('name="publicName"');
     expect(html).not.toContain('name="expectedRevision"');
@@ -216,65 +228,63 @@ describe("Team and resources workspace view", () => {
   });
 
   it("renders the same protected state in Arabic", () => {
-    const html = renderToStaticMarkup(
-      createElement(TeamResourcesView, {
-        locale: "ar",
-        actions: {
-          deactivateResource: action,
-          deactivateStaff: action,
-          saveResource: action,
-          saveResourceType: action,
-          saveStaffProfile: action,
-          setResourceLocationEligibility: action,
-          setResourceRequirement: action,
-          setStaffEligibility: action,
-        },
-        state: {
-          kind: "access-unavailable",
-          reason: "location-scope-unavailable",
-        },
-      }),
-    );
+    const html = render({
+      locale: "ar",
+      actions: {
+        deactivateResource: action,
+        deactivateStaff: action,
+        saveResource: action,
+        saveResourceType: action,
+        saveStaffProfile: action,
+        setResourceLocationEligibility: action,
+        setResourceRequirement: action,
+        setStaffEligibility: action,
+      },
+      state: {
+        kind: "access-unavailable",
+        reason: "location-scope-unavailable",
+      },
+    });
 
     expect(html).toContain("الإدارة محددة الموقع غير متصلة بعد");
     expect(html).toContain("لا يوسّع");
   });
 
   it("renders Arabic form labels from the same semantic component tree", () => {
-    const html = renderToStaticMarkup(
-      createElement(TeamResourcesView, {
-        locale: "ar",
-        result: "reassigned",
-        actions: {
-          deactivateResource: action,
-          deactivateStaff: action,
-          saveResource: action,
-          saveResourceType: action,
-          saveStaffProfile: action,
-          setResourceLocationEligibility: action,
-          setResourceRequirement: action,
-          setStaffEligibility: action,
-        },
-        state: {
-          context: {
-            aal2: true,
-            grants: [
-              { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
-              { capability: "catalog.edit", requiresApproval: false, scope: "tenant" },
-            ],
-            locationIds: [],
-            tenantId: "tenant-a",
-          } as never,
-          kind: "ready",
-          workspace,
-        },
-      }),
-    );
+    const html = render({
+      locale: "ar",
+      result: "reassigned",
+      actions: {
+        deactivateResource: action,
+        deactivateStaff: action,
+        saveResource: action,
+        saveResourceType: action,
+        saveStaffProfile: action,
+        setResourceLocationEligibility: action,
+        setResourceRequirement: action,
+        setStaffEligibility: action,
+      },
+      state: {
+        context: {
+          aal2: true,
+          grants: [
+            { capability: "staff.manage", requiresApproval: false, scope: "tenant" },
+            { capability: "catalog.edit", requiresApproval: false, scope: "tenant" },
+          ],
+          locationIds: [],
+          tenantId: "tenant-a",
+        } as never,
+        kind: "ready",
+        workspace,
+      },
+    });
 
     expect(html).toContain("إنشاء عضو فريق");
     expect(html).toContain("تحديث الأهلية الدقيقة");
     expect(html).toContain("أُعيد تعيين");
-    expect(html).toContain("أدخل قيمة صالحة لهذا الحقل ثم أرسل النموذج مرة أخرى.");
+    expect(teamResourcesFormMessages("ar").invalid).toBe(
+      "أدخل قيمة صالحة لهذا الحقل ثم أرسل النموذج مرة أخرى.",
+    );
     expect(html).toContain('aria-live="polite"');
   });
 });

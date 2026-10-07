@@ -2,13 +2,6 @@ import { formatNumber } from "@wlbp/i18n";
 import { Alert, AlertDescription, ReferenceCode, Section } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  cancelRolloutAction,
-  pauseRolloutAction,
-  retryRolloutAction,
-  rollbackRolloutAction,
-  startRolloutAction,
-} from "../../../../_lib/actions/releases";
 import type { AuditRow } from "../../../../_lib/audit-copy";
 import { copyFor, reasonCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
@@ -116,7 +109,7 @@ export default async function RolloutPage({
             {admin && (o.status === "draft" || o.status === "paused") ? (
               <ActionDialog
                 locale={locale}
-                action={startRolloutAction}
+                operation="startRollout"
                 triggerVariant="primary"
                 trigger={say(locale, o.status === "draft" ? c.start : c.resume)}
                 title={say(locale, c.startTitle)}
@@ -129,13 +122,12 @@ export default async function RolloutPage({
             {operatorRole && o.status === "running" ? (
               <ActionDialog
                 locale={locale}
-                action={pauseRolloutAction}
+                operation="pauseRollout"
                 trigger={say(locale, c.pause)}
                 title={say(locale, c.pauseTitle)}
                 description={say(locale, c.pauseBody)}
                 submit={say(locale, c.pause)}
                 successMessage={say(locale, c.paused)}
-                reason={{ minLength: 5 }}
                 hidden={hidden}
               />
             ) : null}
@@ -144,7 +136,7 @@ export default async function RolloutPage({
             ["running", "paused", "failed"].includes(o.status) ? (
               <ActionDialog
                 locale={locale}
-                action={retryRolloutAction}
+                operation="retryRollout"
                 trigger={say(locale, c.retry)}
                 title={say(locale, c.retryTitle)}
                 submit={say(locale, c.retry)}
@@ -155,13 +147,12 @@ export default async function RolloutPage({
             {admin && ["draft", "running", "paused"].includes(o.status) ? (
               <ActionDialog
                 locale={locale}
-                action={cancelRolloutAction}
+                operation="cancelRollout"
                 trigger={say(locale, c.cancel)}
                 danger
                 title={say(locale, c.cancelTitle)}
                 submit={say(locale, c.cancel)}
                 successMessage={say(locale, c.cancelled)}
-                reason={{ minLength: 5 }}
                 hidden={hidden}
               />
             ) : null}
@@ -170,14 +161,13 @@ export default async function RolloutPage({
             ["running", "paused", "completed", "failed"].includes(o.status) ? (
               <ActionDialog
                 locale={locale}
-                action={rollbackRolloutAction}
+                operation="rollbackRollout"
                 trigger={say(locale, c.rollback)}
                 danger
                 title={say(locale, c.rollbackTitle)}
                 description={say(locale, c.rollbackBody)}
                 submit={say(locale, c.rollback)}
                 successMessage={say(locale, c.rolledBack)}
-                reason={{ minLength: 10 }}
                 confirmText={o.release.version}
                 hidden={hidden}
               />

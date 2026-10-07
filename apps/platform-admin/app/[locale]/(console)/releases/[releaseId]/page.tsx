@@ -1,31 +1,25 @@
 import {
   Alert,
   AlertDescription,
-  Checkbox,
-  Field,
   FieldLegend,
   FieldSet,
-  Label,
   ReferenceCode,
   Section,
 } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { randomUUID } from "node:crypto";
-import {
-  createRolloutAction,
-  setReleaseStatusAction,
-} from "../../../../_lib/actions/releases";
 import { copyFor, reasonCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
 import { pageLocale } from "../../../../_lib/page-locale";
 import { readPages } from "../../../../_lib/read-pages";
 import { releaseCopy } from "../../../../_lib/release-copy";
+import { rolloutRings } from "../../../../_lib/schemas/releases";
 import { PageHeader } from "../../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../../_lib/ui/data-table";
 import { Facts } from "../../../../_lib/ui/facts";
+import { CheckboxGroupFormField } from "../../../../_lib/ui/form-fields";
 import { EmptyState, Unknown, UnavailableState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../../_lib/ui/time";
@@ -125,53 +119,52 @@ export default async function ReleasePage({
             {admin && r.status === "available" ? (
               <ActionDialog
                 locale={locale}
-                action={createRolloutAction}
+                operation="createRollout"
                 trigger={say(locale, c.createRollout)}
                 triggerVariant="primary"
                 title={say(locale, c.createRolloutTitle)}
                 description={say(locale, c.createRolloutBody)}
                 submit={say(locale, c.createRollout)}
                 successMessage={say(locale, c.rolloutCreated)}
-                reason={{ minLength: 5 }}
-                hidden={{ releaseId: r.id, idempotencyKey: randomUUID() }}
+                hidden={{ releaseId: r.id }}
+                values={{ rings: [], instanceIds: [] }}
               >
-                <FieldSet className="gap-3">
-                  <FieldLegend>{say(locale, c.rings)}</FieldLegend>
-                  {(["canary", "early", "general"] as const).map((ring) => (
-                    <Field key={ring} orientation="horizontal">
-                      <Checkbox id={`rollout-ring-${ring}`} name="rings" value={ring} />
-                      <Label htmlFor={`rollout-ring-${ring}`}>{status(ring)}</Label>
-                    </Field>
-                  ))}
-                </FieldSet>
-                <FieldSet className="gap-3">
-                  <FieldLegend>{say(locale, c.instances)}</FieldLegend>
-                  {instances?.ok ? (
-                    instances.data.map((instance) => (
-                      <Field key={instance.instance_id} orientation="horizontal">
-                        <Checkbox
-                          id={`rollout-instance-${instance.instance_id}`}
-                          name="instanceIds"
-                          value={instance.instance_id}
-                        />
-                        <Label htmlFor={`rollout-instance-${instance.instance_id}`}>
-                          <bdi>{instance.tenant_name}</bdi>
-                          <ReferenceCode className="text-xs font-medium text-muted-foreground">
-                            {instance.instance_id.slice(0, 8)}
-                          </ReferenceCode>
-                        </Label>
-                      </Field>
-                    ))
-                  ) : (
+                <CheckboxGroupFormField
+                  name="rings"
+                  idPrefix="rollout-ring"
+                  legend={say(locale, c.rings)}
+                  options={rolloutRings.map((ring) => [ring, status(ring)] as const)}
+                />
+                {instances?.ok ? (
+                  <CheckboxGroupFormField
+                    name="instanceIds"
+                    idPrefix="rollout-instance"
+                    legend={say(locale, c.instances)}
+                    options={instances.data.map(
+                      (instance) =>
+                        [
+                          instance.instance_id,
+                          <>
+                            <bdi>{instance.tenant_name}</bdi>
+                            <ReferenceCode className="text-xs font-medium text-muted-foreground">
+                              {instance.instance_id.slice(0, 8)}
+                            </ReferenceCode>
+                          </>,
+                        ] as const,
+                    )}
+                  />
+                ) : (
+                  <FieldSet className="gap-3">
+                    <FieldLegend>{say(locale, c.instances)}</FieldLegend>
                     <UnavailableState locale={locale} />
-                  )}
-                </FieldSet>
+                  </FieldSet>
+                )}
               </ActionDialog>
             ) : null}
             {admin ? (
               <ActionDialog
                 locale={locale}
-                action={setReleaseStatusAction}
+                operation="setReleaseStatus"
                 danger={r.status === "available"}
                 trigger={say(
                   locale,
@@ -189,7 +182,6 @@ export default async function ReleasePage({
                   r.status === "available" ? c.withdraw : c.makeAvailable,
                 )}
                 successMessage={say(locale, c.statusChanged)}
-                reason={{ minLength: 5 }}
                 hidden={{
                   releaseId: r.id,
                   status: r.status === "available" ? "withdrawn" : "available",

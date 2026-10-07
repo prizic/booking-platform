@@ -3,13 +3,16 @@
 import type { Locale } from "@wlbp/i18n";
 import type { DashboardContextV1 } from "@wlbp/api-contracts";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import type { z } from "zod";
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
-import {
-  getTeamResourcesResultUrl,
-  parseTeamResourcesRetry,
-} from "../../_lib/team-resources-retry";
+import { getTeamResourcesResultUrl } from "../../_lib/team-resources-retry";
 import {
   executeResourceDeactivation,
   executeResourceLocationEligibility,
@@ -19,216 +22,221 @@ import {
   executeSaveStaffProfile,
   executeStaffEligibility,
   executeStaffDeactivation,
+  type DeactivationCommandResult,
   type TeamResourcesCommandResult,
 } from "../../_lib/team-resources-commands";
-import { membershipChoice } from "./form-values";
+import {
+  resourceDeactivationSchema,
+  resourceLocationEligibilitySchema,
+  resourceRequirementSchema,
+  resourceSchema,
+  resourceTypeSchema,
+  staffDeactivationSchema,
+  staffEligibilitySchema,
+  staffProfileSchema,
+  type ResourceDeactivationInput,
+  type ResourceInput,
+  type ResourceLocationEligibilityInput,
+  type ResourceRequirementInput,
+  type ResourceTypeInput,
+  type StaffDeactivationInput,
+  type StaffEligibilityInput,
+  type StaffProfileInput,
+} from "./team-resources-schema";
 
-function localeFrom(formData: FormData): Locale {
-  return formData.get("locale") === "ar" ? "ar" : "en";
-}
+/** Where a successful change is reported: the page's result banner. */
+export type TeamResourcesActionResult = ActionResult<{ readonly destination: string }>;
 
-function requestIdFrom(formData: FormData): string {
-  const requestId = formData.get("requestId");
-  return typeof requestId === "string" ? requestId : "";
-}
+type Source = NonNullable<
+  Awaited<ReturnType<typeof loadDashboardRequestAccess>>["source"]
+>;
 
-function retryFrom(formData: FormData) {
-  return parseTeamResourcesRetry(formData.get("formId"), formData.get("requestId"));
-}
-
-export async function deactivateStaffAction(formData: FormData): Promise<never> {
-  const locale = localeFrom(formData);
-  const request = await loadDashboardRequestAccess(locale);
-  if (request.source === null || request.state.kind !== "ready") {
-    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
-  }
-
-  const result = await executeStaffDeactivation(
-    {
-      reason: formData.get("reason"),
-      replacementStaffId: formData.get("replacementStaffId"),
-      resolution: formData.get("resolution"),
-      staffId: formData.get("staffId"),
-    },
-    request.state.context,
-    request.source,
-    requestIdFrom(formData),
-  );
-  if (result.ok) revalidatePath(`/${locale}/team-resources`);
-  redirect(
-    getTeamResourcesResultUrl(
-      locale,
-      result.ok ? result.outcome : result.code.replaceAll("_", "-"),
-      retryFrom(formData),
-    ),
-  );
-}
-
-export async function deactivateResourceAction(formData: FormData): Promise<never> {
-  const locale = localeFrom(formData);
-  const request = await loadDashboardRequestAccess(locale);
-  if (request.source === null || request.state.kind !== "ready") {
-    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
-  }
-
-  const result = await executeResourceDeactivation(
-    {
-      reason: formData.get("reason"),
-      replacementResourceId: formData.get("replacementResourceId"),
-      resolution: formData.get("resolution"),
-      resourceId: formData.get("resourceId"),
-    },
-    request.state.context,
-    request.source,
-    requestIdFrom(formData),
-  );
-  if (result.ok) revalidatePath(`/${locale}/team-resources`);
-  redirect(
-    getTeamResourcesResultUrl(
-      locale,
-      result.ok ? result.outcome : result.code.replaceAll("_", "-"),
-      retryFrom(formData),
-    ),
-  );
-}
-
-async function withVerifiedContext(
-  formData: FormData,
+/**
+ * Validates the input with the form's schema, runs the command against the
+ * verified session (tenant and capabilities never come from the input), and
+ * reports the outcome. Failures keep the operator on the form with their
+ * values; the codes are the page's former result names.
+ */
+async function run<S extends z.ZodType<{ locale: Locale }>>(
+  schema: S,
+  input: unknown,
   command: (
-    request: {
-      source: NonNullable<
-        Awaited<ReturnType<typeof loadDashboardRequestAccess>>["source"]
-      >;
-      state: { context: DashboardContextV1; kind: "ready" };
-    },
-    requestId: string,
-  ) => Promise<TeamResourcesCommandResult>,
-): Promise<never> {
-  const locale = localeFrom(formData);
+    data: z.output<S>,
+    context: DashboardContextV1,
+    source: Source,
+  ) => Promise<TeamResourcesCommandResult | DeactivationCommandResult>,
+): Promise<TeamResourcesActionResult> {
+  const parsed = parseActionInput(schema, input);
+  if (!parsed.ok) return parsed.result;
+  const locale = parsed.data.locale;
   const request = await loadDashboardRequestAccess(locale);
-  if (request.source === null || request.state.kind !== "ready") {
-    redirect(getTeamResourcesResultUrl(locale, "not-authorized"));
-  }
-
-  const result = await command(
-    { source: request.source, state: request.state },
-    requestIdFrom(formData),
-  );
-  if (result.ok) revalidatePath(`/${locale}/team-resources`);
-  redirect(
-    getTeamResourcesResultUrl(
+  if (request.source === null || request.state.kind !== "ready")
+    return actionError("not-authorized");
+  const result = await command(parsed.data, request.state.context, request.source);
+  if (!result.ok) return actionError(result.code.replaceAll("_", "-"));
+  revalidatePath(`/${locale}/team-resources`);
+  return actionOk({
+    destination: getTeamResourcesResultUrl(
       locale,
-      result.ok ? "saved" : result.code.replaceAll("_", "-"),
-      retryFrom(formData),
+      "outcome" in result ? result.outcome : "saved",
+    ),
+  });
+}
+
+export async function deactivateStaffAction(
+  input: StaffDeactivationInput,
+): Promise<TeamResourcesActionResult> {
+  return run(staffDeactivationSchema, input, (data, context, source) =>
+    executeStaffDeactivation(
+      {
+        reason: data.reason,
+        replacementStaffId: data.replacementStaffId,
+        resolution: data.resolution,
+        staffId: data.staffId,
+      },
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
-export async function saveStaffProfileAction(formData: FormData): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+export async function deactivateResourceAction(
+  input: ResourceDeactivationInput,
+): Promise<TeamResourcesActionResult> {
+  return run(resourceDeactivationSchema, input, (data, context, source) =>
+    executeResourceDeactivation(
+      {
+        reason: data.reason,
+        replacementResourceId: data.replacementResourceId,
+        resolution: data.resolution,
+        resourceId: data.resourceId,
+      },
+      context,
+      source,
+      data.requestId,
+    ),
+  );
+}
+
+export async function saveStaffProfileAction(
+  input: StaffProfileInput,
+): Promise<TeamResourcesActionResult> {
+  return run(staffProfileSchema, input, (data, context, source) =>
     executeSaveStaffProfile(
       {
-        bio: formData.get("bio"),
-        expectedRevision: formData.get("expectedRevision"),
-        internalNotes: formData.get("internalNotes"),
-        membershipId: membershipChoice(formData.get("membershipId")),
-        offeredHoursPerWeek: formData.get("offeredHoursPerWeek"),
-        publicName: formData.get("publicName"),
-        reason: formData.get("reason"),
-        staffId: formData.get("staffId"),
+        bio: data.bio,
+        expectedRevision:
+          data.expectedRevision === null ? "" : String(data.expectedRevision),
+        internalNotes: data.internalNotes,
+        membershipId: data.membershipId,
+        offeredHoursPerWeek: data.offeredHoursPerWeek,
+        publicName: data.publicName,
+        reason: data.reason,
+        staffId: data.staffId,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
-export async function saveResourceTypeAction(formData: FormData): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+export async function saveResourceTypeAction(
+  input: ResourceTypeInput,
+): Promise<TeamResourcesActionResult> {
+  return run(resourceTypeSchema, input, (data, context, source) =>
     executeSaveResourceType(
       {
-        exclusive: formData.get("exclusive"),
-        expectedRevision: formData.get("expectedRevision"),
-        key: formData.get("key"),
-        name: formData.get("name"),
-        reason: formData.get("reason"),
-        resourceTypeId: formData.get("resourceTypeId"),
+        exclusive: data.exclusive,
+        expectedRevision:
+          data.expectedRevision === null ? "" : String(data.expectedRevision),
+        key: data.key,
+        name: data.name,
+        reason: data.reason,
+        resourceTypeId: data.resourceTypeId,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
-export async function saveResourceAction(formData: FormData): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+export async function saveResourceAction(
+  input: ResourceInput,
+): Promise<TeamResourcesActionResult> {
+  return run(resourceSchema, input, (data, context, source) =>
     executeSaveResource(
       {
-        internalNotes: formData.get("internalNotes"),
-        expectedRevision: formData.get("expectedRevision"),
-        key: formData.get("key"),
-        publicName: formData.get("publicName"),
-        reason: formData.get("reason"),
-        resourceId: formData.get("resourceId"),
-        resourceTypeId: formData.get("resourceTypeId"),
-        status: formData.get("status"),
+        internalNotes: data.internalNotes,
+        expectedRevision:
+          data.expectedRevision === null ? "" : String(data.expectedRevision),
+        key: data.key,
+        publicName: data.publicName,
+        reason: data.reason,
+        resourceId: data.resourceId,
+        resourceTypeId: data.resourceTypeId,
+        status: data.status,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
-export async function setStaffEligibilityAction(formData: FormData): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+export async function setStaffEligibilityAction(
+  input: StaffEligibilityInput,
+): Promise<TeamResourcesActionResult> {
+  return run(staffEligibilitySchema, input, (data, context, source) =>
     executeStaffEligibility(
       {
-        eligible: formData.get("eligible"),
-        locationId: formData.get("locationId"),
-        reason: formData.get("reason"),
-        serviceId: formData.get("serviceId"),
-        staffId: formData.get("staffId"),
+        eligible: data.eligible,
+        locationId: data.locationId,
+        reason: data.reason,
+        serviceId: data.serviceId,
+        staffId: data.staffId,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
 export async function setResourceLocationEligibilityAction(
-  formData: FormData,
-): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+  input: ResourceLocationEligibilityInput,
+): Promise<TeamResourcesActionResult> {
+  return run(resourceLocationEligibilitySchema, input, (data, context, source) =>
     executeResourceLocationEligibility(
       {
-        eligible: formData.get("eligible"),
-        locationId: formData.get("locationId"),
-        reason: formData.get("reason"),
-        resourceId: formData.get("resourceId"),
+        eligible: data.eligible,
+        locationId: data.locationId,
+        reason: data.reason,
+        resourceId: data.resourceId,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }
 
-export async function setResourceRequirementAction(formData: FormData): Promise<never> {
-  return withVerifiedContext(formData, (request, requestId) =>
+export async function setResourceRequirementAction(
+  input: ResourceRequirementInput,
+): Promise<TeamResourcesActionResult> {
+  return run(resourceRequirementSchema, input, (data, context, source) =>
     executeResourceRequirement(
       {
-        reason: formData.get("reason"),
-        required: formData.get("required"),
-        resourceTypeId: formData.get("resourceTypeId"),
-        serviceId: formData.get("serviceId"),
+        reason: data.reason,
+        required: data.required,
+        resourceTypeId: data.resourceTypeId,
+        serviceId: data.serviceId,
       },
-      request.state.context,
-      request.source,
-      requestId,
+      context,
+      source,
+      data.requestId,
     ),
   );
 }

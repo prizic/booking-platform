@@ -1,34 +1,25 @@
-import {
-  Alert,
-  AlertDescription,
-  Field,
-  FieldDescription,
-  DateTimePicker,
-  Label,
-  TextField,
-} from "@wlbp/ui-foundation";
-import {
-  addOperatorAction,
-  disableOperatorAction,
-  enableOperatorAction,
-  setOperatorRoleAction,
-} from "../../../_lib/actions/operators";
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import { operatorsCopy as c } from "../../../_lib/admin-copy";
-import { copyFor, fill, formCopy, roleCopy, say, stateCopy } from "../../../_lib/copy";
+import { copyFor, roleCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
 import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
-import { SelectField } from "../../../_lib/ui/select-field";
+import {
+  DateTimeFormField,
+  SelectFormField,
+  TextFormField,
+} from "../../../_lib/ui/form-fields";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { RoleBadge, StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
+import { operatorRoles } from "../../../_lib/schemas/operators";
 
 export const dynamic = "force-dynamic";
 
-const roles = ["viewer", "operator", "admin", "break_glass"] as const;
+const roles = operatorRoles;
 
 export default async function OperatorsPage({
   params,
@@ -43,30 +34,20 @@ export default async function OperatorsPage({
   const now = Date.now();
   const admin = atLeast(operator.role, "admin");
   const roleOptions = roles.map((r) => [r, copyFor(roleCopy, r, locale)] as const);
-  const roleFields = (suffix: string, role?: string, expires?: string | null) => (
+  const roleValues = (role?: string, expires?: string | null) => ({
+    role: role ?? "viewer",
+    expiresAt: expires?.slice(0, 16) ?? "",
+  });
+  const roleFields = (suffix: string) => (
     <>
-      <SelectField
-        name="role"
-        label={say(locale, c.role)}
-        value={role ?? "viewer"}
-        options={roleOptions}
+      <SelectFormField name="role" label={say(locale, c.role)} options={roleOptions} />
+      <DateTimeFormField
+        id={`operator-expires-${suffix}`}
+        name="expiresAt"
+        locale={locale}
+        label={say(locale, c.expiresAt)}
+        description={say(locale, c.expiresHint)}
       />
-      <Field>
-        <Label htmlFor={`operator-expires-${suffix}`}>{say(locale, c.expiresAt)}</Label>
-        <DateTimePicker
-          id={`operator-expires-${suffix}`}
-          name="expiresAt"
-          locale={locale}
-          datePlaceholder={say(locale, formCopy.pickDate)}
-          timePlaceholder={say(locale, formCopy.pickTime)}
-          timeLabel={fill(locale, formCopy.timeOf, { field: say(locale, c.expiresAt) })}
-          {...(expires ? { defaultValue: expires.slice(0, 16) } : {})}
-          aria-describedby={`operator-expires-${suffix}-hint`}
-        />
-        <FieldDescription id={`operator-expires-${suffix}-hint`}>
-          {say(locale, c.expiresHint)}
-        </FieldDescription>
-      </Field>
     </>
   );
 
@@ -81,16 +62,16 @@ export default async function OperatorsPage({
           admin ? (
             <ActionDialog
               locale={locale}
-              action={addOperatorAction}
+              operation="addOperator"
               trigger={say(locale, c.add)}
               triggerVariant="primary"
               title={say(locale, c.addTitle)}
               description={say(locale, c.addBody)}
               submit={say(locale, c.add)}
               successMessage={say(locale, c.added)}
-              reason={{ minLength: 5 }}
+              values={{ email: "", ...roleValues() }}
             >
-              <TextField
+              <TextFormField
                 id="op-email"
                 name="email"
                 type="email"
@@ -167,33 +148,32 @@ export default async function OperatorsPage({
                   <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
-                      action={setOperatorRoleAction}
+                      operation="setOperatorRole"
                       trigger={say(locale, c.changeRole)}
                       triggerVariant="quiet"
                       title={say(locale, c.changeRoleTitle)}
                       submit={say(locale, c.changeRole)}
                       successMessage={say(locale, c.roleChanged)}
-                      reason={{ minLength: 5 }}
                       hidden={{ operatorId: row.operator_id }}
+                      values={roleValues(row.role, row.expires_at)}
                     >
-                      {roleFields(row.operator_id, row.role, row.expires_at)}
+                      {roleFields(row.operator_id)}
                     </ActionDialog>
                     {row.disabled_at ? (
                       <ActionDialog
                         locale={locale}
-                        action={enableOperatorAction}
+                        operation="enableOperator"
                         trigger={say(locale, c.enable)}
                         triggerVariant="quiet"
                         title={say(locale, c.enableTitle)}
                         submit={say(locale, c.enable)}
                         successMessage={say(locale, c.enabled)}
-                        reason={{ minLength: 5 }}
                         hidden={{ operatorId: row.operator_id }}
                       />
                     ) : (
                       <ActionDialog
                         locale={locale}
-                        action={disableOperatorAction}
+                        operation="disableOperator"
                         trigger={say(locale, c.disable)}
                         triggerVariant="quiet"
                         danger
@@ -201,7 +181,6 @@ export default async function OperatorsPage({
                         description={say(locale, c.disableBody)}
                         submit={say(locale, c.disable)}
                         successMessage={say(locale, c.disabled)}
-                        reason={{ minLength: 5 }}
                         hidden={{ operatorId: row.operator_id }}
                       />
                     )}

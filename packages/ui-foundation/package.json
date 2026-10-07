@@ -15,6 +15,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./actions": {
+      "types": "./dist/forms/index.d.ts",
+      "import": "./dist/forms/index.js"
+    },
     "./preferences": {
       "types": "./dist/preferences.d.ts",
       "import": "./dist/preferences.js"
@@ -29,26 +33,32 @@
   },
   "peerDependencies": {
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "next": "catalog:"
   },
   "wlbp": {
     "distribution": "distributed"
   },
   "dependencies": {
+    "@hookform/resolvers": "catalog:",
+    "@tanstack/react-query": "catalog:",
     "class-variance-authority": "catalog:",
     "clsx": "catalog:",
+    "date-fns": "catalog:",
     "lucide-react": "catalog:",
     "radix-ui": "catalog:",
+    "react-day-picker": "catalog:",
+    "react-hook-form": "catalog:",
     "tailwind-merge": "catalog:",
     "tw-animate-css": "catalog:",
-    "react-day-picker": "catalog:",
-    "date-fns": "catalog:"
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "next": "catalog:"
   }
 }

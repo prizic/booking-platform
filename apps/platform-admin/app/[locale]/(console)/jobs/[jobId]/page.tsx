@@ -2,11 +2,6 @@ import { formatNumber } from "@wlbp/i18n";
 import { Alert, ReferenceCode } from "@wlbp/ui-foundation";
 import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
-import {
-  approveJobAction,
-  cancelJobAction,
-  retryJobAction,
-} from "../../../../_lib/actions/operations";
 import { copyFor, fill, say, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
@@ -81,7 +76,7 @@ export default async function JobPage({
       job.kind,
     ],
   );
-  const hidden = { jobId: job.id, tenantId: job.tenant_id ?? "" };
+  const hidden = { jobId: job.id };
   const worker = say(
     locale,
     operationsCopy.workers[workerForKind[job.kind] ?? "infrastructure"],
@@ -105,7 +100,7 @@ export default async function JobPage({
             {job.needs_approval && atLeast(operator.role, "admin") ? (
               <ActionDialog
                 locale={locale}
-                action={approveJobAction}
+                operation="approveJob"
                 trigger={say(locale, c.approve)}
                 triggerVariant="primary"
                 title={say(locale, c.approveTitle)}
@@ -118,26 +113,24 @@ export default async function JobPage({
             {canOperate && job.status === "failed" ? (
               <ActionDialog
                 locale={locale}
-                action={retryJobAction}
+                operation="retryJob"
                 trigger={say(locale, c.retry)}
                 title={say(locale, c.retryTitle)}
                 submit={say(locale, c.retry)}
                 successMessage={say(locale, c.retried)}
-                reason={{ minLength: 5 }}
                 hidden={hidden}
               />
             ) : null}
             {canOperate && (job.status === "queued" || job.status === "failed") ? (
               <ActionDialog
                 locale={locale}
-                action={cancelJobAction}
+                operation="cancelJob"
                 trigger={say(locale, c.cancel)}
                 danger
                 title={say(locale, c.cancelTitle)}
                 description={say(locale, c.cancelBody)}
                 submit={say(locale, c.cancel)}
                 successMessage={say(locale, c.cancelled)}
-                reason={{ minLength: 5 }}
                 hidden={hidden}
               />
             ) : null}

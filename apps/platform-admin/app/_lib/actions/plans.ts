@@ -1,28 +1,30 @@
 "use server";
 
-import { lines, text } from "../form-data";
-import { runOperatorAction, type ActionResult } from "../operator-action";
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+import { runOperatorAction, type OperatorActionResult } from "../operator-action";
+import { planKeyPattern, savePlanSchema, type SavePlanInput } from "../schemas/plans";
 
 export async function savePlanAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const key = text(form, "key").toLowerCase();
-  const create = text(form, "mode") === "create";
+  input: SavePlanInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(savePlanSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { mode, key, name, features, active, reason } = parsed.data;
+  const create = mode === "create";
   return (
     await runOperatorAction({
       action: create ? "plan.create" : "plan.update",
       fn: "save_plan_v1",
       args: {
         p_key: key,
-        p_name: text(form, "name"),
-        p_entitlements: lines(form, "features").map((feature) => feature.toLowerCase()),
-        p_active: form.get("active") === "on",
+        p_name: name,
+        p_entitlements: features,
+        p_active: active,
         p_create: create,
-        p_reason: text(form, "reason"),
+        p_reason: reason,
       },
       targetKind: "plan",
-      targetId: /^[a-z][a-z0-9_-]{1,40}$/u.test(key) ? key : undefined,
+      targetId: planKeyPattern.test(key) ? key : undefined,
     })
   ).result;
 }

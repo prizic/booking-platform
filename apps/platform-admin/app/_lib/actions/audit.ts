@@ -1,42 +1,42 @@
 "use server";
 
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
 import { auditRange, toCsv } from "../audit-csv";
 import type { AuditRow } from "../audit-copy";
-import { localeOf, optional, uuid } from "../form-data";
-import { runOperatorAction, type ActionResult } from "../operator-action";
+import {
+  operatorOk,
+  runOperatorAction,
+  type OperatorActionResult,
+} from "../operator-action";
+import { exportAuditSchema, type ExportAuditInput } from "../schemas/audit";
 
-const dates = /^\d{4}-\d{2}-\d{2}$/u;
-
+/** Exports the filtered audit log; the browser downloads the returned CSV. */
 export async function exportAuditAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const from = optional(form, "from");
-  const to = optional(form, "to");
-  const range = auditRange(
-    from && dates.test(from) ? from : undefined,
-    to && dates.test(to) ? to : undefined,
-  );
+  input: ExportAuditInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(exportAuditSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { q, family, tenant, outcome, from, to, locale } = parsed.data;
+  const range = auditRange(from, to);
   const { result, data } = await runOperatorAction({
     action: "audit.export",
     fn: "export_audit_events_v1",
     args: {
-      p_search: optional(form, "q"),
-      p_action: optional(form, "family"),
-      p_tenant_id: uuid(form, "tenant"),
-      p_outcome: optional(form, "outcome"),
+      p_search: q,
+      p_action: family,
+      p_tenant_id: tenant,
+      p_outcome: outcome,
       p_from: range.from,
       p_to: range.to,
     },
     targetKind: "audit",
   });
-  if (result.kind !== "success") return result;
+  if (!result.ok) return result;
   const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/gu, "-");
-  return {
-    ...result,
+  return operatorOk({
     download: {
       filename: `audit-${stamp}.csv`,
-      body: toCsv((data ?? []) as unknown as AuditRow[], localeOf(form)),
+      body: toCsv((data ?? []) as unknown as AuditRow[], locale),
     },
-  };
+  });
 }

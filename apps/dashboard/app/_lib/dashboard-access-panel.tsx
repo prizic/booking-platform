@@ -18,7 +18,7 @@ import Link from "next/link";
 import type { DashboardAccessState } from "./dashboard-access";
 import { getDashboardMessage } from "./copy";
 import { workspaceMessage } from "./workspace-copy";
-import { selectTenant } from "../[locale]/actions";
+import { TenantSelectForm } from "./tenant-select-form";
 type PageState = DashboardAccessState | { readonly kind: "configuration-missing" };
 
 /**
@@ -86,12 +86,12 @@ export function DashboardAccessPanel({
         <ul className="divide-y rounded-lg border bg-card">
           {state.choices.map((choice) => (
             <li key={choice.membershipId}>
-              <form
-                action={selectTenant}
+              <TenantSelectForm
+                locale={locale}
+                tenantId={choice.tenantId}
+                label={message("selectTenant")}
                 className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
               >
-                <input name="locale" type="hidden" value={locale} />
-                <input name="tenantId" type="hidden" value={choice.tenantId} />
                 <span className="grid min-w-0 gap-0.5">
                   <strong className="truncate font-semibold">
                     {choice.tenantName}
@@ -100,8 +100,7 @@ export function DashboardAccessPanel({
                     {choice.roleKey}
                   </small>
                 </span>
-                <Button type="submit">{message("selectTenant")}</Button>
-              </form>
+              </TenantSelectForm>
             </li>
           ))}
         </ul>
@@ -132,25 +131,20 @@ export function DashboardAccessPanel({
         <ul className="grid gap-1">
           {state.choices.map((choice) => (
             <li key={choice.membershipId}>
-              <form
-                action={selectTenant}
-                className="flex items-center justify-between gap-3"
+              <TenantSelectForm
+                locale={locale}
+                tenantId={choice.tenantId}
+                label={message("selectTenant")}
+                className="flex flex-wrap items-center justify-between gap-3"
+                variant={
+                  choice.tenantId === state.context.tenantId ? "ghost" : "outline"
+                }
+                disabled={choice.tenantId === state.context.tenantId}
               >
-                <input name="locale" type="hidden" value={locale} />
-                <input name="tenantId" type="hidden" value={choice.tenantId} />
                 <span className="min-w-0 truncate text-sm font-medium">
                   {choice.tenantName}
                 </span>
-                <Button
-                  variant={
-                    choice.tenantId === state.context.tenantId ? "ghost" : "outline"
-                  }
-                  type="submit"
-                  disabled={choice.tenantId === state.context.tenantId}
-                >
-                  {message("selectTenant")}
-                </Button>
-              </form>
+              </TenantSelectForm>
             </li>
           ))}
         </ul>

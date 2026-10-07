@@ -1,5 +1,5 @@
 "use client";
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, type Ref } from "react";
 import {
   Select,
   SelectContent,
@@ -17,10 +17,11 @@ export interface ChoiceOption {
 /**
  * A Radix select that submits `name` like a native select. Radix forbids an
  * empty item value: an unset required choice shows `placeholder` instead, and
- * an optional "none" choice uses an explicit sentinel the parser understands.
+ * an optional "none" choice uses an explicit sentinel the schema understands.
  *
  * The chosen label is rendered by the trigger itself, so server-rendered
- * markup already shows the current choice before hydration.
+ * markup already shows the current choice before hydration. Inside a
+ * FormControl it receives the control id and aria wiring on its trigger.
  */
 export function ChoiceSelect({
   id,
@@ -30,30 +31,39 @@ export function ChoiceSelect({
   defaultValue,
   value,
   onValueChange,
+  onBlur,
+  triggerRef,
   required,
   disabled,
   invalid,
   describedBy,
   className,
   size,
+  "aria-invalid": ariaInvalid,
+  "aria-describedby": ariaDescribedBy,
 }: {
-  readonly id: string;
+  readonly id?: string;
   readonly name: string;
   readonly options: readonly ChoiceOption[];
   readonly placeholder?: ReactNode;
   readonly defaultValue?: string | undefined;
   readonly value?: string | undefined;
   readonly onValueChange?: (value: string) => void;
+  readonly onBlur?: () => void;
+  readonly triggerRef?: Ref<HTMLButtonElement>;
   readonly required?: boolean;
   readonly disabled?: boolean;
   readonly invalid?: boolean;
   readonly describedBy?: string | undefined;
   readonly className?: string;
   readonly size?: "default" | "sm";
+  readonly "aria-invalid"?: boolean | "true" | "false";
+  readonly "aria-describedby"?: string;
 }) {
   const [own, setOwn] = useState(defaultValue ?? "");
   const current = value ?? own;
   const chosen = options.find((option) => option.value === current);
+  const describedById = ariaDescribedBy ?? describedBy;
   return (
     <Select
       name={name}
@@ -66,11 +76,15 @@ export function ChoiceSelect({
       {...(disabled ? { disabled: true } : {})}
     >
       <SelectTrigger
-        id={id}
+        {...(id ? { id } : {})}
+        {...(triggerRef ? { ref: triggerRef } : {})}
         className={className}
+        {...(onBlur ? { onBlur } : {})}
         {...(size ? { size } : {})}
-        {...(invalid ? { "aria-invalid": true } : {})}
-        {...(describedBy ? { "aria-describedby": describedBy } : {})}
+        {...(invalid || ariaInvalid === true || ariaInvalid === "true"
+          ? { "aria-invalid": true }
+          : {})}
+        {...(describedById ? { "aria-describedby": describedById } : {})}
       >
         <SelectValue placeholder={placeholder}>{chosen?.label}</SelectValue>
       </SelectTrigger>

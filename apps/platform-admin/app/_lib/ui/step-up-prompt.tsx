@@ -1,10 +1,19 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { Alert, Button, TextField } from "@wlbp/ui-foundation";
+import {
+  Button,
+  Form,
+  FormRootError,
+  useActionMutation,
+  useZodForm,
+} from "@wlbp/ui-foundation";
 import { ShieldAlert } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
-import { formCopy, say, type Copy } from "../copy";
+import { useEffect, useId, useMemo, useRef } from "react";
+import { formCopy, say } from "../copy";
+import { authFormMessages } from "../form-messages";
+import { totpCodeSchema, type TotpCodeInput } from "../schemas/auth";
+import { TextFormField } from "./form-fields";
 import { verifyStepUp } from "./step-up";
 
 export function StepUpPrompt({
@@ -16,25 +25,26 @@ export function StepUpPrompt({
 }) {
   const id = useId();
   const heading = useRef<HTMLHeadingElement>(null);
-  const [error, setError] = useState<Copy | null>(null);
-  const [pending, setPending] = useState(false);
+  const form = useZodForm(totpCodeSchema, { defaultValues: { code: "" } });
+  const messages = useMemo(
+    () => ({
+      ...authFormMessages(locale),
+      invalid_code: say(locale, formCopy.stepUpInvalid),
+      no_factor: say(locale, formCopy.stepUpNoFactor),
+    }),
+    [locale],
+  );
+  // The fresh TOTP verification refreshes the session cookie; the caller then
+  // re-sends its own action, so nothing here needs a page refresh.
+  const mutation = useActionMutation(verifyStepUp, {
+    refresh: false,
+    onSuccess: () => onVerified(),
+  });
 
   useEffect(() => heading.current?.focus(), []);
 
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setPending(true);
-    setError(null);
-    const outcome = await verifyStepUp(
-      String(new FormData(event.currentTarget).get("code") ?? ""),
-    );
-    setPending(false);
-    if (outcome === "ok") onVerified();
-    else
-      setError(
-        outcome === "no-factor" ? formCopy.stepUpNoFactor : formCopy.stepUpInvalid,
-      );
-  }
+  const failed =
+    mutation.data && !mutation.data.ok ? mutation.data.formError : undefined;
 
   return (
     <section
@@ -60,28 +70,40 @@ export function StepUpPrompt({
           </p>
         </div>
       </div>
-      {error ? <Alert tone="danger">{say(locale, error)}</Alert> : null}
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-        <TextField
-          id={`${id}-code`}
-          name="code"
-          label={say(locale, formCopy.stepUpCode)}
-          autoComplete="one-time-code"
-          inputMode="numeric"
-          dir="ltr"
-          minLength={6}
-          maxLength={6}
-          required
-          className="w-48"
-        />
-        <Button
-          type="submit"
-          loading={pending}
-          loadingLabel={say(locale, formCopy.working)}
+      <Form form={form} locale={locale} messages={messages}>
+        <FormRootError code={failed} />
+        {mutation.isError ? <FormRootError code="network" /> : null}
+        <form
+          noValidate
+          onSubmit={(event) =>
+            void form.handleSubmit(() =>
+              mutation.mutate(form.getValues() as TotpCodeInput),
+            )(event)
+          }
+          className="flex flex-wrap items-start gap-3"
         >
-          {say(locale, formCopy.stepUpSubmit)}
-        </Button>
-      </form>
+          <TextFormField
+            id={`${id}-code`}
+            name="code"
+            label={say(locale, formCopy.stepUpCode)}
+            autoComplete="one-time-code"
+            inputMode="numeric"
+            dir="ltr"
+            minLength={6}
+            maxLength={6}
+            required
+            className="w-48"
+          />
+          <Button
+            type="submit"
+            className="mt-7"
+            loading={mutation.isPending}
+            loadingLabel={say(locale, formCopy.working)}
+          >
+            {say(locale, formCopy.stepUpSubmit)}
+          </Button>
+        </form>
+      </Form>
     </section>
   );
 }

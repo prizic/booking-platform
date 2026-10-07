@@ -1,18 +1,34 @@
 "use client";
-import { useActionState, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ExternalLink, Link2, RefreshCw } from "lucide-react";
 import type { Locale } from "@wlbp/i18n";
-import { Alert, AlertDescription, Button } from "@wlbp/ui-foundation";
+import {
+  Alert,
+  AlertDescription,
+  Button,
+  useActionMutation,
+  useZodForm,
+} from "@wlbp/ui-foundation";
 import { startPaymentOnboarding } from "./actions";
+import { paymentOnboardingSchema } from "./onboarding-schema";
+
 function Attempt({ locale, attempt }: { locale: Locale; attempt: string }) {
-  const [state, action, pending] = useActionState(startPaymentOnboarding, {});
-  const requestId = attempt;
+  // Preparing a link changes nothing on this page, so nothing is refreshed.
+  const mutation = useActionMutation(startPaymentOnboarding, { refresh: false });
+  // No visible fields: the attempt id and language are the whole input.
+  const form = useZodForm(paymentOnboardingSchema, {
+    defaultValues: { locale, requestId: attempt },
+  });
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
+  const destination = mutation.data?.ok ? mutation.data.data.destination : null;
+  const refused = mutation.isError || mutation.data?.ok === false;
   return (
-    <form action={action} className="grid gap-3">
-      <input name="locale" type="hidden" value={locale} />
-      <input name="requestId" type="hidden" value={requestId} />
+    <form
+      noValidate
+      className="grid gap-3"
+      onSubmit={form.handleSubmit(() => mutation.mutate(form.getValues()))}
+    >
       <p className="text-sm leading-relaxed text-muted-foreground">
         {m(
           "Recent MFA is required. The provider link alone does not confirm that charges or payouts are enabled.",
@@ -22,22 +38,22 @@ function Attempt({ locale, attempt }: { locale: Locale; attempt: string }) {
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="submit"
-          loading={pending}
+          loading={mutation.isPending}
           loadingLabel={m("Preparing provider link…", "جارٍ تجهيز رابط المزود…")}
         >
           <Link2 aria-hidden="true" />
           {m("Prepare secure onboarding link", "تجهيز رابط إعداد آمن")}
         </Button>
-        {state.destination ? (
+        {destination ? (
           <Button asChild variant="outline">
-            <Link href={state.destination} rel="noreferrer">
+            <Link href={destination} rel="noreferrer">
               <ExternalLink aria-hidden="true" />
               {m("Continue at Stripe", "المتابعة لدى Stripe")}
             </Link>
           </Button>
         ) : null}
       </div>
-      {state.refused ? (
+      {refused ? (
         <Alert tone="danger">
           <AlertDescription className="text-foreground">
             {m(

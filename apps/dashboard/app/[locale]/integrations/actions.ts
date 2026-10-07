@@ -1,21 +1,26 @@
 "use server";
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { createDashboardAuthClient } from "../../_lib/auth-server";
-export interface IntegrationResult {
-  readonly destination?: string;
-  readonly refused?: boolean;
-}
+import {
+  paymentOnboardingSchema,
+  type PaymentOnboardingInput,
+} from "./onboarding-schema";
+
 export async function startPaymentOnboarding(
-  _state: IntegrationResult,
-  form: FormData,
-): Promise<IntegrationResult> {
-  const locale = form.get("locale") === "ar" ? "ar" : "en";
-  const requestId = form.get("requestId");
-  if (typeof requestId !== "string" || !/^[a-f0-9-]{36}$/iu.test(requestId))
-    return { refused: true };
+  input: PaymentOnboardingInput,
+): Promise<ActionResult<{ readonly destination: string }>> {
+  const parsed = parseActionInput(paymentOnboardingSchema, input);
+  if (!parsed.ok) return actionError("refused");
+  const { locale, requestId } = parsed.data;
   const request = await loadDashboardRequestAccess(locale);
   const client = await createDashboardAuthClient();
-  if (request.state.kind !== "ready" || !client) return { refused: true };
+  if (request.state.kind !== "ready" || !client) return actionError("refused");
   try {
     const { data, error } = await client.functions.invoke("payment-onboarding", {
       body: {
@@ -31,7 +36,7 @@ export async function startPaymentOnboarding(
       data === null ||
       typeof data.redirectUrl !== "string"
     )
-      return { refused: true };
+      return actionError("refused");
     const url = new URL(data.redirectUrl);
     if (
       url.protocol !== "https:" ||
@@ -40,9 +45,9 @@ export async function startPaymentOnboarding(
       url.password ||
       url.hash
     )
-      return { refused: true };
-    return { destination: url.href };
+      return actionError("refused");
+    return actionOk({ destination: url.href });
   } catch {
-    return { refused: true };
+    return actionError("refused");
   }
 }

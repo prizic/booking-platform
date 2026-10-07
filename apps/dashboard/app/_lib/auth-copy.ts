@@ -26,6 +26,7 @@ export const authCopy = {
     enroll: "Add authenticator",
     verify: "Verify code",
     code: "Six-digit code",
+    codeFormat: "Enter the six-digit code from your authenticator app.",
     factor: "Authenticator",
     remove: "Remove authenticator",
     removeHint:
@@ -65,6 +66,7 @@ export const authCopy = {
     enroll: "إضافة تطبيق مصادقة",
     verify: "التحقق من الرمز",
     code: "رمز من ستة أرقام",
+    codeFormat: "أدخل الرمز المكوّن من ستة أرقام من تطبيق المصادقة.",
     factor: "تطبيق المصادقة",
     remove: "إزالة تطبيق المصادقة",
     removeHint: "تحقق من رمز قبل إزالة وسيلة المصادقة. الإزالة تغيّر أمان حسابك.",

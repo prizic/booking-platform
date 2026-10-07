@@ -1,6 +1,5 @@
 import { Alert, AlertDescription, DatePicker, Field, Label } from "@wlbp/ui-foundation";
 import Link from "next/link";
-import { exportAuditAction } from "../../../_lib/actions/audit";
 import { auditCopy as c } from "../../../_lib/admin-copy";
 import {
   auditActionCopy,
@@ -76,7 +75,7 @@ export default async function AuditPage({
           atLeast(operator.role, "admin") ? (
             <ActionDialog
               locale={locale}
-              action={exportAuditAction}
+              operation="exportAudit"
               trigger={say(locale, c.export)}
               title={say(locale, c.exportTitle)}
               description={say(locale, c.exportBody)}

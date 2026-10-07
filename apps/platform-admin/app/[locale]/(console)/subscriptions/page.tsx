@@ -1,18 +1,8 @@
-import {
-  Alert,
-  AlertDescription,
-  DateTimePicker,
-  Field,
-  Label,
-} from "@wlbp/ui-foundation";
+import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { actionCopy as a } from "../../../_lib/action-copy";
-import {
-  assignSubscriptionAction,
-  updateSubscriptionAction,
-} from "../../../_lib/actions/subscriptions";
 import { commercialCopy } from "../../../_lib/commercial-copy";
-import { copyFor, fill, formCopy, say, statusCopy } from "../../../_lib/copy";
+import { copyFor, formCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
@@ -21,8 +11,8 @@ import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import { DateTimeFormField, SelectFormField } from "../../../_lib/ui/form-fields";
 import { Pagination } from "../../../_lib/ui/pagination";
-import { SelectField } from "../../../_lib/ui/select-field";
 import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -157,75 +147,66 @@ export default async function SubscriptionsPage({
                   <div key="a" className="flex flex-wrap items-center gap-2">
                     <ActionDialog
                       locale={locale}
-                      action={assignSubscriptionAction}
+                      operation="assignSubscription"
                       trigger={say(locale, a.assignPlan.trigger)}
                       triggerVariant="quiet"
                       title={say(locale, a.assignPlan.title)}
                       description={say(locale, a.assignPlan.body)}
                       submit={say(locale, a.assignPlan.submit)}
                       successMessage={say(locale, a.assignPlan.done)}
-                      reason={{ minLength: 5 }}
                       hidden={{ tenantId: row.tenant_id }}
+                      values={{
+                        planKey: row.plan_key ?? undefined,
+                        ring: row.rollout_ring ?? "general",
+                      }}
                     >
-                      <SelectField
+                      <SelectFormField
                         name="planKey"
                         label={say(locale, a.fields.plan)}
-                        value={row.plan_key ?? undefined}
                         options={planOptions}
                       />
-                      <SelectField
+                      <SelectFormField
                         name="ring"
                         label={say(locale, a.fields.ring)}
-                        value={row.rollout_ring ?? "general"}
                         options={ringOptions}
                       />
                     </ActionDialog>
                     {row.updated_at ? (
                       <ActionDialog
                         locale={locale}
-                        action={updateSubscriptionAction}
+                        operation="updateSubscription"
                         trigger={say(locale, a.updateSubscription.trigger)}
                         triggerVariant="quiet"
                         title={say(locale, a.updateSubscription.title)}
                         description={say(locale, a.updateSubscription.body)}
                         submit={say(locale, a.updateSubscription.submit)}
                         successMessage={say(locale, a.updateSubscription.done)}
-                        reason={{ minLength: 5 }}
                         hidden={{
                           tenantId: row.tenant_id,
                           expectedUpdatedAt: row.updated_at,
                         }}
+                        values={{
+                          state: row.state,
+                          endsAt: row.ends_at?.slice(0, 16) ?? "",
+                          ring: row.rollout_ring ?? "general",
+                        }}
                       >
-                        <SelectField
+                        <SelectFormField
                           name="state"
                           label={say(locale, a.fields.state)}
-                          value={row.state}
                           options={states
                             .filter((s) => s !== "none")
                             .map((s) => [s, status(s)] as const)}
                         />
-                        <Field>
-                          <Label htmlFor={`subscription-ends-${row.tenant_id}`}>
-                            {say(locale, a.fields.endsAt)}
-                          </Label>
-                          <DateTimePicker
-                            id={`subscription-ends-${row.tenant_id}`}
-                            name="endsAt"
-                            locale={locale}
-                            datePlaceholder={say(locale, formCopy.pickDate)}
-                            timePlaceholder={say(locale, formCopy.pickTime)}
-                            timeLabel={fill(locale, formCopy.timeOf, {
-                              field: say(locale, a.fields.endsAt),
-                            })}
-                            {...(row.ends_at
-                              ? { defaultValue: row.ends_at.slice(0, 16) }
-                              : {})}
-                          />
-                        </Field>
-                        <SelectField
+                        <DateTimeFormField
+                          id={`subscription-ends-${row.tenant_id}`}
+                          name="endsAt"
+                          locale={locale}
+                          label={say(locale, a.fields.endsAt)}
+                        />
+                        <SelectFormField
                           name="ring"
                           label={say(locale, a.fields.ring)}
-                          value={row.rollout_ring ?? "general"}
                           options={ringOptions}
                         />
                       </ActionDialog>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDirection, isLocale, type Locale } from "@wlbp/i18n";
+import { QueryProvider } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { createBrandStyle } from "@wlbp/white-label-ui";
 import { cookies } from "next/headers";
@@ -48,7 +49,9 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
       style={createBrandStyle(clientBrand.tokens)}
       suppressHydrationWarning
     >
-      <body>{children}</body>
+      <body>
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

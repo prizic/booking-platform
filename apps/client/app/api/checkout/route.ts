@@ -1,4 +1,7 @@
 import { parseBeginCheckoutV1Request } from "@wlbp/api-contracts";
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+
+import { bookingDetailsSchema } from "../../[locale]/book/booking-schema";
 
 import {
   ClientBookingError,
@@ -25,7 +28,11 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const context = await createPublicApiContext();
     if (context === null) return contractErrorResponse("availability_unavailable", 503);
-    const checkout = parseBeginCheckoutV1Request(await request.json());
+    // The details form schema first (consent included), then the shared contract.
+    const input = parseActionInput(bookingDetailsSchema, await request.json());
+    if (!input.ok) return contractErrorResponse("invalid_request", 400);
+    const { consent: _consent, ...body } = input.data;
+    const checkout = parseBeginCheckoutV1Request(body);
     const source = createClientBookingDataSource(context.api, context.hostname);
     const opened = await source.beginCheckout(checkout);
 

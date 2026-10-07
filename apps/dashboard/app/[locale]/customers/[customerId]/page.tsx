@@ -2,17 +2,10 @@ import { workspaceStatus } from "../../../_lib/workspace-status";
 import type { Locale } from "@wlbp/i18n";
 import {
   Badge,
-  Button,
   EmptyState,
   Facts,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  Input,
-  Label,
   PageHeader,
   ReferenceCode,
-  RequiredMark,
   Section,
   StatusStamp,
   Table,
@@ -21,7 +14,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Textarea,
 } from "@wlbp/ui-foundation";
 import { ArrowLeft, CalendarX } from "lucide-react";
 import Link from "next/link";
@@ -42,11 +34,7 @@ import { ZoneNote } from "../../../_lib/ui/zone-note";
 import { countLabel, workspaceMessage } from "../../../_lib/workspace-copy";
 import { ResultAlert } from "../../../_lib/ui/result-alert";
 import { textLinkClass } from "../../../_lib/ui/text-link";
-import {
-  correctCustomerAction,
-  runPrivacyRequestAction,
-  setCustomerFlagAction,
-} from "../actions";
+import { CustomerCorrectionForm, CustomerRightsForms } from "./customer-forms";
 import { customerResultKeys, positiveCustomerResults } from "../results";
 
 export const dynamic = "force-dynamic";
@@ -337,75 +325,15 @@ export default async function CustomerDetailPage({
       <div className="grid items-start gap-8 lg:grid-cols-2">
         {customer.erased ? null : (
           <Section id="customer-correct" title={message("customersCorrectTitle")}>
-            <form
-              action={correctCustomerAction}
-              className="grid gap-5 rounded-lg border bg-card p-5"
-            >
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="customerId" value={customer.customerId} />
-              <input type="hidden" name="expectedRevision" value={customer.revision} />
-              <Field>
-                <Label htmlFor="correct-name">
-                  {message("customersNameLabel")}
-                  <RequiredMark />
-                </Label>
-                <Input
-                  defaultValue={customer.fullName ?? ""}
-                  id="correct-name"
-                  maxLength={160}
-                  name="fullName"
-                  required
-                  type="text"
-                />
-              </Field>
-              <FieldGroup columns={2}>
-                <Field>
-                  <Label htmlFor="correct-email">
-                    {message("customersEmailLabel")}
-                    <RequiredMark />
-                  </Label>
-                  <Input
-                    defaultValue={customer.email ?? ""}
-                    dir="ltr"
-                    id="correct-email"
-                    maxLength={320}
-                    name="email"
-                    required
-                    type="email"
-                  />
-                </Field>
-                <Field>
-                  <Label htmlFor="correct-phone">
-                    {message("customersPhoneLabel")}
-                  </Label>
-                  <Input
-                    defaultValue={customer.phone ?? ""}
-                    dir="ltr"
-                    id="correct-phone"
-                    maxLength={40}
-                    name="phone"
-                    type="tel"
-                  />
-                </Field>
-              </FieldGroup>
-              <Field>
-                <Label htmlFor="correct-tags">{message("customersTagsLabel")}</Label>
-                <Input
-                  defaultValue={customer.tags.join(", ")}
-                  id="correct-tags"
-                  maxLength={400}
-                  name="tags"
-                  type="text"
-                  aria-describedby="correct-hint"
-                />
-              </Field>
-              <FieldDescription id="correct-hint">
-                {message("customersCorrectHint")}
-              </FieldDescription>
-              <Button type="submit" className="w-fit">
-                {message("customersCorrectAction")}
-              </Button>
-            </form>
+            <CustomerCorrectionForm
+              locale={locale}
+              customerId={customer.customerId}
+              revision={customer.revision}
+              fullName={customer.fullName ?? ""}
+              email={customer.email ?? ""}
+              phone={customer.phone ?? ""}
+              tags={customer.tags.join(", ")}
+            />
           </Section>
         )}
 
@@ -413,63 +341,13 @@ export default async function CustomerDetailPage({
           {/* Every control is offered. The database decides which one this
               record can actually accept; hiding a button is presentation, and
               presentation is never authorization. */}
-          <div className="grid gap-5 rounded-lg border bg-card p-5">
-            <form action={setCustomerFlagAction} className="grid gap-4">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="customerId" value={customer.customerId} />
-              <Field>
-                <Label htmlFor="flag-reason">{message("customersReasonLabel")}</Label>
-                <Textarea id="flag-reason" maxLength={500} name="reason" rows={2} />
-              </Field>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  name="action"
-                  type="submit"
-                  value={customer.restricted ? "unrestrict" : "restrict"}
-                  variant="outline"
-                >
-                  {message(
-                    customer.restricted
-                      ? "customersUnrestrictAction"
-                      : "customersRestrictAction",
-                  )}
-                </Button>
-                <Button
-                  name="action"
-                  type="submit"
-                  value={customer.legalHold ? "release" : "hold"}
-                  variant="outline"
-                >
-                  {message(
-                    customer.legalHold
-                      ? "customersReleaseHoldAction"
-                      : "customersPlaceHoldAction",
-                  )}
-                </Button>
-              </div>
-            </form>
-
-            <form action={runPrivacyRequestAction} className="grid gap-4 border-t pt-5">
-              <input type="hidden" name="locale" value={locale} />
-              <input type="hidden" name="customerId" value={customer.customerId} />
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {message("customersJobsHint")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                <Button name="kind" type="submit" value="export" variant="secondary">
-                  {message("customersExportAction")}
-                </Button>
-                <Button
-                  name="kind"
-                  type="submit"
-                  value="deletion"
-                  variant="destructive-outline"
-                >
-                  {message("customersDeleteAction")}
-                </Button>
-              </div>
-            </form>
-          </div>
+          <CustomerRightsForms
+            key={customer.customerId}
+            locale={locale}
+            customerId={customer.customerId}
+            restricted={customer.restricted}
+            legalHold={customer.legalHold}
+          />
         </Section>
       </div>
 

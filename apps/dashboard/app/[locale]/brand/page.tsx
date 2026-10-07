@@ -1,6 +1,6 @@
-import { BrandPublicationForm } from "./brand-publication-form";
+import { BrandPreviewButton, BrandPublicationForm } from "./brand-publication-form";
 import { BrandForm } from "./brand-form";
-import { parseBrandEditor, brandChangedSections } from "./brand-fields";
+import { parseBrandEditor, brandChangedSections } from "./brand-document";
 import { dashboardBrand } from "../../_lib/brand";
 import { workspaceStatus } from "../../_lib/workspace-status";
 import { formatNumber, type Locale } from "@wlbp/i18n";
@@ -8,7 +8,6 @@ import { formatWhen } from "../../_lib/booking-display";
 import {
   Alert,
   AlertDescription,
-  Button,
   EmptyState,
   Facts,
   PageHeader,
@@ -23,7 +22,6 @@ import {
   TableRow,
   type StampState,
 } from "@wlbp/ui-foundation";
-import { Eye } from "lucide-react";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import type {
@@ -32,7 +30,6 @@ import type {
 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
-import { publishBrandAction, rollbackBrandAction, previewBrandAction } from "./actions";
 import { brandResultKeys, positiveBrandResults } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -224,27 +221,20 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
                 </p>
               ) : null}
               <div className="flex flex-wrap items-center justify-end gap-3 border-t pt-4">
-                <form action={previewBrandAction}>
-                  <input name="locale" type="hidden" value={locale} />
-                  <input
-                    name="brandRevisionId"
-                    type="hidden"
-                    value={draft.brandRevisionId}
-                  />
-                  <Button type="submit" variant="outline">
-                    <Eye aria-hidden="true" />
-                    {message("brandPreviewAction")}
-                  </Button>
-                </form>
+                <BrandPreviewButton
+                  locale={locale}
+                  brandRevisionId={draft.brandRevisionId}
+                  label={message("brandPreviewAction")}
+                />
                 <BrandPublicationForm
                   locale={locale}
-                  action={publishBrandAction}
                   label={message("brandPublishAction")}
                   title={m(
                     "Publish this brand draft?",
                     "هل تريد نشر مسودة العلامة هذه؟",
                   )}
-                  fields={{
+                  change={{
+                    kind: "publish",
                     brandRevisionId: draft.brandRevisionId,
                     contentHash: draft.contentHash,
                   }}
@@ -301,16 +291,16 @@ export default async function BrandPage({ params, searchParams }: BrandPageProps
                       {revision.state === "retired" ? (
                         <BrandPublicationForm
                           locale={locale}
-                          action={rollbackBrandAction}
                           label={message("brandRollbackAction")}
                           title={m(
                             `Roll back to revision ${formatNumber(revision.revision, locale)}?`,
                             `هل تريد الرجوع إلى النسخة ${formatNumber(revision.revision, locale)}؟`,
                           )}
                           variant="outline"
-                          fields={{
+                          change={{
+                            kind: "rollback",
                             brandId: revision.brandId,
-                            toRevision: String(revision.revision),
+                            toRevision: revision.revision,
                           }}
                         />
                       ) : null}

@@ -163,6 +163,7 @@ export type ClientMessageKey =
   | "manageStepUpVerifying"
   | "manageStepUpVerified"
   | "manageStepUpFailed"
+  | "manageStepUpCodeFormat"
   | "manageMissingToken"
   | "manageStatusConfirmed"
   | "manageStatusRequested"
@@ -178,6 +179,7 @@ export type ClientMessageKey =
   | "manageRescheduling"
   | "manageRescheduleTimeLabel"
   | "manageRescheduleTimeHint"
+  | "manageRescheduleTimeUnavailable"
   | "manageRescheduled"
   | "manageActionFailed"
   | "manageActionConflict";
@@ -370,6 +372,7 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpVerifying: "Checking your code",
     manageStepUpVerified: "Confirmed. You can continue with this action.",
     manageStepUpFailed: "That code did not work. Request a new one if you need to.",
+    manageStepUpCodeFormat: "Enter the six-digit code from the email.",
     manageMissingToken: "Open the link from your booking email to manage this booking.",
     manageStatusConfirmed: "Confirmed",
     manageStatusRequested: "Awaiting approval",
@@ -389,6 +392,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageRescheduleTimeLabel: "New time",
     manageRescheduleTimeHint:
       "Times are shown in your timezone. Only times the business still has free can be booked.",
+    manageRescheduleTimeUnavailable:
+      "A clock change in your timezone skips or repeats this time. Choose another time.",
     manageRescheduled: "Your booking has been moved. The new time is confirmed.",
     manageActionFailed: "That did not work. Your booking has not changed.",
     manageActionConflict:
@@ -573,6 +578,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpVerifying: "جارٍ التحقق من الرمز",
     manageStepUpVerified: "تم التأكيد. يمكنك متابعة هذا الإجراء.",
     manageStepUpFailed: "لم ينجح هذا الرمز. اطلب رمزًا جديدًا إذا لزم الأمر.",
+    manageStepUpCodeFormat:
+      "أدخل الرمز المكوّن من ستة أرقام الوارد في البريد الإلكتروني.",
     manageMissingToken: "افتح الرابط من رسالة الحجز لإدارة هذا الحجز.",
     manageStatusConfirmed: "مؤكّد",
     manageStatusRequested: "بانتظار الموافقة",
@@ -592,6 +599,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageRescheduleTimeLabel: "الوقت الجديد",
     manageRescheduleTimeHint:
       "تُعرض الأوقات بمنطقتك الزمنية. يمكن حجز الأوقات المتاحة لدى مقدّم الخدمة فقط.",
+    manageRescheduleTimeUnavailable:
+      "يُتخطّى هذا الوقت أو يتكرّر بسبب تغيير التوقيت في منطقتك الزمنية. اختر وقتًا آخر.",
     manageRescheduled: "تم نقل حجزك، والوقت الجديد مؤكّد.",
     manageActionFailed: "لم تنجح العملية، ولم يتغيّر حجزك.",
     manageActionConflict:

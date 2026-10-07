@@ -2,50 +2,26 @@ import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
   Button,
-  DateTimePicker,
-  Field,
-  Label,
   ReferenceCode,
   Section as FoundationSection,
-  TextField,
 } from "@wlbp/ui-foundation";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-import { randomUUID } from "node:crypto";
 import type { ReactNode } from "react";
 import { actionCopy as a } from "../../../../_lib/action-copy";
-import {
-  requestDomainVerificationAction,
-  addDomainAction,
-} from "../../../../_lib/actions/domains";
-import { requestSupportAction } from "../../../../_lib/actions/support";
-import {
-  assignSubscriptionAction,
-  clearEntitlementOverrideAction,
-  setEntitlementOverrideAction,
-  updateSubscriptionAction,
-} from "../../../../_lib/actions/subscriptions";
-import {
-  renameTenantAction,
-  requestTenantClosureAction,
-  setTenantStatusAction,
-} from "../../../../_lib/actions/tenants";
 import type { AuditRow } from "../../../../_lib/audit-copy";
-import {
-  copyFor,
-  fill,
-  formCopy,
-  say,
-  stateCopy,
-  statusCopy,
-} from "../../../../_lib/copy";
+import { copyFor, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { atLeast, type OperatorContext } from "../../../../_lib/operator-page";
 import { ActionDialog } from "../../../../_lib/ui/action-dialog";
 import { AuditList } from "../../../../_lib/ui/audit-list";
 import { DataTable } from "../../../../_lib/ui/data-table";
 import { Facts } from "../../../../_lib/ui/facts";
+import {
+  DateTimeFormField,
+  SelectFormField,
+  TextFormField,
+} from "../../../../_lib/ui/form-fields";
 import { OperatorForm } from "../../../../_lib/ui/operator-form";
-import { SelectField } from "../../../../_lib/ui/select-field";
 import { EmptyState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { MachineCode, SubText, TextLink } from "../../../../_lib/ui/text";
@@ -162,18 +138,18 @@ export function IdentitySection({ locale, detail, operator }: Props) {
         atLeast(operator.role, "operator") ? (
           <ActionDialog
             locale={locale}
-            action={renameTenantAction}
+            operation="renameTenant"
             trigger={say(locale, c.rename)}
             title={say(locale, c.renameTitle)}
             submit={say(locale, c.rename)}
             successMessage={say(locale, c.renamed)}
             hidden={{ tenantId: tenant.id, expectedUpdatedAt: tenant.updated_at }}
+            values={{ name: tenant.name }}
           >
-            <TextField
+            <TextFormField
               id="rename-name"
               name="name"
               label={say(locale, c.tenantName)}
-              defaultValue={tenant.name}
               required
               maxLength={160}
             />
@@ -216,14 +192,13 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
             {tenant.status === "active" ? (
               <ActionDialog
                 locale={locale}
-                action={setTenantStatusAction}
+                operation="setTenantStatus"
                 trigger={say(locale, c.suspend)}
                 danger
                 title={say(locale, c.suspendTitle)}
                 description={say(locale, c.suspendBody)}
                 submit={say(locale, c.suspend)}
                 successMessage={say(locale, c.suspended)}
-                reason={{ minLength: 10 }}
                 hidden={{
                   tenantId: tenant.id,
                   status: "suspended",
@@ -235,13 +210,12 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
               <>
                 <ActionDialog
                   locale={locale}
-                  action={setTenantStatusAction}
+                  operation="setTenantStatus"
                   trigger={say(locale, c.reactivate)}
                   title={say(locale, c.reactivateTitle)}
                   description={say(locale, c.reactivateBody)}
                   submit={say(locale, c.reactivate)}
                   successMessage={say(locale, c.reactivated)}
-                  reason={{ minLength: 10 }}
                   hidden={{
                     tenantId: tenant.id,
                     status: "active",
@@ -250,16 +224,15 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
                 />
                 <ActionDialog
                   locale={locale}
-                  action={requestTenantClosureAction}
+                  operation="requestTenantClosure"
                   trigger={say(locale, c.closure)}
                   danger
                   title={say(locale, c.closureTitle)}
                   description={say(locale, c.closureBody)}
                   submit={say(locale, c.closure)}
                   successMessage={say(locale, c.closureRequested)}
-                  reason={{ minLength: 10 }}
                   confirmText={tenant.name}
-                  hidden={{ tenantId: tenant.id, idempotencyKey: randomUUID() }}
+                  hidden={{ tenantId: tenant.id }}
                 />
               </>
             ) : null}
@@ -307,73 +280,66 @@ export function SubscriptionSection({
           <>
             <ActionDialog
               locale={locale}
-              action={assignSubscriptionAction}
+              operation="assignSubscription"
               trigger={say(locale, a.assignPlan.trigger)}
               title={say(locale, a.assignPlan.title)}
               description={say(locale, a.assignPlan.body)}
               submit={say(locale, a.assignPlan.submit)}
               successMessage={say(locale, a.assignPlan.done)}
-              reason={{ minLength: 5 }}
               hidden={{ tenantId: detail.tenant.id }}
+              values={{
+                planKey: sub?.plan_key,
+                ring: sub?.rollout_ring ?? "general",
+              }}
             >
-              <SelectField
+              <SelectFormField
                 name="planKey"
                 label={say(locale, a.fields.plan)}
-                value={sub?.plan_key}
                 options={plans
                   .filter((p) => p.active)
                   .map((p) => [p.key, p.name] as const)}
               />
-              <SelectField
+              <SelectFormField
                 name="ring"
                 label={say(locale, a.fields.ring)}
-                value={sub?.rollout_ring ?? "general"}
                 options={ringOptions}
               />
             </ActionDialog>
             {sub ? (
               <ActionDialog
                 locale={locale}
-                action={updateSubscriptionAction}
+                operation="updateSubscription"
                 trigger={say(locale, a.updateSubscription.trigger)}
                 title={say(locale, a.updateSubscription.title)}
                 description={say(locale, a.updateSubscription.body)}
                 submit={say(locale, a.updateSubscription.submit)}
                 successMessage={say(locale, a.updateSubscription.done)}
-                reason={{ minLength: 5 }}
                 hidden={{
                   tenantId: detail.tenant.id,
                   expectedUpdatedAt: sub.updated_at,
                 }}
+                values={{
+                  state: sub.state,
+                  endsAt: sub.ends_at?.slice(0, 16) ?? "",
+                  ring: sub.rollout_ring,
+                }}
               >
-                <SelectField
+                <SelectFormField
                   name="state"
                   label={say(locale, a.fields.state)}
-                  value={sub.state}
                   options={["trialing", "active", "past_due", "cancelled"].map(
                     (s) => [s, copyFor(statusCopy, s, locale)] as const,
                   )}
                 />
-                <Field>
-                  <Label htmlFor="subscription-ends-at">
-                    {say(locale, a.fields.endsAt)}
-                  </Label>
-                  <DateTimePicker
-                    id={"subscription-ends-at"}
-                    name="endsAt"
-                    locale={locale}
-                    datePlaceholder={say(locale, formCopy.pickDate)}
-                    timePlaceholder={say(locale, formCopy.pickTime)}
-                    timeLabel={fill(locale, formCopy.timeOf, {
-                      field: say(locale, a.fields.endsAt),
-                    })}
-                    {...(sub.ends_at ? { defaultValue: sub.ends_at.slice(0, 16) } : {})}
-                  />
-                </Field>
-                <SelectField
+                <DateTimeFormField
+                  id="subscription-ends-at"
+                  name="endsAt"
+                  locale={locale}
+                  label={say(locale, a.fields.endsAt)}
+                />
+                <SelectFormField
                   name="ring"
                   label={say(locale, a.fields.ring)}
-                  value={sub.rollout_ring}
                   options={ringOptions}
                 />
               </ActionDialog>
@@ -422,16 +388,16 @@ export function EntitlementsSection({ locale, detail, operator }: Props) {
         admin ? (
           <ActionDialog
             locale={locale}
-            action={setEntitlementOverrideAction}
+            operation="setEntitlementOverride"
             trigger={say(locale, a.override.trigger)}
             title={say(locale, a.override.title)}
             description={say(locale, a.override.body)}
             submit={say(locale, a.override.submit)}
             successMessage={say(locale, a.override.done)}
-            reason={{ minLength: 5 }}
             hidden={{ tenantId: detail.tenant.id }}
+            values={{ featureKey: "", granted: "yes", expiresAt: "" }}
           >
-            <TextField
+            <TextFormField
               id="override-feature"
               name="featureKey"
               label={say(locale, a.fields.feature)}
@@ -439,30 +405,20 @@ export function EntitlementsSection({ locale, detail, operator }: Props) {
               maxLength={61}
               autoComplete="off"
             />
-            <SelectField
+            <SelectFormField
               name="granted"
               label={say(locale, a.fields.grant)}
-              value="yes"
               options={[
                 ["yes", say(locale, a.fields.grantYes)],
                 ["no", say(locale, a.fields.grantNo)],
               ]}
             />
-            <Field>
-              <Label htmlFor="override-expires-at">
-                {say(locale, a.fields.expiresAt)}
-              </Label>
-              <DateTimePicker
-                id={"override-expires-at"}
-                name="expiresAt"
-                locale={locale}
-                datePlaceholder={say(locale, formCopy.pickDate)}
-                timePlaceholder={say(locale, formCopy.pickTime)}
-                timeLabel={fill(locale, formCopy.timeOf, {
-                  field: say(locale, a.fields.expiresAt),
-                })}
-              />
-            </Field>
+            <DateTimeFormField
+              id="override-expires-at"
+              name="expiresAt"
+              locale={locale}
+              label={say(locale, a.fields.expiresAt)}
+            />
           </ActionDialog>
         ) : null
       }
@@ -495,13 +451,12 @@ export function EntitlementsSection({ locale, detail, operator }: Props) {
                 <ActionDialog
                   key="clear"
                   locale={locale}
-                  action={clearEntitlementOverrideAction}
+                  operation="clearEntitlementOverride"
                   triggerVariant="quiet"
                   trigger={say(locale, a.clearOverride.trigger)}
                   title={say(locale, a.clearOverride.title)}
                   submit={say(locale, a.clearOverride.submit)}
                   successMessage={say(locale, a.clearOverride.done)}
-                  reason={{ minLength: 5 }}
                   hidden={{ tenantId: detail.tenant.id, featureKey: e.feature_key }}
                 />
               ) : null,
@@ -523,15 +478,16 @@ export function DomainsSection({ locale, detail, operator }: Props) {
         operatorRole && detail.instances.length ? (
           <ActionDialog
             locale={locale}
-            action={addDomainAction}
+            operation="addDomain"
             trigger={say(locale, a.addDomain.trigger)}
             title={say(locale, a.addDomain.title)}
             description={say(locale, a.addDomain.body)}
             submit={say(locale, a.addDomain.submit)}
             successMessage={say(locale, a.addDomain.done)}
-            hidden={{ tenantId: detail.tenant.id, idempotencyKey: randomUUID() }}
+            hidden={{ tenantId: detail.tenant.id }}
+            values={{ hostname: "" }}
           >
-            <SelectField
+            <SelectFormField
               name="instanceId"
               label={say(locale, a.fields.instance)}
               options={detail.instances.map(
@@ -542,7 +498,7 @@ export function DomainsSection({ locale, detail, operator }: Props) {
                   ] as const,
               )}
             />
-            <TextField
+            <TextFormField
               id="domain-hostname"
               name="hostname"
               label={say(locale, a.fields.hostname)}
@@ -550,7 +506,7 @@ export function DomainsSection({ locale, detail, operator }: Props) {
               maxLength={253}
               autoComplete="off"
             />
-            <SelectField
+            <SelectFormField
               name="application"
               label={say(locale, a.fields.application)}
               options={[
@@ -594,14 +550,12 @@ export function DomainsSection({ locale, detail, operator }: Props) {
                 <OperatorForm
                   key="v"
                   locale={locale}
-                  action={requestDomainVerificationAction}
+                  operation="requestDomainVerification"
                   submit={say(locale, a.verifyDomain.submit)}
                   successMessage={say(locale, a.verifyDomain.done)}
                   compact
-                >
-                  <input type="hidden" name="domainId" value={d.id} />
-                  <input type="hidden" name="tenantId" value={detail.tenant.id} />
-                </OperatorForm>
+                  hidden={{ domainId: d.id }}
+                />
               ) : null,
             ],
           }))}
@@ -740,23 +694,23 @@ export function SupportSection({ locale, detail, operator }: Props) {
         atLeast(operator.role, "operator") ? (
           <ActionDialog
             locale={locale}
-            action={requestSupportAction}
+            operation="requestSupport"
             trigger={say(locale, a.requestSupport.trigger)}
             title={say(locale, a.requestSupport.title)}
             description={say(locale, a.requestSupport.body)}
             submit={say(locale, a.requestSupport.submit)}
             successMessage={say(locale, a.requestSupport.done)}
-            reason={{ minLength: 10 }}
             hidden={{ tenantId: detail.tenant.id }}
+            values={{ ticket: "", minutes: "60" }}
           >
-            <TextField
+            <TextFormField
               id="support-ticket"
               name="ticket"
               label={say(locale, a.fields.ticket)}
               required
               maxLength={120}
             />
-            <TextField
+            <TextFormField
               id="support-minutes"
               name="minutes"
               type="number"
@@ -764,7 +718,6 @@ export function SupportSection({ locale, detail, operator }: Props) {
               description={say(locale, a.fields.minutesHint)}
               min={5}
               max={480}
-              defaultValue={60}
               required
             />
           </ActionDialog>

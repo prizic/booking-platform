@@ -2,9 +2,8 @@ import type { Locale } from "@wlbp/i18n";
 import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { authMessage } from "../../../_lib/auth-copy";
-import { AuthForm } from "../../../_lib/auth-form";
+import { RecoverForm } from "../../../_lib/auth-form";
 import { AuthFrame, authLinkClass } from "../../../_lib/auth-frame";
-import { normalizeAuthReturnPath } from "../../../_lib/auth-return-path";
 import { recoverPassword } from "./actions";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -35,12 +34,7 @@ export default async function Page({
           </AlertDescription>
         </Alert>
       ) : null}
-      <AuthForm
-        action={recoverPassword}
-        mode="recover"
-        locale={locale}
-        returnTo={normalizeAuthReturnPath(locale, query.returnTo)}
-      />
+      <RecoverForm action={recoverPassword} locale={locale} />
     </AuthFrame>
   );
 }

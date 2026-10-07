@@ -24,26 +24,41 @@ import {
   CardTitle,
   Checkbox,
   Facts,
-  Field,
-  FieldError,
   FieldLegend,
   FieldSet,
-  Label,
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  Input,
   PageHeader,
   ReferenceCode,
   Separator,
   StatusStamp,
-  TextField,
   cn,
+  formErrorMessage,
+  useZodForm,
 } from "@wlbp/ui-foundation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { errorCodeOf, postJson } from "../../_lib/client-api";
 import { formatWallDateTime } from "../../_lib/wall-time";
 import {
   AvailabilityPicker,
   type AvailabilityPickerCopy,
 } from "../availability-picker";
+import {
+  bookingDetailsFormSchema,
+  bookingFormCodes,
+  type BookingDetailsValues,
+  type CheckoutStatusInput,
+  type CreateHoldInput,
+} from "./booking-schema";
 
 export interface BookingFlowCopy {
   readonly availability: AvailabilityPickerCopy;
@@ -62,6 +77,15 @@ interface HeldSlot {
   readonly form: HoldFormV1;
   readonly hold: CreateHoldV1Response;
 }
+
+interface OpenedCheckout {
+  readonly checkout: { balanceMinor: number; currency: string; dueMinor: number };
+  readonly redirectUrl: string | null;
+}
+
+type Confirmation =
+  | { readonly kind: "booking"; readonly booking: ConfirmBookingV1Response }
+  | { readonly kind: "checkout"; readonly opened: OpenedCheckout };
 
 /**
  * One opaque identity per browser tab. It exists so the platform can bound
@@ -84,17 +108,18 @@ function customerTimeZone(fallback: string): string {
   }
 }
 
-async function readError(response: Response): Promise<string> {
-  try {
-    const body: unknown = await response.json();
-    const code =
-      typeof body === "object" && body !== null
-        ? ((body as { error?: { code?: unknown } }).error?.code ?? null)
-        : null;
-    return typeof code === "string" ? code : "availability_unavailable";
-  } catch {
-    return "availability_unavailable";
-  }
+/**
+ * Coming back from the provider. The URL says only which hold to ask about;
+ * everything the customer is then told comes from our own records.
+ */
+function returnedHoldId(): string | null {
+  if (typeof window === "undefined") return null;
+  const parameters = new URLSearchParams(window.location.search);
+  const returned = parameters.get("checkout");
+  const holdId = parameters.get("hold");
+  return (returned === "return" || returned === "cancelled") && holdId !== null
+    ? holdId
+    : null;
 }
 
 const errorCopyKeys: Readonly<Record<string, string>> = {
@@ -108,13 +133,13 @@ const errorCopyKeys: Readonly<Record<string, string>> = {
   slot_unavailable: "bookingErrorSlotUnavailable",
 };
 
-interface FieldProblem {
-  /** The id of the control the problem belongs to. */
-  readonly id: string;
-  /** Shorter text shown beside the control, when it differs from the summary. */
-  readonly inline?: string;
-  readonly message: string;
-}
+/** Domain validation codes and the copy that explains each. */
+const formCodeCopyKeys: Readonly<Record<string, string>> = {
+  [bookingFormCodes.consentRequired]: "bookingConsentRequired",
+  [bookingFormCodes.emailRequired]: "bookingEmailRequired",
+  [bookingFormCodes.fieldRequired]: "bookingFieldRequired",
+  [bookingFormCodes.nameRequired]: "bookingNameRequired",
+};
 
 type Step = 1 | 2 | 3;
 
@@ -182,21 +207,10 @@ export function BookingFlow({
   serviceId,
 }: BookingFlowProps) {
   const message = (key: string) => copy.booking[key] ?? key;
+  const queryClient = useQueryClient();
   const [slot, setSlot] = useState<AvailabilitySlotV1 | null>(null);
   const [held, setHeld] = useState<HeldSlot | null>(null);
   const [booking, setBooking] = useState<ConfirmBookingV1Response | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-  // Each problem names the control it belongs to, so the summary can link to
-  // it and the control can carry its own message.
-  const [fieldErrors, setFieldErrors] = useState<readonly FieldProblem[]>([]);
-  // Answers survive every failure: a lost slot never costs the customer the
-  // details they already typed.
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [consented, setConsented] = useState(false);
-  const [intake, setIntake] = useState<Record<string, string>>({});
   // Issue #22. A payment in flight and, after the customer comes back, what our
   // own records say happened to it. The return URL itself proves nothing.
   const [checkout, setCheckout] = useState<{
@@ -205,187 +219,215 @@ export function BookingFlow({
     dueMinor: number;
     redirectUrl: string | null;
   } | null>(null);
-  const [settlement, setSettlement] = useState<CheckoutStatusV1Response | null>(null);
+  const [returnHold, setReturnHold] = useState<string | null>(returnedHoldId);
+  const [summaryFocus, setSummaryFocus] = useState(0);
 
-  useEffect(() => {
-    if (errorCode !== null || fieldErrors.length > 0) {
-      document.querySelector<HTMLElement>("#booking-error")?.focus();
-    }
-  }, [errorCode, fieldErrors]);
+  const formMessages = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(formCodeCopyKeys).map(([code, key]) => [
+          code,
+          copy.booking[key] ?? key,
+        ]),
+      ),
+    [copy.booking],
+  );
+  // Answers survive every failure: the form outlives each hold, so a lost slot
+  // never costs the customer the details they already typed.
+  const detailsSchema = useMemo(
+    () => bookingDetailsFormSchema(held?.form.fields ?? []),
+    [held],
+  );
+  const form = useZodForm(detailsSchema, {
+    defaultValues: {
+      consent: false,
+      consentVersion: "",
+      contact: { email: "", fullName: "", phone: "" },
+      customerTimeZone: locationTimeZone,
+      holdId: "",
+      idempotencyKey: "",
+      intake: {},
+      locale,
+      sessionToken: "",
+    },
+    // The error summary takes focus instead, then links to each field.
+    shouldFocusError: false,
+  });
 
-  // Coming back from the provider. The URL says only which hold to ask about;
-  // everything the customer is then told comes from our own records.
-  useEffect(() => {
-    const parameters = new URLSearchParams(window.location.search);
-    const returned = parameters.get("checkout");
-    const holdId = parameters.get("hold");
-    if ((returned !== "return" && returned !== "cancelled") || holdId === null) return;
-    let abandoned = false;
-    void (async () => {
-      try {
-        const response = await fetch("/api/checkout/status", {
-          body: JSON.stringify({ holdId, sessionToken: sessionToken() }),
-          credentials: "omit",
-          headers: { "Content-Type": "application/json" },
-          method: "POST",
-        });
-        if (abandoned) return;
-        if (!response.ok) {
-          setErrorCode(await readError(response));
-          return;
-        }
-        setSettlement((await response.json()) as CheckoutStatusV1Response);
-      } catch {
-        if (!abandoned) setErrorCode("availability_unavailable");
-      }
-    })();
-    return () => {
-      abandoned = true;
-    };
-  }, []);
+  const settlementQuery = useQuery({
+    enabled: returnHold !== null,
+    queryKey: ["checkout-status", returnHold],
+    queryFn: async () =>
+      (await postJson("/api/checkout/status", {
+        holdId: returnHold!,
+        sessionToken: sessionToken(),
+      } satisfies CheckoutStatusInput)) as CheckoutStatusV1Response,
+    // Our records are read once per return; the customer restarts explicitly.
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: Infinity,
+  });
+  const settlement: CheckoutStatusV1Response | null =
+    returnHold === null ? null : (settlementQuery.data ?? null);
 
-  async function hold() {
-    if (slot === null || serviceId === null || locationId === null) return;
-    setBusy(true);
-    setErrorCode(null);
-    try {
-      const response = await fetch("/api/holds", {
-        body: JSON.stringify({
-          expectedCacheTag: null,
-          idempotencyKey: `hold-${slot.startAt}-${sessionToken().slice(0, 24)}`,
-          locale,
-          locationId,
-          partySize: 1,
-          serviceId,
-          sessionToken: sessionToken(),
-          staffPreferenceId: null,
-          startAt: slot.startAt,
-        }),
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        setErrorCode(await readError(response));
-        return;
-      }
-      const payload = (await response.json()) as { form: unknown; hold: unknown };
-      setHeld({
+  const holdMutation = useMutation({
+    mutationFn: async (input: CreateHoldInput): Promise<HeldSlot> => {
+      const payload = (await postJson("/api/holds", input)) as {
+        form: unknown;
+        hold: unknown;
+      };
+      return {
         form: parseHoldFormV1(payload.form),
         hold: parseCreateHoldV1Response(payload.hold),
-      });
-    } catch {
-      setErrorCode("availability_unavailable");
-    } finally {
-      setBusy(false);
-    }
-  }
+      };
+    },
+    onSuccess: (next) => {
+      // The hold decides the technical half of the details form.
+      form.setValue("consentVersion", next.form.consentVersion);
+      form.setValue("customerTimeZone", customerTimeZone(locationTimeZone));
+      form.setValue("holdId", next.hold.holdId);
+      // Derived from the hold, so a double submission is the same key and the
+      // database replays the one booking it already committed.
+      form.setValue("idempotencyKey", `confirm-${next.hold.holdId}`);
+      form.setValue("sessionToken", sessionToken());
+      setHeld(next);
+      void queryClient.invalidateQueries({ queryKey: ["availability"] });
+    },
+    retry: false,
+  });
 
-  async function confirm(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (held === null) return;
-    const problems: FieldProblem[] = [];
-    if (fullName.trim().length === 0) {
-      problems.push({
-        id: "booking-full-name",
-        message: message("bookingNameRequired"),
-      });
-    }
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email.trim())) {
-      problems.push({ id: "booking-email", message: message("bookingEmailRequired") });
-    }
-    for (const field of held.form.fields) {
-      if (field.required && (intake[field.key] ?? "").trim().length === 0) {
-        problems.push({
-          id: `booking-intake-${field.key}`,
-          inline: message("bookingFieldRequired"),
-          message: `${field.label}: ${message("bookingFieldRequired")}`,
-        });
-      }
-    }
-    if (!consented) {
-      problems.push({
-        id: "booking-consent",
-        message: message("bookingConsentRequired"),
-      });
-    }
-    setFieldErrors(problems);
-    if (problems.length > 0) return;
-
-    setBusy(true);
-    setErrorCode(null);
-    try {
-      const answers = Object.fromEntries(
-        held.form.fields
-          .map((field) => [field.key, (intake[field.key] ?? "").trim()] as const)
-          .filter(([, answer]) => answer.length > 0),
-      );
-      const paid = held.form.paymentMode !== "none";
-      const response = await fetch(paid ? "/api/checkout" : "/api/bookings", {
-        body: JSON.stringify({
-          consentVersion: held.form.consentVersion,
-          contact: {
-            email: email.trim().toLowerCase(),
-            fullName: fullName.trim(),
-            phone: phone.trim() === "" ? null : phone.trim(),
-          },
-          customerTimeZone: customerTimeZone(locationTimeZone),
-          holdId: held.hold.holdId,
-          // Derived from the hold, so a double submission is the same key and
-          // the database replays the one booking it already committed.
-          idempotencyKey: `confirm-${held.hold.holdId}`,
-          intake: answers,
-          locale,
-          sessionToken: sessionToken(),
-        }),
-        credentials: "omit",
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-      });
-      if (!response.ok) {
-        setErrorCode(await readError(response));
+  const confirmMutation = useMutation({
+    mutationFn: async ({
+      body,
+      paid,
+    }: {
+      body: BookingDetailsValues;
+      paid: boolean;
+    }): Promise<Confirmation> => {
+      const result = await postJson(paid ? "/api/checkout" : "/api/bookings", body);
+      return paid
+        ? { kind: "checkout", opened: result as OpenedCheckout }
+        : { kind: "booking", booking: parseConfirmBookingV1Response(result) };
+    },
+    onSuccess: (result) => {
+      void queryClient.invalidateQueries({ queryKey: ["availability"] });
+      if (result.kind === "booking") {
+        setBooking(result.booking);
         return;
       }
-      if (paid) {
-        const opened = (await response.json()) as {
-          checkout: { balanceMinor: number; currency: string; dueMinor: number };
-          redirectUrl: string | null;
-        };
-        if (opened.redirectUrl !== null) {
-          // The provider page is the next step. Nothing is confirmed until a
-          // signed event says the money moved.
-          window.location.assign(opened.redirectUrl);
-          return;
-        }
-        // No redirect means the provider or its function is unreachable. The
-        // attempt is priced and resumable, so the customer sees that rather
-        // than a dead end.
-        setCheckout({ ...opened.checkout, redirectUrl: null });
+      if (result.opened.redirectUrl !== null) {
+        // The provider page is the next step. Nothing is confirmed until a
+        // signed event says the money moved.
+        window.location.assign(result.opened.redirectUrl);
         return;
       }
-      setBooking(parseConfirmBookingV1Response(await response.json()));
-    } catch {
-      setErrorCode("availability_unavailable");
-    } finally {
-      setBusy(false);
+      // No redirect means the provider or its function is unreachable. The
+      // attempt is priced and resumable, so the customer sees that rather than
+      // a dead end.
+      setCheckout({ ...result.opened.checkout, redirectUrl: null });
+    },
+    retry: false,
+  });
+
+  const errorCode = holdMutation.isError
+    ? errorCodeOf(holdMutation.error)
+    : confirmMutation.isError
+      ? errorCodeOf(confirmMutation.error)
+      : settlementQuery.isError
+        ? errorCodeOf(settlementQuery.error)
+        : null;
+
+  useEffect(() => {
+    if (errorCode !== null) {
+      document.querySelector<HTMLElement>("#booking-error")?.focus();
     }
+  }, [errorCode]);
+
+  useEffect(() => {
+    if (summaryFocus > 0) {
+      document.querySelector<HTMLElement>("#booking-error")?.focus();
+    }
+  }, [summaryFocus]);
+
+  function hold() {
+    if (slot === null || serviceId === null || locationId === null) return;
+    holdMutation.mutate({
+      expectedCacheTag: null,
+      idempotencyKey: `hold-${slot.startAt}-${sessionToken().slice(0, 24)}`,
+      locale,
+      locationId,
+      partySize: 1,
+      serviceId,
+      sessionToken: sessionToken(),
+      staffPreferenceId: null,
+      startAt: slot.startAt,
+    });
   }
+
+  const confirm = form.handleSubmit(
+    (values) => {
+      if (held === null) return;
+      confirmMutation.mutate({ body: values, paid: held.form.paymentMode !== "none" });
+    },
+    () => setSummaryFocus((count) => count + 1),
+  );
 
   function chooseAnotherTime() {
     setHeld(null);
     setSlot(null);
-    setErrorCode(null);
-    setFieldErrors([]);
+    setCheckout(null);
+    setReturnHold(null);
+    holdMutation.reset();
+    confirmMutation.reset();
+    form.clearErrors();
   }
 
-  function problemFor(id: string): FieldProblem | undefined {
-    return fieldErrors.find((problem) => problem.id === id);
-  }
-
-  function inlineError(id: string): string | undefined {
-    const problem = problemFor(id);
-    return problem === undefined ? undefined : (problem.inline ?? problem.message);
-  }
+  // Each problem names the control it belongs to, so the summary can link to
+  // it and the control carries its own message.
+  const { formState } = form;
+  const problemText = (path: string) => {
+    const code = form.getFieldState(
+      path as Parameters<typeof form.getFieldState>[0],
+      formState,
+    ).error?.message;
+    return formErrorMessage(
+      typeof code === "string" ? code : undefined,
+      locale,
+      formMessages,
+    );
+  };
+  // The hold supplies these; a problem with one is not something the customer
+  // can fix in a field, so it reads as a request to check and try again.
+  const technicalProblem =
+    formState.submitCount > 0 &&
+    (
+      [
+        "consentVersion",
+        "customerTimeZone",
+        "holdId",
+        "idempotencyKey",
+        "locale",
+        "sessionToken",
+      ] as const
+    ).some((path) => form.getFieldState(path, formState).error !== undefined);
+  const problems =
+    formState.submitCount === 0
+      ? []
+      : [
+          { id: "booking-full-name", text: problemText("contact.fullName") },
+          { id: "booking-email", text: problemText("contact.email") },
+          { id: "booking-phone", text: problemText("contact.phone") },
+          ...(held?.form.fields ?? []).map((field) => {
+            const text = problemText(`intake.${field.key}`);
+            return {
+              id: `booking-intake-${field.key}`,
+              text: text === undefined ? undefined : `${field.label}: ${text}`,
+            };
+          }),
+          { id: "booking-consent", text: problemText("consent") },
+        ].filter((problem): problem is { id: string; text: string } =>
+          Boolean(problem.text),
+        );
 
   const step: Step =
     settlement !== null || checkout !== null || booking !== null
@@ -682,7 +724,7 @@ export function BookingFlow({
     <section aria-labelledby="booking-title" className="grid gap-8">
       {header}
 
-      {errorCode === null && fieldErrors.length === 0 ? null : (
+      {errorCode === null && problems.length === 0 && !technicalProblem ? null : (
         <Alert
           className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
           id="booking-error"
@@ -694,15 +736,18 @@ export function BookingFlow({
             {errorCode === null ? null : (
               <p>{message(errorCopyKeys[errorCode] ?? "bookingErrorUnavailable")}</p>
             )}
-            {fieldErrors.length === 0 ? null : (
+            {technicalProblem && errorCode === null ? (
+              <p>{message("bookingErrorInvalidRequest")}</p>
+            ) : null}
+            {problems.length === 0 ? null : (
               <ul className="grid list-disc gap-1 ps-5">
-                {fieldErrors.map((problem) => (
+                {problems.map((problem) => (
                   <li key={problem.id}>
                     <a
                       className="font-semibold text-destructive underline underline-offset-4"
                       href={`#${problem.id}`}
                     >
-                      {problem.message}
+                      {problem.text}
                     </a>
                   </li>
                 ))}
@@ -730,9 +775,9 @@ export function BookingFlow({
           {slot === null ? null : (
             <Button
               className="justify-self-end"
-              loading={busy}
+              loading={holdMutation.isPending}
               loadingLabel={message("bookingHolding")}
-              onClick={() => void hold()}
+              onClick={hold}
               size="lg"
             >
               {message("bookingContinue")}
@@ -747,210 +792,268 @@ export function BookingFlow({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form noValidate onSubmit={confirm} className="grid gap-6">
-              <Alert tone="info">
-                {message("bookingHoldExpires").replace(
-                  "{time}",
-                  formatWallDateTime(
-                    held.hold.expiresAt,
-                    locale,
-                    customerTimeZone(locationTimeZone),
-                  ),
-                )}
-              </Alert>
-              <Facts
-                items={[
-                  {
-                    key: "service",
-                    label: message("bookingServiceLabel"),
-                    value: held.form.serviceName,
-                  },
-                  {
-                    key: "location",
-                    label: message("bookingLocationLabel"),
-                    value: held.form.locationName,
-                  },
-                  {
-                    key: "when",
-                    label: message("bookingWhenLabel"),
-                    value: formatWallDateTime(
-                      held.hold.slotStart,
+            <Form form={form} locale={locale} messages={formMessages}>
+              <form
+                noValidate
+                onSubmit={(event) => void confirm(event)}
+                className="grid gap-6"
+              >
+                <Alert tone="info">
+                  {message("bookingHoldExpires").replace(
+                    "{time}",
+                    formatWallDateTime(
+                      held.hold.expiresAt,
                       locale,
                       customerTimeZone(locationTimeZone),
                     ),
-                  },
-                  {
-                    key: "zone",
-                    label: message("bookingTimeZoneLabel"),
-                    value: formatTimeZone(
-                      held.hold.slotStart,
-                      locale,
-                      customerTimeZone(locationTimeZone),
-                    ),
-                  },
-                  {
-                    key: "total",
-                    label: message("bookingTotalLabel"),
-                    value: formatCurrency(
-                      held.hold.price.minorUnits,
-                      held.hold.price.currency,
-                      locale,
-                    ),
-                  },
-                ]}
-              />
-
-              <Separator />
-
-              <div className="grid gap-5 md:grid-cols-2">
-                <TextField
-                  autoComplete="name"
-                  className="md:col-span-2"
-                  description={message("bookingNameDescription")}
-                  error={inlineError("booking-full-name")}
-                  id="booking-full-name"
-                  label={message("bookingNameLabel")}
-                  maxLength={160}
-                  name="fullName"
-                  onChange={(event) => setFullName(event.currentTarget.value)}
-                  required
-                  value={fullName}
-                />
-                <TextField
-                  autoComplete="email"
-                  description={message("bookingEmailDescription")}
-                  dir="ltr"
-                  error={inlineError("booking-email")}
-                  id="booking-email"
-                  label={message("bookingEmailLabel")}
-                  maxLength={320}
-                  name="email"
-                  onChange={(event) => setEmail(event.currentTarget.value)}
-                  required
-                  type="email"
-                  value={email}
-                />
-                <TextField
-                  autoComplete="tel"
-                  description={message("bookingPhoneDescription")}
-                  dir="ltr"
-                  id="booking-phone"
-                  label={message("bookingPhoneLabel")}
-                  maxLength={40}
-                  name="phone"
-                  onChange={(event) => setPhone(event.currentTarget.value)}
-                  type="tel"
-                  value={phone}
-                />
-              </div>
-
-              {held.form.fields.length === 0 ? null : (
-                <FieldSet>
-                  <FieldLegend>{message("bookingIntakeLegend")}</FieldLegend>
-                  {held.form.fields.map((field) => (
-                    <TextField
-                      error={inlineError(`booking-intake-${field.key}`)}
-                      id={`booking-intake-${field.key}`}
-                      key={field.key}
-                      label={field.label}
-                      maxLength={field.maxLength}
-                      name={`intake.${field.key}`}
-                      onChange={(event) => {
-                        // Read the value before the updater runs: React clears
-                        // currentTarget once the event handler returns.
-                        const answer = event.currentTarget.value;
-                        setIntake((current) => ({ ...current, [field.key]: answer }));
-                      }}
-                      required={field.required}
-                      value={intake[field.key] ?? ""}
-                    />
-                  ))}
-                </FieldSet>
-              )}
-
-              <Field invalid={problemFor("booking-consent") !== undefined}>
-                {held.form.consentText === "" ? null : (
-                  <p className="rounded-md bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">
-                    {held.form.consentText}
-                  </p>
-                )}
-                <div className="flex items-start gap-3">
-                  <Checkbox
-                    aria-describedby={
-                      problemFor("booking-consent") === undefined
-                        ? undefined
-                        : "booking-consent-error"
-                    }
-                    aria-invalid={
-                      problemFor("booking-consent") === undefined ? undefined : true
-                    }
-                    checked={consented}
-                    className="mt-0.5"
-                    id="booking-consent"
-                    name="consent"
-                    onCheckedChange={(checked) => setConsented(checked === true)}
-                  />
-                  <Label htmlFor="booking-consent" className="font-medium">
-                    {message("bookingConsentLabel")}
-                  </Label>
-                </div>
-                <FieldError id="booking-consent-error">
-                  {inlineError("booking-consent")}
-                </FieldError>
-              </Field>
-
-              {/* Issue #22. What this will cost, stated before the customer is sent
-                  anywhere, and taken from the server's own figures. */}
-              {held.form.paymentMode === "none" ? null : (
+                  )}
+                </Alert>
                 <Facts
                   items={[
                     {
-                      key: "due",
-                      label: message("bookingDueTodayLabel"),
+                      key: "service",
+                      label: message("bookingServiceLabel"),
+                      value: held.form.serviceName,
+                    },
+                    {
+                      key: "location",
+                      label: message("bookingLocationLabel"),
+                      value: held.form.locationName,
+                    },
+                    {
+                      key: "when",
+                      label: message("bookingWhenLabel"),
+                      value: formatWallDateTime(
+                        held.hold.slotStart,
+                        locale,
+                        customerTimeZone(locationTimeZone),
+                      ),
+                    },
+                    {
+                      key: "zone",
+                      label: message("bookingTimeZoneLabel"),
+                      value: formatTimeZone(
+                        held.hold.slotStart,
+                        locale,
+                        customerTimeZone(locationTimeZone),
+                      ),
+                    },
+                    {
+                      key: "total",
+                      label: message("bookingTotalLabel"),
                       value: formatCurrency(
-                        held.form.dueMinor,
+                        held.hold.price.minorUnits,
                         held.hold.price.currency,
                         locale,
                       ),
                     },
-                    ...(held.form.balanceMinor === 0
-                      ? []
-                      : [
-                          {
-                            key: "balance",
-                            label: message("bookingBalanceDueLabel"),
-                            value: formatCurrency(
-                              held.form.balanceMinor,
-                              held.hold.price.currency,
-                              locale,
-                            ),
-                          },
-                        ]),
                   ]}
                 />
-              )}
-              {held.form.paymentMode === "deposit" ? (
-                <Alert tone="info">{message("bookingDepositNotice")}</Alert>
-              ) : null}
 
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  loading={busy}
-                  loadingLabel={message("bookingSubmitting")}
-                  size="lg"
-                  type="submit"
-                >
-                  {message(
-                    held.form.paymentMode === "none"
-                      ? "bookingSubmit"
-                      : "bookingPayAction",
+                <Separator />
+
+                <div className="grid gap-5 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="contact.fullName"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel htmlFor="booking-full-name" required>
+                          {message("bookingNameLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingNameDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="name"
+                            id="booking-full-name"
+                            maxLength={160}
+                            name="fullName"
+                            required
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="contact.email"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor="booking-email" required>
+                          {message("bookingEmailLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingEmailDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="email"
+                            dir="ltr"
+                            id="booking-email"
+                            maxLength={320}
+                            name="email"
+                            required
+                            type="email"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="contact.phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel htmlFor="booking-phone">
+                          {message("bookingPhoneLabel")}
+                        </FormLabel>
+                        <FormDescription>
+                          {message("bookingPhoneDescription")}
+                        </FormDescription>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="tel"
+                            dir="ltr"
+                            id="booking-phone"
+                            maxLength={40}
+                            name="phone"
+                            type="tel"
+                            value={field.value ?? ""}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                {held.form.fields.length === 0 ? null : (
+                  <FieldSet>
+                    <FieldLegend>{message("bookingIntakeLegend")}</FieldLegend>
+                    {held.form.fields.map((question) => (
+                      <FormField
+                        control={form.control}
+                        key={question.key}
+                        name={`intake.${question.key}`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel
+                              htmlFor={`booking-intake-${question.key}`}
+                              required={question.required}
+                            >
+                              {question.label}
+                            </FormLabel>
+                            <FormControl>
+                              <Input
+                                {...field}
+                                id={`booking-intake-${question.key}`}
+                                maxLength={question.maxLength}
+                                name={`intake.${question.key}`}
+                                required={question.required}
+                                value={field.value ?? ""}
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    ))}
+                  </FieldSet>
+                )}
+
+                <FormField
+                  control={form.control}
+                  name="consent"
+                  render={({ field }) => (
+                    <FormItem>
+                      {held.form.consentText === "" ? null : (
+                        <p className="rounded-md bg-muted px-4 py-3 text-sm leading-relaxed text-muted-foreground">
+                          {held.form.consentText}
+                        </p>
+                      )}
+                      <div className="flex items-start gap-3">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value === true}
+                            className="mt-0.5"
+                            id="booking-consent"
+                            name="consent"
+                            onBlur={field.onBlur}
+                            onCheckedChange={(checked) =>
+                              field.onChange(checked === true)
+                            }
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                        <FormLabel htmlFor="booking-consent" className="font-medium">
+                          {message("bookingConsentLabel")}
+                        </FormLabel>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </Button>
-                <Button onClick={chooseAnotherTime} size="lg" variant="ghost">
-                  {message("bookingRestart")}
-                </Button>
-              </div>
-            </form>
+                />
+
+                {/* Issue #22. What this will cost, stated before the customer is sent
+                    anywhere, and taken from the server's own figures. */}
+                {held.form.paymentMode === "none" ? null : (
+                  <Facts
+                    items={[
+                      {
+                        key: "due",
+                        label: message("bookingDueTodayLabel"),
+                        value: formatCurrency(
+                          held.form.dueMinor,
+                          held.hold.price.currency,
+                          locale,
+                        ),
+                      },
+                      ...(held.form.balanceMinor === 0
+                        ? []
+                        : [
+                            {
+                              key: "balance",
+                              label: message("bookingBalanceDueLabel"),
+                              value: formatCurrency(
+                                held.form.balanceMinor,
+                                held.hold.price.currency,
+                                locale,
+                              ),
+                            },
+                          ]),
+                    ]}
+                  />
+                )}
+                {held.form.paymentMode === "deposit" ? (
+                  <Alert tone="info">{message("bookingDepositNotice")}</Alert>
+                ) : null}
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button
+                    loading={confirmMutation.isPending}
+                    loadingLabel={message("bookingSubmitting")}
+                    size="lg"
+                    type="submit"
+                  >
+                    {message(
+                      held.form.paymentMode === "none"
+                        ? "bookingSubmit"
+                        : "bookingPayAction",
+                    )}
+                  </Button>
+                  <Button onClick={chooseAnotherTime} size="lg" variant="ghost">
+                    {message("bookingRestart")}
+                  </Button>
+                </div>
+              </form>
+            </Form>
           </CardContent>
         </Card>
       )}

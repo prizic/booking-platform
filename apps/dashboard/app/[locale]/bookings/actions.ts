@@ -1,17 +1,31 @@
 "use server";
 
 import type { Locale } from "@wlbp/i18n";
+import {
+  actionError,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { refreshWorkspace } from "../../_lib/refresh-workspace";
 import { redirect } from "next/navigation";
 
 import type { BookingTransitionAction } from "../../_lib/dashboard-access";
 import { DashboardRpcError } from "../../_lib/dashboard-data-source";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
+import { foldValue, textOrNull, zoneOrUtc } from "../../_lib/form-schema";
 import {
   decisionOutcomeFor,
   resolveProposedInstant,
   type DecisionOutcome,
 } from "../../_lib/request-decisions";
+import {
+  bookingChangeSchema,
+  bookingNoteSchema,
+  bookingTransitionSchema,
+  type BookingChangeInput,
+  type BookingNoteInput,
+  type BookingTransitionInput,
+} from "./booking-schema";
 
 type BookingOutcome = DecisionOutcome | "moved" | "resend-unavailable" | "resent";
 
@@ -52,24 +66,19 @@ function detailOutcomeFor(error: unknown): DetailOutcome {
   return decisionOutcomeFor(error);
 }
 
-function trimmed(formData: FormData, key: string): string | null {
-  const value = formData.get(key);
-  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
-}
+/*
+ * Every action below redirects to its outcome when the change commits, as the
+ * pages have always reported it. A refusal returns the outcome code instead,
+ * so the form keeps what the operator typed and says why next to it.
+ */
 
-export async function transitionBookingAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const action = formData.get("action");
-  const bookingId = formData.get("bookingId");
-  const expectedRevision = Number(formData.get("expectedRevision"));
-  if (
-    typeof bookingId !== "string" ||
-    !Object.hasOwn(outcomeForAction, action as string) ||
-    !Number.isSafeInteger(expectedRevision)
-  ) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
-  const transition = action as BookingTransitionAction;
+export async function transitionBookingAction(
+  input: BookingTransitionInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(bookingTransitionSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { bookingId, expectedRevision, locale } = parsed.data;
+  const transition: BookingTransitionAction = parsed.data.action;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -77,7 +86,7 @@ export async function transitionBookingAction(formData: FormData): Promise<never
     request.state.kind !== "ready" ||
     request.source.transitionBooking === undefined
   ) {
-    redirect(detailUrl(locale, bookingId, "not-authorized"));
+    return actionError("not-authorized");
   }
 
   // The key is the booking, the action, and the revision it was asked from, so
@@ -91,31 +100,24 @@ export async function transitionBookingAction(formData: FormData): Promise<never
       bookingId,
       expectedRevision,
       idempotencyKey,
-      reason: trimmed(formData, "reason"),
+      reason: textOrNull(parsed.data.reason),
       tenantId: request.state.context.tenantId,
     });
     outcome = outcomeForAction[transition];
   } catch (error) {
     outcome = detailOutcomeFor(error);
   }
-  if (outcome === outcomeForAction[transition]) {
-    refreshWorkspace(locale);
-  }
+  if (outcome !== outcomeForAction[transition]) return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(detailUrl(locale, bookingId, outcome));
 }
 
-export async function addBookingNoteAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
-  const bookingId = formData.get("bookingId");
-  const visibility = formData.get("visibility");
-  const body = trimmed(formData, "body");
-  if (
-    typeof bookingId !== "string" ||
-    body === null ||
-    (visibility !== "operational" && visibility !== "sensitive")
-  ) {
-    redirect(resultUrl(locale, "invalid-request"));
-  }
+export async function addBookingNoteAction(
+  input: BookingNoteInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(bookingNoteSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { body, bookingId, locale, visibility } = parsed.data;
 
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -123,7 +125,7 @@ export async function addBookingNoteAction(formData: FormData): Promise<never> {
     request.state.kind !== "ready" ||
     request.source.addBookingNote === undefined
   ) {
-    redirect(detailUrl(locale, bookingId, "not-authorized"));
+    return actionError("not-authorized");
   }
 
   let outcome: DetailOutcome;
@@ -138,34 +140,33 @@ export async function addBookingNoteAction(formData: FormData): Promise<never> {
   } catch (error) {
     outcome = detailOutcomeFor(error);
   }
-  if (outcome === "note-added") refreshWorkspace(locale);
+  if (outcome !== "note-added") return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(detailUrl(locale, bookingId, outcome));
 }
 
-export async function changeBookingAction(formData: FormData): Promise<never> {
-  const locale: Locale = formData.get("locale") === "ar" ? "ar" : "en";
+export async function changeBookingAction(
+  input: BookingChangeInput,
+): Promise<ActionResult> {
+  const parsed = parseActionInput(bookingChangeSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { action, bookingId, expectedRevision, locale } = parsed.data;
+
   const request = await loadDashboardRequestAccess(locale);
   if (
     request.source === null ||
     request.state.kind !== "ready" ||
     request.source.changeBooking === undefined
   ) {
-    redirect(resultUrl(locale, "not-authorized"));
+    return actionError("not-authorized");
   }
 
-  const action = formData.get("action");
-  const bookingId = formData.get("bookingId");
-  const expectedRevision = Number(formData.get("expectedRevision"));
-  const timeZone = formData.get("locationTimeZone");
   if (action === "resend") {
     // Resending is the same authorized replay of the message that already
     // exists, never a second logical message.
     let resendOutcome: BookingOutcome = "resent";
     try {
-      if (
-        typeof bookingId !== "string" ||
-        request.source.resendBookingNotification === undefined
-      ) {
+      if (request.source.resendBookingNotification === undefined) {
         throw new Error("invalid");
       }
       await request.source.resendBookingNotification({
@@ -175,31 +176,21 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
     } catch {
       resendOutcome = "resend-unavailable";
     }
-    if (resendOutcome === "resent") refreshWorkspace(locale);
+    if (resendOutcome !== "resent") return actionError(resendOutcome);
+    refreshWorkspace(locale);
     redirect(resultUrl(locale, resendOutcome));
-  }
-  if (
-    (action !== "cancel" && action !== "reschedule") ||
-    typeof bookingId !== "string" ||
-    !Number.isSafeInteger(expectedRevision)
-  ) {
-    redirect(resultUrl(locale, "invalid-request"));
   }
 
   const newStartAt =
     action === "reschedule"
       ? resolveProposedInstant(
-          trimmed(formData, "newStartAt"),
-          typeof timeZone === "string" && timeZone !== "" ? timeZone : "UTC",
-          formData.get("fold") === "0"
-            ? "0"
-            : formData.get("fold") === "1"
-              ? "1"
-              : null,
+          parsed.data.newStartAt,
+          zoneOrUtc(parsed.data.locationTimeZone),
+          foldValue(parsed.data.fold),
         )
       : null;
   if (action === "reschedule" && newStartAt === null) {
-    redirect(resultUrl(locale, "invalid-request"));
+    return actionError("invalid-request");
   }
 
   // The redirect stays outside the try: it signals by throwing, and a change
@@ -210,17 +201,16 @@ export async function changeBookingAction(formData: FormData): Promise<never> {
       action,
       bookingId,
       expectedRevision,
-      internalReason: trimmed(formData, "internalReason"),
+      internalReason: textOrNull(parsed.data.internalReason),
       newStartAt,
-      publicReason: trimmed(formData, "publicReason"),
+      publicReason: textOrNull(parsed.data.publicReason),
       tenantId: request.state.context.tenantId,
     });
     outcome = action === "cancel" ? "rejected" : "moved";
   } catch (error) {
     outcome = decisionOutcomeFor(error);
   }
-  if (outcome === "rejected" || outcome === "moved") {
-    refreshWorkspace(locale);
-  }
+  if (outcome !== "rejected" && outcome !== "moved") return actionError(outcome);
+  refreshWorkspace(locale);
   redirect(resultUrl(locale, outcome));
 }

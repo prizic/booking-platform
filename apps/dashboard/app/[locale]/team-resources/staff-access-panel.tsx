@@ -1,31 +1,36 @@
 "use client";
-import { useActionState, useEffect, useId, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronDown, RotateCw, Send } from "lucide-react";
+import { ChevronDown, Send } from "lucide-react";
 import type { StaffAccessWorkspaceV1 } from "@wlbp/api-contracts";
 import type { Locale } from "@wlbp/i18n";
 import { formatWhen } from "../../_lib/booking-display";
 import {
-  Alert,
-  AlertDescription,
   Button,
   EmptyState,
-  Field,
-  FieldDescription,
   FieldGroup,
-  FieldLegend,
-  FieldSet,
-  Input,
-  Label,
-  RequiredMark,
+  Form,
   Section,
   StatusStamp,
+  applyActionErrors,
+  useActionMutation,
+  useZodForm,
   type StampState,
 } from "@wlbp/ui-foundation";
-import { ConfirmSubmit } from "../services/confirm-submit";
-import { CheckboxRow, ChoiceSelect, FormActions } from "../services/form-kit";
+import { dashboardFormMessages } from "../../_lib/form-messages";
+import { ConfirmAction } from "../services/confirm-submit";
+import { FormActions } from "../services/form-kit";
+import {
+  CheckboxGroupField,
+  SelectField,
+  TextField,
+  type FormControlOf,
+} from "../services/form-fields";
+import { newAttemptId, useAuthoritativeDefaults } from "../services/form-hooks";
+import { MutationFeedback } from "../services/mutation-feedback";
 import { changeStaffAccessAction } from "./staff-access-actions";
+import { staffAccessSchema, type StaffAccessInput } from "./staff-access-schema";
 import {
   staffAccessMessage,
   staffRoleName,
@@ -88,121 +93,157 @@ function Disclosure({
   );
 }
 
+const errorKeys = [
+  "invalid",
+  "not_authorized",
+  "unavailable",
+  "revision_conflict",
+  "last_administrator_required",
+  "step_up_required",
+  "idempotency_conflict",
+  "invitation_not_pending",
+  "member_already_active",
+] as const satisfies readonly StaffAccessMessage[];
+
+function accessErrorMessages(locale: Locale): Readonly<Record<string, string>> {
+  return {
+    ...dashboardFormMessages(locale),
+    ...Object.fromEntries(
+      errorKeys.map((key) => [key, staffAccessMessage(locale, key)]),
+    ),
+  };
+}
+
+type AccessControl = FormControlOf<StaffAccessInput, unknown>;
+
 function AccessForm({
   locale,
   operation,
   targetId,
   revision,
   requestId,
+  roleId = "",
+  locationIds = [],
   children,
 }: {
   locale: Locale;
-  operation: string;
+  operation: StaffAccessInput["operation"];
   targetId?: string;
   revision?: number;
   requestId: string;
-  children: (pending: boolean) => ReactNode;
+  roleId?: string;
+  locationIds?: readonly string[];
+  children: (helpers: {
+    control: AccessControl;
+    pending: boolean;
+    /** Submits with the explicit confirmation; call only from a dialog's confirm button. */
+    confirm: () => void;
+  }) => ReactNode;
 }) {
-  const [state, action, pending] = useActionState(changeStaffAccessAction, {});
-  const attempt = state.nextRequestId ?? requestId;
   const router = useRouter();
-  useEffect(() => {
-    if (state.saved) {
-      router.refresh();
-    }
-  }, [state, router]);
+  const messages = accessErrorMessages(locale);
+  const defaults: StaffAccessInput = {
+    locale,
+    operation,
+    requestId,
+    targetId: targetId ?? "",
+    expectedRevision: revision === undefined ? "" : String(revision),
+    roleId,
+    locationIds: [...locationIds],
+    email: "",
+  };
+  const form = useZodForm(staffAccessSchema, { defaultValues: defaults });
+  useAuthoritativeDefaults(form, defaults);
+  const mutation = useActionMutation(changeStaffAccessAction, {
+    onFailure: (result) => applyActionErrors(form, result),
+    onSuccess: () => {
+      form.reset();
+      form.setValue("requestId", newAttemptId());
+    },
+  });
   const message = (key: StaffAccessMessage) => staffAccessMessage(locale, key);
   return (
-    <form action={action} className="grid gap-4">
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="operation" value={operation} />
-      <input type="hidden" name="targetId" value={targetId ?? ""} />
-      <input type="hidden" name="expectedRevision" value={revision ?? ""} />
-      <input type="hidden" name="requestId" value={attempt} />
-      {state.message ? (
-        <Alert tone={state.saved ? "positive" : "danger"}>
-          <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
-            <span>{message(state.message)}</span>
-            {state.message === "step_up_required" ? (
+    <Form form={form} locale={locale} messages={messages}>
+      <form
+        noValidate
+        className="grid gap-4"
+        data-access-operation={operation}
+        {...(targetId ? { "data-access-target": targetId } : {})}
+        onSubmit={form.handleSubmit(() => mutation.mutate(form.getValues()))}
+      >
+        <MutationFeedback
+          locale={locale}
+          messages={messages}
+          result={mutation.data}
+          transportFailed={mutation.isError}
+          success={message("saved")}
+          reload={{
+            codes: ["revision_conflict"],
+            label: message("reload"),
+            onReload: () => router.refresh(),
+          }}
+          extra={(code) =>
+            code === "step_up_required" ? (
               <Link
                 className="font-semibold text-primary underline-offset-4 hover:underline"
                 href={`/${locale}/auth/mfa?returnTo=${encodeURIComponent(`/${locale}/team-resources`)}`}
               >
                 {message("verify")}
               </Link>
-            ) : null}
-            {state.message === "revision_conflict" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                onClick={() => router.refresh()}
-              >
-                <RotateCw aria-hidden="true" />
-                {message("reload")}
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      <fieldset disabled={pending} className="grid min-w-0 gap-4 border-0 p-0">
-        {children(pending)}
-      </fieldset>
-    </form>
+            ) : null
+          }
+        />
+        <fieldset
+          disabled={mutation.isPending}
+          className="grid min-w-0 gap-4 border-0 p-0"
+        >
+          {children({
+            control: form.control as unknown as AccessControl,
+            pending: mutation.isPending,
+            confirm: () => mutation.mutate({ ...form.getValues(), confirm: "yes" }),
+          })}
+        </fieldset>
+      </form>
+    </Form>
   );
 }
 function AssignmentFields({
   workspace,
   locale,
-  roleId,
-  locationIds = [],
+  control,
+  idPrefix,
 }: {
   workspace: StaffAccessWorkspaceV1;
   locale: Locale;
-  roleId?: string;
-  locationIds?: readonly string[];
+  control: AccessControl;
+  idPrefix: string;
 }) {
-  const id = useId();
   const message = (key: StaffAccessMessage) => staffAccessMessage(locale, key);
   return (
     <>
       <FieldGroup columns={2}>
-        <Field>
-          <Label htmlFor={`${id}-role`}>
-            {message("role")}
-            <RequiredMark />
-          </Label>
-          <ChoiceSelect
-            id={`${id}-role`}
-            name="roleId"
-            required
-            defaultValue={
-              roleId ?? workspace.roles.find((role) => role.key === "staff")?.id ?? ""
-            }
-            options={workspace.roles.map((role) => ({
-              value: role.id,
-              label: staffRoleName(locale, role.key),
-            }))}
-          />
-        </Field>
+        <SelectField
+          control={control}
+          name="roleId"
+          label={message("role")}
+          required
+          options={workspace.roles.map((role) => ({
+            value: role.id,
+            label: staffRoleName(locale, role.key),
+          }))}
+        />
       </FieldGroup>
-      <FieldSet className="gap-1">
-        <FieldLegend className="text-sm">{message("locations")}</FieldLegend>
-        <FieldDescription>{message("locationHint")}</FieldDescription>
-        <div className="grid gap-x-6 md:grid-cols-2">
-          {workspace.locations.map((location) => (
-            <CheckboxRow
-              key={location.id}
-              id={`${id}-location-${location.id}`}
-              name="locationIds"
-              value={location.id}
-              defaultChecked={locationIds.includes(location.id)}
-            >
-              {location.name}
-            </CheckboxRow>
-          ))}
-        </div>
-      </FieldSet>
+      <CheckboxGroupField
+        control={control}
+        name="locationIds"
+        idPrefix={idPrefix}
+        label={message("locations")}
+        description={message("locationHint")}
+        options={workspace.locations.map((location) => ({
+          value: location.id,
+          label: location.name,
+        }))}
+      />
     </>
   );
 }
@@ -222,27 +263,32 @@ export function StaffAccessPanel({
     <Section id="staff-access" title={message("title")} description={message("hint")}>
       <div className="grid rounded-lg border bg-card px-5 pt-1 [&>details:first-child]:border-t-0">
         <Disclosure summary={message("invite")}>
-          <AccessForm locale={locale} operation="invite" requestId={attempt()}>
-            {(pending) => (
+          <AccessForm
+            locale={locale}
+            operation="invite"
+            requestId={attempt()}
+            roleId={workspace.roles.find((role) => role.key === "staff")?.id ?? ""}
+          >
+            {({ control, pending }) => (
               <>
                 <FieldGroup columns={2}>
-                  <Field>
-                    <Label htmlFor="staff-access-invite-email">
-                      {message("email")}
-                      <RequiredMark />
-                    </Label>
-                    <Input
-                      id="staff-access-invite-email"
-                      type="email"
-                      name="email"
-                      dir="ltr"
-                      required
-                      maxLength={254}
-                      autoComplete="off"
-                    />
-                  </Field>
+                  <TextField
+                    control={control}
+                    name="email"
+                    label={message("email")}
+                    required
+                    type="email"
+                    dir="ltr"
+                    maxLength={254}
+                    autoComplete="off"
+                  />
                 </FieldGroup>
-                <AssignmentFields workspace={workspace} locale={locale} />
+                <AssignmentFields
+                  workspace={workspace}
+                  locale={locale}
+                  control={control}
+                  idPrefix="staff-access-invite-location"
+                />
                 <FormActions>
                   <Button
                     type="submit"
@@ -289,14 +335,16 @@ export function StaffAccessPanel({
                       targetId={member.id}
                       revision={member.revision}
                       requestId={attempt()}
+                      roleId={member.roleId}
+                      locationIds={member.locationIds}
                     >
-                      {(pending) => (
+                      {({ control, pending }) => (
                         <>
                           <AssignmentFields
                             workspace={workspace}
                             locale={locale}
-                            roleId={member.roleId}
-                            locationIds={member.locationIds}
+                            control={control}
+                            idPrefix={`staff-access-${member.id}-location`}
                           />
                           <FormActions>
                             <Button
@@ -320,10 +368,11 @@ export function StaffAccessPanel({
                         revision={member.revision}
                         requestId={attempt()}
                       >
-                        {(pending) => (
+                        {({ pending, confirm }) => (
                           <FormActions className="border-t-0 pt-0">
-                            <ConfirmSubmit
+                            <ConfirmAction
                               destructive
+                              onConfirm={confirm}
                               label={message("revoke")}
                               pending={pending}
                               pendingLabel={message("working")}
@@ -378,7 +427,7 @@ export function StaffAccessPanel({
                       revision={invitation.revision}
                       requestId={attempt()}
                     >
-                      {(pending) => (
+                      {({ pending }) => (
                         <div>
                           <Button
                             type="submit"
@@ -400,10 +449,11 @@ export function StaffAccessPanel({
                       revision={invitation.revision}
                       requestId={attempt()}
                     >
-                      {(pending) => (
+                      {({ pending, confirm }) => (
                         <div>
-                          <ConfirmSubmit
+                          <ConfirmAction
                             destructive
+                            onConfirm={confirm}
                             variant="destructive-outline"
                             size="sm"
                             label={message("revokeInvitation")}

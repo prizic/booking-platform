@@ -208,8 +208,20 @@ raw form controls (`button`, `input` other than hidden, `select`, `textarea`,
   segments, requests woven, cancellations struck through and never removed).
   The triangle-tooth edge appears only on band edges. Booking references use
   `ReferenceCode`; record states use `StatusStamp` (always words plus colour).
+- **Forms and data.** Every form uses React Hook Form with one Zod schema
+  that the browser form and the server action (or API route) both apply:
+  `parseActionInput` re-validates untrusted input before any existing
+  authorization, idempotency and RPC logic, and the database functions remain
+  the final authority for booking, capacity, price and permissions. Schemas
+  emit stable error codes rendered in Arabic or English by `FormMessage`.
+  Every create/update/delete runs as a React Query mutation
+  (`useActionMutation` for server actions); server-rendered pages keep
+  server-side reads and refresh after a mutation, while reads that happen in
+  the browser use `useQuery`. Mutations are never retried automatically.
+  Platform Admin schemas stay inside the private app.
 - **Dependencies.** `radix-ui`, `class-variance-authority`, `clsx`,
   `tailwind-merge`, `lucide-react`, `tw-animate-css`, `react-day-picker`,
-  `date-fns` (all MIT/ISC/Apache-2.0) in the distributed `ui-foundation`
+  `date-fns`, `react-hook-form`, `@hookform/resolvers`, `zod`,
+  `@tanstack/react-query` (all MIT/ISC/Apache-2.0) in the distributed `ui-foundation`
   package; `tailwindcss` and `@tailwindcss/postcss` as app build tooling.
   Versions are pinned in the pnpm catalog and respect the release-age policy.

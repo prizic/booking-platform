@@ -1,35 +1,43 @@
 "use client";
-import { useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
   AlertDescription,
+  applyActionErrors,
   Button,
   Checkbox,
-  Field,
   FieldDescription,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Input,
-  Label,
-  RequiredMark,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
   Separator,
+  useActionMutation,
+  useZodForm,
 } from "@wlbp/ui-foundation";
 import { authMessage, type AuthMessageKey } from "../../../_lib/auth-copy";
+import { authFormMessages } from "../../../_lib/auth-form";
 import { textLinkClass as authLinkClass } from "../../../_lib/ui/text-link";
 import {
   enrollAuthenticator,
   verifyAuthenticator,
   removeAuthenticator,
   cancelAuthenticatorSetup,
-  type MfaResult,
+  type AuthenticatorSetup,
 } from "./actions";
+import { removeAuthenticatorSchema, verifyAuthenticatorSchema } from "./mfa-schema";
+
 export function MfaForm({
   locale,
   factors,
@@ -43,14 +51,69 @@ export function MfaForm({
   readonly unavailable: boolean;
   readonly returnTo: string;
 }) {
-  const [setup, setSetup] = useState<MfaResult | null>(null);
+  const [setup, setSetup] = useState<AuthenticatorSetup | null>(null);
   const [result, setResult] = useState<AuthMessageKey | null>(null);
-  const [pending, start] = useTransition();
-  const router = useRouter();
   const message = (key: AuthMessageKey) => authMessage(locale, key);
-  const available = setup?.factorId
+  const messages = authFormMessages(locale);
+  const available = setup
     ? [...factors, { id: setup.factorId, friendlyName: message("factor") }]
     : factors;
+
+  const enroll = useActionMutation(enrollAuthenticator, {
+    refresh: false,
+    onSuccess: (data) => setSetup(data),
+    onFailure: () => setResult("unavailable"),
+    onError: () => setResult("unavailable"),
+  });
+
+  const verifyForm = useZodForm(verifyAuthenticatorSchema, {
+    defaultValues: { factorId: factors[0]?.id ?? "", code: "" },
+  });
+  // A setup in progress is the factor being verified, as soon as it exists.
+  const setupFactorId = setup?.factorId;
+  useEffect(() => {
+    if (setupFactorId !== undefined) verifyForm.setValue("factorId", setupFactorId);
+  }, [setupFactorId, verifyForm]);
+  const verify = useActionMutation(verifyAuthenticator, {
+    onSuccess: () => {
+      setResult("verified");
+      setSetup(null);
+      verifyForm.resetField("code");
+    },
+    onFailure: (failure) => {
+      applyActionErrors(verifyForm, failure);
+      setResult("invalid");
+    },
+    onError: () => setResult("unavailable"),
+  });
+
+  const cancel = useActionMutation(cancelAuthenticatorSetup, {
+    onSuccess: () => {
+      setSetup(null);
+      setResult(null);
+    },
+    onFailure: () => setResult("unavailable"),
+    onError: () => setResult("unavailable"),
+  });
+
+  const removeForm = useZodForm(removeAuthenticatorSchema, {
+    defaultValues: { factorId: factors[0]?.id ?? "", confirm: false },
+  });
+  const remove = useActionMutation(removeAuthenticator, {
+    onSuccess: () => {
+      setResult("verified");
+      removeForm.resetField("confirm");
+    },
+    onFailure: (failure) => {
+      applyActionErrors(removeForm, failure);
+      setResult("invalid");
+    },
+    onError: () => setResult("unavailable"),
+  });
+
+  const pending =
+    enroll.isPending || verify.isPending || cancel.isPending || remove.isPending;
+
   return (
     <div className="grid gap-5">
       {unavailable ? (
@@ -67,7 +130,7 @@ export function MfaForm({
           </AlertDescription>
         </Alert>
       ) : null}
-      {setup?.ok && setup.qrCode ? (
+      {setup ? (
         <section
           aria-label={message("setup")}
           className="grid justify-items-center gap-3"
@@ -96,105 +159,95 @@ export function MfaForm({
       {available.length === 0 ? (
         <p className="text-sm text-muted-foreground">{message("noFactor")}</p>
       ) : (
-        <form
-          className="grid gap-5"
-          onSubmit={(event) => {
-            event.preventDefault();
-            const data = new FormData(event.currentTarget);
-            const factor = String(data.get("factorId"));
-            const code = String(data.get("code"));
-            start(async () => {
-              const response = await verifyAuthenticator(factor, code);
-              setResult(response.ok ? "verified" : "invalid");
-              if (response.ok) {
-                setSetup(null);
-                router.refresh();
-              }
-            });
-          }}
-        >
-          <Field>
-            <Label htmlFor="mfa-verify-factor">{message("factor")}</Label>
-            <Select
-              key={setup?.factorId ?? "existing"}
-              name="factorId"
-              defaultValue={setup?.factorId ?? factors[0]?.id ?? ""}
-            >
-              <SelectTrigger id="mfa-verify-factor">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {available.map((factor) => (
-                  <SelectItem key={factor.id} value={factor.id}>
-                    {factor.friendlyName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <Label htmlFor="mfa-code">
-              {message("code")}
-              <RequiredMark />
-            </Label>
-            <Input
-              id="mfa-code"
-              name="code"
-              dir="ltr"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              pattern="[0-9]{6}"
-              required
-              minLength={6}
-              maxLength={6}
-              className="font-latin tracking-[0.3em]"
-            />
-          </Field>
-          <Button
-            type="submit"
-            block
-            loading={pending}
-            loadingLabel={message("pending")}
+        <Form form={verifyForm} locale={locale} messages={messages}>
+          <form
+            noValidate
+            className="grid gap-5"
+            onSubmit={verifyForm.handleSubmit((values) => verify.mutate(values))}
           >
-            {message("verify")}
-          </Button>
-        </form>
+            <FormField
+              control={verifyForm.control}
+              name="factorId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{message("factor")}</FormLabel>
+                  <Select
+                    name={field.name}
+                    value={field.value}
+                    onValueChange={(value) => {
+                      // Radix echoes "" from its hidden native select before a
+                      // newly added option exists; never let that clear the choice.
+                      if (value) field.onChange(value);
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger onBlur={field.onBlur}>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {available.map((factor) => (
+                        <SelectItem key={factor.id} value={factor.id}>
+                          {factor.friendlyName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={verifyForm.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel required>{message("code")}</FormLabel>
+                  <FormControl>
+                    <Input
+                      {...field}
+                      dir="ltr"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      className="font-latin tracking-[0.3em]"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="submit"
+              block
+              loading={verify.isPending}
+              disabled={pending}
+              loadingLabel={message("pending")}
+            >
+              {message("verify")}
+            </Button>
+          </form>
+        </Form>
       )}
       {!setup ? (
         <Button
           variant="outline"
           disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const response = await enrollAuthenticator();
-              if (response.ok) setSetup(response);
-              else setResult("unavailable");
-            })
-          }
+          loading={enroll.isPending}
+          onClick={() => enroll.mutate(undefined)}
         >
           {message("enroll")}
         </Button>
       ) : null}
       {[
-        ...(setup?.factorId
-          ? [{ id: setup.factorId, friendlyName: message("factor") }]
-          : []),
+        ...(setup ? [{ id: setup.factorId, friendlyName: message("factor") }] : []),
         ...unfinished.filter((factor) => factor.id !== setup?.factorId),
       ].map((factor) => (
         <Button
           key={factor.id}
           variant="ghost"
           disabled={pending}
-          onClick={() =>
-            start(async () => {
-              const response = await cancelAuthenticatorSetup(factor.id);
-              if (response.ok) {
-                setSetup(null);
-                setResult(null);
-                router.refresh();
-              } else setResult("unavailable");
-            })
-          }
+          onClick={() => cancel.mutate({ factorId: factor.id })}
         >
           {message("cancelSetup")} — {factor.friendlyName}
         </Button>
@@ -202,50 +255,83 @@ export function MfaForm({
       {factors.length ? (
         <>
           <Separator />
-          <form
-            aria-labelledby="mfa-remove-title"
-            className="grid gap-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const data = new FormData(event.currentTarget);
-              start(async () => {
-                const response = await removeAuthenticator(
-                  String(data.get("factorId")),
-                );
-                setResult(response.ok ? "verified" : "invalid");
-                if (response.ok) router.refresh();
-              });
-            }}
-          >
-            <div className="grid gap-1">
-              <h2 id="mfa-remove-title" className="text-base font-semibold">
+          <Form form={removeForm} locale={locale} messages={messages}>
+            <form
+              noValidate
+              aria-labelledby="mfa-remove-title"
+              className="grid gap-4"
+              onSubmit={removeForm.handleSubmit((values) => remove.mutate(values))}
+            >
+              <div className="grid gap-1">
+                <h2 id="mfa-remove-title" className="text-base font-semibold">
+                  {message("remove")}
+                </h2>
+                <FieldDescription>{message("removeHint")}</FieldDescription>
+              </div>
+              <FormField
+                control={removeForm.control}
+                name="factorId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{message("factor")}</FormLabel>
+                    <Select
+                      name={field.name}
+                      value={field.value}
+                      onValueChange={(value) => {
+                        // Radix echoes "" from its hidden native select before a
+                        // newly added option exists; never let that clear the choice.
+                        if (value) field.onChange(value);
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger onBlur={field.onBlur}>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {factors.map((factor) => (
+                          <SelectItem key={factor.id} value={factor.id}>
+                            {factor.friendlyName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={removeForm.control}
+                name="confirm"
+                render={({ field }) => (
+                  <FormItem>
+                    <div className="flex items-start gap-3">
+                      <FormControl>
+                        <Checkbox
+                          name={field.name}
+                          checked={field.value === true}
+                          onCheckedChange={(checked) =>
+                            field.onChange(checked === true)
+                          }
+                          onBlur={field.onBlur}
+                        />
+                      </FormControl>
+                      <FormLabel required>{message("removeHint")}</FormLabel>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <Button
+                type="submit"
+                variant="destructive-outline"
+                disabled={pending}
+                loading={remove.isPending}
+              >
                 {message("remove")}
-              </h2>
-              <FieldDescription>{message("removeHint")}</FieldDescription>
-            </div>
-            <Field>
-              <Label htmlFor="mfa-remove-factor">{message("factor")}</Label>
-              <Select name="factorId" defaultValue={factors[0]?.id ?? ""}>
-                <SelectTrigger id="mfa-remove-factor">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {factors.map((factor) => (
-                    <SelectItem key={factor.id} value={factor.id}>
-                      {factor.friendlyName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field orientation="horizontal">
-              <Checkbox id="mfa-remove-confirm" required />
-              <Label htmlFor="mfa-remove-confirm">{message("removeHint")}</Label>
-            </Field>
-            <Button type="submit" variant="destructive-outline" disabled={pending}>
-              {message("remove")}
-            </Button>
-          </form>
+              </Button>
+            </form>
+          </Form>
         </>
       ) : null}
       <Link className={authLinkClass} href={returnTo}>

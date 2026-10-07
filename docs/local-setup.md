@@ -137,6 +137,24 @@ Hosted environment setup and the serialized release path are documented in
 [environments.md](./environments.md). Developer workstations never link to
 production as the normal migration path.
 
+### Arabic demo data
+
+Opt-in preview data so a local Client and Dashboard look like a working Gulf business instead of e2e fixtures. With a local stack running (set `WLBP_SUPABASE_WORKDIR` to an absolute path to target an isolated stack), run `pnpm demo:local`.
+
+It applies `supabase/demo/arabic-demo.sql`: one tenant, "منشأتك" / "Your Business" (SAR, Arabic default), with the location "الفرع الرئيسي" / "Main branch" in `Asia/Riyadh`. It also creates 4 staff with Arabic names, 2 rooms, 5 bilingual services with VAT-inclusive SAR prices, 8 customers, and about 30 bookings. The bookings span today across all four staff lanes (in mixed states), the next 7 days and the past week. Every fixed id starts with `ad`. Emails end in `.example.invalid`. Phone numbers are in the fictional 555-01xx range.
+
+- **Synthetic and local-only.** The runner refuses any non-loopback Supabase URL. The SQL refuses unless the runner sets `wlbp.allow_demo=on`, and also refuses when any tenant has a non-reserved (real) domain. It is never part of `seed.sql`, a migration or `db reset`. Some pgTAP files assume an empty bookings table, so run `pnpm test:db` on a freshly reset stack **before** applying the demo (or reset again afterwards), exactly as with the e2e fixtures.
+- **Repeatable.** Re-running on the same day changes nothing. A run on a later day closes out passed demo bookings and adds that day's set. `pnpm db:reset` removes it.
+- **Owner login.** Sign in as `demo-owner@example.invalid`. The runner sets a fresh random password through the local Auth admin API on every run and saves it only to the ignored, owner-only `.artifacts/demo/credentials.json`.
+- **Resolving the tenant.** On `localhost`, the apps resolve the tenant from `LOCAL_TENANT_HOST`. The helper below sets it along with the stack's public URL and key. From `apps/dashboard` (Git Bash):
+
+  ```bash
+  WLBP_NEXT_DIST_DIR=.next-arabic-demo node ../../scripts/run-with-local-supabase-env.mjs \
+    dashboard.arabic-demo.example.invalid node node_modules/next/dist/bin/next dev --port 3101
+  ```
+
+  Open `http://localhost:3101/ar`. For Client, run the same command from `apps/client` with `client.arabic-demo.example.invalid` and another port.
+
 ---
 
 ## Verification commands

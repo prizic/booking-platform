@@ -1,33 +1,23 @@
 import type { Locale } from "@wlbp/i18n";
-import {
-  Alert,
-  AlertDescription,
-  Checkbox,
-  DateTimePicker,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  Label,
-  Section,
-  Textarea,
-  TextField,
-} from "@wlbp/ui-foundation";
+import { Alert, AlertDescription, FieldGroup, Section } from "@wlbp/ui-foundation";
 import Link from "next/link";
-import {
-  requestIntegrationCheckAction,
-  saveFlagAction,
-  saveReferencesAction,
-} from "../../../_lib/actions/settings";
 import { settingsCopy as c } from "../../../_lib/admin-copy";
-import { fill, formCopy, say, stateCopy } from "../../../_lib/copy";
+import { say, stateCopy } from "../../../_lib/copy";
 import { callOperator, type RpcRow } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
 import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
+import {
+  CheckboxFormField,
+  DateTimeFormField,
+  SelectFormField,
+  TextFormField,
+  TextareaFormField,
+} from "../../../_lib/ui/form-fields";
 import { OperatorForm } from "../../../_lib/ui/operator-form";
-import { SelectField } from "../../../_lib/ui/select-field";
+import { flagKinds } from "../../../_lib/schemas/settings";
 import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -35,23 +25,29 @@ import { TimeValue } from "../../../_lib/ui/time";
 export const dynamic = "force-dynamic";
 
 type Flag = RpcRow<"list_platform_flags_v1">;
-const kinds = [
-  "feature",
-  "incident_banner",
-  "maintenance_window",
-  "kill_switch",
-] as const;
+const kinds = flagKinds;
 
 const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
+
+/** Visible starting values; editing pins the key as a hidden value. */
+function flagValues(flag?: Flag) {
+  return {
+    key: flag?.key ?? "",
+    kind: flag?.kind ?? "incident_banner",
+    enabled: flag?.enabled ?? false,
+    messageEn: flag?.message_en ?? "",
+    messageAr: flag?.message_ar ?? "",
+    startsAt: flag?.starts_at?.slice(0, 16) ?? "",
+    endsAt: flag?.ends_at?.slice(0, 16) ?? "",
+  };
+}
 
 function FlagFields({ locale, flag }: { locale: Locale; flag?: Flag }) {
   const id = (field: string) => `flag-${flag?.key ?? "new"}-${field}`;
   return (
     <>
-      {flag ? (
-        <input type="hidden" name="key" value={flag.key} />
-      ) : (
-        <TextField
+      {flag ? null : (
+        <TextFormField
           id="flag-key"
           name="key"
           label={say(locale, c.key)}
@@ -60,69 +56,45 @@ function FlagFields({ locale, flag }: { locale: Locale; flag?: Flag }) {
           autoComplete="off"
         />
       )}
-      <SelectField
+      <SelectFormField
         name="kind"
         label={say(locale, c.kind)}
-        value={flag?.kind ?? "incident_banner"}
         options={kinds.map((k) => [k, say(locale, c.kinds[k])] as const)}
       />
-      <Field orientation="horizontal">
-        <Checkbox
-          id={id("enabled")}
-          name="enabled"
-          defaultChecked={flag?.enabled ?? false}
-        />
-        <Label htmlFor={id("enabled")}>{say(locale, c.enabled)}</Label>
-      </Field>
-      <Field>
-        <Label htmlFor={id("message-en")}>{say(locale, c.messageEn)}</Label>
-        <Textarea
-          id={id("message-en")}
-          name="messageEn"
-          lang="en"
-          dir="ltr"
-          maxLength={500}
-          defaultValue={flag?.message_en ?? ""}
-        />
-      </Field>
-      <Field>
-        <Label htmlFor={id("message-ar")}>{say(locale, c.messageAr)}</Label>
-        <Textarea
-          id={id("message-ar")}
-          name="messageAr"
-          lang="ar"
-          dir="rtl"
-          maxLength={500}
-          defaultValue={flag?.message_ar ?? ""}
-        />
-      </Field>
+      <CheckboxFormField
+        id={id("enabled")}
+        name="enabled"
+        label={say(locale, c.enabled)}
+      />
+      <TextareaFormField
+        id={id("message-en")}
+        name="messageEn"
+        label={say(locale, c.messageEn)}
+        lang="en"
+        dir="ltr"
+        maxLength={500}
+      />
+      <TextareaFormField
+        id={id("message-ar")}
+        name="messageAr"
+        label={say(locale, c.messageAr)}
+        lang="ar"
+        dir="rtl"
+        maxLength={500}
+      />
       <FieldGroup columns={2}>
-        <Field>
-          <Label htmlFor={id("starts")}>{say(locale, c.startsAt)}</Label>
-          <DateTimePicker
-            id={id("starts")}
-            name="startsAt"
-            locale={locale}
-            datePlaceholder={say(locale, formCopy.pickDate)}
-            timePlaceholder={say(locale, formCopy.pickTime)}
-            timeLabel={fill(locale, formCopy.timeOf, {
-              field: say(locale, c.startsAt),
-            })}
-            {...(flag?.starts_at ? { defaultValue: flag.starts_at.slice(0, 16) } : {})}
-          />
-        </Field>
-        <Field>
-          <Label htmlFor={id("ends")}>{say(locale, c.endsAt)}</Label>
-          <DateTimePicker
-            id={id("ends")}
-            name="endsAt"
-            locale={locale}
-            datePlaceholder={say(locale, formCopy.pickDate)}
-            timePlaceholder={say(locale, formCopy.pickTime)}
-            timeLabel={fill(locale, formCopy.timeOf, { field: say(locale, c.endsAt) })}
-            {...(flag?.ends_at ? { defaultValue: flag.ends_at.slice(0, 16) } : {})}
-          />
-        </Field>
+        <DateTimeFormField
+          id={id("starts")}
+          name="startsAt"
+          locale={locale}
+          label={say(locale, c.startsAt)}
+        />
+        <DateTimeFormField
+          id={id("ends")}
+          name="endsAt"
+          locale={locale}
+          label={say(locale, c.endsAt)}
+        />
       </FieldGroup>
     </>
   );
@@ -164,13 +136,13 @@ export default async function SettingsPage({
           admin ? (
             <ActionDialog
               locale={locale}
-              action={saveFlagAction}
+              operation="saveFlag"
               trigger={say(locale, c.newFlag)}
               title={say(locale, c.flagTitle)}
               description={say(locale, c.flagBody)}
               submit={say(locale, c.newFlag)}
               successMessage={say(locale, c.flagSaved)}
-              reason={{ minLength: 5 }}
+              values={flagValues()}
             >
               <FlagFields locale={locale} />
             </ActionDialog>
@@ -227,14 +199,15 @@ export default async function SettingsPage({
                   <ActionDialog
                     key="x"
                     locale={locale}
-                    action={saveFlagAction}
+                    operation="saveFlag"
                     trigger={say(locale, c.editFlag)}
                     triggerVariant="quiet"
                     title={say(locale, c.flagTitle)}
                     description={say(locale, c.flagBody)}
                     submit={say(locale, c.editFlag)}
                     successMessage={say(locale, c.flagSaved)}
-                    reason={{ minLength: 5 }}
+                    hidden={{ key: flag.key }}
+                    values={flagValues(flag)}
                   >
                     <FlagFields locale={locale} flag={flag} />
                   </ActionDialog>
@@ -304,41 +277,33 @@ export default async function SettingsPage({
                   ) : canQueue ? (
                     <OperatorForm
                       locale={locale}
-                      action={requestIntegrationCheckAction}
+                      operation="requestIntegrationCheck"
                       submit={say(locale, c.check)}
                       successMessage={say(locale, c.checkQueued)}
                       className="flex items-center"
-                    >
-                      <input type="hidden" name="provider" value={i.provider} />
-                    </OperatorForm>
+                      hidden={{ provider: i.provider }}
+                    />
                   ) : null}
                   {admin ? (
                     <ActionDialog
                       locale={locale}
-                      action={saveReferencesAction}
+                      operation="saveReferences"
                       trigger={say(locale, c.editReferences)}
                       triggerVariant="quiet"
                       title={say(locale, c.referencesTitle)}
                       submit={say(locale, c.editReferences)}
                       successMessage={say(locale, c.referencesSaved)}
                       hidden={{ provider: i.provider }}
+                      values={{ references: i.secret_references.join("\n") }}
                     >
-                      <Field>
-                        <Label htmlFor={`references-${i.provider}`}>
-                          {say(locale, c.references)}
-                        </Label>
-                        <Textarea
-                          id={`references-${i.provider}`}
-                          name="references"
-                          dir="ltr"
-                          rows={5}
-                          defaultValue={i.secret_references.join("\n")}
-                          aria-describedby={`references-${i.provider}-hint`}
-                        />
-                        <FieldDescription id={`references-${i.provider}-hint`}>
-                          {say(locale, c.referencesHint)}
-                        </FieldDescription>
-                      </Field>
+                      <TextareaFormField
+                        id={`references-${i.provider}`}
+                        name="references"
+                        label={say(locale, c.references)}
+                        description={say(locale, c.referencesHint)}
+                        dir="ltr"
+                        rows={5}
+                      />
                     </ActionDialog>
                   ) : null}
                 </div>,

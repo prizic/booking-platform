@@ -1,7 +1,6 @@
 import { Alert } from "@wlbp/ui-foundation";
 import { TextLink } from "../../../_lib/ui/text";
 import { actionCopy as a } from "../../../_lib/action-copy";
-import { requestDomainVerificationAction } from "../../../_lib/actions/domains";
 import { copyFor, formCopy, say, stateCopy, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
@@ -121,14 +120,12 @@ export default async function DomainsPage({
                   <OperatorForm
                     key="q"
                     locale={locale}
-                    action={requestDomainVerificationAction}
+                    operation="requestDomainVerification"
                     submit={say(locale, a.verifyDomain.submit)}
                     successMessage={say(locale, a.verifyDomain.done)}
                     compact
-                  >
-                    <input type="hidden" name="domainId" value={row.domain_id} />
-                    <input type="hidden" name="tenantId" value={row.tenant_id} />
-                  </OperatorForm>
+                    hidden={{ domainId: row.domain_id }}
+                  />
                 ) : (
                   <Unknown locale={locale} kind="none" />
                 ),

@@ -1,4 +1,5 @@
 import type { Locale } from "@wlbp/i18n";
+import { dashboardFormMessages } from "../../_lib/form-messages";
 const copy = {
   en: {
     services: "Services",
@@ -112,6 +113,12 @@ const copy = {
     publishConfirmAction: "Publish now",
     question: "Question",
     emptyHint: "Change the search or state filter, or create a new record.",
+    catalog_key_invalid: "Use lowercase letters, digits and single hyphens only.",
+    catalog_price_invalid:
+      "Enter an exact amount with at most two decimal places and no grouping separators.",
+    catalog_intake_key_invalid:
+      "Start with a lowercase letter; use lowercase letters, digits and underscores only.",
+    catalog_intake_key_duplicate: "Each question needs its own key.",
   },
   ar: {
     services: "الخدمات",
@@ -219,8 +226,42 @@ const copy = {
     publishConfirmAction: "النشر الآن",
     question: "سؤال",
     emptyHint: "غيّر البحث أو مرشح الحالة، أو أنشئ سجلًا جديدًا.",
+    catalog_key_invalid: "استخدم أحرفًا إنجليزية صغيرة وأرقامًا وشرطات مفردة فقط.",
+    catalog_price_invalid:
+      "أدخل مبلغًا دقيقًا بمنزلتين عشريتين على الأكثر ودون فواصل تجميع.",
+    catalog_intake_key_invalid:
+      "ابدأ بحرف إنجليزي صغير، واستخدم الأحرف الصغيرة والأرقام والشرطة السفلية فقط.",
+    catalog_intake_key_duplicate: "يحتاج كل سؤال إلى مفتاح خاص به.",
   },
 } as const;
 export type CatalogMessageKey = keyof typeof copy.en;
 export const catalogMessage = (locale: Locale, key: CatalogMessageKey) =>
   copy[locale][key];
+
+/** Error codes the catalog editors render (generic codes come from the foundation). */
+const errorKeys = [
+  "invalid",
+  "denied",
+  "unavailable",
+  "revision_conflict",
+  "idempotency_conflict",
+  "catalog_approval_required",
+  "catalog_legal_content_required",
+  "catalog_reference_invalid",
+  "catalog_locales_required",
+  "catalog_category_in_use",
+  "catalog_assignment_invalid",
+  "catalog_time_zone_invalid",
+  "catalog_first_release_invalid",
+  "catalog_key_invalid",
+  "catalog_price_invalid",
+  "catalog_intake_key_invalid",
+  "catalog_intake_key_duplicate",
+] as const satisfies readonly CatalogMessageKey[];
+
+export function catalogErrorMessages(locale: Locale): Readonly<Record<string, string>> {
+  return {
+    ...dashboardFormMessages(locale),
+    ...Object.fromEntries(errorKeys.map((key) => [key, copy[locale][key]])),
+  };
+}

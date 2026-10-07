@@ -2,11 +2,6 @@ import { ReferenceCode } from "@wlbp/ui-foundation";
 import { formatNumber } from "@wlbp/i18n";
 import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
-import {
-  activateRunAction,
-  deactivateRunAction,
-  retryRunAction,
-} from "../../../../_lib/actions/operations";
 import { copyFor, fill, reasonCopy, say, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
@@ -98,7 +93,7 @@ export default async function RunPage({
       </>
     );
   const run = result.data as unknown as Run;
-  const hidden = { runId: run.id, tenantId: run.tenant_id };
+  const hidden = { runId: run.id };
   const finished = run.state === "active" || run.state === "deactivated";
   const hasFailure =
     run.state === "failed" || run.steps.some((s) => s.status === "failed");
@@ -128,7 +123,7 @@ export default async function RunPage({
             {atLeast(operator.role, "operator") && !finished && hasFailure ? (
               <ActionDialog
                 locale={locale}
-                action={retryRunAction}
+                operation="retryRun"
                 trigger={say(locale, c.retry)}
                 title={say(locale, c.retryTitle)}
                 description={say(locale, c.retryBody)}
@@ -140,7 +135,7 @@ export default async function RunPage({
             {atLeast(operator.role, "operator") && !finished ? (
               <ActionDialog
                 locale={locale}
-                action={activateRunAction}
+                operation="activateRun"
                 trigger={say(locale, c.activate)}
                 title={say(locale, c.activateTitle)}
                 description={say(locale, c.activateBody)}
@@ -152,14 +147,13 @@ export default async function RunPage({
             {atLeast(operator.role, "admin") && run.state !== "deactivated" ? (
               <ActionDialog
                 locale={locale}
-                action={deactivateRunAction}
+                operation="deactivateRun"
                 trigger={say(locale, c.deactivate)}
                 danger
                 title={say(locale, c.deactivateTitle)}
                 description={say(locale, c.deactivateBody)}
                 submit={say(locale, c.deactivate)}
                 successMessage={say(locale, c.deactivated)}
-                reason={{ minLength: 10 }}
                 hidden={hidden}
               />
             ) : null}

@@ -25,7 +25,7 @@ import {
   Textarea,
   Toolbar,
 } from "@wlbp/ui-foundation";
-import { ChartColumn, Download } from "lucide-react";
+import { ChartColumn } from "lucide-react";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import { columnsOf, renderCsv } from "../../_lib/csv";
@@ -42,7 +42,7 @@ import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
 import { Money } from "../../_lib/ui/money";
 import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
 import { ResultAlert } from "../../_lib/ui/result-alert";
-import { runReportExportAction } from "./actions";
+import { ReportExportForm } from "./report-export-form";
 import { positiveReportResults, reportResultKeys } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -441,42 +441,13 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
       )}
 
       <Section id="reports-export" title={message("reportsExportTitle")}>
-        <form
-          action={runReportExportAction}
-          className="flex flex-wrap items-end gap-3 rounded-lg border bg-card p-4"
-        >
-          <input type="hidden" name="locale" value={locale} />
-          <input type="hidden" name="from" value={from} />
-          <input type="hidden" name="to" value={to} />
-          <input type="hidden" name="timeZone" value={timeZone} />
-          <input type="hidden" name="locationId" value={locationId ?? ""} />
-          <Field className="min-w-56">
-            <Label htmlFor="reports-export-key">{message("reportsExportWhich")}</Label>
-            <Select defaultValue="bookings" name="reportKey">
-              <SelectTrigger id="reports-export-key">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="bookings">
-                  {message("reportsBookingsTitle")}
-                </SelectItem>
-                <SelectItem value="utilization">
-                  {message("reportsUtilizationTitle")}
-                </SelectItem>
-                <SelectItem value="revenue">
-                  {message("reportsRevenueTitle")}
-                </SelectItem>
-                <SelectItem value="customers">
-                  {message("reportsCustomersTitle")}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Button type="submit">
-            <Download aria-hidden="true" />
-            {message("reportsExportAction")}
-          </Button>
-        </form>
+        <ReportExportForm
+          locale={locale}
+          from={from}
+          to={to}
+          timeZone={timeZone}
+          locationId={locationId ?? ""}
+        />
 
         {exported === null || exported.rows.length === 0 ? null : (
           <Field>

@@ -4,7 +4,7 @@ import {
   parseAvailabilityV1Response,
   type AvailabilitySlotV1,
 } from "@wlbp/api-contracts";
-import { resolveZonedLocalDateTime, type Locale } from "@wlbp/i18n";
+import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
   AlertDescription,
@@ -16,26 +16,25 @@ import {
   CardHeader,
   CardTitle,
   DatePicker,
-  Field,
-  FieldError,
   FieldGroup,
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
+  formErrorMessage,
+  useZodForm,
 } from "@wlbp/ui-foundation";
+import { useQuery } from "@tanstack/react-query";
 import { RotateCw, Search } from "lucide-react";
-import {
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { formatWallDateTime } from "../_lib/wall-time";
 import {
@@ -43,10 +42,14 @@ import {
   type AvailabilityResultsCopy,
 } from "./availability-results";
 import {
-  availabilityPickerReducer,
-  initialAvailabilityPickerState,
-  type AvailabilityPickerAction,
+  availabilityQueryKey,
+  availabilitySearchParams,
+  type AvailabilityQuerySnapshot,
 } from "./availability-picker-state";
+import {
+  availabilityDateRequired,
+  availabilitySearchSchema,
+} from "./availability-schema";
 import { timeZoneOptions, type TimeZoneOrigin } from "./time-zone-options";
 
 export interface AvailabilityPickerCopy extends AvailabilityResultsCopy {
@@ -79,16 +82,6 @@ interface AvailabilityPickerProps {
   readonly serviceId: string | null;
 }
 
-function localMidnight(localDate: string, timeZone: string): string {
-  const [year, month, day] = localDate.split("-").map(Number);
-  const resolution = resolveZonedLocalDateTime(
-    { year: year!, month: month!, day: day!, hour: 0, minute: 0 },
-    timeZone,
-  );
-  if (resolution.kind === "gap") throw new Error("Invalid local date");
-  return resolution.instants[0];
-}
-
 /** "GMT+3" in the page language; only computed in the browser, after hydration. */
 function zoneOffset(zone: string, locale: Locale): string {
   try {
@@ -113,15 +106,12 @@ function deviceTimeZone(): string | null {
   }
 }
 
-function addCalendarDays(localDate: string, days: number): string {
-  const [year, month, day] = localDate.split("-").map(Number);
-  const date = new Date(Date.UTC(year!, month! - 1, day! + days));
-  return [
-    date.getUTCFullYear().toString().padStart(4, "0"),
-    (date.getUTCMonth() + 1).toString().padStart(2, "0"),
-    date.getUTCDate().toString().padStart(2, "0"),
-  ].join("-");
-}
+/** Each searchable field and the control its summary link moves focus to. */
+const fieldControls = [
+  ["date", "availability-date"],
+  ["timeZone", "availability-time-zone"],
+  ["partySize", "availability-party-size"],
+] as const;
 
 export function AvailabilityPicker({
   copy,
@@ -131,16 +121,58 @@ export function AvailabilityPicker({
   onSlotSelected,
   serviceId,
 }: AvailabilityPickerProps) {
-  const [state, dispatch] = useReducer(
-    availabilityPickerReducer,
-    locationTimeZone,
-    initialAvailabilityPickerState,
-  );
   const [interactive, setInteractive] = useState(false);
   const [deviceZone, setDeviceZone] = useState<string | null>(null);
-  const [dateError, setDateError] = useState<string | null>(null);
-  const requestSequence = useRef(0);
-  const activeRequest = useRef<AbortController>(null);
+  // The filters of the search being shown. Changing any filter clears it, so
+  // results and a selection never outlive the search they belong to.
+  const [submitted, setSubmitted] = useState<AvailabilityQuerySnapshot | null>(null);
+  const [selected, setSelected] = useState<AvailabilitySlotV1 | null>(null);
+  const [summaryFocus, setSummaryFocus] = useState(0);
+  const focusedSummary = useRef(0);
+  const formMessages = useMemo(
+    () => ({ [availabilityDateRequired]: copy.dateRequired }),
+    [copy.dateRequired],
+  );
+
+  const form = useZodForm(availabilitySearchSchema, {
+    defaultValues: { date: "", partySize: "1", timeZone: locationTimeZone },
+    // The error summary takes focus instead, then links to each field.
+    shouldFocusError: false,
+  });
+
+  const target =
+    serviceId === null || locationId === null
+      ? null
+      : { locale, locationId, serviceId };
+  const availability = useQuery({
+    enabled: target !== null && submitted !== null,
+    queryKey:
+      target !== null && submitted !== null
+        ? availabilityQueryKey(target, submitted)
+        : ["availability", "idle"],
+    queryFn: async ({ signal }) => {
+      const query = availabilitySearchParams(target!, submitted!);
+      const response = await fetch(`/api/availability?${query}`, {
+        credentials: "omit",
+        headers: { Accept: "application/json" },
+        signal,
+      });
+      if (!response.ok) throw new Error("Availability request failed");
+      return parseAvailabilityV1Response(await response.json());
+    },
+    // Advisory times: never retried or refreshed behind the customer's back.
+    // "Try again" and a new search are the only ways to fetch again.
+    refetchOnWindowFocus: false,
+    retry: false,
+    staleTime: 0,
+  });
+
+  const searching = submitted !== null && availability.isFetching;
+  const failed = submitted !== null && !searching && availability.status === "error";
+  const response =
+    submitted !== null && !searching && availability.status === "success"
+      ? availability.data
+      : undefined;
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
@@ -151,18 +183,8 @@ export function AvailabilityPicker({
   }, []);
 
   useEffect(() => {
-    if (state.failed) {
-      document.querySelector<HTMLElement>("#availability-error")?.focus();
-    }
-  }, [state.failed]);
-
-  useEffect(() => {
-    if (dateError !== null) {
-      document.querySelector<HTMLElement>("#availability-form-error")?.focus();
-    }
-  }, [dateError]);
-
-  useEffect(() => () => activeRequest.current?.abort(), []);
+    if (failed) document.querySelector<HTMLElement>("#availability-error")?.focus();
+  }, [failed]);
 
   const zoneOptions = useMemo(
     () =>
@@ -180,61 +202,51 @@ export function AvailabilityPicker({
     service: copy.timeZoneServiceHint,
   };
 
-  function changeFilter(action: AvailabilityPickerAction) {
-    activeRequest.current?.abort();
-    activeRequest.current = null;
-    dispatch(action);
+  function clearSearch() {
+    setSubmitted(null);
+    setSelected(null);
   }
 
-  async function search(event?: FormEvent<HTMLFormElement>) {
-    event?.preventDefault();
-    const snapshot = Object.freeze({ ...state.filters });
-    if (!serviceId || !locationId) return;
-    if (!snapshot.date) {
-      setDateError(copy.dateRequired);
-      return;
-    }
-    activeRequest.current?.abort();
-    const controller = new AbortController();
-    activeRequest.current = controller;
-    const requestId = ++requestSequence.current;
-    dispatch({ requestId, snapshot, type: "submitted" });
-    try {
-      const query = new URLSearchParams({
-        endBefore: localMidnight(addCalendarDays(snapshot.date, 7), snapshot.timeZone),
-        locale,
-        locationId,
-        partySize: String(snapshot.partySize),
-        serviceId,
-        startAfter: localMidnight(snapshot.date, snapshot.timeZone),
-        timeZone: snapshot.timeZone,
+  const search = form.handleSubmit(
+    (values) => {
+      const snapshot = Object.freeze({
+        date: values.date,
+        partySize: values.partySize,
+        timeZone: values.timeZone,
       });
-      const response = await fetch(`/api/availability?${query}`, {
-        credentials: "omit",
-        headers: { Accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new Error("Availability request failed");
-      dispatch({
-        requestId,
-        response: parseAvailabilityV1Response(await response.json()),
-        type: "resolved",
-      });
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        dispatch({ requestId, type: "rejected" });
-      }
-    } finally {
-      if (activeRequest.current === controller) activeRequest.current = null;
-    }
-  }
+      setSelected(null);
+      const unchanged =
+        submitted !== null &&
+        submitted.date === snapshot.date &&
+        submitted.partySize === snapshot.partySize &&
+        submitted.timeZone === snapshot.timeZone;
+      // Searching again for the same filters asks the server again.
+      if (unchanged) void availability.refetch();
+      else setSubmitted(snapshot);
+    },
+    () => setSummaryFocus((count) => count + 1),
+  );
 
   function selectSlot(slot: AvailabilitySlotV1) {
-    dispatch({ slot, type: "selected" });
+    setSelected(slot);
     onSlotSelected?.(slot);
   }
 
-  const unavailable = serviceId === null || locationId === null;
+  const { errors } = form.formState;
+  const problems = fieldControls.flatMap(([field, controlId]) => {
+    const text = formErrorMessage(errors[field]?.message, locale, formMessages);
+    return text === undefined ? [] : [{ controlId, text }];
+  });
+  const summaryShown = problems.length > 0;
+  // Each refused search moves focus to the summary once, as soon as the
+  // summary is rendered (field errors can arrive a render after the submit).
+  useEffect(() => {
+    if (summaryShown && summaryFocus > focusedSummary.current) {
+      focusedSummary.current = summaryFocus;
+      document.querySelector<HTMLElement>("#availability-form-error")?.focus();
+    }
+  }, [summaryFocus, summaryShown]);
+
   return (
     <Card aria-labelledby="availability-title" role="region">
       <CardHeader>
@@ -242,159 +254,195 @@ export function AvailabilityPicker({
         <CardDescription>{copy.summary}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-6">
-        {unavailable ? (
+        {target === null ? (
           <Alert tone="info">{copy.unavailable}</Alert>
         ) : (
-          <form
-            aria-busy={state.loading || !interactive || undefined}
-            className="grid gap-5"
-            onSubmit={search}
-          >
-            {state.failed ? (
-              <Alert
-                className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
-                id="availability-error"
-                tabIndex={-1}
-                tone="danger"
-              >
-                <AlertTitle>{copy.errorTitle}</AlertTitle>
-                <AlertDescription className="grid justify-items-start gap-3">
-                  <p>{copy.error}</p>
-                  <Button onClick={() => void search()} variant="outline">
-                    <RotateCw aria-hidden="true" />
-                    {copy.retry}
-                  </Button>
-                </AlertDescription>
-              </Alert>
-            ) : null}
-            {dateError === null ? null : (
-              <Alert
-                className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
-                id="availability-form-error"
-                tabIndex={-1}
-                tone="danger"
-              >
-                <AlertTitle>{copy.formErrorTitle}</AlertTitle>
-                <AlertDescription>
-                  <a
-                    className="font-semibold text-destructive underline underline-offset-4"
-                    href="#availability-date"
-                  >
-                    {dateError}
-                  </a>
-                </AlertDescription>
-              </Alert>
-            )}
-            <FieldGroup columns={3}>
-              <Field invalid={dateError !== null}>
-                <Label htmlFor="availability-date">{copy.dateLabel}</Label>
-                <DatePicker
-                  {...(dateError === null
-                    ? {}
-                    : {
-                        "aria-describedby": "availability-date-error",
-                        "aria-invalid": true,
-                      })}
-                  disabled={!interactive}
-                  id="availability-date"
-                  locale={locale}
-                  name="date"
-                  onValueChange={(value) => {
-                    setDateError(null);
-                    changeFilter({ field: "date", type: "filterChanged", value });
-                  }}
-                  placeholder={copy.datePlaceholder}
-                  required
-                  value={state.filters.date}
-                />
-                <FieldError id="availability-date-error">{dateError}</FieldError>
-              </Field>
-              <Field>
-                <Label htmlFor="availability-time-zone">{copy.timeZoneLabel}</Label>
-                <Select
-                  disabled={!interactive}
-                  name="timeZone"
-                  onValueChange={(value) =>
-                    changeFilter({ field: "timeZone", type: "filterChanged", value })
-                  }
-                  required
-                  value={state.filters.timeZone}
-                >
-                  <SelectTrigger id="availability-time-zone">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {zoneOptions.map((option) => {
-                      const details = [option.offset, zoneHints[option.origin]]
-                        .filter(Boolean)
-                        .join(" · ");
-                      return (
-                        <SelectItem key={option.zone} value={option.zone}>
-                          <bdi dir="ltr">{option.zone}</bdi>
-                          {details === "" ? null : (
-                            <span className="text-muted-foreground">{details}</span>
-                          )}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <Label htmlFor="availability-party-size">{copy.partySizeLabel}</Label>
-                <Input
-                  disabled={!interactive}
-                  id="availability-party-size"
-                  inputMode="numeric"
-                  max={50}
-                  min={1}
-                  name="partySize"
-                  onChange={(event) =>
-                    changeFilter({
-                      field: "partySize",
-                      type: "filterChanged",
-                      value: event.currentTarget.valueAsNumber,
-                    })
-                  }
-                  required
-                  type="number"
-                  value={state.filters.partySize}
-                />
-              </Field>
-            </FieldGroup>
-            <Button
-              className="justify-self-start"
-              disabled={!interactive}
-              loading={state.loading}
-              loadingLabel={copy.searching}
-              type="submit"
+          <Form form={form} locale={locale} messages={formMessages}>
+            <form
+              aria-busy={searching || !interactive || undefined}
+              className="grid gap-5"
+              noValidate
+              onSubmit={(event) => void search(event)}
             >
-              <Search aria-hidden="true" />
-              {copy.search}
-            </Button>
-          </form>
+              {failed ? (
+                <Alert
+                  className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
+                  id="availability-error"
+                  tabIndex={-1}
+                  tone="danger"
+                >
+                  <AlertTitle>{copy.errorTitle}</AlertTitle>
+                  <AlertDescription className="grid justify-items-start gap-3">
+                    <p>{copy.error}</p>
+                    <Button
+                      onClick={() => void availability.refetch()}
+                      variant="outline"
+                    >
+                      <RotateCw aria-hidden="true" />
+                      {copy.retry}
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+              {problems.length === 0 ? null : (
+                <Alert
+                  className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
+                  id="availability-form-error"
+                  tabIndex={-1}
+                  tone="danger"
+                >
+                  <AlertTitle>{copy.formErrorTitle}</AlertTitle>
+                  <AlertDescription>
+                    <ul className="grid gap-1">
+                      {problems.map((problem) => (
+                        <li key={problem.controlId}>
+                          <a
+                            className="font-semibold text-destructive underline underline-offset-4"
+                            href={`#${problem.controlId}`}
+                          >
+                            {problem.text}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </AlertDescription>
+                </Alert>
+              )}
+              <FieldGroup columns={3}>
+                <FormField
+                  control={form.control}
+                  name="date"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="availability-date">
+                        {copy.dateLabel}
+                      </FormLabel>
+                      <FormControl>
+                        <DatePicker
+                          disabled={!interactive}
+                          id="availability-date"
+                          locale={locale}
+                          name="date"
+                          onValueChange={(value) => {
+                            clearSearch();
+                            field.onChange(value);
+                          }}
+                          placeholder={copy.datePlaceholder}
+                          required
+                          value={field.value}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="timeZone"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="availability-time-zone">
+                        {copy.timeZoneLabel}
+                      </FormLabel>
+                      <Select
+                        disabled={!interactive}
+                        name="timeZone"
+                        onValueChange={(value) => {
+                          clearSearch();
+                          field.onChange(value);
+                        }}
+                        required
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger id="availability-time-zone">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-72">
+                          {zoneOptions.map((option) => {
+                            const details = [option.offset, zoneHints[option.origin]]
+                              .filter(Boolean)
+                              .join(" · ");
+                            return (
+                              <SelectItem key={option.zone} value={option.zone}>
+                                <bdi dir="ltr">{option.zone}</bdi>
+                                {details === "" ? null : (
+                                  <span className="text-muted-foreground">
+                                    {details}
+                                  </span>
+                                )}
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="partySize"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel htmlFor="availability-party-size">
+                        {copy.partySizeLabel}
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          disabled={!interactive}
+                          id="availability-party-size"
+                          inputMode="numeric"
+                          max={50}
+                          min={1}
+                          name="partySize"
+                          onBlur={field.onBlur}
+                          onChange={(event) => {
+                            clearSearch();
+                            field.onChange(event.currentTarget.value);
+                          }}
+                          ref={field.ref}
+                          required
+                          type="number"
+                          value={String(field.value ?? "")}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </FieldGroup>
+              <Button
+                className="justify-self-start"
+                disabled={!interactive}
+                loading={searching}
+                loadingLabel={copy.searching}
+                type="submit"
+              >
+                <Search aria-hidden="true" />
+                {copy.search}
+              </Button>
+            </form>
+          </Form>
         )}
-        {state.result ? (
+        {response && submitted ? (
           <AvailabilityResults
             copy={copy}
-            displayTimeZone={state.result.response.displayTimeZone}
+            displayTimeZone={response.displayTimeZone}
             locale={locale}
-            noSlotReason={state.result.response.noSlotReason}
+            noSlotReason={response.noSlotReason}
             onSelect={selectSlot}
-            selectedSlot={state.selected ?? null}
-            serviceTimeZone={state.result.response.locationTimeZone}
-            slots={state.result.response.slots}
+            selectedSlot={selected}
+            serviceTimeZone={response.locationTimeZone}
+            slots={response.slots}
           />
         ) : null}
-        {state.selected && state.result ? (
+        {selected && response && submitted ? (
           <Alert tone="positive">
             {copy.selectedAnnouncement.replace(
               "{time}",
-              formatWallDateTime(
-                state.selected.startAt,
-                locale,
-                state.result.snapshot.timeZone,
-              ),
+              formatWallDateTime(selected.startAt, locale, submitted.timeZone),
             )}
           </Alert>
         ) : null}

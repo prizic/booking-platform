@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useState, type Ref } from "react";
 import { DayPicker, type DayPickerProps } from "react-day-picker";
 // DayPicker locales extend date-fns with translated navigation and grid labels.
 import { ar as arLocale, enUS } from "react-day-picker/locale";
@@ -89,6 +89,8 @@ function formatDisplay(date: Date, locale: PickerLocale): string {
 }
 
 export interface DatePickerProps {
+  /** Lets React Hook Form focus the trigger on a validation error. */
+  readonly ref?: Ref<HTMLButtonElement>;
   /** Form field name; the value is submitted as YYYY-MM-DD like a native date input. */
   readonly name?: string;
   readonly id?: string;
@@ -110,6 +112,7 @@ export interface DatePickerProps {
 
 /** Date field: a button that opens the month grid; submits YYYY-MM-DD under `name`. */
 export function DatePicker({
+  ref,
   name,
   id,
   locale,
@@ -150,6 +153,7 @@ export function DatePicker({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
+            ref={ref}
             type="button"
             id={id}
             disabled={disabled}
@@ -210,6 +214,8 @@ function formatTime(value: string, locale: PickerLocale): string {
 }
 
 export interface TimeSelectProps {
+  /** Lets React Hook Form focus the trigger on a validation error. */
+  readonly ref?: Ref<HTMLButtonElement>;
   readonly name?: string;
   readonly id?: string;
   readonly locale: PickerLocale;
@@ -228,6 +234,7 @@ export interface TimeSelectProps {
 
 /** Time field as a select of HH:MM steps; submits HH:MM like a native time input. */
 export function TimeSelect({
+  ref,
   name,
   id,
   locale,
@@ -257,6 +264,7 @@ export function TimeSelect({
       {...(disabled ? { disabled } : {})}
     >
       <SelectTrigger
+        ref={ref}
         id={id}
         className={className}
         aria-describedby={aria["aria-describedby"]}

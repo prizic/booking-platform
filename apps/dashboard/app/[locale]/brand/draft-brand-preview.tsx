@@ -20,7 +20,7 @@ import {
 import { ArrowLeft, CalendarPlus, Languages } from "lucide-react";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { BrandScope } from "../brand-preview/brand-scope";
-import { brandObject } from "./brand-fields";
+import { brandObject } from "./brand-document";
 
 /** How the Client presents the saved draft, drawn with the same foundation components. */
 function ClientMock({

@@ -34,9 +34,10 @@ async function submitMutation(page: Page, button: Locator) {
   ]);
 }
 /**
- * Dangerous submits open an alertdialog. The `confirm` field must stay disabled
- * until the operator confirms inside the dialog, so the action cannot carry it
- * by any other path.
+ * Dangerous submits open an alertdialog. The trigger must only open the dialog:
+ * no server action may run until the operator confirms inside it, because only
+ * the dialog's confirm button adds the explicit `confirm` literal the server
+ * requires.
  */
 async function confirmDangerous(
   page: Page,
@@ -44,10 +45,19 @@ async function confirmDangerous(
   trigger: string,
   confirm: string,
 ) {
-  await expect(scope.locator('input[name="confirm"]')).toBeDisabled();
+  const actionCalls: string[] = [];
+  const recordAction = (request: {
+    headers(): Record<string, string>;
+    url(): string;
+  }) => {
+    if (request.headers()["next-action"] !== undefined) actionCalls.push(request.url());
+  };
+  page.on("request", recordAction);
   await scope.getByRole("button", { name: trigger, exact: true }).click();
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
+  page.off("request", recordAction);
+  expect(actionCalls).toEqual([]);
   await dialog.getByRole("button", { name: confirm, exact: true }).click();
 }
 const monthNames = Array.from({ length: 12 }, (_, index) =>
@@ -261,9 +271,7 @@ test.describe("persisted workflows", () => {
       .locator("summary")
       .filter({ hasText: /^Add resource$/u })
       .click();
-    const resource = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="formId"][value="new-resource"]') });
+    const resource = page.locator('form[data-form-id="new-resource"]');
     await expect(resource).toBeVisible();
     await resource
       .locator('select[name="resourceTypeId"]')
@@ -284,7 +292,7 @@ test.describe("persisted workflows", () => {
       .locator("details")
       .filter({
         has: page.locator(
-          'input[name="staffId"][value="d8000000-0000-0000-0000-000000000001"]',
+          'form[data-form-id="staff-d8000000-0000-0000-0000-000000000001-eligibility"]',
         ),
       })
       .filter({ has: page.locator('select[name="eligible"]') });
@@ -365,15 +373,15 @@ test.describe("persisted workflows", () => {
       await expect(rule.getByRole("status")).toBeVisible();
     }
     await page.goto(`${completionOrigin}/en/bookings/new`);
-    await page.locator("#on-behalf-name").fill("Completion synthetic guest");
-    await page.locator("#on-behalf-email").fill("completion-guest@example.invalid");
+    await field(page, "fullName").fill("Completion synthetic guest");
+    await field(page, "email").fill("completion-guest@example.invalid");
     await chooseOption(
       page,
-      page.locator("#on-behalf-offer"),
+      page.getByRole("combobox", { name: "Service and location", exact: true }),
       "Completion consultation · Live booking suite",
     );
     const date = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-    await pickDate(page, page.locator("#on-behalf-date"), date);
+    await pickDate(page, page.getByRole("button", { name: "Date", exact: true }), date);
     await page
       .getByRole("button", { name: "Find available times", exact: true })
       .click();
@@ -383,8 +391,13 @@ test.describe("persisted workflows", () => {
       .first()
       .check();
     await page.getByRole("button", { name: "Hold selected time", exact: true }).click();
-    await page.locator("#intake-reason").fill("Synthetic acceptance intake");
-    await page.locator("#on-behalf-consent").check();
+    await field(page, "answers.reason").fill("Synthetic acceptance intake");
+    await page
+      .getByRole("checkbox", {
+        name: "The customer has agreed to the policy shown above",
+        exact: true,
+      })
+      .check();
     await page.getByRole("button", { name: "Create booking", exact: true }).click();
     await page.waitForURL(/\/bookings\/[a-f0-9-]{36}$/u);
     const bookingId = page.url().split("/").at(-1)!;
@@ -437,10 +450,7 @@ test.describe("persisted workflows", () => {
     expect(page.url()).not.toMatch(/token|code=/u);
     await enrollCompletionMfa(page);
     await page.goto(`${completionOrigin}/en/brand`);
-    const publish = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="contentHash"]') })
-      .filter({ has: page.locator('input[name="confirm"]') });
+    const publish = page.locator('[data-brand-action="publish"]');
     await confirmDangerous(page, publish, "Publish this draft", "Publish this draft");
     await page.waitForURL(/result=published/u);
     expect(
@@ -449,8 +459,7 @@ test.describe("persisted workflows", () => {
       ),
     ).toBe("1");
     const rollback = page
-      .locator("form")
-      .filter({ has: page.locator('input[name="toRevision"][value="1"]') })
+      .locator('[data-brand-action="rollback"][data-to-revision="1"]')
       .first();
     await confirmDangerous(page, rollback, "Roll back to this", "Roll back to this");
     await expect(page).toHaveURL(/result=rolled-back/u);
@@ -477,16 +486,16 @@ test.describe("persisted workflows", () => {
     email: string,
   ) {
     await page.goto(`${completionOrigin}/en/bookings/new`);
-    await page.locator("#on-behalf-name").fill("Completion workflow guest");
-    await page.locator("#on-behalf-email").fill(email);
+    await field(page, "fullName").fill("Completion workflow guest");
+    await field(page, "email").fill(email);
     await chooseOption(
       page,
-      page.locator("#on-behalf-offer"),
+      page.getByRole("combobox", { name: "Service and location", exact: true }),
       `${offer} · Live booking suite`,
     );
     await pickDate(
       page,
-      page.locator("#on-behalf-date"),
+      page.getByRole("button", { name: "Date", exact: true }),
       new Date(Date.now() + days * 86400000).toISOString().slice(0, 10),
     );
     await page
@@ -498,8 +507,13 @@ test.describe("persisted workflows", () => {
       .first()
       .check();
     await page.getByRole("button", { name: "Hold selected time", exact: true }).click();
-    await page.locator("#intake-reason").fill("Synthetic workflow intake");
-    await page.locator("#on-behalf-consent").check();
+    await field(page, "answers.reason").fill("Synthetic workflow intake");
+    await page
+      .getByRole("checkbox", {
+        name: "The customer has agreed to the policy shown above",
+        exact: true,
+      })
+      .check();
     await page.getByRole("button", { name: "Create booking", exact: true }).click();
     await page.waitForURL(/\/bookings\/[a-f0-9-]{36}$/u);
     return page.url().split("/").at(-1)!;
@@ -551,9 +565,7 @@ test.describe("persisted workflows", () => {
         "requested",
       );
       await page.goto(`${completionOrigin}/en/requests`);
-      const form = page
-        .locator("form")
-        .filter({ has: page.locator(`input[name="bookingId"][value="${id}"]`) });
+      const form = page.locator(`form[data-booking-id="${id}"]`);
       await form.locator('[name="publicReason"]').fill("Synthetic request decision");
       await form.locator('[name="internalReason"]').fill("Synthetic review");
       if (action === "propose")
@@ -580,14 +592,14 @@ test.describe("persisted workflows", () => {
       13,
       email("no-show"),
     );
-    await page.locator("#transition-reason").fill("Synthetic no-show outcome");
+    await field(page, "reason").fill("Synthetic no-show outcome");
     await submitMutation(page, page.locator('button[name="action"][value="no_show"]'));
     await expect(page).toHaveURL(/result=no-show/u);
-    await expect(page.locator('input[name="expectedRevision"]')).toHaveValue("2");
+    await expect(page.locator('form[data-expected-revision="2"]')).toHaveCount(1);
     expect(
       completionSql(`select status from app.bookings where id='${noShowId}'`),
     ).toBe("no_show");
-    await page.locator("#transition-reason").fill("Synthetic outcome correction");
+    await field(page, "reason").fill("Synthetic outcome correction");
     await submitMutation(page, page.locator('button[name="action"][value="correct"]'));
     await expect(page).toHaveURL(/result=corrected/u);
     expect(
@@ -618,8 +630,7 @@ test.describe("persisted workflows", () => {
       // Each row opens its change form in a dialog named by the booking reference.
       const change = page
         .getByRole("dialog")
-        .locator("form")
-        .filter({ has: page.locator(`input[name="bookingId"][value="${changedId}"]`) });
+        .locator(`form[data-booking-id="${changedId}"]`);
       // A click that lands before hydration opens nothing; repeat until it does.
       await expect(async () => {
         if ((await change.count()) === 0)
@@ -653,20 +664,20 @@ test.describe("persisted workflows", () => {
       12,
       email("lifecycle"),
     );
-    await page.locator("#transition-reason").fill("Synthetic check-in override");
+    await field(page, "reason").fill("Synthetic check-in override");
     await page.getByRole("button", { name: "Check in", exact: true }).click();
     await expect(page).toHaveURL(/result=checked-in/u);
-    await page.locator("#transition-reason").fill("Synthetic completion");
+    await field(page, "reason").fill("Synthetic completion");
     await page.getByRole("button", { name: "Complete", exact: true }).click();
     await expect(page).toHaveURL(/result=completed/u);
     expect(completionSql(`select status from app.bookings where id='${id}'`)).toBe(
       "completed",
     );
     await page.getByRole("link", { name: "Customer", exact: true }).click();
-    await page.locator("#correct-name").fill("Completion corrected guest");
+    await field(page, "fullName").fill("Completion corrected guest");
     await page
       .locator("form")
-      .filter({ has: page.locator("#correct-name") })
+      .filter({ has: page.locator('[name="fullName"]') })
       .getByRole("button")
       .click();
     await expect(page).toHaveURL(/result=corrected/u);
@@ -683,10 +694,10 @@ test.describe("persisted workflows", () => {
     await page.locator('button[name="kind"][value="export"]').click();
     await expect(page).toHaveURL(/result=exported/u);
     await expect(page.locator("#customer-export-title")).toBeVisible();
-    await page.locator("#flag-reason").fill("Synthetic privacy restriction");
+    await field(page, "reason").fill("Synthetic privacy restriction");
     await page.locator('button[name="action"][value="restrict"]').click();
     await expect(page).toHaveURL(/result=restricted/u);
-    await page.locator("#flag-reason").fill("Synthetic legal hold");
+    await field(page, "reason").fill("Synthetic legal hold");
     await page.locator('button[name="action"][value="hold"]').click();
     await expect(page).toHaveURL(/result=held/u);
     await page.locator('button[name="kind"][value="deletion"]').click();
@@ -700,10 +711,7 @@ test.describe("persisted workflows", () => {
     await page.goto(`${completionOrigin}/en/communications`);
     // The lifecycle customer is privacy-restricted above. Retry a separate,
     // unrestricted booking so this flow preserves the suppression contract.
-    const retry = page
-      .locator("form")
-      .filter({ has: page.locator(`input[name="bookingId"][value="${noShowId}"]`) })
-      .first();
+    const retry = page.locator(`[data-communication-retry="${noShowId}"]`).first();
     await confirmDangerous(page, retry, "Retry email", "Retry email");
     await expect(page).toHaveURL(/result=queued/u);
     await expect(page.locator("main").getByRole("status")).toContainText(
@@ -774,9 +782,7 @@ test.describe("persisted workflows", () => {
       `select id from app.bookings where tenant_id='${completionTenant}' and status='confirmed' order by created_at desc limit 1`,
     );
     await operator.goto(`${completionOrigin}/en/bookings/${id}`);
-    await operator
-      .locator("#transition-reason")
-      .fill("Synthetic acceptance check-in override");
+    await field(operator, "reason").fill("Synthetic acceptance check-in override");
     await operator.getByRole("button", { name: "Check in", exact: true }).click();
     await expect(operator).toHaveURL(/result=checked-in/u);
     const changedEvent = page.getByRole("listitem").filter({

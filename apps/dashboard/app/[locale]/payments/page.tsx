@@ -24,7 +24,6 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-  Textarea,
   Toolbar,
 } from "@wlbp/ui-foundation";
 import { CircleCheck, Mail, ReceiptText } from "lucide-react";
@@ -41,7 +40,7 @@ import { ZoneNote } from "../../_lib/ui/zone-note";
 import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
 import { ResultAlert } from "../../_lib/ui/result-alert";
 import { textLinkClass } from "../../_lib/ui/text-link";
-import { requestRefundAction, resolveExceptionAction } from "./actions";
+import { PaymentExceptionForms } from "./payment-forms";
 import { paymentResultKeys, positivePaymentResults } from "./results";
 
 export const dynamic = "force-dynamic";
@@ -52,16 +51,6 @@ type PaymentsPageProps = {
   readonly params: Promise<{ locale: Locale }>;
   readonly searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
-
-// How an operator can close an item. The database re-checks every one of these;
-// offering them here is presentation, never authorization.
-const resolutions = [
-  "refunded",
-  "written_off",
-  "contested",
-  "reconciled",
-  "no_action_needed",
-] as const;
 
 async function load(
   locale: Locale,
@@ -272,58 +261,11 @@ export default async function PaymentsPage({
                         </p>
                       ) : (
                         <div className="grid content-start gap-4 border-t pt-4 lg:border-t-0 lg:border-s lg:ps-5 lg:pt-0">
-                          {item.bookingId === null ? null : (
-                            <form action={requestRefundAction}>
-                              <input type="hidden" name="locale" value={locale} />
-                              <input
-                                type="hidden"
-                                name="bookingId"
-                                value={item.bookingId}
-                              />
-                              <Button type="submit" variant="outline" block>
-                                {message("paymentsRetryRefund")}
-                              </Button>
-                            </form>
-                          )}
-                          <form action={resolveExceptionAction} className="grid gap-4">
-                            <input type="hidden" name="locale" value={locale} />
-                            <input
-                              type="hidden"
-                              name="exceptionId"
-                              value={item.exceptionId}
-                            />
-                            <Field>
-                              <Label htmlFor={`resolution-${item.exceptionId}`}>
-                                {message("paymentsResolutionLabel")}
-                              </Label>
-                              <Select defaultValue="reconciled" name="resolution">
-                                <SelectTrigger id={`resolution-${item.exceptionId}`}>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {resolutions.map((option) => (
-                                    <SelectItem key={option} value={option}>
-                                      {workspaceStatus(locale, option)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </Field>
-                            <Field>
-                              <Label htmlFor={`note-${item.exceptionId}`}>
-                                {message("paymentsNoteLabel")}
-                              </Label>
-                              <Textarea
-                                id={`note-${item.exceptionId}`}
-                                maxLength={500}
-                                name="note"
-                                rows={2}
-                              />
-                            </Field>
-                            <Button type="submit" block>
-                              {message("paymentsResolveAction")}
-                            </Button>
-                          </form>
+                          <PaymentExceptionForms
+                            locale={locale}
+                            exceptionId={item.exceptionId}
+                            bookingId={item.bookingId}
+                          />
                         </div>
                       )}
                     </article>

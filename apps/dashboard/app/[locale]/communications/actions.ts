@@ -1,25 +1,23 @@
 "use server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import {
+  actionError,
+  actionOk,
+  parseActionInput,
+  type ActionResult,
+} from "@wlbp/ui-foundation/actions";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
-export interface CommunicationResult {
-  readonly error?: boolean;
-}
+import { communicationRetrySchema, type CommunicationRetryInput } from "./retry-schema";
+
 export async function retryCommunication(
-  _state: CommunicationResult,
-  form: FormData,
-): Promise<CommunicationResult> {
-  const locale = form.get("locale") === "ar" ? "ar" : "en";
-  const bookingId = form.get("bookingId");
-  if (
-    form.get("confirm") !== "yes" ||
-    typeof bookingId !== "string" ||
-    !/^[a-f0-9-]{36}$/iu.test(bookingId)
-  )
-    return { error: true };
+  input: CommunicationRetryInput,
+): Promise<ActionResult<{ readonly destination: string }>> {
+  const parsed = parseActionInput(communicationRetrySchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { locale, bookingId } = parsed.data;
   const request = await loadDashboardRequestAccess(locale);
   if (request.state.kind !== "ready" || !request.source?.resendBookingNotification)
-    return { error: true };
+    return actionError("refused");
   try {
     await request.source.resendBookingNotification({
       tenantId: request.state.context.tenantId,
@@ -29,7 +27,7 @@ export async function retryCommunication(
       revalidatePath(`/${locale}/${path}`);
     revalidatePath(`/${locale}/bookings/${bookingId}`);
   } catch {
-    return { error: true };
+    return actionError("refused");
   }
-  redirect(`/${locale}/communications?result=queued`);
+  return actionOk({ destination: `/${locale}/communications?result=queued` });
 }

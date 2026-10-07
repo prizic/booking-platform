@@ -1,17 +1,5 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import {
-  Alert,
-  AlertDescription,
-  Badge,
-  Checkbox,
-  Field,
-  FieldDescription,
-  Label,
-  ReferenceCode,
-  Textarea,
-  TextField,
-} from "@wlbp/ui-foundation";
-import { savePlanAction } from "../../../_lib/actions/plans";
+import { Alert, AlertDescription, Badge, ReferenceCode } from "@wlbp/ui-foundation";
 import { commercialCopy } from "../../../_lib/commercial-copy";
 import { fill, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
@@ -20,6 +8,11 @@ import { pageLocale } from "../../../_lib/page-locale";
 import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
+import {
+  CheckboxFormField,
+  TextFormField,
+  TextareaFormField,
+} from "../../../_lib/ui/form-fields";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -28,21 +21,24 @@ export const dynamic = "force-dynamic";
 
 const c = commercialCopy.plans;
 
-function PlanFields({
-  locale,
-  plan,
-}: {
-  locale: Locale;
-  plan?: { key: string; name: string; entitlements: string[]; active: boolean };
-}) {
+type PlanRow = { key: string; name: string; entitlements: string[]; active: boolean };
+
+/** Visible starting values; the hidden mode (and key, when editing) pick create or edit. */
+function planValues(plan?: PlanRow) {
+  return {
+    key: plan?.key ?? "",
+    name: plan?.name ?? "",
+    features: plan?.entitlements.join("\n") ?? "",
+    active: plan?.active ?? true,
+  };
+}
+
+function PlanFields({ locale, plan }: { locale: Locale; plan?: PlanRow }) {
   const suffix = plan?.key ?? "new";
   return (
     <>
-      <input type="hidden" name="mode" value={plan ? "edit" : "create"} />
-      {plan ? (
-        <input type="hidden" name="key" value={plan.key} />
-      ) : (
-        <TextField
+      {plan ? null : (
+        <TextFormField
           id="plan-key"
           name="key"
           label={say(locale, c.key)}
@@ -53,36 +49,26 @@ function PlanFields({
           autoComplete="off"
         />
       )}
-      <TextField
+      <TextFormField
         id={`plan-name-${suffix}`}
         name="name"
         label={say(locale, c.name)}
-        defaultValue={plan?.name}
         required
         maxLength={80}
       />
-      <Field>
-        <Label htmlFor={`plan-features-${suffix}`}>{say(locale, c.features)}</Label>
-        <Textarea
-          id={`plan-features-${suffix}`}
-          name="features"
-          defaultValue={plan?.entitlements.join("\n")}
-          rows={6}
-          dir="ltr"
-          aria-describedby={`plan-features-${suffix}-hint`}
-        />
-        <FieldDescription id={`plan-features-${suffix}-hint`}>
-          {say(locale, c.featuresHint)}
-        </FieldDescription>
-      </Field>
-      <Field orientation="horizontal">
-        <Checkbox
-          id={`plan-active-${suffix}`}
-          name="active"
-          defaultChecked={plan?.active ?? true}
-        />
-        <Label htmlFor={`plan-active-${suffix}`}>{say(locale, c.active)}</Label>
-      </Field>
+      <TextareaFormField
+        id={`plan-features-${suffix}`}
+        name="features"
+        label={say(locale, c.features)}
+        description={say(locale, c.featuresHint)}
+        rows={6}
+        dir="ltr"
+      />
+      <CheckboxFormField
+        id={`plan-active-${suffix}`}
+        name="active"
+        label={say(locale, c.active)}
+      />
     </>
   );
 }
@@ -112,13 +98,14 @@ export default async function PlansPage({
           admin ? (
             <ActionDialog
               locale={locale}
-              action={savePlanAction}
+              operation="savePlan"
               trigger={say(locale, c.create)}
               triggerVariant="primary"
               title={say(locale, c.createTitle)}
               submit={say(locale, c.create)}
               successMessage={say(locale, c.saved)}
-              reason={{ minLength: 5 }}
+              hidden={{ mode: "create" }}
+              values={planValues()}
             >
               <PlanFields locale={locale} />
             </ActionDialog>
@@ -177,14 +164,15 @@ export default async function PlansPage({
                 <ActionDialog
                   key="e"
                   locale={locale}
-                  action={savePlanAction}
+                  operation="savePlan"
                   trigger={say(locale, c.edit)}
                   triggerVariant="quiet"
                   title={say(locale, c.editTitle)}
                   description={say(locale, c.editBody)}
                   submit={say(locale, c.edit)}
                   successMessage={say(locale, c.saved)}
-                  reason={{ minLength: 5 }}
+                  hidden={{ mode: "edit", key: plan.key }}
+                  values={planValues(plan)}
                 >
                   <PlanFields locale={locale} plan={plan} />
                 </ActionDialog>

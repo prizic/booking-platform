@@ -1,44 +1,47 @@
 "use server";
 
-import { instant, text, uuid } from "../form-data";
-import { runOperatorAction, type ActionResult } from "../operator-action";
-import { missing } from "./guard";
+import { parseActionInput } from "@wlbp/ui-foundation/actions";
+import { runOperatorAction, type OperatorActionResult } from "../operator-action";
+import {
+  addOperatorSchema,
+  operatorStandingSchema,
+  setOperatorRoleSchema,
+  type AddOperatorInput,
+  type OperatorStandingInput,
+  type SetOperatorRoleInput,
+} from "../schemas/operators";
 
 export async function addOperatorAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
+  input: AddOperatorInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(addOperatorSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { email, role, expiresAt, reason } = parsed.data;
   return (
     await runOperatorAction({
       action: "operator.add",
       fn: "add_operator_v1",
-      args: {
-        p_email: text(form, "email"),
-        p_role: text(form, "role"),
-        p_expires_at: instant(form, "expiresAt") ?? null,
-        p_reason: text(form, "reason"),
-      },
+      args: { p_email: email, p_role: role, p_expires_at: expiresAt, p_reason: reason },
       targetKind: "operator",
     })
   ).result;
 }
 
 export async function setOperatorRoleAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const operatorId = uuid(form, "operatorId");
-  const invalid = missing(operatorId);
-  if (invalid) return invalid;
+  input: SetOperatorRoleInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(setOperatorRoleSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { operatorId, role, expiresAt, reason } = parsed.data;
   return (
     await runOperatorAction({
       action: "operator.change_role",
       fn: "set_operator_role_v1",
       args: {
-        p_operator_id: operatorId!,
-        p_role: text(form, "role"),
-        p_expires_at: instant(form, "expiresAt") ?? null,
-        p_reason: text(form, "reason"),
+        p_operator_id: operatorId,
+        p_role: role,
+        p_expires_at: expiresAt,
+        p_reason: reason,
       },
       targetKind: "operator",
       targetId: operatorId,
@@ -47,17 +50,16 @@ export async function setOperatorRoleAction(
 }
 
 export async function disableOperatorAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const operatorId = uuid(form, "operatorId");
-  const invalid = missing(operatorId);
-  if (invalid) return invalid;
+  input: OperatorStandingInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(operatorStandingSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { operatorId, reason } = parsed.data;
   return (
     await runOperatorAction({
       action: "operator.disable",
       fn: "disable_operator_v1",
-      args: { p_operator_id: operatorId!, p_reason: text(form, "reason") },
+      args: { p_operator_id: operatorId, p_reason: reason },
       targetKind: "operator",
       targetId: operatorId,
     })
@@ -65,17 +67,16 @@ export async function disableOperatorAction(
 }
 
 export async function enableOperatorAction(
-  _previous: ActionResult,
-  form: FormData,
-): Promise<ActionResult> {
-  const operatorId = uuid(form, "operatorId");
-  const invalid = missing(operatorId);
-  if (invalid) return invalid;
+  input: OperatorStandingInput,
+): Promise<OperatorActionResult> {
+  const parsed = parseActionInput(operatorStandingSchema, input);
+  if (!parsed.ok) return parsed.result;
+  const { operatorId, reason } = parsed.data;
   return (
     await runOperatorAction({
       action: "operator.enable",
       fn: "enable_operator_v1",
-      args: { p_operator_id: operatorId!, p_reason: text(form, "reason") },
+      args: { p_operator_id: operatorId, p_reason: reason },
       targetKind: "operator",
       targetId: operatorId,
     })

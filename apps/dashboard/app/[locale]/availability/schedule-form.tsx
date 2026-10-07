@@ -1,46 +1,63 @@
 "use client";
-import { useActionState, useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RotateCw } from "lucide-react";
+import { useWatch, type Path } from "react-hook-form";
 import type { Locale } from "@wlbp/i18n";
 import {
-  Alert,
-  AlertDescription,
   Button,
-  DatePicker,
-  DateTimePicker,
-  Field,
-  FieldDescription,
-  FieldError,
   FieldGroup,
   FieldLegend,
   FieldSet,
-  Input,
-  Label,
-  RequiredMark,
-  TimeSelect,
+  Form,
+  applyActionErrors,
+  useActionMutation,
+  useZodForm,
 } from "@wlbp/ui-foundation";
 import { workspaceMessage } from "../../_lib/workspace-copy";
 import type { ScheduleChoice } from "../../_lib/dashboard-access";
-import { saveScheduleAction, removeScheduleAction } from "../actions";
-import { ConfirmSubmit } from "../services/confirm-submit";
+import { dashboardFormMessages } from "../../_lib/form-messages";
+import { removeScheduleAction, saveScheduleAction } from "./actions";
+import { ConfirmAction } from "../services/confirm-submit";
+import { FormActions } from "../services/form-kit";
+import type { ChoiceOption } from "../services/choice-select";
 import {
-  CheckboxRow,
-  ChoiceSelect,
-  FormActions,
-  keepUnsavedInput,
-  type ChoiceOption,
-} from "../services/form-kit";
-import { scheduleKinds, policyBounds, type ScheduleKind } from "./schedule-fields";
+  CheckboxField,
+  DateField,
+  DateTimeField,
+  SelectField,
+  TextField,
+  TimeField,
+} from "../services/form-fields";
+import { newAttemptId, useAuthoritativeDefaults } from "../services/form-hooks";
+import { MutationFeedback } from "../services/mutation-feedback";
+import {
+  UNAMBIGUOUS_FOLD,
+  policyBounds,
+  scheduleKinds,
+  scheduleRuleSchema,
+  type ScheduleKind,
+  type ScheduleRuleInput,
+} from "./schedule-schema";
 import { scheduleMessage, type ScheduleMessage } from "./schedule-copy";
 import { scopeName, type RecordRow } from "./schedule-scope";
 
-/**
- * Select value for "the local time is not repeated". The parser accepts only
- * "0" or "1" as an explicit occurrence and treats every other value — this
- * sentinel included — exactly as it treated the former empty choice.
- */
-const UNAMBIGUOUS_FOLD = "auto";
+const errorKeys = [
+  "invalid",
+  "gap",
+  "foldError",
+  "stale",
+  "unavailable",
+  "denied",
+  "scopeNotEmpty",
+  "breakOutside",
+] as const satisfies readonly ScheduleMessage[];
+
+function scheduleErrorMessages(locale: Locale): Readonly<Record<string, string>> {
+  return {
+    ...dashboardFormMessages(locale),
+    ...Object.fromEntries(errorKeys.map((key) => [key, scheduleMessage(locale, key)])),
+  };
+}
 
 function localValue(instant: string | null, timeZone: string): string {
   if (!instant) return "";
@@ -61,6 +78,89 @@ function timeValue(minute: number | null) {
     ? ""
     : `${String(Math.floor(minute / 60) % 24).padStart(2, "0")}:${String(minute % 60).padStart(2, "0")}`;
 }
+const recurringKinds: readonly ScheduleKind[] = ["weekly", "break", "exception"];
+const timedKinds: readonly ScheduleKind[] = ["time_off", "blackout", "maintenance"];
+
+/** The scope kinds a rule type may target. */
+function scopeKindsFor(operation: ScheduleKind): readonly string[] {
+  return operation === "policy"
+    ? ["tenant", "location", "service", "staff", "resource"]
+    : operation === "time_off"
+      ? ["staff", "resource"]
+      : operation === "maintenance"
+        ? ["resource"]
+        : operation === "scope"
+          ? ["location", "staff", "resource"]
+          : ["location"];
+}
+
+/** The editor's values for a rule (or a new one), as the controls hold them. */
+export function scheduleDefaults(
+  locale: Locale,
+  choices: readonly ScheduleChoice[],
+  rows: readonly RecordRow[],
+  record: RecordRow | undefined,
+  requestId: string,
+): ScheduleRuleInput {
+  const operation = record?.kind ?? "weekly";
+  const scopes = rows.filter((row) => row.kind === "scope");
+  const scopeId =
+    record?.kind === "scope" ? record.id : (record?.scopeId ?? scopes[0]?.id ?? "");
+  const scope = scopes.find((row) => row.id === scopeId);
+  const locationId =
+    record?.locationId ??
+    scope?.locationId ??
+    choices.find((c) => c.kind === "location")?.id ??
+    "";
+  const recurring = recurringKinds.includes(operation);
+  const zone =
+    (recurring ? scope?.timeZone : null) ??
+    choices.find((c) => c.id === locationId)?.timeZone ??
+    record?.timeZone ??
+    "Asia/Riyadh";
+  const fold =
+    record?.fold === null || record?.fold === undefined
+      ? UNAMBIGUOUS_FOLD
+      : String(record.fold);
+  return {
+    locale,
+    operation,
+    requestId,
+    id: record?.id ?? "",
+    scopeId,
+    locationId,
+    staffId: record?.staffId ?? "",
+    resourceId: record?.resourceId ?? "",
+    serviceId: record?.serviceId ?? "",
+    expectedRevision: recurring
+      ? String(scope?.revision ?? "")
+      : String(record?.revision ?? ""),
+    scopeKind: record?.serviceId
+      ? "service"
+      : record?.staffId
+        ? "staff"
+        : record?.resourceId
+          ? "resource"
+          : "location",
+    timeZone: zone,
+    dayOfWeek: String(record?.dayOfWeek ?? 1),
+    localDate: record?.localDate ?? "",
+    exceptionKind: record?.exceptionKind ?? "closed",
+    fold,
+    startTime: timeValue(record?.startMinute ?? 540),
+    endTime: timeValue(record?.endMinute ?? 1020),
+    endOfDay: record?.endMinute === 1440,
+    startsAt: localValue(record?.startsAt ?? null, zone),
+    startFold: fold,
+    endsAt: localValue(record?.endsAt ?? null, zone),
+    endFold: fold,
+    reason: record?.reason ?? "",
+    policyKey: record?.policyKey ?? "minimum_notice_minutes",
+    value:
+      record?.value === null || record?.value === undefined ? "" : String(record.value),
+  };
+}
+
 export function ScheduleForm({
   locale,
   choices,
@@ -75,256 +175,147 @@ export function ScheduleForm({
   attempt: string;
 }) {
   const message = (key: ScheduleMessage) => scheduleMessage(locale, key);
+  const messages = scheduleErrorMessages(locale);
   const router = useRouter();
-  const [state, action, pending] = useActionState(saveScheduleAction, {});
-  const requestId = state.nextRequestId ?? attempt;
-  const [operation, setOperation] = useState<ScheduleKind>(record?.kind ?? "weekly");
+  const defaults = scheduleDefaults(locale, choices, rows, record, attempt);
+  const form = useZodForm(scheduleRuleSchema, { defaultValues: defaults });
+  useAuthoritativeDefaults(form, defaults);
+  const control = form.control;
+  const mutation = useActionMutation(saveScheduleAction, {
+    onFailure: (result) => applyActionErrors(form, result),
+  });
+  const pending = mutation.isPending;
+  const [operation, scopeId, scopeKind, locationId, exceptionKind] = useWatch({
+    control,
+    name: ["operation", "scopeId", "scopeKind", "locationId", "exceptionKind"],
+  }) as [ScheduleKind, string, string, string, string];
   const scopes = rows.filter((row) => row.kind === "scope");
-  const [scopeId, setScopeId] = useState(record?.scopeId ?? scopes[0]?.id ?? "");
+  const recurring = recurringKinds.includes(operation);
+  const timed = timedKinds.includes(operation);
   const scope = scopes.find((row) => row.id === scopeId);
-  const [locationId, setLocationId] = useState(
-    record?.locationId ??
-      scope?.locationId ??
-      choices.find((c) => c.kind === "location")?.id ??
-      "",
-  );
-  const [scopeKind, setScopeKind] = useState(
-    record?.serviceId
-      ? "service"
-      : record?.staffId
-        ? "staff"
-        : record?.resourceId
-          ? "resource"
-          : "location",
-  );
-  const [exceptionKind, setExceptionKind] = useState(record?.exceptionKind ?? "closed");
-  useEffect(() => {
-    if (state.saved) {
-      router.refresh();
-    }
-  }, [state, router]);
-  const recurring = ["weekly", "break", "exception"].includes(operation);
-  const timed = ["time_off", "blackout", "maintenance"].includes(operation);
   const zone =
     (recurring ? scope?.timeZone : null) ??
     choices.find((c) => c.id === locationId)?.timeZone ??
     record?.timeZone ??
     "Asia/Riyadh";
-  const prefix = useId();
-  const controlId = (name: string) => `${prefix}-${name}`;
-  const errorId = (name: string) => `${prefix}-${name}-error`;
-  const invalid = (name: string) => state.field === name;
-  const field = (
-    name: string,
-    label: ScheduleMessage,
-    control: ReactNode,
-    required = false,
-  ) => (
-    <Field invalid={invalid(name)}>
-      <Label htmlFor={controlId(name)}>
-        {message(label)}
-        {required ? <RequiredMark /> : null}
-      </Label>
-      {control}
-      {invalid(name) ? (
-        <FieldError id={errorId(name)} role="alert">
-          {message(state.message ?? "invalid")}
-        </FieldError>
-      ) : null}
-    </Field>
-  );
-  const input = (
-    name: string,
-    label: ScheduleMessage,
-    type: string,
-    value: string | number = "",
-    required = true,
-  ) =>
-    field(
-      name,
-      label,
-      <Input
-        id={controlId(name)}
-        name={name}
-        type={type}
-        defaultValue={value}
-        required={required}
-        aria-invalid={invalid(name) || undefined}
-        aria-describedby={invalid(name) ? errorId(name) : undefined}
-      />,
-      required,
-    );
-  // Date and time fields submit the same YYYY-MM-DD / HH:MM /
-  // YYYY-MM-DDTHH:MM strings the native inputs did, under the same names.
-  const describe = (name: string) => ({
-    ...(invalid(name)
-      ? { "aria-invalid": true, "aria-describedby": errorId(name) }
-      : {}),
-  });
+  const lastScope = useRef(defaults.scopeId);
+
+  /**
+   * The values the rule submits besides the visible controls: the scope's
+   * revision and its location/staff/resource for recurring rules, the record's
+   * revision otherwise, and no identifiers for controls the rule type hides.
+   */
+  function syncDerived() {
+    const values = form.getValues();
+    const set = (name: Path<ScheduleRuleInput>, value: string) => {
+      if (form.getValues(name) !== value) form.setValue(name, value);
+    };
+    if (recurringKinds.includes(values.operation as ScheduleKind)) {
+      const current = scopes.find((row) => row.id === values.scopeId);
+      set("expectedRevision", current ? String(current.revision) : "");
+      set("locationId", current?.locationId ?? "");
+      set("staffId", current?.staffId ?? "");
+      set("resourceId", current?.resourceId ?? "");
+      set("serviceId", "");
+      return;
+    }
+    set("expectedRevision", record ? String(record.revision) : "");
+    set("scopeId", values.operation === "scope" && record ? record.id : "");
+    if (values.scopeKind === "tenant" || values.scopeKind === "service")
+      set("locationId", record?.locationId ?? "");
+    if (values.scopeKind !== "staff") set("staffId", "");
+    if (values.scopeKind !== "resource") set("resourceId", "");
+    if (values.scopeKind !== "service") set("serviceId", "");
+  }
+
+  // Keep the derived values in step with the rule type, scope and scope kind.
+  useEffect(() => {
+    if (recurring && scopeId) lastScope.current = scopeId;
+    if (recurring && !scopeId && lastScope.current)
+      form.setValue("scopeId", lastScope.current);
+    syncDerived();
+    // syncDerived reads the latest props and values each time it runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [operation, scopeId, scopeKind, recurring]);
+
+  // The timezone follows the chosen scope or location, as before.
+  useEffect(() => {
+    if (form.getValues("timeZone") !== zone) form.setValue("timeZone", zone);
+  }, [form, zone]);
+
+  // Staff, resource and service choices depend on the location: start over when it changes.
+  const lastLocation = useRef(locationId);
+  useEffect(() => {
+    if (lastLocation.current === locationId) return;
+    lastLocation.current = locationId;
+    if (recurring || record) return;
+    for (const name of ["staffId", "resourceId", "serviceId"] as const)
+      if (form.getValues(name) !== "") form.setValue(name, "");
+  }, [form, locationId, recurring, record]);
+
   const datePlaceholder = workspaceMessage(locale, "datePlaceholder");
   const timePlaceholder = workspaceMessage(locale, "timePlaceholder");
-  const datePick = (name: string, label: ScheduleMessage, value: string) =>
-    field(
-      name,
-      label,
-      <DatePicker
-        id={controlId(name)}
-        name={name}
-        locale={locale}
-        defaultValue={value}
-        required
-        placeholder={datePlaceholder}
-        {...describe(name)}
-      />,
-      true,
-    );
-  const timePick = (name: string, label: ScheduleMessage, value: string) =>
-    field(
-      name,
-      label,
-      <TimeSelect
-        id={controlId(name)}
-        name={name}
-        locale={locale}
-        defaultValue={value}
-        required
-        placeholder={timePlaceholder}
-        {...describe(name)}
-      />,
-      true,
-    );
-  const dateTimePick = (name: string, label: ScheduleMessage, value: string) =>
-    field(
-      name,
-      label,
-      <DateTimePicker
-        id={controlId(name)}
-        name={name}
-        locale={locale}
-        defaultValue={value}
-        required
-        datePlaceholder={datePlaceholder}
-        timePlaceholder={timePlaceholder}
-        timeLabel={workspaceMessage(locale, "timeOf", { label: message(label) })}
-        {...describe(name)}
-      />,
-      true,
-    );
-  const choose = (
-    name: string,
-    label: ScheduleMessage,
-    options: readonly ChoiceOption[],
-    props: {
-      readonly value?: string;
-      readonly defaultValue?: string;
-      readonly onValueChange?: (value: string) => void;
-      readonly required?: boolean;
-      readonly disabled?: boolean;
-      readonly placeholder?: ReactNode;
-      readonly resetKey?: string;
-    } = {},
-  ) =>
-    field(
-      name,
-      label,
-      <ChoiceSelect
-        key={props.resetKey}
-        id={controlId(name)}
-        name={name}
-        options={options}
-        invalid={invalid(name)}
-        describedBy={invalid(name) ? errorId(name) : undefined}
-        {...(props.value === undefined ? {} : { value: props.value })}
-        {...(props.defaultValue === undefined
-          ? {}
-          : { defaultValue: props.defaultValue })}
-        {...(props.onValueChange ? { onValueChange: props.onValueChange } : {})}
-        {...(props.required ? { required: true } : {})}
-        {...(props.disabled ? { disabled: true } : {})}
-        {...(props.placeholder === undefined ? {} : { placeholder: props.placeholder })}
-      />,
-      props.required,
-    );
-  const select = (
-    kind: ScheduleChoice["kind"],
-    name: string,
-    defaultValue: string | null | undefined,
-  ) =>
-    choose(
-      name,
-      kind,
-      choices
-        .filter(
-          (c) =>
-            c.kind === kind && (kind === "location" || c.locationId === locationId),
-        )
-        .map((c) => ({ value: c.id, label: c.name })),
-      {
-        defaultValue: defaultValue ?? "",
-        required: true,
-        placeholder: message("choose"),
-        // The choices depend on the location; start over when it changes.
-        resetKey: `${name}:${locationId}`,
-      },
-    );
-  const fold = (name: string) =>
-    choose(
-      name,
-      "fold",
-      [
-        { value: UNAMBIGUOUS_FOLD, label: message("auto") },
-        { value: "0", label: message("first") },
-        { value: "1", label: message("second") },
-      ],
-      {
-        defaultValue:
-          record?.fold === null || record?.fold === undefined
-            ? UNAMBIGUOUS_FOLD
-            : String(record.fold),
-      },
-    );
+  const scopedChoices = (kind: ScheduleChoice["kind"]): readonly ChoiceOption[] =>
+    choices
+      .filter(
+        (c) => c.kind === kind && (kind === "location" || c.locationId === locationId),
+      )
+      .map((c) => ({ value: c.id, label: c.name }));
+  const foldOptions: readonly ChoiceOption[] = [
+    { value: UNAMBIGUOUS_FOLD, label: message("auto") },
+    { value: "0", label: message("first") },
+    { value: "1", label: message("second") },
+  ];
   return (
-    <form action={action} className="grid gap-5" {...keepUnsavedInput}>
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="requestId" value={requestId} />
-      <input type="hidden" name="id" value={record?.id ?? ""} />
-      <input
-        type="hidden"
-        name="expectedRevision"
-        value={recurring ? (scope?.revision ?? "") : (record?.revision ?? "")}
-      />
-      <FieldSet disabled={pending}>
-        <FieldLegend className={record ? "sr-only" : undefined}>
-          {record ? message("edit") : message("create")}
-        </FieldLegend>
-        <FieldGroup columns={2}>
-          {choose(
-            "operation",
-            "operation",
-            scheduleKinds.map((kind) => ({ value: kind, label: message(kind) })),
-            {
-              value: operation,
-              disabled: !!record,
-              onValueChange: (value) => {
+    <Form form={form} locale={locale} messages={messages}>
+      <form
+        noValidate
+        className="grid gap-5"
+        data-schedule-record={record?.id ?? "new"}
+        onSubmit={(event) => {
+          syncDerived();
+          void form.handleSubmit(() => mutation.mutate(form.getValues()))(event);
+        }}
+      >
+        <FieldSet disabled={pending}>
+          <FieldLegend className={record ? "sr-only" : undefined}>
+            {record ? message("edit") : message("create")}
+          </FieldLegend>
+          <FieldGroup columns={2}>
+            <SelectField
+              control={control}
+              name="operation"
+              label={message("operation")}
+              disabled={!!record}
+              options={scheduleKinds.map((kind) => ({
+                value: kind,
+                label: message(kind),
+              }))}
+              onValueChange={(value) => {
                 const next = value as ScheduleKind;
-                setOperation(next);
-                if (next === "maintenance") setScopeKind("resource");
+                const kinds = scopeKindsFor(next);
+                const current = form.getValues("scopeKind");
+                if (next === "maintenance") form.setValue("scopeKind", "resource");
                 else if (
                   next === "time_off" &&
-                  !["staff", "resource"].includes(scopeKind)
+                  !["staff", "resource"].includes(current)
                 )
-                  setScopeKind("staff");
+                  form.setValue("scopeKind", "staff");
                 else if (next === "blackout" || next === "holiday")
-                  setScopeKind("location");
-              },
-            },
-          )}
-          {record ? <input type="hidden" name="operation" value={operation} /> : null}
-          {recurring
-            ? choose(
-                "scopeId",
-                "scope",
-                scopes.map((row) => ({
+                  form.setValue("scopeKind", "location");
+                else if (!kinds.includes(current))
+                  form.setValue("scopeKind", kinds[0] ?? "location");
+              }}
+            />
+            {recurring ? (
+              <SelectField
+                control={control}
+                name="scopeId"
+                label={message("scope")}
+                required
+                disabled={!!record}
+                placeholder={message("choose")}
+                options={scopes.map((row) => ({
                   value: row.id,
                   label: (
                     <>
@@ -332,64 +323,28 @@ export function ScheduleForm({
                       {message("revision")} {row.revision}
                     </>
                   ),
-                })),
-                {
-                  value: scopeId,
-                  required: true,
-                  disabled: !!record,
-                  placeholder: message("choose"),
-                  onValueChange: (value) => {
-                    setScopeId(value);
-                    setLocationId(scopes.find((s) => s.id === value)?.locationId ?? "");
-                  },
-                },
-              )
-            : null}
-          {record && recurring ? (
-            <input type="hidden" name="scopeId" value={scopeId} />
-          ) : null}
-          {recurring ? (
-            <>
-              <input name="locationId" type="hidden" value={scope?.locationId ?? ""} />
-              <input name="staffId" type="hidden" value={scope?.staffId ?? ""} />
-              <input name="resourceId" type="hidden" value={scope?.resourceId ?? ""} />
-            </>
-          ) : null}
-          {operation === "scope" && record ? (
-            <input name="scopeId" type="hidden" value={record.id} />
-          ) : null}
-          {!recurring ? (
-            <>
-              {choose(
-                "scopeKind",
-                "scopeKind",
-                (operation === "policy"
-                  ? ["tenant", "location", "service", "staff", "resource"]
-                  : operation === "time_off"
-                    ? ["staff", "resource"]
-                    : operation === "maintenance"
-                      ? ["resource"]
-                      : operation === "scope"
-                        ? ["location", "staff", "resource"]
-                        : ["location"]
-                ).map((kind) => ({
-                  value: kind,
-                  label: message(kind as ScheduleMessage),
-                })),
-                {
-                  value: scopeKind,
-                  disabled: !!record,
-                  onValueChange: (value) => setScopeKind(value),
-                },
-              )}
-              {record ? (
-                <input type="hidden" name="scopeKind" value={scopeKind} />
-              ) : null}
-              {scopeKind !== "tenant" && scopeKind !== "service"
-                ? choose(
-                    "locationId",
-                    "location",
-                    choices
+                }))}
+              />
+            ) : (
+              <>
+                <SelectField
+                  control={control}
+                  name="scopeKind"
+                  label={message("scopeKind")}
+                  disabled={!!record}
+                  options={scopeKindsFor(operation).map((kind) => ({
+                    value: kind,
+                    label: message(kind as ScheduleMessage),
+                  }))}
+                />
+                {scopeKind !== "tenant" && scopeKind !== "service" ? (
+                  <SelectField
+                    control={control}
+                    name="locationId"
+                    label={message("location")}
+                    required
+                    disabled={!!record}
+                    options={choices
                       .filter((c) => c.kind === "location")
                       .map((c) => ({
                         value: c.id,
@@ -398,186 +353,225 @@ export function ScheduleForm({
                             {c.name} · <bdi>{c.timeZone}</bdi>
                           </>
                         ),
-                      })),
-                    {
-                      value: locationId,
-                      required: true,
-                      disabled: !!record,
-                      onValueChange: (value) => setLocationId(value),
-                    },
-                  )
-                : null}
-              {record && record.locationId ? (
-                <input type="hidden" name="locationId" value={record.locationId} />
-              ) : null}
-              {scopeKind === "staff"
-                ? select("staff", "staffId", record?.staffId)
-                : null}
-              {scopeKind === "resource"
-                ? select("resource", "resourceId", record?.resourceId)
-                : null}
-              {scopeKind === "service"
-                ? select("service", "serviceId", record?.serviceId ?? null)
-                : null}
-            </>
-          ) : null}
-          <Field invalid={invalid("timeZone")}>
-            <Label htmlFor={controlId("timeZone")}>
-              {message("timeZone")}
-              <RequiredMark />
-            </Label>
-            <Input
-              key={zone}
-              id={controlId("timeZone")}
+                      }))}
+                  />
+                ) : null}
+                {scopeKind === "staff" ? (
+                  <SelectField
+                    control={control}
+                    name="staffId"
+                    label={message("staff")}
+                    required
+                    placeholder={message("choose")}
+                    options={scopedChoices("staff")}
+                  />
+                ) : null}
+                {scopeKind === "resource" ? (
+                  <SelectField
+                    control={control}
+                    name="resourceId"
+                    label={message("resource")}
+                    required
+                    placeholder={message("choose")}
+                    options={scopedChoices("resource")}
+                  />
+                ) : null}
+                {scopeKind === "service" ? (
+                  <SelectField
+                    control={control}
+                    name="serviceId"
+                    label={message("service")}
+                    required
+                    placeholder={message("choose")}
+                    options={scopedChoices("service")}
+                  />
+                ) : null}
+              </>
+            )}
+            <TextField
+              control={control}
               name="timeZone"
-              type="text"
-              dir="ltr"
-              defaultValue={zone}
+              label={message("timeZone")}
               required
-              aria-invalid={invalid("timeZone") || undefined}
-              aria-describedby={
-                invalid("timeZone")
-                  ? `${controlId("timeZone")}-dst ${errorId("timeZone")}`
-                  : `${controlId("timeZone")}-dst`
-              }
+              dir="ltr"
+              description={message("dst")}
             />
-            <FieldDescription id={`${controlId("timeZone")}-dst`}>
-              {message("dst")}
-            </FieldDescription>
-            {invalid("timeZone") ? (
-              <FieldError id={errorId("timeZone")} role="alert">
-                {message(state.message ?? "invalid")}
-              </FieldError>
-            ) : null}
-          </Field>
-          {operation === "weekly" || operation === "break"
-            ? choose(
-                "dayOfWeek",
-                "dayOfWeek",
-                Array.from({ length: 7 }, (_, day) => ({
+            {operation === "weekly" || operation === "break" ? (
+              <SelectField
+                control={control}
+                name="dayOfWeek"
+                label={message("dayOfWeek")}
+                options={Array.from({ length: 7 }, (_, day) => ({
                   value: String(day),
                   label: new Intl.DateTimeFormat(locale === "ar" ? "ar" : "en", {
                     weekday: "long",
                     timeZone: "UTC",
                   }).format(new Date(Date.UTC(2026, 0, 4 + day))),
-                })),
-                { defaultValue: String(record?.dayOfWeek ?? 1) },
-              )
-            : null}
-          {operation === "exception" || operation === "holiday"
-            ? datePick("localDate", "localDate", record?.localDate ?? "")
-            : null}
-          {operation === "exception" ? (
-            <>
-              {choose(
-                "exceptionKind",
-                "exceptionKind",
-                [
-                  { value: "closed", label: message("closed") },
-                  { value: "override", label: message("override") },
-                ],
-                {
-                  value: exceptionKind,
-                  onValueChange: (value) =>
-                    setExceptionKind(value as "closed" | "override"),
-                },
-              )}
-              {fold("fold")}
-            </>
-          ) : null}
-        </FieldGroup>
-        {operation === "weekly" ||
-        operation === "break" ||
-        (operation === "exception" && exceptionKind === "override") ? (
-          <FieldGroup columns={3} className="items-end">
-            {timePick("startTime", "startTime", timeValue(record?.startMinute ?? 540))}
-            {timePick("endTime", "endTime", timeValue(record?.endMinute ?? 1020))}
-            <CheckboxRow
-              id={controlId("endOfDay")}
-              name="endOfDay"
-              defaultChecked={record?.endMinute === 1440}
-            >
-              {message("endOfDay")}
-            </CheckboxRow>
-          </FieldGroup>
-        ) : null}
-        {timed ? (
-          <FieldGroup columns={2}>
-            {dateTimePick(
-              "startsAt",
-              "startsAt",
-              localValue(record?.startsAt ?? null, zone),
-            )}
-            {fold("startFold")}
-            {dateTimePick("endsAt", "endsAt", localValue(record?.endsAt ?? null, zone))}
-            {fold("endFold")}
-          </FieldGroup>
-        ) : null}
-        {timed || operation === "holiday" ? (
-          <FieldGroup columns={2}>
-            {input(
-              "reason",
-              "reason",
-              "text",
-              record?.reason ?? "",
-              operation === "holiday",
-            )}
-          </FieldGroup>
-        ) : null}
-        {operation === "policy" ? (
-          <FieldGroup columns={2}>
-            {choose(
-              "policyKey",
-              "policyKey",
-              Object.keys(policyBounds).map((key, index) => ({
-                value: key,
-                label: message(
-                  (
-                    [
-                      "notice",
-                      "horizon",
-                      "interval",
-                      "daily",
-                      "before",
-                      "after",
-                      "turnover",
-                      "travel",
-                    ] as const
-                  )[index]!,
-                ),
-              })),
-              { defaultValue: record?.policyKey ?? "minimum_notice_minutes" },
-            )}
-            {input("value", "value", "number", record?.value ?? "", false)}
-          </FieldGroup>
-        ) : null}
-        <FormActions>
-          <Button type="submit" loading={pending} loadingLabel={message("saving")}>
-            {message("save")}
-          </Button>
-        </FormActions>
-      </FieldSet>
-      {state.message ? (
-        <Alert tone={state.saved ? "positive" : "danger"}>
-          <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
-            <span>{message(state.message)}</span>
-            {state.message === "stale" ? (
-              <Button
-                variant="outline"
-                size="sm"
-                type="button"
-                onClick={() => router.refresh()}
-              >
-                <RotateCw aria-hidden="true" />
-                {message("reload")}
-              </Button>
+                }))}
+              />
             ) : null}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-    </form>
+            {operation === "exception" || operation === "holiday" ? (
+              <DateField
+                control={control}
+                name="localDate"
+                label={message("localDate")}
+                required
+                locale={locale}
+                placeholder={datePlaceholder}
+              />
+            ) : null}
+            {operation === "exception" ? (
+              <>
+                <SelectField
+                  control={control}
+                  name="exceptionKind"
+                  label={message("exceptionKind")}
+                  options={[
+                    { value: "closed", label: message("closed") },
+                    { value: "override", label: message("override") },
+                  ]}
+                />
+                <SelectField
+                  control={control}
+                  name="fold"
+                  label={message("fold")}
+                  options={foldOptions}
+                />
+              </>
+            ) : null}
+          </FieldGroup>
+          {operation === "weekly" ||
+          operation === "break" ||
+          (operation === "exception" && exceptionKind === "override") ? (
+            <FieldGroup columns={3} className="items-end">
+              <TimeField
+                control={control}
+                name="startTime"
+                label={message("startTime")}
+                required
+                locale={locale}
+                placeholder={timePlaceholder}
+              />
+              <TimeField
+                control={control}
+                name="endTime"
+                label={message("endTime")}
+                required
+                locale={locale}
+                placeholder={timePlaceholder}
+              />
+              <CheckboxField
+                control={control}
+                name="endOfDay"
+                label={message("endOfDay")}
+              />
+            </FieldGroup>
+          ) : null}
+          {timed ? (
+            <FieldGroup columns={2}>
+              <DateTimeField
+                control={control}
+                name="startsAt"
+                label={message("startsAt")}
+                required
+                locale={locale}
+                datePlaceholder={datePlaceholder}
+                timePlaceholder={timePlaceholder}
+                timeLabel={workspaceMessage(locale, "timeOf", {
+                  label: message("startsAt"),
+                })}
+              />
+              <SelectField
+                control={control}
+                name="startFold"
+                label={message("fold")}
+                options={foldOptions}
+              />
+              <DateTimeField
+                control={control}
+                name="endsAt"
+                label={message("endsAt")}
+                required
+                locale={locale}
+                datePlaceholder={datePlaceholder}
+                timePlaceholder={timePlaceholder}
+                timeLabel={workspaceMessage(locale, "timeOf", {
+                  label: message("endsAt"),
+                })}
+              />
+              <SelectField
+                control={control}
+                name="endFold"
+                label={message("fold")}
+                options={foldOptions}
+              />
+            </FieldGroup>
+          ) : null}
+          {timed || operation === "holiday" ? (
+            <FieldGroup columns={2}>
+              <TextField
+                control={control}
+                name="reason"
+                label={message("reason")}
+                required={operation === "holiday"}
+              />
+            </FieldGroup>
+          ) : null}
+          {operation === "policy" ? (
+            <FieldGroup columns={2}>
+              <SelectField
+                control={control}
+                name="policyKey"
+                label={message("policyKey")}
+                options={Object.keys(policyBounds).map((key, index) => ({
+                  value: key,
+                  label: message(
+                    (
+                      [
+                        "notice",
+                        "horizon",
+                        "interval",
+                        "daily",
+                        "before",
+                        "after",
+                        "turnover",
+                        "travel",
+                      ] as const
+                    )[index]!,
+                  ),
+                }))}
+              />
+              <TextField
+                control={control}
+                name="value"
+                label={message("value")}
+                type="number"
+              />
+            </FieldGroup>
+          ) : null}
+          <FormActions>
+            <Button type="submit" loading={pending} loadingLabel={message("saving")}>
+              {message("save")}
+            </Button>
+          </FormActions>
+        </FieldSet>
+        <MutationFeedback
+          locale={locale}
+          messages={messages}
+          result={mutation.data}
+          transportFailed={mutation.isError}
+          success={message("saved")}
+          reload={{
+            codes: ["stale"],
+            label: message("reload"),
+            onReload: () => router.refresh(),
+          }}
+        />
+      </form>
+    </Form>
   );
 }
+
 export function ScheduleRemove({
   locale,
   record,
@@ -589,43 +583,45 @@ export function ScheduleRemove({
   scopeRevision: number | null;
   attempt: string;
 }) {
-  const [state, action, pending] = useActionState(removeScheduleAction, {});
-  const requestId = state.nextRequestId ?? attempt;
-  const router = useRouter();
-  useEffect(() => {
-    if (state.saved) {
-      router.refresh();
-    }
-  }, [state, router]);
+  const [nextAttempt, setNextAttempt] = useState<string | null>(null);
+  const mutation = useActionMutation(removeScheduleAction, {
+    onSuccess: () => setNextAttempt(newAttemptId()),
+  });
   const message = (key: ScheduleMessage) => scheduleMessage(locale, key);
   return (
-    <form action={action} className="grid gap-3">
-      <input name="locale" type="hidden" value={locale} />
-      <input name="requestId" type="hidden" value={requestId} />
-      <input name="operation" type="hidden" value={record.kind} />
-      <input name="id" type="hidden" value={record.id} />
-      <input name="expectedRevision" type="hidden" value={record.revision} />
-      <input name="expectedScopeRevision" type="hidden" value={scopeRevision ?? ""} />
+    <div className="grid gap-3" data-schedule-remove={record.id}>
       <div>
-        <ConfirmSubmit
+        <ConfirmAction
           destructive
           variant="destructive-outline"
           size="sm"
           label={message("remove")}
-          pending={pending}
+          pending={mutation.isPending}
           title={message("removeTitle")}
           description={message("removeHint")}
           confirmLabel={message("remove")}
           cancelLabel={message("cancel")}
+          onConfirm={() =>
+            mutation.mutate({
+              locale,
+              requestId: nextAttempt ?? attempt,
+              operation: record.kind,
+              id: record.id,
+              expectedRevision: String(record.revision),
+              expectedScopeRevision:
+                scopeRevision === null ? "" : String(scopeRevision),
+              confirm: "yes",
+            })
+          }
         />
       </div>
-      {state.message ? (
-        <Alert tone={state.saved ? "positive" : "danger"}>
-          <AlertDescription className="text-foreground">
-            {message(state.message)}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-    </form>
+      <MutationFeedback
+        locale={locale}
+        messages={scheduleErrorMessages(locale)}
+        result={mutation.data}
+        transportFailed={mutation.isError}
+        success={message("removed")}
+      />
+    </div>
   );
 }

@@ -1,31 +1,24 @@
 import { formatNumber } from "@wlbp/i18n";
-import {
-  Badge,
-  Checkbox,
-  Field,
-  FieldDescription,
-  FieldGroup,
-  Label,
-  ReferenceCode,
-  RequiredMark,
-  Textarea,
-  TextField,
-} from "@wlbp/ui-foundation";
+import { Badge, FieldGroup, ReferenceCode } from "@wlbp/ui-foundation";
 import Link from "next/link";
-import { randomUUID } from "node:crypto";
-import { registerReleaseAction } from "../../../_lib/actions/releases";
 import { copyFor, formCopy, reasonCopy, say, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
 import { releaseCopy } from "../../../_lib/release-copy";
+import { releaseChannels } from "../../../_lib/schemas/releases";
 import { PageHeader } from "../../../_lib/shell/page-header";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import {
+  CheckboxFormField,
+  SelectFormField,
+  TextFormField,
+  TextareaFormField,
+} from "../../../_lib/ui/form-fields";
 import { Pagination } from "../../../_lib/ui/pagination";
-import { SelectField } from "../../../_lib/ui/select-field";
 import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
@@ -34,7 +27,7 @@ import { ProgressRow } from "../rollouts/progress-row";
 export const dynamic = "force-dynamic";
 
 const c = releaseCopy.releases;
-const channels = ["internal", "candidate", "stable"] as const;
+const channels = releaseChannels;
 const spec = {
   filters: { channel: channels, status: ["available", "withdrawn"] },
   pageSize: 25,
@@ -58,21 +51,15 @@ function NotesField({
   ltr?: boolean;
 }) {
   return (
-    <Field>
-      <Label htmlFor={id}>
-        {label}
-        {required ? <RequiredMark /> : null}
-      </Label>
-      <Textarea
-        id={id}
-        name={name}
-        rows={3}
-        required={required}
-        dir={ltr ? "ltr" : undefined}
-        aria-describedby={`${id}-hint`}
-      />
-      <FieldDescription id={`${id}-hint`}>{hint}</FieldDescription>
-    </Field>
+    <TextareaFormField
+      id={id}
+      name={name}
+      label={label}
+      description={hint}
+      rows={3}
+      required={required}
+      {...(ltr ? { dir: "ltr" } : {})}
+    />
   );
 }
 
@@ -108,17 +95,28 @@ export default async function ReleasesPage({
           atLeast(operator.role, "admin") ? (
             <ActionDialog
               locale={locale}
-              action={registerReleaseAction}
+              operation="registerRelease"
               trigger={say(locale, c.register)}
               triggerVariant="primary"
               title={say(locale, c.registerTitle)}
               description={say(locale, c.registerBody)}
               submit={say(locale, c.register)}
               successMessage={say(locale, c.registered)}
-              hidden={{ idempotencyKey: randomUUID() }}
+              values={{
+                version: "",
+                channel: "candidate",
+                gitCommit: "",
+                configSchemaVersion: "",
+                backendMin: "",
+                backendMax: "",
+                migrationIds: "",
+                featureNotes: "",
+                upgradeNotes: "",
+                reversible: true,
+              }}
             >
               <FieldGroup columns={2}>
-                <TextField
+                <TextFormField
                   id="r-version"
                   name="version"
                   label={say(locale, c.version)}
@@ -127,13 +125,12 @@ export default async function ReleasesPage({
                   autoComplete="off"
                   dir="ltr"
                 />
-                <SelectField
+                <SelectFormField
                   name="channel"
                   label={say(locale, c.channel)}
-                  value="candidate"
                   options={channels.map((ch) => [ch, status(ch)] as const)}
                 />
-                <TextField
+                <TextFormField
                   id="r-commit"
                   name="gitCommit"
                   label={say(locale, c.commit)}
@@ -144,7 +141,7 @@ export default async function ReleasesPage({
                   dir="ltr"
                   className="md:col-span-2"
                 />
-                <TextField
+                <TextFormField
                   id="r-schema"
                   name="configSchemaVersion"
                   label={say(locale, c.configSchema)}
@@ -152,14 +149,14 @@ export default async function ReleasesPage({
                   required
                   className="md:col-span-2"
                 />
-                <TextField
+                <TextFormField
                   id="r-min"
                   name="backendMin"
                   label={say(locale, c.backendMin)}
                   type="number"
                   required
                 />
-                <TextField
+                <TextFormField
                   id="r-max"
                   name="backendMax"
                   label={say(locale, c.backendMax)}
@@ -188,10 +185,11 @@ export default async function ReleasesPage({
                 hint={say(locale, c.notesHint)}
                 required
               />
-              <Field orientation="horizontal">
-                <Checkbox id="r-reversible" name="reversible" defaultChecked />
-                <Label htmlFor="r-reversible">{say(locale, c.reversible)}</Label>
-              </Field>
+              <CheckboxFormField
+                id="r-reversible"
+                name="reversible"
+                label={say(locale, c.reversible)}
+              />
             </ActionDialog>
           ) : null
         }
