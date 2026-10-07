@@ -12,7 +12,12 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadInstanceBrand } from "./instance-brand.mjs";
+import {
+  decodePngToRgba,
+  encodeRgbaPng,
+  loadInstanceBrand,
+  renderSquareIcon,
+} from "./instance-brand.mjs";
 
 const pngBytes = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
@@ -197,5 +202,77 @@ describe("loadInstanceBrand asset materialization", () => {
 
       expect(() => loadInstanceBrand(appDirectory)).toThrow(/logoLight.*must use PNG/u);
     }
+  });
+});
+
+describe("installable-app icons", () => {
+  function pngSize(bytes) {
+    return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+  }
+
+  it("derives square any, maskable and apple-touch icons from the brand icon", () => {
+    const { appDirectory, instanceDirectory } = createRepository();
+    writeFileSync(path.join(instanceDirectory, "assets", "logo.png"), pngBytes);
+
+    loadInstanceBrand(appDirectory);
+
+    const directory = path.join(appDirectory, "public", "assets", "_pwa");
+    for (const [file, size] of [
+      ["icon-192.png", 192],
+      ["icon-512.png", 512],
+      ["maskable-192.png", 192],
+      ["maskable-512.png", 512],
+      ["apple-touch-icon.png", 180],
+    ]) {
+      const bytes = readFileSync(path.join(directory, file));
+      expect(pngSize(bytes), file).toEqual({ width: size, height: size });
+      // Re-validates through the same strict decoder used for tenant input.
+      expect(decodePngToRgba(bytes).rgba).toHaveLength(size * size * 4);
+    }
+    // Opaque variants fill the canvas: the corner is the (default white) background.
+    const maskable = decodePngToRgba(
+      readFileSync(path.join(directory, "maskable-192.png")),
+    );
+    expect([...maskable.rgba.subarray(0, 4)]).toEqual([255, 255, 255, 255]);
+  });
+
+  it("round-trips RGBA and keeps artwork inside the maskable safe zone", () => {
+    const source = {
+      width: 4,
+      height: 2,
+      rgba: new Uint8Array(Array.from({ length: 8 }, () => [200, 20, 30, 255]).flat()),
+    };
+    const decoded = decodePngToRgba(encodeRgbaPng(source));
+    expect(decoded).toMatchObject({ width: 4, height: 2 });
+    expect([...decoded.rgba]).toEqual([...source.rgba]);
+
+    const any = renderSquareIcon(decoded, 20);
+    // A wide source is letterboxed on a transparent canvas.
+    expect(any.rgba[3]).toBe(0);
+    expect([...any.rgba.subarray((10 * 20 + 10) * 4, (10 * 20 + 10) * 4 + 4)]).toEqual([
+      200, 20, 30, 255,
+    ]);
+
+    const maskable = renderSquareIcon(decoded, 20, {
+      artwork: 0.56,
+      background: [1, 2, 3],
+    });
+    expect([...maskable.rgba.subarray(0, 4)]).toEqual([1, 2, 3, 255]);
+    expect([
+      ...maskable.rgba.subarray((10 * 20 + 10) * 4, (10 * 20 + 10) * 4 + 3),
+    ]).toEqual([200, 20, 30]);
+  });
+
+  it("decodes the shipped template icon", () => {
+    const icon = readFileSync(
+      new URL("../../instance-template/instance/assets/icon.png", import.meta.url),
+    );
+    const decoded = decodePngToRgba(icon);
+    expect(decoded.rgba).toHaveLength(decoded.width * decoded.height * 4);
+    const rendered = renderSquareIcon(decoded, 512);
+    expect(decodePngToRgba(encodeRgbaPng(rendered))).toMatchObject({
+      width: 512,
+      height: 512,
+    });
   });
 });

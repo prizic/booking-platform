@@ -10,6 +10,7 @@
 // visibility timeout and recording an attempt is another, so a worker killed
 // mid-batch loses nothing: the visibility timeout expires and the message is
 // claimed again.
+import { parseNotificationBrandRow } from "../_shared/email/brand.ts";
 import {
   createResendAdapter,
   runNotificationBatch,
@@ -36,8 +37,10 @@ interface ClaimedRow {
   readonly attempt: number;
   readonly booking_revision: number;
   readonly correlation_id: string;
+  /** Set by `enqueue_test_notification_v1`; absent on older claim shapes. */
+  readonly is_test?: boolean | null;
   readonly message_id: string;
-  readonly payload: Record<string, string>;
+  readonly payload: Record<string, unknown> | null;
   readonly recipient_email: string;
   readonly template_key: string;
   readonly template_locale: string;
@@ -69,6 +72,7 @@ Deno.serve(async (request: Request): Promise<Response> => {
         attempt: row.attempt,
         bookingRevision: row.booking_revision,
         correlationId: row.correlation_id,
+        ...(row.is_test === true ? { isTest: true } : {}),
         locale: row.template_locale === "ar" ? "ar" : "en",
         messageId: row.message_id,
         payload: row.payload ?? {},
@@ -95,16 +99,14 @@ Deno.serve(async (request: Request): Promise<Response> => {
         p_started_at: input.startedAt,
       });
     },
-    resolveBrandName: async (tenantId) => {
-      const rows = await callRpc<string>("get_notification_brand_v1", {
+    resolveBrand: async (tenantId) => {
+      // The published brand revision plus verified hostnames. A failed lookup
+      // is null, which the batch treats as "try again later" — never as a
+      // reason to sign the message with a platform name.
+      const rows = await callRpc<unknown>("get_notification_brand_v2", {
         p_tenant_id: tenantId,
       });
-      // Never a platform default. An email signed with our name instead of the
-      // tenant's is the one mistake a white-label product cannot make, so a
-      // lookup that fails leaves the message for the next attempt.
-      const name = typeof rows?.[0] === "string" ? rows[0] : "";
-      if (name === "") throw new Error("brand_unresolved");
-      return name;
+      return rows === null ? null : parseNotificationBrandRow(rows[0]);
     },
   });
 

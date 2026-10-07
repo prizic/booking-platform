@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { createDashboardAuthClient } from "../../../_lib/auth-server";
 import { normalizeAuthReturnPath } from "../../../_lib/auth-return-path";
 import { authMessage } from "../../../_lib/auth-copy";
-import { AuthFrame } from "../../../_lib/auth-frame";
+import { AuthFrame, authLinkClass } from "../../../_lib/auth-frame";
+import { pwaMessage } from "../../../_lib/pwa-copy";
+import Link from "next/link";
 import { MfaForm } from "./mfa-form";
 export const dynamic = "force-dynamic";
 export default async function Page({
@@ -33,6 +35,11 @@ export default async function Page({
       title={authMessage(locale, "mfaTitle")}
       intro={authMessage(locale, "mfaIntro")}
       path="/auth/mfa"
+      footer={
+        <Link href={`/${locale}/install`} className={authLinkClass}>
+          {pwaMessage(locale, "installLink")}
+        </Link>
+      }
     >
       <MfaForm
         locale={locale}

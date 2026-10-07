@@ -32,6 +32,8 @@ import { formatWhen } from "../../_lib/booking-display";
 import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
 import { ServiceDye } from "../../_lib/ui/service-dye";
 import { ZoneNote } from "../../_lib/ui/zone-note";
+import { CommunicationsNav } from "../../_lib/communications-nav";
+import { hasDirectCapability } from "../../_lib/notification-access";
 export const dynamic = "force-dynamic";
 const healthLabels = {
   queued: ["Queued", "في الانتظار"],
@@ -315,6 +317,14 @@ export default async function CommunicationsPage({
           titleId="communications-title"
           title={m("Communications", "التواصل")}
           meta={<ZoneNote locale={locale} timeZone="UTC" />}
+        />
+        <CommunicationsNav
+          locale={locale}
+          current="messages"
+          showSettings={
+            request.state.kind === "ready" &&
+            hasDirectCapability(request.state.context, "policy.edit")
+          }
         />
         {body}
       </div>

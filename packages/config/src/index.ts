@@ -295,5 +295,6 @@ export function createContentSecurityPolicy(
     "form-action 'self'",
     "frame-ancestors 'none'",
     "worker-src 'self' blob:",
+    "manifest-src 'self'",
   ].join("; ");
 }

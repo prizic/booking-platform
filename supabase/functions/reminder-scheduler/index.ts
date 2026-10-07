@@ -5,6 +5,12 @@
 // `schedule_booking_reminders_v1` and nothing else. It is idempotent on the
 // intent key, so running it twice schedules nothing twice, and it supersedes
 // reminders whose booking moved.
+//
+// Lead times are the tenant's own (`reminder_offsets_minutes` in its
+// notification settings, default 24 h and 2 h), read inside that function, so
+// a tenant's change takes effect on the next run without this process knowing
+// about it. Each reminder intent carries its `lead_minutes`, which the worker
+// turns into "tomorrow" / "in 2 hours" in the recipient's language.
 import {
   callRpc,
   isInternalInvocation,

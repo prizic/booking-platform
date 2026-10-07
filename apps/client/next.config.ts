@@ -3,6 +3,11 @@ import { loadInstanceBrand, loadInstanceContent } from "@wlbp/config/instance-br
 
 const instanceBrand = loadInstanceBrand(import.meta.dirname);
 const instanceContent = loadInstanceContent(import.meta.dirname);
+// Versions the service worker and its caches; each build installs a new worker
+// that waits for the person to accept the update (docs/pwa.md).
+const pwaVersion =
+  process.env.WLBP_PWA_VERSION ??
+  `${(process.env.VERCEL_GIT_COMMIT_SHA ?? "local").slice(0, 12)}-${Date.now().toString(36)}`;
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -23,6 +28,7 @@ const nextConfig: NextConfig = {
   env: {
     WLBP_BRAND_CONFIG_JSON: instanceBrand.serialized,
     WLBP_INSTANCE_CONTENT_JSON: instanceContent.serialized,
+    WLBP_PWA_VERSION: pwaVersion,
   },
   poweredByHeader: false,
   productionBrowserSourceMaps: false,

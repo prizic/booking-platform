@@ -110,6 +110,10 @@ describe("configuration validation", () => {
       "connect-src 'self' https://booking-api.example.com wss://booking-api.example.com",
     );
     expect(policy).toContain("frame-ancestors 'none'");
+    // The PWA service worker and web app manifest load only from the app's own origin.
+    expect(policy).toContain("worker-src 'self'");
+    expect(policy).toContain("manifest-src 'self'");
+    expect(policy).not.toMatch(/manifest-src[^;]*(?:\*|https?:|data:)/u);
     expect(() => createContentSecurityPolicy("unsafe nonce")).toThrow("nonce");
   });
 

@@ -1,7 +1,10 @@
 import { parseBeginCheckoutV1Request } from "@wlbp/api-contracts";
 import { parseActionInput } from "@wlbp/ui-foundation/actions";
 
-import { bookingDetailsSchema } from "../../[locale]/book/booking-schema";
+import {
+  bookingDetailsSchema,
+  splitBookingDetails,
+} from "../../[locale]/book/booking-schema";
 
 import {
   ClientBookingError,
@@ -12,6 +15,7 @@ import {
   contractErrorStatus,
   createPublicApiContext,
 } from "../../_lib/tenant-request";
+import { isShownWhatsAppConsent } from "../../_lib/whatsapp-consent";
 
 export const dynamic = "force-dynamic";
 
@@ -31,10 +35,17 @@ export async function POST(request: Request): Promise<Response> {
     // The details form schema first (consent included), then the shared contract.
     const input = parseActionInput(bookingDetailsSchema, await request.json());
     if (!input.ok) return contractErrorResponse("invalid_request", 400);
-    const { consent: _consent, ...body } = input.data;
+    const { request: body, whatsappOptIn } = splitBookingDetails(input.data);
     const checkout = parseBeginCheckoutV1Request(body);
+    // The consent snapshot must be the words the customer was shown.
+    if (
+      whatsappOptIn !== null &&
+      !isShownWhatsAppConsent(whatsappOptIn, checkout.locale)
+    ) {
+      return contractErrorResponse("invalid_request", 400);
+    }
     const source = createClientBookingDataSource(context.api, context.hostname);
-    const opened = await source.beginCheckout(checkout);
+    const opened = await source.beginCheckout(checkout, whatsappOptIn);
 
     const redirectUrl = await requestProviderRedirect(
       opened.paymentAttemptId,

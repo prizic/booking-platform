@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { getDirection, isLocale, type Locale } from "@wlbp/i18n";
@@ -7,6 +7,9 @@ import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { createBrandStyle } from "@wlbp/white-label-ui";
 import { cookies } from "next/headers";
 import { dashboardBrand } from "../_lib/brand";
+import { instanceLocalePolicy } from "../_lib/locale-policy";
+import { pwaMessage } from "../_lib/pwa-copy";
+import { PwaRegistration } from "../_lib/pwa-registration";
 import { getDashboardLocaleMetadata } from "../_lib/site-metadata";
 import "../globals.css";
 
@@ -24,6 +27,22 @@ function requireLocale(value: string): Locale {
 
   return value;
 }
+
+/** Browser and installed-app chrome take the brand primary colour. */
+export const viewport: Viewport = {
+  themeColor: dashboardBrand.tokens.colorDark
+    ? [
+        {
+          media: "(prefers-color-scheme: light)",
+          color: dashboardBrand.tokens.color.primary,
+        },
+        {
+          media: "(prefers-color-scheme: dark)",
+          color: dashboardBrand.tokens.colorDark.primary,
+        },
+      ]
+    : dashboardBrand.tokens.color.primary,
+};
 
 export async function generateMetadata({
   params,
@@ -52,6 +71,16 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     >
       <body>
         <QueryProvider>{children}</QueryProvider>
+        <PwaRegistration
+          defaultLocale={instanceLocalePolicy.defaultLocale}
+          version={process.env.WLBP_PWA_VERSION ?? "dev"}
+          labels={{
+            title: pwaMessage(locale, "updateTitle"),
+            body: pwaMessage(locale, "updateBody"),
+            accept: pwaMessage(locale, "updateAccept"),
+            dismiss: pwaMessage(locale, "updateDismiss"),
+          }}
+        />
       </body>
     </html>
   );

@@ -32,7 +32,7 @@ function ports(overrides: Partial<NotificationPorts> = {}): NotificationPorts {
     claim: async () => [claimed],
     deliver: async () => ({ outcome: "accepted", providerReference: "prov-1" }),
     record: async () => undefined,
-    resolveBrandName: async () => "Example Booking",
+    resolveBrand: async () => ({ nameAr: "مثال", nameEn: "Example Booking" }),
     ...overrides,
   };
 }
@@ -107,6 +107,127 @@ describe("notification batch", () => {
   });
 });
 
+describe("notification batch brand, test flag and payload", () => {
+  it("leaves a message for the next attempt when the brand cannot be read", async () => {
+    const delivered = vi.fn(async () => ({ outcome: "accepted" as const }));
+    const recorded: Parameters<NotificationPorts["record"]>[0][] = [];
+    const summary = await runNotificationBatch(
+      ports({
+        deliver: delivered,
+        record: async (input) => {
+          recorded.push(input);
+        },
+        resolveBrand: async () => {
+          throw new Error("rpc down");
+        },
+      }),
+    );
+
+    expect(summary).toEqual({ accepted: 0, failed: 0, retried: 1 });
+    expect(delivered).not.toHaveBeenCalled();
+    expect(recorded[0]?.report).toEqual({
+      errorCode: "brand_unresolved",
+      outcome: "retryable_error",
+    });
+  });
+
+  it("never signs with anything but the tenant's name", async () => {
+    const summary = await runNotificationBatch(
+      ports({ resolveBrand: async () => ({ primaryColor: "#123456" }) }),
+    );
+    expect(summary).toEqual({ accepted: 0, failed: 0, retried: 1 });
+  });
+
+  it("signs in the message's language and looks the brand up once per tenant", async () => {
+    const resolveBrand = vi.fn(async () => ({
+      nameAr: "مثال",
+      nameEn: "Example Booking",
+    }));
+    const subjects: string[] = [];
+    const texts: string[] = [];
+    await runNotificationBatch(
+      ports({
+        claim: async () => [claimed, { ...claimed, locale: "ar", messageId: "m-2" }],
+        deliver: async (input) => {
+          subjects.push(input.subject);
+          texts.push(input.text);
+          return { outcome: "accepted" };
+        },
+        resolveBrand,
+      }),
+    );
+    expect(resolveBrand).toHaveBeenCalledTimes(1);
+    expect(texts[0]).toContain("Example Booking");
+    expect(texts[1]).toContain("مثال");
+  });
+
+  it("marks a test send in the subject, the body and the provider tags", async () => {
+    let seen: Parameters<NotificationPorts["deliver"]>[0] | undefined;
+    await runNotificationBatch(
+      ports({
+        claim: async () => [{ ...claimed, isTest: true }],
+        deliver: async (input) => {
+          seen = input;
+          return { outcome: "accepted" };
+        },
+      }),
+    );
+    expect(seen?.isTest).toBe(true);
+    expect(seen?.subject.startsWith("[Test] ")).toBe(true);
+    expect(seen?.text).toContain("Test message");
+    expect(seen?.idempotencyKey).toBe(`${claimed.tenantId}:${claimed.messageId}`);
+  });
+
+  it("renders a test send with an empty payload from the synthetic sample", async () => {
+    let seen: Parameters<NotificationPorts["deliver"]>[0] | undefined;
+    const summary = await runNotificationBatch(
+      ports({
+        claim: async () => [
+          { ...claimed, isTest: true, payload: {}, templateKey: "staff.daily_digest" },
+        ],
+        deliver: async (input) => {
+          seen = input;
+          return { outcome: "accepted" };
+        },
+      }),
+    );
+    expect(summary).toEqual({ accepted: 1, failed: 0, retried: 0 });
+    expect(seen?.subject).toContain("[Test]");
+    expect(seen?.text).toContain("Sample service");
+  });
+
+  it("renders a raw snake_case outbox payload", async () => {
+    let seen: Parameters<NotificationPorts["deliver"]>[0] | undefined;
+    await runNotificationBatch(
+      ports({
+        claim: async () => [
+          {
+            ...claimed,
+            payload: {
+              booking_id: "b-1",
+              lead_minutes: 120,
+              public_reference: "K3M9P2T7XY",
+              service_name: "Initial consultation",
+              starts_at: "2026-09-21T10:00:00.000Z",
+              time_zone: "Asia/Riyadh",
+            },
+            templateKey: "booking.reminder",
+          },
+        ],
+        deliver: async (input) => {
+          seen = input;
+          return { outcome: "accepted" };
+        },
+      }),
+    );
+    expect(seen?.subject).toContain("K3M9P2T7XY");
+    expect(seen?.text).toContain("Initial consultation");
+    expect(seen?.text).toContain("Asia/Riyadh");
+    expect(seen?.text).toContain("in 2 hours");
+    expect(seen?.text).toContain("1:00");
+  });
+});
+
 describe("resend adapter", () => {
   const adapter = (fetchImplementation: typeof fetch) =>
     createResendAdapter({
@@ -176,6 +297,22 @@ describe("resend adapter", () => {
     );
     expect(JSON.parse(String(seen?.body))).toMatchObject({
       tags: [{ name: "correlation_id", value: command.correlationId }],
+    });
+  });
+
+  it("tags a test send so provider events can be told apart", async () => {
+    let seen: RequestInit | undefined;
+    const call = (async (_url: string, init?: RequestInit) => {
+      seen = init;
+      return new Response(JSON.stringify({ id: "prov-9" }), { status: 200 });
+    }) as unknown as typeof fetch;
+
+    await adapter(call)({ ...command, isTest: true });
+    expect(JSON.parse(String(seen?.body))).toMatchObject({
+      tags: [
+        { name: "correlation_id", value: command.correlationId },
+        { name: "is_test", value: "true" },
+      ],
     });
   });
 });

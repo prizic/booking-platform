@@ -938,3 +938,241 @@ for (const locale of ["en", "ar"] as const)
       ).toEqual([]);
     }
   });
+
+const notificationCopy = {
+  en: {
+    nav: "Communications sections",
+    settings: "Notification settings",
+    preferences: "My email preferences",
+    email: "Email",
+    save: "Save notification settings",
+    saved: "Notification settings saved.",
+    refund: "Refund issued",
+    refundFailed: "Refund failed",
+    confirmed: "Booking confirmed",
+    alwaysSent: "Always sent",
+    digest: "Email me the day’s agenda each morning",
+    savePrefs: "Save my preferences",
+    savedPrefs: "Your email preferences are saved.",
+    waTitle: "WhatsApp",
+    waNotEntitled: "Your plan does not include WhatsApp notifications.",
+  },
+  ar: {
+    nav: "أقسام التواصل",
+    settings: "إعدادات الإشعارات",
+    preferences: "تفضيلات بريدي",
+    email: "البريد",
+    save: "حفظ إعدادات الإشعارات",
+    saved: "حُفظت إعدادات الإشعارات.",
+    refund: "إصدار استرداد",
+    refundFailed: "تعذّر الاسترداد",
+    confirmed: "تأكيد الحجز",
+    alwaysSent: "تُرسل دائمًا",
+    digest: "أرسل إليّ جدول اليوم كل صباح",
+    savePrefs: "حفظ تفضيلاتي",
+    savedPrefs: "حُفظت تفضيلات بريدك.",
+    waTitle: "واتساب",
+    waNotEntitled: "لا تشمل خطتك إشعارات واتساب.",
+  },
+} as const;
+
+/** Zero automated WCAG A/AA violations, and no horizontal scroll, at this width. */
+async function expectAccessibleAt(page: Page, width: number, label: string) {
+  await page.setViewportSize({ width, height: 900 });
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+    `${label} ${width}px must reflow`,
+  ).toBe(true);
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(
+    results.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => n.target) })),
+    `${label} ${width}px`,
+  ).toEqual([]);
+}
+
+/** A click that lands before hydration changes nothing; repeat until it does. */
+async function setSwitch(target: Locator, on: boolean) {
+  await expect(async () => {
+    if ((await target.getAttribute("aria-checked")) !== String(on))
+      await target.click();
+    await expect(target).toHaveAttribute("aria-checked", String(on), {
+      timeout: 2_000,
+    });
+  }).toPass({ timeout: 60_000 });
+}
+
+/** The tenant's stored email override for one type: "true", "false" or "default". */
+const tenantEmailSetting = (key: string) =>
+  completionSql(
+    `select coalesce((select s.overrides->'${key}'->>'email_enabled' from app.notification_settings s where s.tenant_id='${completionTenant}'),'default')`,
+  );
+
+test.describe("notification configuration", () => {
+  test.describe.configure({ mode: "serial" });
+  for (const [locale, templateKey] of [
+    ["en", "payment.refunded"],
+    ["ar", "payment.refund_failed"],
+  ] as const)
+    test(`administrator turns an optional customer email off in ${locale}; always-sent types stay locked`, async ({
+      page,
+    }) => {
+      const copy = notificationCopy[locale];
+      const name = templateKey === "payment.refunded" ? copy.refund : copy.refundFailed;
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await signInCompletion(page, "admin", locale);
+      await page.goto(`${completionOrigin}/${locale}/communications`);
+      await page
+        .getByRole("navigation", { name: copy.nav, exact: true })
+        .getByRole("link", { name: copy.settings, exact: true })
+        .click();
+      await page.waitForURL(new RegExp(`/${locale}/communications/settings$`, "u"));
+      await expect(page.locator("html")).toHaveAttribute(
+        "dir",
+        locale === "ar" ? "rtl" : "ltr",
+      );
+      await expect(
+        page.getByRole("heading", { level: 1, name: copy.settings, exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByRole("navigation", { name: copy.nav, exact: true })
+          .getByRole("link", { name: copy.settings, exact: true }),
+      ).toHaveAttribute("aria-current", "page");
+
+      // Always-sent types render their email switch on, disabled, and stamped.
+      for (const locked of [
+        "booking.confirmed",
+        "management.otp_requested",
+        "auth.sign_in_link",
+        "auth.password_reset",
+        "auth.email_change",
+      ]) {
+        const row = page.locator(`li[data-template-key="${locked}"]`);
+        await expect(row).toHaveCount(1);
+        await expect(row.getByRole("switch")).toBeDisabled();
+        await expect(row.getByRole("switch")).toHaveAttribute("aria-checked", "true");
+        await expect(row).toContainText(copy.alwaysSent);
+      }
+      await expect(
+        page.locator('li[data-template-key="booking.confirmed"]').getByRole("switch"),
+      ).toHaveAccessibleName(`${copy.email} — ${copy.confirmed}`);
+
+      const row = page.locator(`li[data-template-key="${templateKey}"]`);
+      const toggle = row.getByRole("switch", {
+        name: `${copy.email} — ${name}`,
+        exact: true,
+      });
+      await expect(toggle).toBeEnabled();
+      const save = async () => {
+        await submitMutation(
+          page,
+          page.getByRole("button", { name: copy.save, exact: true }),
+        );
+        await expect(page.locator("main").getByRole("status")).toContainText(
+          copy.saved,
+        );
+      };
+      // A diagnostic rerun on a used stack restores the default first, so the
+      // "off" below is always a real change.
+      if (tenantEmailSetting(templateKey) === "false") {
+        await setSwitch(toggle, true);
+        await save();
+        await page.reload();
+      }
+      await expect(toggle).toHaveAttribute("aria-checked", "true");
+      await setSwitch(toggle, false);
+      await save();
+      expect(tenantEmailSetting(templateKey)).toBe("false");
+      // Locked types never gain an email override, whatever the browser sent.
+      expect(
+        completionSql(
+          `select count(*) from app.notification_settings where tenant_id='${completionTenant}' and (overrides->'booking.confirmed' ? 'email_enabled' or overrides->'management.otp_requested' ? 'email_enabled')`,
+        ),
+      ).toBe("0");
+      expect(
+        completionSql(
+          `select count(*) > 0 from app.notification_settings_events where tenant_id='${completionTenant}' and action='settings_saved'`,
+        ),
+      ).toBe("t");
+
+      // The saved state is what a fresh load shows.
+      await page.reload();
+      await expect(toggle).toHaveAttribute("aria-checked", "false");
+      await expectAccessibleAt(page, 1440, `notification settings ${locale}`);
+      await expectAccessibleAt(page, 390, `notification settings ${locale}`);
+    });
+
+  test("staff member turns on the daily agenda in My email preferences", async ({
+    page,
+  }) => {
+    const copy = notificationCopy.en;
+    const staffMembership = "d3000000-0000-0000-0000-000000000003";
+    const stored = () =>
+      completionSql(
+        `select coalesce((select preferences->>'staff.daily_digest' from app.staff_notification_preferences where tenant_id='${completionTenant}' and membership_id='${staffMembership}'),'none')`,
+      );
+    await signInCompletion(page, "staff");
+    await page.goto(`${completionOrigin}/en/communications`);
+    const nav = page.getByRole("navigation", { name: copy.nav, exact: true });
+    // Staff hold no policy.edit, so the tenant settings section is not offered.
+    await expect(
+      nav.getByRole("link", { name: copy.settings, exact: true }),
+    ).toHaveCount(0);
+    await nav.getByRole("link", { name: copy.preferences, exact: true }).click();
+    await page.waitForURL(/\/en\/communications\/preferences$/u);
+    await expect(
+      page.getByRole("heading", { level: 1, name: copy.preferences, exact: true }),
+    ).toBeVisible();
+    const digest = page.getByRole("switch", { name: copy.digest, exact: true });
+    const save = async () => {
+      await submitMutation(
+        page,
+        page.getByRole("button", { name: copy.savePrefs, exact: true }),
+      );
+      await expect(page.locator("main").getByRole("status")).toContainText(
+        copy.savedPrefs,
+      );
+    };
+    if (stored() === "true") {
+      await setSwitch(digest, false);
+      await save();
+      await page.reload();
+    }
+    await expect(digest).toHaveAttribute("aria-checked", "false");
+    await setSwitch(digest, true);
+    await save();
+    expect(stored()).toBe("true");
+    await page.reload();
+    await expect(digest).toHaveAttribute("aria-checked", "true");
+    await expectAccessibleAt(page, 1440, "my email preferences");
+  });
+
+  for (const locale of ["en", "ar"] as const)
+    test(`integrations shows WhatsApp as not on the plan in ${locale}`, async ({
+      page,
+    }) => {
+      const copy = notificationCopy[locale];
+      await signInCompletion(page, "admin", locale);
+      await page.goto(`${completionOrigin}/${locale}/integrations`);
+      const section = page.locator("#integrations-whatsapp");
+      await expect(
+        section.getByRole("heading", { name: copy.waTitle, exact: true }),
+      ).toBeVisible();
+      await expect(section).toContainText(copy.waNotEntitled);
+      // Without the entitlement no setup control is offered at all.
+      await expect(section.locator("form")).toHaveCount(0);
+      await expect(
+        section
+          .getByRole("textbox")
+          .or(section.getByRole("switch"))
+          .or(section.getByRole("button")),
+      ).toHaveCount(0);
+      expect(
+        completionSql(
+          `select count(*) from app.whatsapp_configs where tenant_id='${completionTenant}'`,
+        ),
+      ).toBe("0");
+    });
+});

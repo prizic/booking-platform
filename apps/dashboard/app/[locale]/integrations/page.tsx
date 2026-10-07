@@ -18,6 +18,7 @@ import { createDashboardAuthClient } from "../../_lib/auth-server";
 import { workspaceStatus } from "../../_lib/workspace-status";
 import { workspaceStamp } from "../communications/status-stamp";
 import { OnboardingForm } from "./onboarding-form";
+import { WhatsAppSection } from "./whatsapp-card";
 export const dynamic = "force-dynamic";
 const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 export default async function IntegrationsPage({
@@ -60,6 +61,17 @@ export default async function IntegrationsPage({
     );
   else {
     const context = request.state.context;
+    // The WhatsApp read needs only the capability; saving needs a fresh MFA.
+    const whatsapp = await (async () => {
+      try {
+        return (await request.source?.getWhatsAppConfig?.(context.tenantId)) ?? null;
+      } catch {
+        return null;
+      }
+    })();
+    const whatsappSection = (
+      <WhatsAppSection locale={locale} tenantId={context.tenantId} config={whatsapp} />
+    );
     const loaded = await (async () => {
       try {
         const client = await createDashboardAuthClient(false);
@@ -78,22 +90,25 @@ export default async function IntegrationsPage({
     if (loaded) {
       if (!loaded.verified)
         body = (
-          <Alert tone="warning">
-            <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
-              <span>
-                {m(
-                  "Verify your account to read payment account status.",
-                  "تحقّق من حسابك لقراءة حالة حساب الدفع.",
-                )}
-              </span>
-              <Button asChild size="sm">
-                <Link href={verifyHref}>
-                  <ShieldCheck aria-hidden="true" />
-                  {m("Verify account", "التحقق من الحساب")}
-                </Link>
-              </Button>
-            </AlertDescription>
-          </Alert>
+          <>
+            <Alert tone="warning">
+              <AlertDescription className="flex flex-wrap items-center gap-3 text-foreground">
+                <span>
+                  {m(
+                    "Verify your account to read payment account status.",
+                    "تحقّق من حسابك لقراءة حالة حساب الدفع.",
+                  )}
+                </span>
+                <Button asChild size="sm">
+                  <Link href={verifyHref}>
+                    <ShieldCheck aria-hidden="true" />
+                    {m("Verify account", "التحقق من الحساب")}
+                  </Link>
+                </Button>
+              </AlertDescription>
+            </Alert>
+            {whatsappSection}
+          </>
         );
       else {
         const { rows } = loaded;
@@ -218,19 +233,23 @@ export default async function IntegrationsPage({
                 </p>
               </div>
             </Section>
+            {whatsappSection}
           </>
         );
       }
     } else {
       body = (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {m(
-              "Integration status is unavailable. Retry the read.",
-              "حالة التكامل غير متاحة. أعد محاولة القراءة.",
-            )}
-          </AlertDescription>
-        </Alert>
+        <>
+          <Alert tone="danger">
+            <AlertDescription className="text-foreground">
+              {m(
+                "Integration status is unavailable. Retry the read.",
+                "حالة التكامل غير متاحة. أعد محاولة القراءة.",
+              )}
+            </AlertDescription>
+          </Alert>
+          {whatsappSection}
+        </>
       );
     }
   }

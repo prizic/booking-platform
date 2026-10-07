@@ -67,6 +67,13 @@ export type ClientMessageKey =
   | "bookingPhoneDescription"
   | "bookingIntakeLegend"
   | "bookingConsentLabel"
+  | "bookingWhatsAppCountryLabel"
+  | "bookingWhatsAppPhoneLabel"
+  | "bookingWhatsAppPhoneDescription"
+  | "bookingWhatsAppPhonePreview"
+  | "bookingWhatsAppEmailNote"
+  | "bookingWhatsAppPhoneRequired"
+  | "bookingWhatsAppPhoneInvalid"
   | "bookingConsentRequired"
   | "bookingNameRequired"
   | "bookingEmailRequired"
@@ -249,6 +256,17 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingPhoneDescription: "Only used if we need to reach you about this booking.",
     bookingIntakeLegend: "Before your appointment",
     bookingConsentLabel: "I accept the booking and cancellation policy.",
+    bookingWhatsAppCountryLabel: "Country code",
+    bookingWhatsAppPhoneLabel: "WhatsApp number",
+    bookingWhatsAppPhoneDescription:
+      "Your mobile number without the country code, or the full number starting with +.",
+    bookingWhatsAppPhonePreview: "Updates will go to",
+    bookingWhatsAppEmailNote:
+      "Your confirmation and updates are always sent by email as well.",
+    bookingWhatsAppPhoneRequired:
+      "Enter the WhatsApp number for updates, or untick WhatsApp updates.",
+    bookingWhatsAppPhoneInvalid:
+      "Enter a valid mobile number, or the full international number starting with +.",
     bookingConsentRequired: "Accept the policy to confirm your booking.",
     bookingNameRequired: "Enter your full name.",
     bookingEmailRequired: "Enter an email address we can send your confirmation to.",
@@ -462,6 +480,17 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     bookingPhoneDescription: "يُستخدم فقط إذا احتجنا للتواصل معك بشأن هذا الحجز.",
     bookingIntakeLegend: "قبل موعدك",
     bookingConsentLabel: "أوافق على سياسة الحجز والإلغاء.",
+    bookingWhatsAppCountryLabel: "رمز الدولة",
+    bookingWhatsAppPhoneLabel: "رقم واتساب",
+    bookingWhatsAppPhoneDescription:
+      "رقم جوالك دون رمز الدولة، أو الرقم الدولي كاملًا بدءًا بعلامة +.",
+    bookingWhatsAppPhonePreview: "ستصل التحديثات إلى",
+    bookingWhatsAppEmailNote:
+      "نرسل التأكيد والتحديثات إلى بريدك الإلكتروني دائمًا أيضًا.",
+    bookingWhatsAppPhoneRequired:
+      "أدخل رقم واتساب لاستلام التحديثات، أو ألغِ اختيار التحديثات عبر واتساب.",
+    bookingWhatsAppPhoneInvalid:
+      "أدخل رقم جوال صحيحًا، أو الرقم الدولي كاملًا بدءًا بعلامة +.",
     bookingConsentRequired: "وافق على السياسة لتأكيد حجزك.",
     bookingNameRequired: "أدخل اسمك الكامل.",
     bookingEmailRequired: "أدخل بريدًا إلكترونيًا لإرسال التأكيد إليه.",
