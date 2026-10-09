@@ -83,4 +83,45 @@ describe("Client manage route boundary", () => {
       }),
     );
   });
+
+  /*
+   * Regression: the emailed link is `view`-only, so cancel/reschedule need an
+   * exchange step. An invented intent must read as every other refusal without
+   * reaching the database; a real one forwards the view link and its intent.
+   */
+  it("refuses an invented exchange intent without a database call", async () => {
+    for (const body of [
+      { action: "request-action", intent: "view", token },
+      { action: "request-action", intent: "refund_request", token },
+      { action: "request-action", intent: "delete-all", token },
+      { action: "request-action", intent: "cancel", token: "not-a-token" },
+    ]) {
+      expect(await (await post(body)).json()).toEqual({ outcome: "unavailable" });
+    }
+    expect(rpc).not.toHaveBeenCalled();
+  });
+
+  it("exchanges the emailed link for that intent's own action link", async () => {
+    rpc.mockResolvedValue({
+      data: [
+        {
+          contract_version: 1,
+          expires_at: "2035-09-24T12:40:00.000Z",
+          intent: "cancel",
+          outcome: "issued",
+          token: "c".repeat(64),
+        },
+      ],
+      error: null,
+    });
+    const response = await post({ action: "request-action", intent: "cancel", token });
+    expect(await response.json()).toMatchObject({
+      intent: "cancel",
+      outcome: "issued",
+    });
+    expect(rpc).toHaveBeenCalledWith(
+      "request_management_action_v1",
+      expect.objectContaining({ p_intent: "cancel", p_token: token }),
+    );
+  });
 });

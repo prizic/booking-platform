@@ -184,6 +184,37 @@ test("fails before Vercel when the persisted project identity is unavailable", a
   ]);
 });
 
+test("an unimplemented step key fails rather than resolving to a prototype member", async () => {
+  const completions = [];
+  const worker = createVercelProvisioningWorker({
+    vercel: { createProjects: async () => assert.fail("must not call Vercel") },
+    loadRepository: async () => assert.fail("must not load repository"),
+    store: {
+      claim: async () => ({
+        id: "step-unknown",
+        provider: "vercel",
+        stepKey: "constructor",
+      }),
+      complete: async (command) => completions.push(command),
+    },
+  });
+
+  // `handlers["constructor"]` used to resolve through the prototype chain to
+  // `Object`, so the step was "handled" and recorded as succeeded without any
+  // provider call at all.
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "failed",
+    stepKey: "constructor",
+  });
+  assert.deepEqual(completions, [
+    {
+      errorCode: "vercel_step_not_implemented",
+      outcome: "failed",
+      stepId: "step-unknown",
+    },
+  ]);
+});
+
 test("a restarted worker does not replay a create_projects step already completed durably", async () => {
   const completions = [];
   let claimed = true;

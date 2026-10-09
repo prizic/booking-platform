@@ -8,6 +8,7 @@ import {
 } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Fragment } from "react";
 import { copyFor, reasonCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
@@ -144,12 +145,12 @@ export default async function ReleasePage({
                       (instance) =>
                         [
                           instance.instance_id,
-                          <>
+                          <Fragment key={instance.instance_id}>
                             <bdi>{instance.tenant_name}</bdi>
                             <ReferenceCode className="text-xs font-medium text-muted-foreground">
                               {instance.instance_id.slice(0, 8)}
                             </ReferenceCode>
-                          </>,
+                          </Fragment>,
                         ] as const,
                     )}
                   />

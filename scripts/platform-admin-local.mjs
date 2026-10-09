@@ -3,6 +3,10 @@
 // because the retained `white-label-booking-platform` stack holds demo data we
 // must not reset, port 54321 currently belongs to an unrelated project, and the
 // dashboard campaign owns 553xx. Every command here refuses any other workdir.
+//
+// Set WLBP_CAMPAIGN to run the same helper against a fresh stack instead: the
+// project id, workdir, ports and inspector port all move together, and nothing
+// else has to change. Without it, every value below is exactly what it was.
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { chmod, cp, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
@@ -12,11 +16,64 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const root = fileURLToPath(new URL("..", import.meta.url));
-export const output = path.join(root, ".artifacts/platform-admin");
-export const workdir = path.join(output, "isolated");
-export const projectId = "platform-admin-20261006";
 
-export function isolateConfig(text) {
+// One stack definition, three known profiles. The default is the retained
+// Platform Admin demo and must keep resolving to exactly what it always has, so
+// an existing run is unaffected. A verification campaign sets WLBP_CAMPAIGN and
+// gets its own project id, workdir and ports without a second copy of this
+// script: 553xx belongs to the retained dashboard campaign and 565xx to the
+// retained Platform Admin one, so a fresh campaign takes 577xx.
+// A campaign name becomes a Supabase project id (`<name>-20261008`) and a
+// Docker container segment (`supabase_db_<project id>`), so it must be a
+// lowercase slug. Anything else (spaces, slashes, uppercase) would build an
+// invalid project id or escape the intended container name.
+export function assertCampaignName(value) {
+  if (value !== "" && !/^[a-z0-9](?:[a-z0-9-]{0,32}[a-z0-9])?$/u.test(value))
+    throw new Error(
+      "WLBP_CAMPAIGN must be a lowercase slug (letters, digits, hyphens).",
+    );
+}
+
+// Port blocks owned by stacks this helper must never collide with: the base
+// project (543xx), the retained dashboard campaign (553xx) and the retained
+// Platform Admin demo (565xx). The runtime preflight also refuses held ports,
+// but a campaign pointed at a retained block is refused here with a reason.
+const RESERVED_PORT_PREFIXES = ["543", "553", "565"];
+const RESERVED_INSPECTOR_PORTS = ["8083", "8093", "8183"];
+
+export function assertCampaignPortProfile(prefix, inspector, isCampaign) {
+  if (!/^\d{3}$/u.test(prefix))
+    throw new Error("WLBP_CAMPAIGN_PORT_PREFIX must be exactly three digits.");
+  if (!/^\d{4,5}$/u.test(inspector))
+    throw new Error("WLBP_CAMPAIGN_INSPECTOR_PORT must be a valid port.");
+  if (Number(inspector) < 1024 || Number(inspector) > 65535)
+    throw new Error("WLBP_CAMPAIGN_INSPECTOR_PORT must be between 1024 and 65535.");
+  if (isCampaign && RESERVED_PORT_PREFIXES.includes(prefix))
+    throw new Error(
+      `WLBP_CAMPAIGN_PORT_PREFIX ${prefix} belongs to a retained stack; choose a fresh prefix.`,
+    );
+  if (isCampaign && RESERVED_INSPECTOR_PORTS.includes(inspector))
+    throw new Error(
+      `WLBP_CAMPAIGN_INSPECTOR_PORT ${inspector} belongs to a retained stack; choose a fresh port.`,
+    );
+}
+
+const campaign = process.env.WLBP_CAMPAIGN?.trim() ?? "";
+assertCampaignName(campaign);
+export const output = campaign
+  ? path.join(root, ".artifacts/monorepo-hardening")
+  : path.join(root, ".artifacts/platform-admin");
+export const workdir = path.join(output, "isolated");
+export const projectId = campaign ? `${campaign}-20261008` : "platform-admin-20261006";
+export const portPrefix =
+  process.env.WLBP_CAMPAIGN_PORT_PREFIX ?? (campaign ? "577" : "565");
+export const inspectorPort =
+  process.env.WLBP_CAMPAIGN_INSPECTOR_PORT ?? (campaign ? "8095" : "8093");
+assertCampaignPortProfile(portPrefix, inspectorPort, campaign !== "");
+export const apiPort = `${portPrefix}21`;
+export const dbPort = `${portPrefix}22`;
+
+export function isolateConfig(text, prefix = portPrefix, inspector = inspectorPort) {
   if (!text.includes('project_id = "white-label-booking-platform"'))
     throw new Error("unexpected config.toml: refusing to isolate another project");
   let out = text
@@ -24,8 +81,8 @@ export function isolateConfig(text) {
       'project_id = "white-label-booking-platform"',
       `project_id = "${projectId}"`,
     )
-    .replace(/\b543(\d\d)\b/gu, "565$1")
-    .replace(/\binspector_port = 8083\b/u, "inspector_port = 8093");
+    .replace(/\b543(\d\d)\b/gu, `${prefix}$1`)
+    .replace(/\binspector_port = 8083\b/u, `inspector_port = ${inspector}`);
   if (/^\[analytics\]$/mu.test(out)) {
     out = out.replace(
       /^\[analytics\]\n(?:enabled = \w+\n)?/mu,
@@ -63,9 +120,23 @@ async function sync() {
 }
 
 async function assertIsolated() {
-  const config = await readFile(path.join(workdir, "supabase/config.toml"), "utf8");
+  assertIsolatedConfig(
+    await readFile(path.join(workdir, "supabase/config.toml"), "utf8"),
+  );
+}
+
+/**
+ * The workdir is only ever safe to reset when it is this profile's own project
+ * on this profile's own ports. Checking the id alone would still let a campaign
+ * reset a workdir whose ports had been pointed at another stack.
+ */
+export function assertIsolatedConfig(config) {
   if (!config.includes(`project_id = "${projectId}"`))
     throw new Error(`refusing: ${workdir} is not ${projectId}`);
+  if (!config.includes(`port = ${apiPort}`))
+    throw new Error(`refusing: ${workdir} is not on ${apiPort}`);
+  if (!config.includes(`port = ${dbPort}`))
+    throw new Error(`refusing: ${workdir} is not on ${dbPort}`);
 }
 
 function supabase(args, quiet = false) {
@@ -88,7 +159,7 @@ function supabase(args, quiet = false) {
 
 const credentialsPath = path.join(output, "credentials.json");
 
-export function parseIsolatedStatus(text) {
+export function parseIsolatedStatus(text, prefix = portPrefix) {
   const env = Object.fromEntries(
     text
       .trim()
@@ -114,7 +185,7 @@ export function parseIsolatedStatus(text) {
     const localHosts = ["127.0.0.1", "localhost", "[::1]"];
     safe =
       api.protocol === "http:" &&
-      api.port === "56521" &&
+      api.port === `${prefix}21` &&
       localHosts.includes(api.hostname) &&
       !api.username &&
       !api.password &&
@@ -122,7 +193,7 @@ export function parseIsolatedStatus(text) {
       !api.search &&
       !api.hash &&
       db.protocol === "postgresql:" &&
-      db.port === "56522" &&
+      db.port === `${prefix}22` &&
       localHosts.includes(db.hostname) &&
       db.pathname === "/postgres" &&
       !db.search &&
@@ -458,6 +529,59 @@ async function seed() {
   );
 }
 
+// Platform-managed Realtime tables are owned by the container's infrastructure
+// role, not by the migration role, so this policy is applied as that owner. The
+// container name follows the active profile, so it can never land on a retained
+// stack: `supabase_db_<project id>`.
+async function realtimePolicy() {
+  await assertIsolated();
+  execFileSync(
+    "docker",
+    [
+      "exec",
+      "-i",
+      `supabase_db_${projectId}`,
+      "psql",
+      "--username=supabase_admin",
+      "--dbname=postgres",
+      "--no-psqlrc",
+      "--set=ON_ERROR_STOP=1",
+      "--command",
+      await readFile(
+        path.join(root, "supabase/realtime/tenant-workspace-policy.sql"),
+        "utf8",
+      ),
+    ],
+    { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+  );
+  process.stdout.write(`Realtime tenant-workspace policy applied to ${projectId}.\n`);
+}
+
+/**
+ * The Dashboard browser journey's synthetic tenant. Its password is generated
+ * here, never printed, and handed to Playwright through an owner-only file —
+ * the same contract `live-booking-e2e.mjs` uses for its own journey.
+ */
+async function dashboardFixture() {
+  await assertIsolated();
+  const env = isolatedEnvironment();
+  const password = randomBytes(32).toString("base64url");
+  const fixture = await readFile(
+    path.join(root, "tests/e2e/fixtures/dashboard-completion.sql"),
+    "utf8",
+  );
+  isolatedSql(env, fixture.replaceAll(":'dashboard_password'", `'${password}'`));
+  const file = path.join(output, "dashboard-completion-credentials.json");
+  await writeFile(file, JSON.stringify({ dashboardPassword: password }), {
+    mode: 0o600,
+  });
+  await chmod(file, 0o600);
+  process.stdout.write(
+    `Dashboard completion fixture applied to ${projectId}. ` +
+      `Credentials: ${path.relative(root, file)} (owner-readable only).\n`,
+  );
+}
+
 export function platformAdminEnvironment(env, port) {
   return {
     NEXT_PUBLIC_SUPABASE_URL: env.apiUrl,
@@ -509,6 +633,29 @@ function cwdOf(pid) {
       .find((line) => line.startsWith("n"))
       ?.slice(1) ?? ""
   );
+}
+
+/**
+ * A stack that cannot bind its ports fails deep inside Docker with a message
+ * that names neither the port nor the other stack. Refuse before `supabase
+ * start` instead, and name the holder: the retained 553xx and 565xx stacks must
+ * never be the thing this collides with.
+ */
+function assertPortsFree() {
+  const held = [
+    [apiPort, "api"],
+    [dbPort, "db"],
+    [inspectorPort, "edge runtime inspector"],
+  ]
+    .filter(([port]) => listenerOn(port))
+    .map(([port, what]) => `${port} (${what})`);
+  if (held.length > 0) {
+    throw new Error(
+      `refusing to start ${projectId}: ${held.join(", ")} already in use. ` +
+        "Another stack holds them; choose a different WLBP_CAMPAIGN_PORT_PREFIX.",
+    );
+  }
+  process.stdout.write(`${projectId} ports free: api ${apiPort}, db ${dbPort}.\n`);
 }
 
 async function serve() {
@@ -571,12 +718,15 @@ const commands = {
   seed,
   serve,
   sync,
+  "realtime-policy": realtimePolicy,
+  "dashboard-fixture": dashboardFixture,
   async start() {
     await sync();
+    assertPortsFree();
     supabase(["start"], true);
     const env = isolatedEnvironment();
     process.stdout.write(
-      `${projectId} started. API: ${env.apiUrl}; database port: 56522.\n`,
+      `${projectId} started. API: ${env.apiUrl}; database port: ${dbPort}.\n`,
     );
   },
   async replay() {
@@ -593,8 +743,11 @@ const commands = {
     await assertIsolated();
     const env = isolatedEnvironment();
     process.stdout.write(
-      `${projectId} running. API: ${env.apiUrl}; database port: 56522.\n`,
+      `${projectId} running. API: ${env.apiUrl}; database port: ${dbPort}.\n`,
     );
+  },
+  ports() {
+    assertPortsFree();
   },
   async stop() {
     await assertIsolated();

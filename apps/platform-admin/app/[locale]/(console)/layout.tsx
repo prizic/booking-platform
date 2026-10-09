@@ -5,7 +5,7 @@ import { LogOut, ShieldCheck, UserRound } from "lucide-react";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { fill, roleCopy, say, shellCopy, stateCopy } from "../../_lib/copy";
 import { getNavigation } from "../../_lib/navigation";
 import {
@@ -152,13 +152,12 @@ export default async function ConsoleLayout({
           <UserRound aria-hidden="true" />
         </Link>
       </Button>
-      <Suspense>
-        <LocaleSwitch
-          locale={locale}
-          label={say(locale, shellCopy.language)}
-          className="hidden md:inline-flex"
-        />
-      </Suspense>
+      {/* Hydrate route-dependent links with the shell before it can navigate. */}
+      <LocaleSwitch
+        locale={locale}
+        label={say(locale, shellCopy.language)}
+        className="hidden md:inline-flex"
+      />
       <ThemeToggle
         initialTheme={theme}
         labels={{
@@ -177,13 +176,11 @@ export default async function ConsoleLayout({
         brand={brand}
         mobileBrand={mobileBrand}
         sheetFooter={
-          <Suspense>
-            <LocaleSwitch
-              locale={locale}
-              label={say(locale, shellCopy.language)}
-              tone="rail"
-            />
-          </Suspense>
+          <LocaleSwitch
+            locale={locale}
+            label={say(locale, shellCopy.language)}
+            tone="rail"
+          />
         }
         groups={getNavigation(locale)}
         topbar={topbar}

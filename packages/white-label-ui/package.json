@@ -11,6 +11,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./brand-config": {
+      "types": "./dist/brand-config.d.ts",
+      "import": "./dist/brand-config.js"
+    },
+    "./instance-content": {
+      "types": "./dist/instance-content.d.ts",
+      "import": "./dist/instance-content.js"
     }
   },
   "scripts": {

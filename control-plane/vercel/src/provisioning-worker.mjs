@@ -149,7 +149,12 @@ export function createVercelProvisioningWorker({
     const step = await store.claim();
     if (!step) return { kind: "idle" };
     if (step.provider !== "vercel") return { kind: "skipped", reason: "not_vercel" };
-    const handler = handlers[step.stepKey];
+    // `Object.hasOwn`, not a truthy lookup: `handlers["constructor"]` resolves
+    // through the prototype chain to a function, and an unimplemented step key
+    // would then be "handled" by calling it and recorded as succeeded.
+    const handler = Object.hasOwn(handlers, step.stepKey)
+      ? handlers[step.stepKey]
+      : undefined;
     if (!handler) {
       await store.complete({
         stepId: step.id,

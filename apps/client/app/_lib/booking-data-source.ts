@@ -309,16 +309,21 @@ export function createClientBookingDataSource(
         );
       }
       const row = firstRow(result.data);
+      // The booking columns come from a left join, so each is absent exactly
+      // when no booking was made. A missing column must read as "no booking",
+      // never as the literal string "undefined", which the returning page
+      // would read as a confirmed payment.
+      const optionalText = (value: unknown) =>
+        value === null || value === undefined ? null : String(value);
       return {
         balanceMinor: Number(row.balance_minor ?? 0),
-        bookingId: row.booking_id === null ? null : String(row.booking_id),
-        bookingStatus: row.booking_status === null ? null : String(row.booking_status),
+        bookingId: optionalText(row.booking_id),
+        bookingStatus: optionalText(row.booking_status),
         currency: String(row.currency),
         dueMinor: Number(row.due_minor ?? 0),
-        exceptionCode: row.exception_code === null ? null : String(row.exception_code),
-        paymentStatus: row.payment_status === null ? null : String(row.payment_status),
-        publicReference:
-          row.public_reference === null ? null : String(row.public_reference),
+        exceptionCode: optionalText(row.exception_code),
+        paymentStatus: optionalText(row.payment_status),
+        publicReference: optionalText(row.public_reference),
         purpose: row.purpose === "deposit" ? "deposit" : "full",
         status: String(row.status),
       };

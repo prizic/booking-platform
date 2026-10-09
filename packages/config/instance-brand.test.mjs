@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -264,8 +265,21 @@ describe("installable-app icons", () => {
   });
 
   it("decodes the shipped template icon", () => {
+    const packageDirectory = path.dirname(fileURLToPath(import.meta.url));
+    const repositoryRoot = path.resolve(packageDirectory, "..", "..");
+    const brandPath = [
+      path.join(repositoryRoot, "instance", "brand.json"),
+      path.join(repositoryRoot, "instance-template", "instance", "brand.json"),
+    ].find((candidate) => existsSync(candidate));
+    expect(
+      brandPath,
+      "shipped brand.json must exist in the supported instance layout",
+    ).toBeDefined();
+    const brand = JSON.parse(readFileSync(brandPath, "utf8"));
+    expect(typeof brand.assets?.icon).toBe("string");
+    expect(brand.assets.icon.startsWith("/assets/")).toBe(true);
     const icon = readFileSync(
-      new URL("../../instance-template/instance/assets/icon.png", import.meta.url),
+      path.join(path.dirname(brandPath), brand.assets.icon.slice(1)),
     );
     const decoded = decodePngToRgba(icon);
     expect(decoded.rgba).toHaveLength(decoded.width * decoded.height * 4);

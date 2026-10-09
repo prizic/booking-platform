@@ -39,6 +39,19 @@ export const manageViewSchema = z.object({
 
 export type ManageViewInput = z.input<typeof manageViewSchema>;
 
+/**
+ * The link's own intent, read from the URL. `redeem_management_token_v1`
+ * refuses any intent that is not the one the token was minted for, so a page
+ * that always asked for `view` could never redeem a cancel or reschedule link
+ * — the whole action surface, and the step-up that guards it, stayed
+ * unreachable. The database still compares this against the stored intent, so
+ * a rewritten `intent` in the URL buys nothing.
+ */
+export function manageIntentFromParam(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  return manageViewSchema.shape.intent.catch("view").parse(candidate);
+}
+
 /** Ask for a one-time code by email. */
 export const requestStepUpSchema = z.object({
   action: z.literal("request-step-up"),
@@ -46,6 +59,21 @@ export const requestStepUpSchema = z.object({
 });
 
 export type RequestStepUpInput = z.input<typeof requestStepUpSchema>;
+
+/**
+ * Exchange the emailed view link for that intent's own action link. Only the
+ * two booking actions the Client implements may be requested here, and the
+ * intent is strict on purpose: unlike redemption — where an unknown intent
+ * reads as `view` — coercing an unknown value into an action would mint the
+ * wrong authority. An invented intent never reaches the database.
+ */
+export const requestActionSchema = z.object({
+  action: z.literal("request-action"),
+  intent: z.enum(["cancel", "reschedule"]),
+  token: linkTokenField,
+});
+
+export type RequestActionInput = z.input<typeof requestActionSchema>;
 
 /** The one-time code form, and the body the route verifies. */
 export const verifyStepUpSchema = z.object({

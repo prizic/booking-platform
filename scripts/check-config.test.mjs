@@ -115,17 +115,47 @@ describe("theme.css configuration validation", () => {
   });
 
   it("rejects declarations whose values drift from brand.json", async () => {
-    const result = await runWithTheme((theme) =>
-      theme.replace(
-        "--brand-color-background: #f3efe5",
-        "--brand-color-background: #000000",
+    const fixtureRoot = await createRepositoryFixture();
+    const brand = JSON.parse(
+      await readFile(
+        path.join(fixtureRoot, "instance-template", "instance", "brand.json"),
+        "utf8",
       ),
+    );
+    const expected = brand.tokens?.color?.background;
+    assert.ok(typeof expected === "string" && expected.trim() !== "");
+    const themePath = path.join(
+      fixtureRoot,
+      "instance-template",
+      "instance",
+      "theme.css",
+    );
+    const original = await readFile(themePath, "utf8");
+    assert.ok(original.includes(`--brand-color-background: ${expected}`));
+    const mutated = original.replace(
+      `--brand-color-background: ${expected}`,
+      "--brand-color-background: #000000",
+    );
+    assert.notEqual(mutated, original);
+    await writeFile(themePath, mutated, "utf8");
+
+    const result = spawnSync(
+      process.execPath,
+      [path.join(fixtureRoot, "scripts/check-config.mjs")],
+      {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+      },
     );
 
     assert.notEqual(result.status, 0);
+    const escaped = expected.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
     assert.match(
       result.stderr,
-      /theme\.css :root --brand-color-background must equal brand\.json value #f3efe5/u,
+      new RegExp(
+        `theme\\.css :root --brand-color-background must equal brand\\.json value ${escaped}`,
+        "u",
+      ),
     );
   });
 

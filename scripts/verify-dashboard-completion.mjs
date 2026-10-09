@@ -4,6 +4,7 @@ import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readLocalSupabaseEnvironment } from "./live-booking-e2e.mjs";
+import { pathExists } from "./workspace.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const output = path.join(root, ".artifacts/dashboard-completion");
@@ -468,17 +469,28 @@ if (
         "dashboard-realtime",
       ].includes(g.name),
   );
-await gate(
-  "ui-detector",
-  "/Volumes/PortableSSD/AI-Hub/skills/impeccable/scripts/impeccable",
-  [
+// The detector is an operator-local tool, not a repository dependency, so its
+// location is an input rather than a hardcoded workstation path. A missing
+// detector is reported as unverified — never as a pass.
+const uiDetector =
+  process.env.WLBP_UI_DETECTOR ??
+  path.join(
+    process.env.HOME ?? "",
+    ".config/opencode/skills/impeccable/scripts/impeccable",
+  );
+if (await pathExists(uiDetector))
+  await gate("ui-detector", uiDetector, [
     "detect",
     "--json",
     "apps/dashboard/app",
     "packages/ui-foundation/src",
     "packages/white-label-ui/src",
-  ],
-);
+  ]);
+else
+  await pending(
+    "ui-detector",
+    `No UI detector at ${uiDetector}. Set WLBP_UI_DETECTOR to its path to run this gate; it is an operator tool, not a repository dependency.`,
+  );
 await save();
 process.stdout.write(`Report: ${path.join(output, "report.md")}\n`);
 if (

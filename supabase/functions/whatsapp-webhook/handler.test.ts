@@ -173,6 +173,89 @@ Deno.test("a signed but non-JSON body is refused", async () => {
   assert(response.status === 400, `expected 400, got ${response.status}`);
 });
 
+Deno.test(
+  "a byte-identical redelivery produces the same idempotency keys",
+  async () => {
+    const { handler, recorded } = harness();
+    const first = await handler(
+      new Request(endpoint, {
+        body: statusPayload,
+        headers: { "x-hub-signature-256": await sign(statusPayload) },
+        method: "POST",
+      }),
+    );
+    const second = await handler(
+      new Request(endpoint, {
+        body: statusPayload,
+        headers: { "x-hub-signature-256": await sign(statusPayload) },
+        method: "POST",
+      }),
+    );
+    assert(first.status === 200 && second.status === 200, "both acknowledged");
+    // Meta carries no timestamp in the signature, so a redelivery verifies. The
+    // recorded rows are keyed on `<wamid>:<status>`, which is what makes the
+    // duplicate free — the same references, so `record_whatsapp_provider_event_v1`
+    // dedupes on them.
+    assert(recorded.length === 4, `expected four rows, got ${recorded.length}`);
+    assert(
+      recorded
+        .slice(0, 2)
+        .map((event) => event.eventReference)
+        .join(",") ===
+        recorded
+          .slice(2)
+          .map((event) => event.eventReference)
+          .join(","),
+      "redelivery produced different idempotency keys",
+    );
+  },
+);
+
+Deno.test("a reordered delivery keeps its own identity per status", async () => {
+  const { handler, recorded } = harness();
+  const reversed = JSON.stringify({
+    entry: [
+      {
+        changes: [
+          {
+            field: "messages",
+            value: {
+              messaging_product: "whatsapp",
+              metadata: { phone_number_id: "106540352242922" },
+              statuses: [
+                {
+                  id: "wamid.B",
+                  status: "failed",
+                  timestamp: "1750030090",
+                  errors: [{ code: 132015, title: "Template paused" }],
+                },
+                { id: "wamid.A", status: "delivered", timestamp: "1750030080" },
+              ],
+            },
+          },
+        ],
+        id: "102290129340398",
+      },
+    ],
+    object: "whatsapp_business_account",
+  });
+  const response = await handler(
+    new Request(endpoint, {
+      body: reversed,
+      headers: { "x-hub-signature-256": await sign(reversed) },
+      method: "POST",
+    }),
+  );
+  assert(response.status === 200, `expected 200, got ${response.status}`);
+  // Order of arrival is not order of fact: each event keeps its own reference,
+  // so the database decides what is still valid to apply.
+  assert(
+    recorded.map((event) => event.eventReference).join(",") ===
+      "wamid.B:failed,wamid.A:delivered",
+    recorded.map((event) => event.eventReference).join(","),
+  );
+});
+
 Deno.test("a recording failure answers 500 so Meta redelivers", async () => {
   const { handler } = harness({ failRecord: true });
   const response = await handler(

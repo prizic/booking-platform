@@ -83,6 +83,7 @@ const permanent = (errorCode: string): WhatsAppDeliveryReport => ({
 async function deliver(
   row: ClaimedWhatsAppRow,
   ports: WhatsAppWorkerPorts,
+  resolveBrandName: (tenantId: string, locale: "ar" | "en") => Promise<string | null>,
 ): Promise<WhatsAppDeliveryReport> {
   if (row.template_name === null || row.template_name === "") {
     return permanent("template_unmapped");
@@ -118,7 +119,7 @@ async function deliver(
     // Never a platform default: a message signed with our name instead of the
     // tenant's is the one mistake a white-label product cannot make. A brand
     // that cannot be resolved leaves the message for the next attempt.
-    const brandName = await ports.resolveBrandName(row.tenant_id, locale);
+    const brandName = await resolveBrandName(row.tenant_id, locale);
     if (brandName === null || brandName === "") {
       return {
         category: "transient",
@@ -151,11 +152,25 @@ export async function runWhatsAppBatch(
   let failed = 0;
   let retried = 0;
 
+  // One brand lookup per tenant per batch, not one per message — the same
+  // memo the email worker uses. Keyed by tenant *and* locale, so an Arabic and
+  // an English message in one batch each get their own name.
+  const brands = new Map<string, Promise<string | null>>();
+  const brandOf = (tenantId: string, locale: "ar" | "en") => {
+    const key = `${tenantId}:${locale}`;
+    let pending = brands.get(key);
+    if (pending === undefined) {
+      pending = ports.resolveBrandName(tenantId, locale).catch(() => null);
+      brands.set(key, pending);
+    }
+    return pending;
+  };
+
   for (const row of claimed) {
     const startedAt = new Date().toISOString();
     let report: WhatsAppDeliveryReport;
     try {
-      report = await deliver(row, ports);
+      report = await deliver(row, ports, brandOf);
     } catch {
       // Only a port can throw here (brand lookup). Treat it as transient; the
       // error itself is not logged because it may carry request context.

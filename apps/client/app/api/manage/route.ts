@@ -4,6 +4,7 @@ import {
   manageActionSchema,
   manageTokenSchema,
   manageViewSchema,
+  requestActionSchema,
   requestStepUpSchema,
   verifyStepUpSchema,
 } from "../../[locale]/manage/manage-schema";
@@ -49,6 +50,17 @@ export async function POST(request: Request): Promise<Response> {
       const verified =
         input.ok && (await source.verifyStepUp(input.data.token, input.data.code));
       return Response.json({ verified }, { headers });
+    }
+    if (action === "request-action") {
+      // Exchange the emailed view link for that intent's own action link. An
+      // invented intent never reaches the database; it reads as every other
+      // refusal. The issued link still needs its emailed code before it may act.
+      const input = parseActionInput(requestActionSchema, body);
+      if (!input.ok) return unavailable();
+      return Response.json(
+        await source.requestAction(input.data.token, input.data.intent),
+        { headers },
+      );
     }
     if (action === "cancel" || action === "reschedule") {
       // A move needs a time and a cancellation must not carry one, and the

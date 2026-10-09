@@ -195,6 +195,26 @@ describe("verifyStripeWebhook", () => {
     ).resolves.toEqual({ ok: false, reason: "invalid" });
   });
 
+  it("refuses a truncated signature of the same shape", async () => {
+    const timestamp = Math.floor(signedAt.getTime() / 1000);
+    const full = await sign(rawBody, timestamp);
+    // A length mismatch must be refused without an early return that would let
+    // the comparison time itself be measured.
+    const signatureHeader = `t=${timestamp},v1=${full.slice(0, 32)}`;
+    await expect(
+      verifyStripeWebhook({ now: signedAt, rawBody, secret, signatureHeader }),
+    ).resolves.toEqual({ ok: false, reason: "invalid" });
+  });
+
+  it("refuses a non-numeric or non-finite timestamp", async () => {
+    for (const value of ["abc", "1e3x", "NaN", ""]) {
+      const signatureHeader = `t=${value},v1=${"0".repeat(64)}`;
+      await expect(
+        verifyStripeWebhook({ now: signedAt, rawBody, secret, signatureHeader }),
+      ).resolves.toEqual({ ok: false, reason: "invalid" });
+    }
+  });
+
   it("refuses a missing header and a missing secret identically", async () => {
     await expect(
       verifyStripeWebhook({ now: signedAt, rawBody, secret, signatureHeader: null }),
@@ -300,6 +320,93 @@ describe("normalizeStripeEvent", () => {
     );
 
     expect(event?.outcome).toBeNull();
+  });
+
+  it("drops a fractional or negative amount instead of casting it to bigint", () => {
+    // `p_amount_minor_units` is bigint. A fractional figure makes PostgREST
+    // reject the whole RPC, so the delivery retries forever against a payload
+    // that can never succeed.
+    for (const amount of [18000.5, -1, "18000", Number.NaN]) {
+      const event = normalizeStripeEvent(
+        JSON.stringify({
+          created: 1_789_000_000,
+          data: {
+            object: {
+              amount_total: amount,
+              id: "cs_frac",
+              payment_status: "paid",
+            },
+          },
+          id: "evt_frac",
+          type: "checkout.session.completed",
+        }),
+      );
+      expect(event?.amountMinorUnits).toBeNull();
+    }
+  });
+
+  it("drops an out-of-range event timestamp instead of throwing", () => {
+    const event = normalizeStripeEvent(
+      JSON.stringify({
+        created: 1e300,
+        data: { object: { id: "cs_t", payment_status: "paid" } },
+        id: "evt_t",
+        type: "checkout.session.completed",
+      }),
+    );
+    expect(event?.occurredAt).toBeNull();
+    expect(event?.outcome).toBe("succeeded");
+  });
+
+  it("keeps duplicate and reordered deliveries independently normalized", () => {
+    const completed = normalizeStripeEvent(
+      JSON.stringify({
+        created: 1_789_000_000,
+        data: {
+          object: {
+            amount_total: 18000,
+            currency: "sar",
+            id: "cs_1",
+            metadata: { payment_attempt_id: "attempt-1" },
+            payment_status: "paid",
+          },
+        },
+        id: "evt_a",
+        type: "checkout.session.completed",
+      }),
+    );
+    // The same event redelivered must normalize identically, because the
+    // database dedupes on `eventReference` — a difference here would make one
+    // delivery a replay and the next a fresh settlement.
+    expect(
+      normalizeStripeEvent(
+        JSON.stringify({
+          created: 1_789_000_000,
+          data: {
+            object: {
+              amount_total: 18000,
+              currency: "sar",
+              id: "cs_1",
+              metadata: { payment_attempt_id: "attempt-1" },
+              payment_status: "paid",
+            },
+          },
+          id: "evt_a",
+          type: "checkout.session.completed",
+        }),
+      ),
+    ).toEqual(completed);
+    // A different event id for the same session is a different fact.
+    expect(
+      normalizeStripeEvent(
+        JSON.stringify({
+          created: 1_789_000_100,
+          data: { object: { id: "cs_1", payment_status: "paid" } },
+          id: "evt_b",
+          type: "checkout.session.completed",
+        }),
+      )?.eventReference,
+    ).toBe("evt_b");
   });
 
   it("returns null for a body that is not an event", () => {

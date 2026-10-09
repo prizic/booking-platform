@@ -1,4 +1,4 @@
-import { parseBrandConfig } from "@wlbp/white-label-ui";
+import { parseBrandConfig } from "@wlbp/white-label-ui/brand-config";
 
 const serializedBrand = process.env.WLBP_BRAND_CONFIG_JSON;
 if (!serializedBrand) {

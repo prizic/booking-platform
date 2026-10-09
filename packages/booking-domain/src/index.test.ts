@@ -90,6 +90,26 @@ describe("money", () => {
     expect(() => createMoney(1.5, "USD")).toThrow(BookingDomainError);
   });
 
+  it("rejects invalid currency and fractional minor units", () => {
+    expect(() => createMoney(1_250, "US")).toThrow(BookingDomainError);
+    // A non-string currency would otherwise throw a bare TypeError from
+    // `toUpperCase`, which is not what every caller catches.
+    expect(() => createMoney(1_250, undefined as unknown as string)).toThrow(
+      BookingDomainError,
+    );
+    expect(() => createMoney(-1, "USD")).not.toThrow();
+    expect(createMoney(-1, "USD").minorUnits).toBe(-1);
+  });
+
+  it("refuses a percentage that is not a whole number of basis points", () => {
+    expect(() => calculatePercentageAmount(createMoney(105, "USD"), 5_000.5)).toThrow(
+      BookingDomainError,
+    );
+    expect(() => calculatePercentageAmount(createMoney(105, "USD"), -1)).toThrow(
+      BookingDomainError,
+    );
+  });
+
   it("rounds percentage arithmetic half up in minor units", () => {
     expect(calculatePercentageAmount(createMoney(105, "USD"), 5_000)).toEqual({
       currency: "USD",
@@ -111,6 +131,21 @@ describe("half-open allocation ranges", () => {
 
     expect(rangesOverlap(first, second)).toBe(false);
     expect(rangesOverlap(withBuffers(first, 0, 10), second)).toBe(true);
+  });
+
+  it("refuses a buffer that is not whole non-negative minutes", () => {
+    const range = createTimeRange(
+      "2026-09-05T09:00:00.000Z",
+      "2026-09-05T10:00:00.000Z",
+    );
+    expect(() => withBuffers(range, -1, 0)).toThrow(BookingDomainError);
+    expect(() => withBuffers(range, 1.5, 0)).toThrow(BookingDomainError);
+    expect(() =>
+      createTimeRange("2026-09-05T10:00:00.000Z", "2026-09-05T09:00:00.000Z"),
+    ).toThrow(BookingDomainError);
+    expect(() => createTimeRange("not-a-date", "2026-09-05T09:00:00.000Z")).toThrow(
+      BookingDomainError,
+    );
   });
 });
 
@@ -210,6 +245,41 @@ describe("civil-time schedule rules", () => {
     expect(
       resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York", 1),
     ).toMatchObject({ kind: "exact", fold: 1 });
+  });
+
+  it("reuses one zone formatter across resolutions instead of one per offset probe", () => {
+    const original = Intl.DateTimeFormat;
+    let built = 0;
+    // Counting constructions is the only way to observe the cache from outside;
+    // the correctness of the answer is asserted by the DST cases above.
+    class Counting extends original {
+      constructor(...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+        super(...args);
+        built += 1;
+      }
+    }
+    Intl.DateTimeFormat = Counting as unknown as typeof Intl.DateTimeFormat;
+    try {
+      resolveScheduleCivilTime("2026-03-08T02:30", "America/New_York");
+      const afterFirst = built;
+      resolveScheduleCivilTime("2026-03-08T03:30", "America/New_York");
+      resolveScheduleCivilTime("2026-11-01T01:30", "America/New_York", 1);
+      // The whole ±14h band is 1681 candidate offsets; one formatter per probe
+      // would have been 1681 constructions for the first call alone.
+      expect(afterFirst).toBeLessThanOrEqual(2);
+      expect(built).toBe(afterFirst);
+    } finally {
+      Intl.DateTimeFormat = original;
+    }
+  });
+
+  it("refuses a civil time outside the ±14h offset band", () => {
+    expect(() => resolveScheduleCivilTime("2026-09-07 09:00", "Asia/Riyadh")).toThrow(
+      BookingDomainError,
+    );
+    expect(() =>
+      resolveScheduleCivilTime("2026-09-07T09:00:00", "Not/AZone"),
+    ).toThrow();
   });
 
   it("enforces notice, horizon, and daily staff limits", () => {

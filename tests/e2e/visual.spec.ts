@@ -39,16 +39,30 @@ for (const profile of responsiveProfiles) {
             expect(horizontalOverflow).toBeLessThanOrEqual(1);
 
             if (brand.name === "warm") {
-              const colors = await page
-                .locator(".wlbp-brand-shell")
-                .evaluate((element) => {
-                  const style = getComputedStyle(element);
-                  return {
-                    background: style.backgroundColor,
-                    text: style.color,
-                  };
-                });
-              expect(colors).toEqual({
+              // Brand tokens ship as validated `--brand-*` custom properties
+              // on <html> (createBrandStyle in both tenant layouts); the
+              // shared theme bridge paints them onto <html>/<body>
+              // (bg-background/text-foreground in
+              // @wlbp/ui-foundation theme.css). Assert both layers so the
+              // check proves the warm fixture is actually rendered, not just
+              // parsed. page.evaluate fails fast; the removed
+              // `.wlbp-brand-shell` locator hung the suite for 60s per warm
+              // test instead.
+              const applied = await page.evaluate(() => {
+                const rootStyle = getComputedStyle(document.documentElement);
+                const bodyStyle = getComputedStyle(document.body);
+                return {
+                  tokenBackground: rootStyle
+                    .getPropertyValue("--brand-color-background")
+                    .trim(),
+                  tokenText: rootStyle.getPropertyValue("--brand-color-text").trim(),
+                  background: bodyStyle.backgroundColor,
+                  text: bodyStyle.color,
+                };
+              });
+              expect(applied).toEqual({
+                tokenBackground: "#f7f2e8",
+                tokenText: "#20170f",
                 background: "rgb(247, 242, 232)",
                 text: "rgb(32, 23, 15)",
               });

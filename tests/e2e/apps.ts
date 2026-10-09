@@ -85,6 +85,11 @@ export async function settleBrandRender(page: Page) {
     await Promise.all(
       document
         .getAnimations()
+        // Preview loading indicators loop forever; screenshot capture disables
+        // those animations itself. Only wait for transitions that can settle.
+        .filter((animation) =>
+          Number.isFinite(animation.effect?.getComputedTiming().endTime),
+        )
         .map((animation) => animation.finished.catch(() => undefined)),
     );
   });

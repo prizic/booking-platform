@@ -485,7 +485,7 @@ export function DomainsSection({ locale, detail, operator }: Props) {
             submit={say(locale, a.addDomain.submit)}
             successMessage={say(locale, a.addDomain.done)}
             hidden={{ tenantId: detail.tenant.id }}
-            values={{ hostname: "" }}
+            values={{ hostname: "", application: "client" }}
           >
             <SelectFormField
               name="instanceId"

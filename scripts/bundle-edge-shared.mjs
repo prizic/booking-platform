@@ -33,19 +33,15 @@ const contractsSource = path.join(
 // that climbs out of `supabase/functions`, but `supabase functions deploy`
 // bundles with that directory as its root and refuses to follow one — so the
 // Stripe functions would have deployed exactly once, in a shell nobody ran.
+//
+// `modules` lists only what an Edge Function needs *directly*. Anything they
+// import relatively is followed automatically (see `moduleClosure`), so adding
+// a helper module to a package cannot leave the vendored copy importing a file
+// that was never generated — which fails at `supabase start`, not at build time.
 const bundles = [
   {
     directory: "email",
-    modules: [
-      "brand.ts",
-      "digest.ts",
-      "layout.ts",
-      "payload.ts",
-      "samples.ts",
-      "templates.ts",
-      "webhook.ts",
-      "worker.ts",
-    ],
+    modules: ["brand.ts", "samples.ts", "templates.ts", "webhook.ts", "worker.ts"],
     package: "packages/email",
   },
   {
@@ -68,6 +64,23 @@ const banner = (origin) =>
   `// Do not edit. Change the package and run \`pnpm bundle:edge\`.\n`;
 
 /**
+ * Net `{`/`}` on a line, ignoring braces inside string and comment literals.
+ * Enough for a type declaration; not a TypeScript parser.
+ */
+function braceDelta(line) {
+  const withoutLiterals = line
+    .replace(/'(?:[^'\\]|\\.)*'/gu, "''")
+    .replace(/"(?:[^"\\]|\\.)*"/gu, '""')
+    .replace(/\/\/.*$/u, "");
+  let delta = 0;
+  for (const character of withoutLiterals) {
+    if (character === "{") delta += 1;
+    else if (character === "}") delta -= 1;
+  }
+  return delta;
+}
+
+/**
  * Pull a named type declaration out of the contracts package. Bringing the
  * whole package across would bring its own bare imports with it, and inventing
  * a local copy of the type would let the two drift silently — so the text of
@@ -79,8 +92,14 @@ export function extractTypeDeclaration(source, name) {
     new RegExp(`^export type ${name}\\b`, "u").test(line),
   );
   if (start === -1) return null;
+  // The declaration ends where its braces balance, not at the first line that
+  // ends in `;`: a union member line can end in one while the type continues,
+  // and stopping there emits a truncated, unparseable copy that only fails when
+  // Deno loads the function.
+  let depth = 0;
   for (let index = start; index < lines.length; index += 1) {
-    if (lines[index].trimEnd().endsWith(";")) {
+    depth += braceDelta(lines[index]);
+    if (depth === 0 && lines[index].trimEnd().endsWith(";")) {
       return lines.slice(start, index + 1).join("\n");
     }
   }
@@ -107,13 +126,54 @@ export function rewriteSpecifiers(source) {
     .replace(/"@wlbp\/api-contracts"/gu, '"./contracts.ts"');
 }
 
+/**
+ * Every relative module this source imports, as bare file names. Only `./x.js`
+ * is followed: a package-internal import is the one form Deno cannot resolve
+ * from a vendored copy, and the only form this bundler can fix.
+ */
+export function relativeImports(source) {
+  return [...source.matchAll(/(?:from\s*|import\s*)"\.\/([^"]+)\.js"/gu)].map(
+    (match) => `${match[1]}.ts`,
+  );
+}
+
+/**
+ * The entry modules plus everything they import relatively, breadth-first.
+ *
+ * This is the fix for a demonstrated failure: `intl-locale.ts` was added to
+ * `packages/email/src` and imported by three modules, but the bundle listed its
+ * modules by hand, so the generated copy imported `./intl-locale.ts` from a file
+ * the bundler never wrote. CI caught the drift and would not have caught the
+ * consequence — the function fails to load, which stops `supabase start`.
+ */
+export async function moduleClosure(
+  bundle,
+  read = (target) => readFile(target, "utf8"),
+) {
+  const sourceDirectory = bundle.source ?? "src";
+  const directory = path.join(repositoryRoot, bundle.package, sourceDirectory);
+  const seen = new Set();
+  const queue = [...bundle.modules];
+  while (queue.length > 0) {
+    const moduleName = queue.shift();
+    if (seen.has(moduleName)) continue;
+    seen.add(moduleName);
+    const source = await read(path.join(directory, moduleName));
+    for (const imported of relativeImports(source)) {
+      if (!seen.has(imported)) queue.push(imported);
+    }
+  }
+  return [...seen];
+}
+
 export async function buildBundle(bundle) {
   const contracts = await readFile(contractsSource, "utf8");
   const files = new Map();
   const wanted = new Set();
+  const sourceDirectory = bundle.source ?? "src";
 
-  for (const moduleName of bundle.modules) {
-    const sourceDirectory = bundle.source ?? "src";
+  const closure = await moduleClosure(bundle);
+  for (const moduleName of closure) {
     const source = await readFile(
       path.join(repositoryRoot, bundle.package, sourceDirectory, moduleName),
       "utf8",
@@ -149,9 +209,7 @@ export async function buildBundle(bundle) {
   files.set(
     "mod.ts",
     banner(`${bundle.package}/${bundle.source ?? "src"}`) +
-      bundle.modules
-        .map((moduleName) => `export * from "./${moduleName}";`)
-        .join("\n") +
+      closure.map((moduleName) => `export * from "./${moduleName}";`).join("\n") +
       "\n",
   );
   return files;

@@ -2170,6 +2170,21 @@ export type Database = {
           job_id: string;
         }[];
       };
+      request_management_action_v1: {
+        Args: {
+          p_application: string;
+          p_hostname: string;
+          p_intent: string;
+          p_token: string;
+        };
+        Returns: {
+          contract_version: number;
+          expires_at: string;
+          intent: string;
+          outcome: string;
+          token: string;
+        }[];
+      };
       request_management_otp_v1: {
         Args: { p_application: string; p_hostname: string; p_token: string };
         Returns: {

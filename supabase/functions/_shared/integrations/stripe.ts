@@ -116,12 +116,17 @@ export type StripeWebhookVerification =
 
 const toleranceSeconds = 300;
 
-/** Constant-time comparison, so a signature cannot be discovered byte by byte. */
+/**
+ * Constant-time comparison, so a signature cannot be discovered byte by byte.
+ * The candidate is padded to the expected length rather than compared only when
+ * the lengths happen to match: an early return on a length mismatch is exactly
+ * the byte-by-byte discovery this exists to prevent.
+ */
 function equalsConstantTime(left: string, right: string): boolean {
-  if (left.length !== right.length) return false;
-  let difference = 0;
-  for (let index = 0; index < left.length; index += 1) {
-    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  const length = Math.max(left.length, right.length);
+  let difference = left.length ^ right.length;
+  for (let index = 0; index < length; index += 1) {
+    difference |= (left.charCodeAt(index) | 0) ^ (right.charCodeAt(index) | 0);
   }
   return difference === 0;
 }
@@ -253,8 +258,28 @@ export function normalizeStripeEvent(rawBody: string): NormalizedStripeEvent | n
   const amount = object.amount_total ?? object.amount_received ?? object.amount;
   const intent = object.payment_intent;
 
+  // Only a whole, non-negative amount of minor units travels on. A fractional
+  // or negative figure cannot be cast to the `bigint` the database compares
+  // against, and `p_occurred_at` has to survive `toISOString`, so both are
+  // dropped rather than allowed to throw and make the provider retry forever.
+  // The database settles on its own priced amount regardless, so dropping the
+  // comparison figure loses no money — only a tamper tripwire.
+  const amountMinorUnits =
+    typeof amount === "number" && Number.isSafeInteger(amount) && amount >= 0
+      ? amount
+      : null;
+  const occurredAtSeconds = event.created;
+  let occurredAt: string | null = null;
+  if (typeof occurredAtSeconds === "number" && Number.isFinite(occurredAtSeconds)) {
+    try {
+      occurredAt = new Date(occurredAtSeconds * 1000).toISOString();
+    } catch {
+      occurredAt = null;
+    }
+  }
+
   return {
-    amountMinorUnits: typeof amount === "number" ? amount : null,
+    amountMinorUnits,
     chargeReference:
       typeof intent === "string"
         ? intent
@@ -265,10 +290,7 @@ export function normalizeStripeEvent(rawBody: string): NormalizedStripeEvent | n
       typeof object.currency === "string" ? object.currency.toUpperCase() : null,
     eventReference: event.id,
     eventType: event.type,
-    occurredAt:
-      typeof event.created === "number"
-        ? new Date(event.created * 1000).toISOString()
-        : null,
+    occurredAt,
     outcome,
     paymentAttemptId: typeof attemptId === "string" ? attemptId : null,
     sessionReference: typeof object.id === "string" ? object.id : null,

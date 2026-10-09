@@ -4,6 +4,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 import { chooseDate } from "./booking-fixtures";
 import {
+  completionActorEmail,
   completionOrigin,
   completionSql,
   completionTenant,
@@ -737,10 +738,13 @@ test.describe("persisted workflows", () => {
 
   test("another actor's update refreshes protected data and revoked access is refused", async ({
     browser,
+    context,
+    page,
   }) => {
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await signInCompletion(page, "scheduler");
+    // This actor alone owns the destructive revocation below; the shared
+    // completion-scheduler membership must stay active for every positive
+    // permission and role case elsewhere in the suite.
+    await signInCompletion(page, "realtime-scheduler");
     const bookingDate = completionSql(
       `select (starts_at at time zone location_time_zone)::date from app.bookings where tenant_id='${completionTenant}' and status='confirmed' order by created_at desc limit 1`,
     );
@@ -794,7 +798,7 @@ test.describe("persisted workflows", () => {
     const member = operator
       .locator("li")
       .filter({
-        has: operator.getByText("completion-scheduler@example.invalid", {
+        has: operator.getByText(completionActorEmail("realtime-scheduler"), {
           exact: true,
         }),
       })
@@ -811,7 +815,6 @@ test.describe("persisted workflows", () => {
       page.getByRole("heading", { name: "Access unavailable" }).first(),
     ).toBeVisible({ timeout: 75_000 });
     await expect(page.locator('a[href$="/bookings/' + id + '"]')).toHaveCount(0);
-    await context.close();
     await other.close();
   });
 });
@@ -1148,31 +1151,572 @@ test.describe("notification configuration", () => {
     await expect(digest).toHaveAttribute("aria-checked", "true");
     await expectAccessibleAt(page, 1440, "my email preferences");
   });
-
-  for (const locale of ["en", "ar"] as const)
-    test(`integrations shows WhatsApp as not on the plan in ${locale}`, async ({
-      page,
-    }) => {
-      const copy = notificationCopy[locale];
-      await signInCompletion(page, "admin", locale);
-      await page.goto(`${completionOrigin}/${locale}/integrations`);
-      const section = page.locator("#integrations-whatsapp");
-      await expect(
-        section.getByRole("heading", { name: copy.waTitle, exact: true }),
-      ).toBeVisible();
-      await expect(section).toContainText(copy.waNotEntitled);
-      // Without the entitlement no setup control is offered at all.
-      await expect(section.locator("form")).toHaveCount(0);
-      await expect(
-        section
-          .getByRole("textbox")
-          .or(section.getByRole("switch"))
-          .or(section.getByRole("button")),
-      ).toHaveCount(0);
-      expect(
-        completionSql(
-          `select count(*) from app.whatsapp_configs where tenant_id='${completionTenant}'`,
-        ),
-      ).toBe("0");
-    });
 });
+
+// These roles use unique records and do not depend on notification mutations.
+// Keep them sequential for MFA, but let later cases run after an independent failure.
+test.describe("tenant roles", () => {
+  test.describe.configure({ mode: "default" });
+  const roleName = (label: string, attempt: string) =>
+    `Completion role ${label} ${attempt}`;
+  const roleRow = (id: string) =>
+    completionSql(
+      `select name_en from app.roles where tenant_id='${completionTenant}' and id='${id}'`,
+    );
+
+  test("administrator creates, edits, duplicates and archives a custom role", async ({
+    page,
+  }) => {
+    const attempt = randomBytes(4).toString("hex");
+    await signInCompletion(page);
+    await enrollCompletionMfa(page);
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(
+      page.getByRole("heading", { name: "Roles and permissions", exact: true }),
+    ).toBeVisible();
+    const create = page.locator("form", {
+      has: page.getByRole("heading", { name: "Create custom role", exact: true }),
+    });
+    await create.locator('input[name="nameEn"]').fill(roleName("author", attempt));
+    await create.locator('input[name="nameAr"]').fill(`دور الإنجاز ${attempt}`);
+    await create.locator('[role="checkbox"][value="booking.view.any"]').check();
+    await create.locator('[role="checkbox"][value="booking.approve"]').check();
+    // Reserved grants are never offered, even to the administrator.
+    await expect(create.locator('[role="checkbox"][value="role.manage"]')).toHaveCount(
+      0,
+    );
+    await expect(create.locator('[role="checkbox"][value="billing.view"]')).toHaveCount(
+      0,
+    );
+    await submitMutation(
+      page,
+      create.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(create.getByRole("status")).toContainText("Role saved.");
+    const roleId = completionSql(
+      `select id from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("author", attempt)}' and archived_at is null`,
+    );
+    expect(roleId).toMatch(/^[a-f0-9-]{36}$/u);
+    expect(
+      completionSql(
+        `select count(*) from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}'`,
+      ),
+    ).toBe("2");
+
+    // A fresh load shows the persisted role and its grant count.
+    await page.reload();
+    const card = page.locator(`article[data-role-id="${roleId}"]`);
+    await expect(
+      card.getByRole("heading", { name: roleName("author", attempt), exact: true }),
+    ).toBeVisible();
+    await expect(card).toContainText("2 permissions");
+
+    // Edit renames at the rendered revision.
+    await card.locator('details[data-role-action="edit"] > summary').click();
+    const edit = card.locator('details[data-role-action="edit"] form');
+    await edit.locator('input[name="nameEn"]').fill(roleName("renamed", attempt));
+    await edit.locator('[role="checkbox"][value="booking.cancel"]').check();
+    await submitMutation(
+      page,
+      edit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(edit.getByRole("status")).toContainText("Role updated.");
+    expect(roleRow(roleId)).toBe(roleName("renamed", attempt));
+    expect(completionSql(`select revision from app.roles where id='${roleId}'`)).toBe(
+      "2",
+    );
+
+    // Duplicate starts a new role from the source grants.
+    await card.locator('details[data-role-action="duplicate"] > summary').click();
+    const duplicate = card.locator('details[data-role-action="duplicate"] form');
+    // The edit's revalidate refreshed this already-mounted editor in place:
+    // it starts from the role's current three grants, not the two it was
+    // first rendered with. Client state survives a re-render, so a stale
+    // working set here would silently duplicate the pre-edit role.
+    await expect(
+      duplicate.locator('[role="checkbox"][value="booking.view.any"]'),
+    ).toBeChecked();
+    await expect(
+      duplicate.locator('[role="checkbox"][value="booking.approve"]'),
+    ).toBeChecked();
+    await expect(
+      duplicate.locator('[role="checkbox"][value="booking.cancel"]'),
+    ).toBeChecked();
+    await duplicate.locator('input[name="nameEn"]').fill(roleName("copy", attempt));
+    await duplicate.locator('input[name="nameAr"]').fill(`نسخة الإنجاز ${attempt}`);
+    await submitMutation(
+      page,
+      duplicate.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(duplicate.getByRole("status")).toContainText("Role saved.");
+    const copyId = completionSql(
+      `select id from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("copy", attempt)}' and archived_at is null`,
+    );
+    expect(copyId).toMatch(/^[a-f0-9-]{36}$/u);
+    expect(
+      completionSql(
+        `select duplicated_from_role_id from app.roles where id='${copyId}'`,
+      ),
+    ).toBe(roleId);
+    expect(
+      completionSql(
+        `select count(*) from app.role_permissions where tenant_id='${completionTenant}' and role_id='${copyId}'`,
+      ),
+    ).toBe("3");
+
+    // Archive retires the copy; the reload shows the archived badge and no
+    // further edit or archive controls for it.
+    await page.reload();
+    const copy = page.locator(`article[data-role-id="${copyId}"]`);
+    await copy.locator('details[data-role-action="archive"] > summary').click();
+    const archive = copy.locator('details[data-role-action="archive"] form');
+    await submitMutation(
+      page,
+      archive.getByRole("button", { name: "Archive", exact: true }),
+    );
+    await expect(copy.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(copy.locator('details[data-role-action="archive"]')).toHaveCount(0);
+    expect(
+      completionSql(
+        `select count(*) from app.roles where id='${copyId}' and archived_at is not null`,
+      ),
+    ).toBe("1");
+    await page.reload();
+    await expect(page.locator(`article[data-role-id="${copyId}"]`)).toContainText(
+      "Archived",
+    );
+    await expect(
+      page
+        .locator(`article[data-role-id="${copyId}"]`)
+        .locator('details[data-role-action="edit"]'),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .locator(`article[data-role-id="${copyId}"]`)
+        .locator('details[data-role-action="archive"]'),
+    ).toHaveCount(0);
+    // Leave the workspace tidy for the next campaign run.
+    const original = page.locator(`article[data-role-id="${roleId}"]`);
+    await original.locator('details[data-role-action="archive"] > summary').click();
+    await submitMutation(
+      page,
+      original
+        .locator('details[data-role-action="archive"] form')
+        .getByRole("button", { name: "Archive", exact: true }),
+    );
+    await expect(original.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(original.locator('details[data-role-action="archive"]')).toHaveCount(
+      0,
+    );
+  });
+
+  test("administrator creates an assigned-mode role with descriptions and exact scopes", async ({
+    page,
+  }) => {
+    const attempt = randomBytes(4).toString("hex");
+    await signInCompletion(page);
+    await enrollCompletionMfa(page);
+    await page.goto(`${completionOrigin}/en/roles`);
+    const create = page.locator("form", {
+      has: page.getByRole("heading", { name: "Create custom role", exact: true }),
+    });
+    await create.locator('input[name="nameEn"]').fill(roleName("assigned", attempt));
+    await create.locator('input[name="nameAr"]').fill(`دور مخصص ${attempt}`);
+    await create
+      .locator('input[name="descriptionEn"]')
+      .fill(`Front desk rota ${attempt}`);
+    await create
+      .locator('input[name="descriptionAr"]')
+      .fill(`جدول الاستقبال ${attempt}`);
+    // An unchecked tenant-only grant stays absent across the mode switch:
+    // no hidden field resurrects it after unchecking.
+    await create.locator('[role="checkbox"][value="customer.data.correct"]').check();
+    await create.locator('[role="checkbox"][value="customer.data.correct"]').uncheck();
+    await create.getByRole("combobox", { name: "Role scope" }).click();
+    await page.getByRole("option", { name: "Assigned locations" }).click();
+    // Tenant-only permissions are disabled with an explanation, never
+    // silently dropped: the administrator holds customer.data.correct, yet
+    // it cannot be chosen here.
+    await expect(
+      create.locator('[role="checkbox"][value="customer.data.correct"]'),
+    ).toBeDisabled();
+    await expect(create).toContainText(
+      "Workspace-wide permissions are unavailable for assigned-location roles.",
+    );
+    await create.locator('[role="checkbox"][value="booking.view.any"]').check();
+    await create.locator('[role="checkbox"][value="booking.approve"]').check();
+    await submitMutation(
+      page,
+      create.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(create.getByRole("status")).toContainText("Role saved.");
+    const roleId = completionSql(
+      `select id from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("assigned", attempt)}' and archived_at is null`,
+    );
+    expect(roleId).toMatch(/^[a-f0-9-]{36}$/u);
+    expect(
+      completionSql(`select location_scope_mode from app.roles where id='${roleId}'`),
+    ).toBe("assigned");
+    // Per-permission scopes: `own` where allowed, `location` where `own`
+    // is not, never a dropped grant under a success message.
+    expect(
+      completionSql(
+        `select scope_kind from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='booking.approve'`,
+      ),
+    ).toBe("own");
+    expect(
+      completionSql(
+        `select scope_kind from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='booking.view.any'`,
+      ),
+    ).toBe("location");
+    expect(
+      completionSql(`select description_en from app.roles where id='${roleId}'`),
+    ).toBe(`Front desk rota ${attempt}`);
+    expect(
+      completionSql(`select description_ar from app.roles where id='${roleId}'`),
+    ).toBe(`جدول الاستقبال ${attempt}`);
+    expect(
+      completionSql(
+        `select count(*) from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='customer.data.correct'`,
+      ),
+    ).toBe("0");
+
+    // A fresh load shows the persisted role; editing keeps descriptions and
+    // rotates the idempotency key, so the next operation starts fresh.
+    await page.reload();
+    const card = page.locator(`article[data-role-id="${roleId}"]`);
+    await card.locator('details[data-role-action="edit"] > summary').click();
+    const edit = card.locator('details[data-role-action="edit"] form');
+    await expect(edit.locator('input[name="descriptionEn"]')).toHaveValue(
+      `Front desk rota ${attempt}`,
+    );
+    await expect(edit.locator('input[name="descriptionAr"]')).toHaveValue(
+      `جدول الاستقبال ${attempt}`,
+    );
+    const firstKey = await edit.locator('input[name="requestId"]').inputValue();
+    expect(firstKey).toMatch(/^[a-f0-9-]{36}$/u);
+    await edit
+      .locator('input[name="nameEn"]')
+      .fill(roleName("assigned-renamed", attempt));
+    await submitMutation(
+      page,
+      edit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(edit.getByRole("status")).toContainText("Role updated.");
+    await expect
+      .poll(async () => edit.locator('input[name="requestId"]').inputValue(), {
+        timeout: 10_000,
+      })
+      .not.toBe(firstKey);
+    // Leave the workspace tidy for the next campaign run.
+    await card.locator('details[data-role-action="archive"] > summary').click();
+    await submitMutation(
+      page,
+      card
+        .locator('details[data-role-action="archive"] form')
+        .getByRole("button", { name: "Archive", exact: true }),
+    );
+    await expect(card.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(card.locator('details[data-role-action="archive"]')).toHaveCount(0);
+  });
+
+  test("a workspace-wide grant switched to assigned locations is refused, not dropped", async ({
+    page,
+  }) => {
+    const attempt = randomBytes(4).toString("hex");
+    await signInCompletion(page);
+    await enrollCompletionMfa(page);
+    await page.goto(`${completionOrigin}/en/roles`);
+    const create = page.locator("form", {
+      has: page.getByRole("heading", { name: "Create custom role", exact: true }),
+    });
+    await create.locator('input[name="nameEn"]').fill(roleName("widestatic", attempt));
+    await create.locator('input[name="nameAr"]').fill(`دور واسع ${attempt}`);
+    // `brand.manage` is tenant-only and dominated by the administrator, so a
+    // tenant-mode save succeeds and the grant persists.
+    await create.locator('[role="checkbox"][value="brand.manage"]').check();
+    await submitMutation(
+      page,
+      create.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(create.getByRole("status")).toContainText("Role saved.");
+    // A submit never silently resets the form, so the successful create
+    // leaves the entered draft in place.
+    await expect(create.locator('input[name="nameEn"]')).toHaveValue(
+      roleName("widestatic", attempt),
+    );
+    const roleId = completionSql(
+      `select id from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("widestatic", attempt)}' and archived_at is null`,
+    );
+    expect(roleId).toMatch(/^[a-f0-9-]{36}$/u);
+
+    await page.reload();
+    const card = page.locator(`article[data-role-id="${roleId}"]`);
+    await card.locator('details[data-role-action="edit"] > summary').click();
+    const edit = card.locator('details[data-role-action="edit"] form');
+    await edit.getByRole("combobox", { name: "Role scope" }).click();
+    await page.getByRole("option", { name: "Assigned locations" }).click();
+    await submitMutation(
+      page,
+      edit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(edit.getByRole("alert")).toContainText(
+      "These permissions are workspace-wide and cannot be used with the Assigned locations scope: brand.manage.",
+    );
+    // The refusal rewinds nothing: the Assigned locations choice, the entered
+    // names and the incompatible selection all survive so the operator
+    // corrects the refusal in place. The form-reset listeners Radix Select
+    // and Checkbox attach would otherwise rewind the scope to the role's
+    // stored tenant mode and silently widen the retried grant.
+    await expect(edit.getByRole("combobox", { name: "Role scope" })).toContainText(
+      "Assigned locations",
+    );
+    await expect(edit.locator('input[name="mode"]')).toHaveValue("assigned");
+    await expect(edit.locator('input[name="nameEn"]')).toHaveValue(
+      roleName("widestatic", attempt),
+    );
+    await expect(edit.locator('input[name="nameAr"]')).toHaveValue(
+      `دور واسع ${attempt}`,
+    );
+    await expect(edit.locator('[role="checkbox"][value="brand.manage"]')).toBeChecked();
+    // Nothing persisted: same revision, same grant, same tenant scope.
+    expect(completionSql(`select revision from app.roles where id='${roleId}'`)).toBe(
+      "1",
+    );
+    expect(
+      completionSql(
+        `select scope_kind from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='brand.manage'`,
+      ),
+    ).toBe("tenant");
+    // The incompatible selection stays removable without reloading: a
+    // selected box is never disabled, so the operator clears the refusal
+    // by unchecking it and saves an assigned-compatible grant instead.
+    await expect(edit.locator('[role="checkbox"][value="brand.manage"]')).toBeEnabled();
+    await edit.locator('[role="checkbox"][value="brand.manage"]').uncheck();
+    await edit.locator('[role="checkbox"][value="booking.approve"]').check();
+    // The corrected draft still carries the assigned scope, so the retry
+    // persists booking.approve with the narrow scope instead of a widened
+    // workspace-wide grant.
+    await expect(edit.getByRole("combobox", { name: "Role scope" })).toContainText(
+      "Assigned locations",
+    );
+    await expect(edit.locator('input[name="mode"]')).toHaveValue("assigned");
+    await submitMutation(
+      page,
+      edit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(edit.getByRole("status")).toContainText("Role updated.");
+    // The saved scope choice stays visible after the successful save too —
+    // the editor does not rewind to the role's original workspace-wide mode.
+    await expect(edit.getByRole("combobox", { name: "Role scope" })).toContainText(
+      "Assigned locations",
+    );
+    await expect(edit.locator('input[name="mode"]')).toHaveValue("assigned");
+    expect(completionSql(`select revision from app.roles where id='${roleId}'`)).toBe(
+      "2",
+    );
+    expect(
+      completionSql(
+        `select count(*) from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='brand.manage'`,
+      ),
+    ).toBe("0");
+    expect(
+      completionSql(
+        `select scope_kind from app.role_permissions where tenant_id='${completionTenant}' and role_id='${roleId}' and permission_key='booking.approve'`,
+      ),
+    ).toBe("own");
+    // Leave the workspace tidy for the next campaign run.
+    await page.reload();
+    const fresh = page.locator(`article[data-role-id="${roleId}"]`);
+    await fresh.locator('details[data-role-action="archive"] > summary').click();
+    await submitMutation(
+      page,
+      fresh
+        .locator('details[data-role-action="archive"] form')
+        .getByRole("button", { name: "Archive", exact: true }),
+    );
+    await expect(fresh.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(fresh.locator('details[data-role-action="archive"]')).toHaveCount(0);
+  });
+
+  test("saving with no permissions prompts instead of failing generically", async ({
+    page,
+  }) => {
+    const attempt = randomBytes(4).toString("hex");
+    await signInCompletion(page);
+    await enrollCompletionMfa(page);
+    await page.goto(`${completionOrigin}/en/roles`);
+    const create = page.locator("form", {
+      has: page.getByRole("heading", { name: "Create custom role", exact: true }),
+    });
+    await create.locator('input[name="nameEn"]').fill(roleName("empty", attempt));
+    await create.locator('input[name="nameAr"]').fill(`دور فارغ ${attempt}`);
+    await submitMutation(
+      page,
+      create.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(create.getByRole("alert")).toContainText(
+      "Choose at least one permission before saving.",
+    );
+    expect(
+      completionSql(
+        `select count(*) from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("empty", attempt)}'`,
+      ),
+    ).toBe("0");
+  });
+
+  test("a stale role edit is refused and leaves state unchanged", async ({
+    browser,
+  }) => {
+    const attempt = randomBytes(4).toString("hex");
+    const stale = await browser.newContext();
+    const stalePage = await stale.newPage();
+    await signInCompletion(stalePage);
+    await enrollCompletionMfa(stalePage);
+    await stalePage.goto(`${completionOrigin}/en/roles`);
+    const create = stalePage.locator("form", {
+      has: stalePage.getByRole("heading", {
+        name: "Create custom role",
+        exact: true,
+      }),
+    });
+    await create.locator('input[name="nameEn"]').fill(roleName("stale", attempt));
+    await create.locator('input[name="nameAr"]').fill(`دور قديم ${attempt}`);
+    await create.locator('[role="checkbox"][value="booking.view.any"]').check();
+    await submitMutation(
+      stalePage,
+      create.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(create.getByRole("status")).toContainText("Role saved.");
+    const roleId = completionSql(
+      `select id from app.roles where tenant_id='${completionTenant}' and name_en='${roleName("stale", attempt)}' and archived_at is null`,
+    );
+    expect(roleId).toMatch(/^[a-f0-9-]{36}$/u);
+
+    // A second administrator session moves the role to revision 2 while the
+    // first tab still renders revision 1.
+    const other = await browser.newContext();
+    const freshPage = await other.newPage();
+    await signInCompletion(freshPage);
+    await enrollCompletionMfa(freshPage);
+    await freshPage.goto(`${completionOrigin}/en/roles`);
+    const freshCard = freshPage.locator(`article[data-role-id="${roleId}"]`);
+    await freshCard.locator('details[data-role-action="edit"] > summary').click();
+    const freshEdit = freshCard.locator('details[data-role-action="edit"] form');
+    await freshEdit.locator('input[name="nameEn"]').fill(roleName("fresh", attempt));
+    await submitMutation(
+      freshPage,
+      freshEdit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(freshEdit.getByRole("status")).toContainText("Role updated.");
+
+    // The stale tab is refused with an actionable message; nothing changes.
+    const staleCard = stalePage.locator(`article[data-role-id="${roleId}"]`);
+    await staleCard.locator('details[data-role-action="edit"] > summary').click();
+    const staleEdit = staleCard.locator('details[data-role-action="edit"] form');
+    await staleEdit.locator('input[name="nameEn"]').fill(roleName("lost", attempt));
+    await submitMutation(
+      stalePage,
+      staleEdit.getByRole("button", { name: "Save role", exact: true }),
+    );
+    await expect(staleEdit.getByRole("alert")).toContainText(
+      "Someone else changed this role. Reload and try again.",
+    );
+    expect(roleRow(roleId)).toBe(roleName("fresh", attempt));
+    await stalePage.reload();
+    await expect(
+      stalePage
+        .locator(`article[data-role-id="${roleId}"]`)
+        .getByRole("heading", { name: roleName("fresh", attempt), exact: true }),
+    ).toBeVisible();
+    await stale.close();
+    await other.close();
+  });
+
+  test("built-in roles cannot be edited or archived, and schedulers cannot manage roles", async ({
+    page,
+  }) => {
+    await signInCompletion(page);
+    await page.goto(`${completionOrigin}/en/roles`);
+    const builtin = page
+      .locator("article[data-role-id]")
+      .filter({
+        has: page.getByRole("heading", { name: "tenant_admin", exact: true }),
+      })
+      .first();
+    await expect(builtin).toBeVisible();
+    await expect(builtin.locator('details[data-role-action="edit"]')).toHaveCount(0);
+    await expect(builtin.locator('details[data-role-action="archive"]')).toHaveCount(0);
+    // Built-ins stay duplicable: the copy becomes the editable custom role.
+    await expect(builtin.locator('details[data-role-action="duplicate"]')).toHaveCount(
+      1,
+    );
+
+    await signInCompletion(page, "scheduler");
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(
+      page.getByRole("heading", { name: "Create custom role", exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator('details[data-role-action="edit"]')).toHaveCount(0);
+    await expect(page.locator('details[data-role-action="archive"]')).toHaveCount(0);
+
+    await signInCompletion(page, "revoked");
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(
+      page.getByRole("heading", { name: "Access unavailable" }).first(),
+    ).toBeVisible();
+  });
+
+  test("arabic roles page carries the same actions with rtl labels", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await signInCompletion(page, "admin", "ar");
+    await page.goto(`${completionOrigin}/ar/roles`);
+    await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await expect(
+      page.getByRole("heading", { name: "الأدوار والصلاحيات", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "إنشاء دور مخصص", exact: true }),
+    ).toBeVisible();
+    const create = page.locator("form", {
+      has: page.getByRole("heading", { name: "إنشاء دور مخصص", exact: true }),
+    });
+    await expect(create.getByText("عرض كل الحجوزات", { exact: true })).toBeVisible();
+    await expect(create.getByLabel("الوصف بالإنجليزية (اختياري)")).toBeVisible();
+    await expect(create.getByLabel("الوصف بالعربية (اختياري)")).toBeVisible();
+    await expect(create.locator('[role="checkbox"][value="role.manage"]')).toHaveCount(
+      0,
+    );
+    await expectAccessibleAt(page, 1440, "roles ar");
+    await expectAccessibleAt(page, 390, "roles ar");
+  });
+});
+
+for (const locale of ["en", "ar"] as const)
+  test(`integrations shows WhatsApp as not on the plan in ${locale}`, async ({
+    page,
+  }) => {
+    const copy = notificationCopy[locale];
+    await signInCompletion(page, "admin", locale);
+    await page.goto(`${completionOrigin}/${locale}/integrations`);
+    const section = page.locator("#integrations-whatsapp");
+    await expect(
+      section.getByRole("heading", { name: copy.waTitle, exact: true }),
+    ).toBeVisible();
+    await expect(section).toContainText(copy.waNotEntitled);
+    // Without the entitlement no setup control is offered at all.
+    await expect(section.locator("form")).toHaveCount(0);
+    await expect(
+      section
+        .getByRole("textbox")
+        .or(section.getByRole("switch"))
+        .or(section.getByRole("button")),
+    ).toHaveCount(0);
+    expect(
+      completionSql(
+        `select count(*) from app.whatsapp_configs where tenant_id='${completionTenant}'`,
+      ),
+    ).toBe("0");
+  });

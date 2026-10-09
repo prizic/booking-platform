@@ -123,4 +123,85 @@ describe("guest management data source", () => {
     await source.redeem(token, "cancel");
     expect(calls[0]).toMatchObject({ p_intent: "cancel", p_token: token });
   });
+
+  /*
+   * Regression: production minted only `view` links, so the cancel/reschedule
+   * surface was unreachable. The exchange below is the missing step: the view
+   * link goes in, that intent's own single-use link comes out, and the code
+   * still travels separately through the OTP email.
+   */
+  it("exchanges the emailed link for that intent's own action link", async () => {
+    const issuedToken = "c".repeat(64);
+    const calls: { args: unknown; name: string }[] = [];
+    const source = createManagementDataSource(
+      {
+        rpc: async (name, args) => {
+          calls.push({ args, name });
+          return {
+            data: [
+              {
+                contract_version: 1,
+                expires_at: "2026-11-01T05:40:00+00:00",
+                intent: "cancel",
+                outcome: "issued",
+                token: issuedToken,
+              },
+            ],
+            error: null,
+          };
+        },
+      },
+      "book.tenant.example",
+    );
+
+    await expect(source.requestAction(token, "cancel")).resolves.toEqual({
+      expiresAt: "2026-11-01T05:40:00.000Z",
+      intent: "cancel",
+      outcome: "issued",
+      token: issuedToken,
+    });
+    expect(calls).toEqual([
+      {
+        args: {
+          p_application: "client",
+          p_hostname: "book.tenant.example",
+          p_intent: "cancel",
+          p_token: token,
+        },
+        name: "request_management_action_v1",
+      },
+    ]);
+  });
+
+  it("answers an exchange refusal exactly like every other refusal", async () => {
+    for (const result of [
+      { data: [{ outcome: "unavailable" }], error: null },
+      { data: [], error: null },
+      { data: null, error: { code: "42501", message: "management_link_unavailable" } },
+    ]) {
+      const source = createManagementDataSource(
+        { rpc: async () => result },
+        "book.tenant.example",
+      );
+      await expect(source.requestAction(token, "cancel")).resolves.toEqual({
+        outcome: "unavailable",
+      });
+    }
+    // Issued without a well-formed link, or for another intent, is a broken
+    // contract rather than a refusal: like redemption, it raises instead of
+    // letting the page navigate to it. The route still answers `unavailable`.
+    for (const result of [
+      { data: [{ intent: "cancel", outcome: "issued", token: "short" }], error: null },
+      {
+        data: [{ intent: "refund_request", outcome: "issued", token: "c".repeat(64) }],
+        error: null,
+      },
+    ]) {
+      const source = createManagementDataSource(
+        { rpc: async () => result },
+        "book.tenant.example",
+      );
+      await expect(source.requestAction(token, "cancel")).rejects.toThrow();
+    }
+  });
 });

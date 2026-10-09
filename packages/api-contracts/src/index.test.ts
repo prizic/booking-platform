@@ -309,6 +309,53 @@ describe("tenant isolation DTOs", () => {
     expect(() => parsePublicCatalogV1([{ ...item, serviceName: "" }])).toThrow();
   });
 
+  it("applies the same money rules to the catalog as to every other price", () => {
+    // A negative price or a lower-case currency used to reach the customer's
+    // booking form, because this parser checked neither.
+    const base = {
+      approvalRequired: false,
+      bookingMode: "appointment",
+      bufferAfterMinutes: 10,
+      bufferBeforeMinutes: 0,
+      cacheTag: "catalog:tenant-a:1:en",
+      canonicalPath: "/services/consultation",
+      capacityMode: "exclusive",
+      categoryKey: null,
+      durationMinutes: 45,
+      locale: "en",
+      locationAddress: "Address",
+      locationCanonicalPath: "/locations/riyadh",
+      locationDescription: "Site",
+      locationId: "location-a",
+      locationKey: "riyadh",
+      locationName: "Riyadh",
+      locationTimeZone: "Asia/Riyadh",
+      paymentMode: "none",
+      publicationId: "publication-a",
+      publicationRevision: 1,
+      serviceDescription: "About",
+      serviceId: "service-a",
+      serviceKey: "consultation",
+      serviceName: "Consultation",
+      taxRateBps: 1500,
+      tenantId: "tenant-a",
+    };
+    for (const price of [
+      { currency: "SAR", minorUnits: -1 },
+      { currency: "sar", minorUnits: 18000 },
+      { currency: "SAR", minorUnits: 18000.5 },
+      { currency: "SAR", minorUnits: Number.NaN },
+      { currency: 42, minorUnits: 18000 },
+    ]) {
+      expect(() => parsePublicCatalogV1([{ ...base, price }])).toThrow(
+        "Public catalog price is invalid",
+      );
+    }
+    expect(
+      parsePublicCatalogV1([{ ...base, price: { currency: "SAR", minorUnits: 0 } }]),
+    ).toHaveLength(1);
+  });
+
   it("parses a minimal tenant-safe Dashboard context", () => {
     expect(
       parseDashboardContextV1({

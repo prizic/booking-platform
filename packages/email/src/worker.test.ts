@@ -161,6 +161,54 @@ describe("notification batch brand, test flag and payload", () => {
     expect(texts[1]).toContain("مثال");
   });
 
+  it("never lets one tenant's brand stand in for another's in a shared batch", async () => {
+    // The brand cache is keyed by tenant, so a batch holding two tenants must
+    // still resolve two brands. A key that omitted the tenant would sign tenant
+    // B's mail with tenant A's name.
+    const other = { ...claimed, messageId: "m-other", tenantId: "tenant-b" };
+    const seen: string[] = [];
+    await runNotificationBatch(
+      ports({
+        claim: async () => [claimed, other],
+        deliver: async (input) => {
+          seen.push(input.text);
+          return { outcome: "accepted" };
+        },
+        resolveBrand: async (tenantId) => ({
+          nameAr: "مثال",
+          nameEn: tenantId === claimed.tenantId ? "Example Booking" : "Other Booking",
+        }),
+      }),
+    );
+
+    expect(seen[0]).toContain("Example Booking");
+    expect(seen[0]).not.toContain("Other Booking");
+    expect(seen[1]).toContain("Other Booking");
+    expect(seen[1]).not.toContain("Example Booking");
+  });
+
+  it("never reports a delivery the database did not record", async () => {
+    // `record` is the only thing that decides an attempt is over. If it throws,
+    // the batch must not resolve with a success summary, because that summary is
+    // what the caller answers the invoker with.
+    const recorded: string[] = [];
+    const summary = await runNotificationBatch(
+      ports({
+        claim: async () => [claimed, { ...claimed, messageId: "m-2" }],
+        record: async (input) => {
+          recorded.push(input.messageId);
+          if (input.messageId === "m-2") throw new Error("rpc down");
+        },
+      }),
+    ).then(
+      (value) => ({ rejected: false as const, value }),
+      (error: unknown) => ({ rejected: true as const, value: error }),
+    );
+
+    expect(summary.rejected).toBe(true);
+    expect(recorded).toEqual([claimed.messageId, "m-2"]);
+  });
+
   it("marks a test send in the subject, the body and the provider tags", async () => {
     let seen: Parameters<NotificationPorts["deliver"]>[0] | undefined;
     await runNotificationBatch(

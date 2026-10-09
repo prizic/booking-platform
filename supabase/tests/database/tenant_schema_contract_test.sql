@@ -287,6 +287,7 @@ select is(
     'private.remove_schedule_record_v1(uuid,text,uuid,bigint,bigint,uuid)',
     'private.replay_notification_v1(uuid,uuid)',
     'private.request_booking_v1(uuid,app.booking_holds,app.catalog_service_revisions,uuid,uuid,timestamp with time zone)',
+    'private.request_management_action_v1(text,text,text,text)',
     'private.request_management_otp_v1(text,text,text)',
     'private.request_refund_v1(uuid,uuid,text,bigint,text)',
     'private.reschedule_booking_v1(uuid,uuid,bigint,timestamp with time zone,text,text,uuid)',

@@ -26,6 +26,7 @@ import {
   stubDepositCheckout,
 } from "./booking-fixtures";
 import { locales, responsiveProfiles } from "./apps";
+import { issueLiveViewToken, mintLiveOtpCode } from "./live-manage-fixture";
 
 for (const profile of responsiveProfiles) {
   test.describe(`${profile.name} booking journey`, () => {
@@ -257,6 +258,112 @@ test.describe("guest management link", () => {
     await expect(page.getByRole("button", { name: /email me a code/iu })).toHaveCount(
       0,
     );
+  });
+
+  /*
+   * Regression: the page always redeemed with `intent: "view"`, and
+   * `redeem_management_token_v1` refuses any intent that is not the one the
+   * token was minted for, so a real cancel or reschedule link read as
+   * unavailable and the step-up that guards those actions never appeared.
+   */
+  test("redeems each link with the intent it was minted for", async ({ page }) => {
+    const seen: string[] = [];
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        intent?: string;
+      };
+      seen.push(body.intent ?? "<none>");
+      return route.fulfill({
+        json: {
+          ...grantedView,
+          intent: body.intent,
+          stepUpRequired: body.intent !== "view",
+          stepUpVerified: false,
+        },
+      });
+    });
+
+    await page.goto(`${clientOrigin}/en/manage?token=${token}&intent=cancel`);
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toBeVisible();
+    await page.goto(`${clientOrigin}/en/manage?token=${token}&intent=reschedule`);
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toBeVisible();
+    // A link with no intent, or an invented one, reads as a plain view.
+    await page.goto(`${clientOrigin}/en/manage?token=${token}&intent=delete-all`);
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toHaveCount(
+      0,
+    );
+
+    expect(seen).toEqual(["cancel", "reschedule", "view"]);
+  });
+
+  /*
+   * Regression: production minted only `view` links and OTP request refuses
+   * them, so cancel/reschedule were unreachable from the emailed link. The
+   * view page now exchanges its link for that intent's own single-use link;
+   * the code still travels separately through the OTP email.
+   */
+  test("a view link exchanges itself for the action it is eligible for", async ({
+    page,
+  }) => {
+    const issuedToken = "c".repeat(64);
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        action?: string;
+        intent?: string;
+      };
+      if (body.action === "request-action") {
+        return route.fulfill({
+          json: {
+            expiresAt: "2035-09-24T12:40:00.000Z",
+            intent: body.intent,
+            outcome: "issued",
+            token: issuedToken,
+          },
+        });
+      }
+      return route.fulfill({
+        json: {
+          ...grantedView,
+          intent: body.intent ?? "view",
+          stepUpRequired: body.intent !== undefined && body.intent !== "view",
+          stepUpVerified: false,
+        },
+      });
+    });
+
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+    // Eligibility is visible, but no step-up yet: a view link can never act.
+    await expect(page.getByText(/you can cancel this booking/iu)).toBeVisible();
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toHaveCount(
+      0,
+    );
+
+    await page.getByRole("button", { name: /^cancel this booking$/iu }).click();
+    // The issued link carries its own intent, so the action page guards itself
+    // with a code before it may act.
+    await expect(page).toHaveURL(new RegExp(`token=${issuedToken}&intent=cancel`));
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toBeVisible();
+  });
+
+  test("a refused exchange says only that nothing changed", async ({ page }) => {
+    await page.route("**/api/manage", (route) => {
+      const body = JSON.parse(route.request().postData() ?? "{}") as {
+        action?: string;
+      };
+      if (body.action === "request-action") {
+        return route.fulfill({ json: { outcome: "unavailable" } });
+      }
+      return route.fulfill({ json: grantedView });
+    });
+
+    await page.goto(`${clientOrigin}/en/manage?token=${token}`);
+    await page.getByRole("button", { name: /^cancel this booking$/iu }).click();
+
+    await expect(page.locator("#manage-request-error")).toContainText(
+      /that did not work/iu,
+    );
+    // The booking facts are still on screen: nothing was issued or applied.
+    await expect(page.getByText("M4T7XZK3Q2")).toBeVisible();
   });
 
   test("every refusal looks the same and discloses nothing", async ({ page }) => {
@@ -584,11 +691,211 @@ test.describe("live database booking journey", () => {
     await signInLiveDashboard(context);
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
+    const bookingLink = page.getByRole("link", {
+      name: `${booking.publicReference} Open booking`,
+      exact: true,
+    });
+    const bookingRow = page.getByRole("row").filter({ has: bookingLink });
+    await expect(bookingLink).toBeVisible();
     await expect(
-      page.getByRole("heading", {
-        name: new RegExp(`Live consultation · ${booking.publicReference}`, "u"),
-      }),
+      bookingRow.getByText("Live consultation", { exact: true }),
     ).toBeVisible();
+    await expect(
+      bookingRow.getByRole("cell", { name: "Confirmed", exact: true }),
+    ).toBeVisible();
+    await page.reload();
+    await expect(bookingLink).toBeVisible();
+  });
+
+  // Guest management over the real link surface: no `**/api/manage` stub
+  // anywhere in these tests. The view token comes from the production issuer
+  // inside the test harness, the step-up code from the worker minter, and
+  // everything the browser touches travels the real route/RPC path.
+  async function createLiveManageableBooking(
+    page: Page,
+    daysFromNow: number,
+    email: string,
+  ): Promise<{ bookingId: string; publicReference: string }> {
+    await reachLiveDetails(page, daysFromNow);
+    await fillLiveDetails(page, email);
+    const bookingResponse = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/bookings" &&
+        response.request().method() === "POST",
+    );
+    await page.getByRole("button", { name: /confirm booking/iu }).click();
+    const created = (await (await bookingResponse).json()) as {
+      bookingId: string;
+      publicReference: string;
+    };
+    await expect(
+      page.getByRole("heading", { name: /your booking is confirmed/iu }),
+    ).toBeVisible();
+    return created;
+  }
+
+  async function exchangeLiveViewLink(
+    page: Page,
+    viewToken: string,
+    intent: "cancel" | "reschedule",
+    actionName: RegExp,
+  ): Promise<void> {
+    await page.goto(`${clientOrigin}/en/manage?token=${viewToken}`);
+    await expect(page.getByText(/you can cancel this booking/iu)).toBeVisible();
+    // A view link reads facts but never guards an action.
+    await expect(page.getByRole("button", { name: /email me a code/iu })).toHaveCount(
+      0,
+    );
+    await page.getByRole("button", { name: actionName }).click();
+    await expect(page).toHaveURL(new RegExp(`intent=${intent}`));
+    // No second send: the exchange queued the challenge, so the code form is
+    // already here and the page says to check the inbox.
+    await expect(
+      page.getByText(/check the inbox of the address on your booking/iu),
+    ).toBeVisible();
+    await expect(page.getByLabel(/six-digit code/iu)).toBeVisible();
+  }
+
+  async function verifyLiveCode(page: Page, code: string): Promise<void> {
+    await page.getByLabel(/six-digit code/iu).fill(code);
+    await page.getByRole("button", { name: /confirm code/iu }).click();
+    await expect(page.getByText(/confirmed\. you can continue/iu)).toBeVisible();
+  }
+
+  test("a guest exchanges the emailed view link and cancels with the mailed code", async ({
+    page,
+  }) => {
+    const created = await createLiveManageableBooking(
+      page,
+      6,
+      "live-manage-cancel@example.invalid",
+    );
+    await exchangeLiveViewLink(
+      page,
+      issueLiveViewToken(created.bookingId),
+      "cancel",
+      /^cancel this booking$/iu,
+    );
+    await verifyLiveCode(page, mintLiveOtpCode(created.bookingId, "cancel"));
+
+    await page.getByRole("button", { name: /^cancel this booking$/iu }).click();
+    await expect(
+      page.getByRole("heading", { name: /your booking is cancelled/iu }),
+    ).toBeVisible();
+    await expect(page.getByText(created.publicReference)).toBeVisible();
+  });
+
+  test("a wrong code changes nothing and the booking stays live", async ({ page }) => {
+    const created = await createLiveManageableBooking(
+      page,
+      7,
+      "live-manage-wrong-code@example.invalid",
+    );
+    const viewToken = issueLiveViewToken(created.bookingId);
+    await exchangeLiveViewLink(page, viewToken, "cancel", /^cancel this booking$/iu);
+    const code = mintLiveOtpCode(created.bookingId, "cancel");
+    const wrongCode = code === "000000" ? "000001" : "000000";
+
+    await page.getByLabel(/six-digit code/iu).fill(wrongCode);
+    await page.getByRole("button", { name: /confirm code/iu }).click();
+    await expect(page.locator("#manage-step-up-error")).toContainText(
+      /that code did not work/iu,
+    );
+
+    // One spent attempt locks nothing: the mailed code still verifies.
+    await verifyLiveCode(page, code);
+
+    // The booking was never acted on: the emailed view link still reads it.
+    await page.goto(`${clientOrigin}/en/manage?token=${viewToken}`);
+    await expect(page.getByText(created.publicReference)).toBeVisible();
+    await expect(page.getByText(/you can cancel this booking/iu)).toBeVisible();
+  });
+
+  test("a verified guest moves the booking to a live free slot", async ({ page }) => {
+    const created = await createLiveManageableBooking(
+      page,
+      8,
+      "live-manage-reschedule@example.invalid",
+    );
+    await exchangeLiveViewLink(
+      page,
+      issueLiveViewToken(created.bookingId),
+      "reschedule",
+      /^move this booking$/iu,
+    );
+    await verifyLiveCode(page, mintLiveOtpCode(created.bookingId, "reschedule"));
+
+    // A new start the business really has free, read through the real
+    // availability route. The date/time picker widgets stay the known gap:
+    // this leg proves the durable move, not widget interaction.
+    const targetStartAt = await page.evaluate(
+      async ({ locationId, serviceId, startAfter, endBefore }) => {
+        const query = new URLSearchParams({
+          endBefore,
+          locale: "en",
+          locationId,
+          partySize: "1",
+          serviceId,
+          startAfter,
+          timeZone: "America/New_York",
+        });
+        const response = await fetch(`/api/availability?${query}`);
+        if (!response.ok) throw new Error("availability search failed");
+        const body = (await response.json()) as {
+          slots?: { startAt?: unknown }[];
+        };
+        const startAt = body.slots?.[0]?.startAt;
+        if (typeof startAt !== "string" || startAt === "")
+          throw new Error("availability returned no slot");
+        return startAt;
+      },
+      {
+        endBefore: new Date(Date.now() + 16 * 24 * 60 * 60 * 1000).toISOString(),
+        locationId: liveLocationId,
+        serviceId: liveServiceId,
+        startAfter: new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    );
+
+    const applied = await page.evaluate(
+      async ({ token, newStartAt }) => {
+        const redeemResponse = await fetch("/api/manage", {
+          body: JSON.stringify({ intent: "reschedule", token }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        const redeem = (await redeemResponse.json()) as {
+          booking?: { bookingRevision?: unknown };
+        };
+        if (typeof redeem.booking?.bookingRevision !== "number")
+          throw new Error("redeem did not return a revision");
+        const actResponse = await fetch("/api/manage", {
+          body: JSON.stringify({
+            action: "reschedule",
+            expectedRevision: redeem.booking.bookingRevision,
+            newStartAt,
+            token,
+          }),
+          headers: { "Content-Type": "application/json" },
+          method: "POST",
+        });
+        return (await actResponse.json()) as {
+          outcome?: unknown;
+          startAt?: unknown;
+          status?: unknown;
+        };
+      },
+      {
+        newStartAt: targetStartAt,
+        token: new URL(page.url()).searchParams.get("token") ?? "",
+      },
+    );
+
+    expect(applied).toMatchObject({
+      outcome: "applied",
+      startAt: targetStartAt,
+      status: "confirmed",
+    });
   });
 
   test("Client validation blocks an incomplete live submission before the booking route", async ({
@@ -657,7 +964,7 @@ test.describe("live database booking journey", () => {
     await page.goto(`${dashboardOrigin}/en/bookings`);
     await expect(page.getByRole("heading", { name: /bookings/iu })).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: new RegExp(publicReference, "u") }),
+      page.getByRole("link", { name: `${publicReference} Open booking`, exact: true }),
     ).toBeVisible();
   });
 

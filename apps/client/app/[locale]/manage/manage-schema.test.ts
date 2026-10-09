@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import { proposalResponseSchema } from "../proposal/proposal-schema";
 import {
   manageActionSchema,
+  manageIntentFromParam,
   manageTokenSchema,
   manageViewSchema,
+  requestActionSchema,
   rescheduleFormSchema,
   rescheduleStartAt,
   verifyStepUpSchema,
@@ -26,6 +28,24 @@ describe("manage link schemas", () => {
     expect(manageViewSchema.parse({ intent: "cancel", token }).intent).toBe("cancel");
   });
 
+  /*
+   * Regression: the page hardcoded `intent: "view"`, so `redeem_management_token_v1`
+   * refused every action link (`v_token.intent is distinct from p_intent`) and the
+   * whole cancel/reschedule/step-up surface was unreachable with a real link.
+   */
+  it("carries the link's own intent out of the URL", () => {
+    expect(manageIntentFromParam("cancel")).toBe("cancel");
+    expect(manageIntentFromParam("reschedule")).toBe("reschedule");
+    expect(manageIntentFromParam("data_deletion_request")).toBe(
+      "data_deletion_request",
+    );
+    // A missing, repeated or invented intent never widens what the link does:
+    // the database still compares it with the one the token was minted for.
+    expect(manageIntentFromParam(undefined)).toBe("view");
+    expect(manageIntentFromParam("cancel-all-everything")).toBe("view");
+    expect(manageIntentFromParam(["cancel", "view"])).toBe("cancel");
+  });
+
   it("verifies only a six-digit code", () => {
     expect(
       verifyStepUpSchema.parse({ action: "verify-step-up", code: " 123456 ", token })
@@ -37,6 +57,37 @@ describe("manage link schemas", () => {
           ?.issues[0]?.message,
       ).toBe("manage_code_format");
     }
+  });
+
+  /*
+   * Regression: only the two booking actions the Client implements may be
+   * requested. Unlike redemption — where an unknown intent reads as `view` —
+   * the exchange must never coerce an invented value into an action.
+   */
+  it("exchanges the view link for exactly one booking action", () => {
+    for (const intent of ["cancel", "reschedule"]) {
+      expect(
+        requestActionSchema.parse({ action: "request-action", intent, token }),
+      ).toEqual({ action: "request-action", intent, token });
+    }
+    for (const intent of [
+      "view",
+      "refund_request",
+      "delete-all-everything",
+      undefined,
+    ]) {
+      expect(
+        requestActionSchema.safeParse({ action: "request-action", intent, token })
+          .success,
+      ).toBe(false);
+    }
+    expect(
+      requestActionSchema.safeParse({
+        action: "request-action",
+        intent: "cancel",
+        token: "not-a-token",
+      }).success,
+    ).toBe(false);
   });
 
   it("needs a time to move and refuses one on a cancellation", () => {

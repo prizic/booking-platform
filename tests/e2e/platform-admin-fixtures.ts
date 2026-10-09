@@ -60,7 +60,9 @@ export async function signIn(
   await expect(page.locator("#code")).toBeVisible();
   await page.locator("#code").fill(await freshCode(who));
   await page.locator('form button[type="submit"]').click();
-  await expect(page.locator(".console")).toBeVisible();
+  // Console shell owns #main-content (skip-link target); the signed-out and
+  // denied states render a main without that id.
+  await expect(page.locator("#main-content")).toBeVisible();
 }
 
 export async function signOut(page: Page) {

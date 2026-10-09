@@ -3,7 +3,7 @@ import {
   createInstanceText,
   parseInstanceContent,
   type InstanceText,
-} from "@wlbp/white-label-ui";
+} from "@wlbp/white-label-ui/instance-content";
 
 /*
  * Tenant-facing text comes only from the instance folder

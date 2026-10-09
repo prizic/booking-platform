@@ -59,13 +59,13 @@ const completionServers = [
 const liveBookingServers = [
   {
     command:
-      "node scripts/run-with-local-supabase-env.mjs client.live-booking.example.invalid pnpm --filter @wlbp/client exec next dev --port 41730",
+      "WLBP_NEXT_DIST_DIR=.next-live-client node scripts/run-with-local-supabase-env.mjs client.live-booking.example.invalid pnpm --filter @wlbp/client exec next dev --port 41730",
     port: 41730,
     reuseExistingServer: false,
   },
   {
     command:
-      "node scripts/run-with-local-supabase-env.mjs dashboard.live-booking.example.invalid pnpm --filter @wlbp/dashboard exec next dev --port 41731",
+      "WLBP_NEXT_DIST_DIR=.next-live-dashboard node scripts/run-with-local-supabase-env.mjs dashboard.live-booking.example.invalid pnpm --filter @wlbp/dashboard exec next dev --port 41731",
     port: 41731,
     reuseExistingServer: false,
   },
@@ -164,7 +164,12 @@ export default defineConfig({
         : servers
   ).map(({ command, port, reuseExistingServer }) => ({
     command,
-    port,
+    // A listening Next dev socket can precede compilation of the auth page.
+    // Wait for that page before authenticated Dashboard journeys begin.
+    ...(process.env.DASHBOARD_COMPLETION_E2E === "1" &&
+    (port === 41731 || port === 41734)
+      ? { url: `http://localhost:${port}/en/auth/sign-in` }
+      : { port }),
     reuseExistingServer,
     timeout: 120_000,
   })),

@@ -22,6 +22,13 @@ export class BookingDomainError extends Error {
 }
 
 export function createCurrencyCode(value: string): CurrencyCode {
+  // A non-string (an absent column from a database row, say) would throw a bare
+  // `TypeError` from `toUpperCase`, which is not the error every caller of this
+  // package catches. Fail through the one typed error instead.
+  if (typeof value !== "string") {
+    throw new BookingDomainError("invalid_currency", "Currency must be a string");
+  }
+
   const normalized = value.toUpperCase();
 
   if (!/^[A-Z]{3}$/.test(normalized)) {
@@ -443,8 +450,16 @@ export function applyScheduleException(
   );
 }
 
-function zonedParts(instant: number, timeZone: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
+// Building a formatter costs far more than using one, and the DST search below
+// probes every minute offset in the ±14h band — so a per-call formatter was
+// constructed up to 1681 times for a single civil time. One formatter per zone,
+// reused. Keyed by the zone only, so the cache is bounded by the tenant count.
+const zoneFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function zoneFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = zoneFormatters.get(timeZone);
+  if (cached !== undefined) return cached;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone,
     year: "numeric",
     month: "2-digit",
@@ -452,7 +467,13 @@ function zonedParts(instant: number, timeZone: string) {
     hour: "2-digit",
     minute: "2-digit",
     hourCycle: "h23",
-  }).formatToParts(new Date(instant));
+  });
+  zoneFormatters.set(timeZone, formatter);
+  return formatter;
+}
+
+function zonedParts(instant: number, timeZone: string) {
+  const parts = zoneFormatter(timeZone).formatToParts(new Date(instant));
   return Object.fromEntries(
     parts
       .filter(({ type }) => type !== "literal")

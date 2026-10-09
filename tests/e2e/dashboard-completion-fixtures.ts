@@ -3,18 +3,35 @@ import { createHmac } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { expect, type Page } from "@playwright/test";
 import { readLocalSupabaseEnvironment } from "../../scripts/live-booking-e2e.mjs";
+import { dbPort, portPrefix } from "../../scripts/platform-admin-local.mjs";
 export const completionOrigin = "http://localhost:41731";
 export const completionTenant = "d0000000-0000-0000-0000-000000000001";
+const completionPortPrefix = process.env.WLBP_CAMPAIGN?.trim() ? portPrefix : "553";
+const completionDatabasePort = process.env.WLBP_CAMPAIGN?.trim() ? dbPort : "55322";
 let isolatedEnvironment: ReturnType<typeof readLocalSupabaseEnvironment> | undefined;
 function completionEnvironment() {
   // The campaign never resets its stack while a browser worker is running.
   const local = (isolatedEnvironment ??= readLocalSupabaseEnvironment());
-  if (new URL(local.databaseUrl).port !== "55322")
+  if (
+    new URL(local.databaseUrl).port !== completionDatabasePort ||
+    !["127.0.0.1", "localhost", "[::1]"].includes(
+      new URL(local.databaseUrl).hostname,
+    ) ||
+    new URL(local.apiUrl).origin !== `http://127.0.0.1:${completionPortPrefix}21`
+  )
     throw new Error("Dashboard evidence requires the isolated campaign");
   return local;
 }
 export type CompletionActor =
-  "admin" | "scheduler" | "staff" | "manager" | "revoked" | "foreign";
+  | "admin"
+  | "scheduler"
+  | "staff"
+  | "manager"
+  | "revoked"
+  | "foreign"
+  | "realtime-scheduler";
+export const completionActorEmail = (actor: CompletionActor) =>
+  `completion-${actor}@example.invalid`;
 export async function signInCompletion(
   page: Page,
   actor: CompletionActor = "admin",
@@ -26,7 +43,7 @@ export async function signInCompletion(
     throw new Error("Use the dashboard completion campaign credential fixture.");
   const { dashboardPassword } = JSON.parse(readFileSync(file, "utf8"));
   await page.goto(`${origin}/${locale}/auth/sign-in`);
-  await page.locator('input[name="email"]').fill(`completion-${actor}@example.invalid`);
+  await page.locator('input[name="email"]').fill(completionActorEmail(actor));
   await page.locator('input[name="password"]').fill(dashboardPassword);
   await page
     .getByRole("button", {
@@ -67,7 +84,7 @@ export function completionSql(sql: string): string {
  * This materializes real queued messages; it never records fake delivery. */
 export function dispatchCompletionNotifications(failedBookingId: string) {
   const local = completionEnvironment();
-  if (new URL(local.databaseUrl).port !== "55322")
+  if (new URL(local.databaseUrl).port !== completionDatabasePort)
     throw new Error("Notification dispatch requires the isolated campaign");
   if (!/^[a-f0-9-]{36}$/u.test(failedBookingId))
     throw new Error("Synthetic notification booking must be a UUID");
@@ -91,12 +108,12 @@ export function dispatchCompletionNotifications(failedBookingId: string) {
 /** Local Auth-mail evidence only; callback material stays in private memory. */
 export async function completionRecoveryLink() {
   const local = completionEnvironment();
-  if (new URL(local.databaseUrl).port !== "55322")
+  if (new URL(local.databaseUrl).port !== completionDatabasePort)
     throw new Error("Isolated mailbox required");
   // Supabase's inbucket-named container runs Mailpit. Its documented message
   // view supports recipient filtering without exposing other test mail.
   const mailbox =
-    "http://127.0.0.1:55324/view/latest.txt?query=" +
+    `http://127.0.0.1:${completionPortPrefix}24/view/latest.txt?query=` +
     encodeURIComponent("to:completion-recovery@example.invalid");
   for (let attempt = 0; attempt < 40; attempt++) {
     const response = await fetch(mailbox);
@@ -106,7 +123,7 @@ export async function completionRecoveryLink() {
         const candidate = match[0].replaceAll("&amp;", "&");
         const url = new URL(candidate);
         if (
-          url.origin === "http://127.0.0.1:55321" &&
+          url.origin === new URL(local.apiUrl).origin &&
           url.pathname === "/auth/v1/verify" &&
           url.searchParams.get("type") === "recovery"
         )

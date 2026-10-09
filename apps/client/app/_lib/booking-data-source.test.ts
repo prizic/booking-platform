@@ -201,6 +201,64 @@ describe("Client booking data source", () => {
     });
   });
 
+  /*
+   * Regression: `row.booking_id === null ? null : String(row.booking_id)` turned
+   * a column PostgREST omitted into the string "undefined", and the returning
+   * page reads a non-null bookingId as a settled payment. Only the committed
+   * row may say a booking exists.
+   */
+  it("never reports a booking the checkout status row does not name", async () => {
+    const attempt = {
+      balance_minor: 0,
+      currency: "SAR",
+      due_minor: 18_000,
+      purpose: "full",
+      status: "succeeded",
+    };
+    const source = createClientBookingDataSource(
+      { rpc: async () => ({ data: [attempt], error: null }) },
+      "book.tenant.example",
+    );
+    await expect(
+      source.getCheckoutStatus(
+        "0a3f2b64-0000-4000-8000-000000000001",
+        "session-token-0123456789",
+      ),
+    ).resolves.toMatchObject({
+      bookingId: null,
+      bookingStatus: null,
+      publicReference: null,
+      paymentStatus: null,
+      exceptionCode: null,
+    });
+
+    const committed = createClientBookingDataSource(
+      {
+        rpc: async () => ({
+          data: [
+            {
+              ...attempt,
+              booking_id: "0a3f2b64-0000-4000-8000-000000000002",
+              booking_status: "confirmed",
+              public_reference: "K3M9P2T7XY",
+            },
+          ],
+          error: null,
+        }),
+      },
+      "book.tenant.example",
+    );
+    await expect(
+      committed.getCheckoutStatus(
+        "0a3f2b64-0000-4000-8000-000000000001",
+        "session-token-0123456789",
+      ),
+    ).resolves.toMatchObject({
+      bookingId: "0a3f2b64-0000-4000-8000-000000000002",
+      publicReference: "K3M9P2T7XY",
+    });
+  });
+
   it("reads the intake schema of the publication the hold captured", async () => {
     const source = createClientBookingDataSource(
       {

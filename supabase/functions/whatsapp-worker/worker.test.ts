@@ -101,6 +101,29 @@ Deno.test(
   },
 );
 
+Deno.test(
+  "looks the brand up once per tenant and locale, not once per message",
+  async () => {
+    const { ports, sent } = harness([
+      row({ message_id: "ar-1", template_locale: "ar" }),
+      row({ message_id: "ar-2", template_locale: "ar" }),
+      row({ message_id: "en-1", template_locale: "en" }),
+    ]);
+    const calls: string[] = [];
+    const summary = await runWhatsAppBatch({
+      ...ports,
+      resolveBrandName: (tenant, locale) => {
+        calls.push(`${tenant}:${locale}`);
+        return Promise.resolve(locale === "ar" ? "عيادة النخبة" : "Elite Clinic");
+      },
+    });
+    assert(summary.accepted === 3, `summary ${JSON.stringify(summary)}`);
+    assert(sent.length === 3, "three sends");
+    // Two Arabic messages, one English: two lookups, not three.
+    assert(calls.length === 2, `brand lookups: ${calls.join(",")}`);
+  },
+);
+
 Deno.test("a rate limit is retryable and a paused template is permanent", async () => {
   const { ports, recorded } = harness(
     [row({ message_id: "rate" }), row({ message_id: "paused" })],

@@ -17,6 +17,37 @@ test("does not call GitHub when no step is claimable", async () => {
   assert.deepEqual(await worker.runOnce(), { kind: "idle" });
 });
 
+test("an unimplemented step key fails rather than resolving to a prototype member", async () => {
+  const completions = [];
+  const worker = createGitHubProvisioningWorker({
+    github: { seedRepository: async () => assert.fail("must not call GitHub") },
+    loadRelease: async () => assert.fail("must not load a release"),
+    store: {
+      claim: async () => ({
+        id: "step-unknown",
+        provider: "github",
+        stepKey: "constructor",
+      }),
+      complete: async (command) => completions.push(command),
+    },
+  });
+
+  // `handlers["constructor"]` used to resolve through the prototype chain to
+  // `Object`, so the step was "handled" and recorded as succeeded without any
+  // provider call at all.
+  assert.deepEqual(await worker.runOnce(), {
+    kind: "failed",
+    stepKey: "constructor",
+  });
+  assert.deepEqual(completions, [
+    {
+      errorCode: "github_step_not_implemented",
+      outcome: "failed",
+      stepId: "step-unknown",
+    },
+  ]);
+});
+
 test("reports one successful seed with only safe repository observations", async () => {
   const completions = [];
   const release = {

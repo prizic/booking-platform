@@ -81,6 +81,14 @@ test("lists read persisted demo data and keep their filters in the URL", async (
 }) => {
   await signIn(page, "viewer");
   await page.goto(`${adminOrigin}/en/tenants?status=suspended`);
+  await expect(page.locator('a[hreflang="ar"]').first()).toHaveAttribute(
+    "href",
+    "/ar/tenants?status=suspended",
+  );
+  await expect(page.locator('a[hreflang="en"]').first()).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
   await expect(
     page.getByRole("link", { name: "Synthetic demo · West Salon" }),
   ).toBeVisible();
@@ -147,7 +155,9 @@ test("an administrator registers, renames, suspends and reactivates a tenant, an
   await page.locator("#brandKey").fill(`e2e-${stamp}`);
   await page.getByRole("button", { name: "Register tenant" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
-  await expect(page.getByText("Tenant registered.")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Tenant registered." }),
+  ).toBeVisible();
 
   const renamed = `${name} renamed`;
   await page.getByRole("button", { name: "Rename", exact: true }).click();
@@ -156,7 +166,9 @@ test("an administrator registers, renames, suspends and reactivates a tenant, an
     .getByRole("dialog")
     .getByRole("button", { name: "Rename", exact: true })
     .click();
-  await expect(page.getByText("Tenant renamed.")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Tenant renamed." }),
+  ).toBeVisible();
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: renamed })).toBeVisible();
 
@@ -173,7 +185,9 @@ test("an administrator registers, renames, suspends and reactivates a tenant, an
   await suspend.click();
   await page.getByRole("dialog").getByLabel("Reason").fill(suspensionReason);
   await page.getByRole("dialog").getByRole("button", { name: "Suspend" }).click();
-  await expect(page.getByText("Tenant suspended.")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Tenant suspended." }),
+  ).toBeVisible();
   await page.reload();
   await page.getByRole("button", { name: "Reactivate" }).click();
   await page
@@ -181,10 +195,14 @@ test("an administrator registers, renames, suspends and reactivates a tenant, an
     .getByLabel("Reason")
     .fill("E2E: verifying reactivation works");
   await page.getByRole("dialog").getByRole("button", { name: "Reactivate" }).click();
-  await expect(page.getByText("Tenant reactivated.")).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Tenant reactivated." }),
+  ).toBeVisible();
 
   await page.goto(`${adminOrigin}/en/audit?q=${encodeURIComponent(suspensionReason)}`);
-  await expect(page.getByText("Suspended a tenant")).toBeVisible();
+  await expect(
+    page.getByRole("table", { name: "Audit log" }).getByText("Suspended a tenant"),
+  ).toBeVisible();
 });
 
 test("validation errors are explained, not raw", async ({ page }) => {
@@ -224,7 +242,11 @@ test("Arabic is right-to-left and fully translated", async ({ page }) => {
 test("mobile navigation is an explicit disclosure", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "viewer");
-  const menu = page.getByRole("button", { name: "Menu" });
+  // The sheet's close button is named "Close menu", which contains "Menu":
+  // match the trigger's exact accessible name source instead, so an open
+  // sheet (which hides the trigger from the accessibility tree) cannot
+  // resolve the locator to the close button.
+  const menu = page.locator('button[aria-label="Menu"]');
   await expect(menu).toHaveAttribute("aria-expanded", "false");
   await menu.click();
   await expect(menu).toHaveAttribute("aria-expanded", "true");
@@ -653,6 +675,16 @@ test("administrative workflows persist commercial changes and keep external work
     await expect(
       page.getByText(/Runs when the integration check worker claims it/u),
     ).toBeVisible();
+    const jobUrl = new URL(page.url());
+    expect(jobUrl.pathname).toMatch(/^\/en\/jobs\//u);
+    await expect(page.locator('a[hreflang="ar"]').first()).toHaveAttribute(
+      "href",
+      `${jobUrl.pathname.replace(/^\/en/u, "/ar")}${jobUrl.search}`,
+    );
+    await expect(page.locator('a[hreflang="en"]').first()).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
   });
   expect(problems()).toEqual([]);
 });

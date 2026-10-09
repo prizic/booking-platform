@@ -158,12 +158,15 @@ export type ClientMessageKey =
   | "manageRescheduleIneligible"
   | "manageCancelEligible"
   | "manageCancelIneligible"
-  | "manageActionsPending"
+  | "manageRequestTitle"
+  | "manageRequestSummary"
+  | "manageRequestSending"
   | "manageStepUpTitle"
   | "manageStepUpSummary"
   | "manageStepUpSend"
   | "manageStepUpSending"
   | "manageStepUpSent"
+  | "manageStepUpQueuedHint"
   | "manageStepUpCodeLabel"
   | "manageStepUpCodeHint"
   | "manageStepUpVerify"
@@ -374,8 +377,10 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageCancelEligible: "You can cancel this booking.",
     manageCancelIneligible:
       "This booking can no longer be cancelled online. Contact the business if you need to cancel.",
-    manageActionsPending:
-      "Changing or cancelling from this page arrives with the next release.",
+    manageRequestTitle: "Need to change or cancel?",
+    manageRequestSummary:
+      "Choose what you need. We email a single-use link and a code to the address on the booking.",
+    manageRequestSending: "Preparing your secure link",
     manageStepUpTitle: "Confirm it is you",
     manageStepUpSummary:
       "For this action we email a six-digit code to the address on the booking.",
@@ -383,6 +388,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpSending: "Sending your code",
     manageStepUpSent:
       "If this link is still valid, a code is on its way. It expires shortly.",
+    manageStepUpQueuedHint:
+      "Check the inbox of the address on your booking for your code, then enter it below. You can also send a new code.",
     manageStepUpCodeLabel: "Six-digit code",
     manageStepUpCodeHint:
       "Enter the code from the email. Codes expire and can be used once.",
@@ -592,7 +599,10 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageCancelEligible: "يمكنك إلغاء هذا الحجز.",
     manageCancelIneligible:
       "لم يعد بالإمكان إلغاء هذا الحجز عبر الإنترنت. تواصل مع مقدّم الخدمة إذا احتجت للإلغاء.",
-    manageActionsPending: "سيتاح التعديل أو الإلغاء من هذه الصفحة في الإصدار القادم.",
+    manageRequestTitle: "هل تحتاج إلى تعديل الحجز أو إلغائه؟",
+    manageRequestSummary:
+      "اختر ما تحتاجه، وسنرسل رابطًا يُستخدم مرة واحدة ورمزًا إلى البريد المسجّل في الحجز.",
+    manageRequestSending: "جارٍ تجهيز رابطك الآمن",
     manageStepUpTitle: "تأكيد هويتك",
     manageStepUpSummary:
       "لهذا الإجراء نرسل رمزًا من ستة أرقام إلى البريد المسجّل في الحجز.",
@@ -600,6 +610,8 @@ export const clientCopy: Record<Locale, Record<ClientMessageKey, string>> = {
     manageStepUpSending: "جارٍ إرسال الرمز",
     manageStepUpSent:
       "إذا كان هذا الرابط صالحًا، فالرمز في طريقه إليك، وتنتهي صلاحيته بعد قليل.",
+    manageStepUpQueuedHint:
+      "تحقّق من صندوق الوارد للبريد الإلكتروني المسجّل في حجزك ثم أدخل الرمز أدناه. يمكنك أيضًا إرسال رمز جديد.",
     manageStepUpCodeLabel: "الرمز المكوّن من ستة أرقام",
     manageStepUpCodeHint:
       "أدخل الرمز من الرسالة. تنتهي صلاحية الرموز وتُستخدم مرة واحدة.",

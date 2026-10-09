@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseBrandAssets, resolveBrandAssets } from "./index.js";
+import { parseBrandAssets, resolveBrandAssets } from "./brand-assets.js";
 
 const completeAssets = {
   logoLight: "/assets/logo-light.png",

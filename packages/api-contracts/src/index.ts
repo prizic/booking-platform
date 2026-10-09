@@ -721,12 +721,18 @@ export function parsePublicCatalogV1(value: unknown): readonly PublicCatalogItem
           item[key] < 0
         )
           throw new Error("Public catalog value is invalid");
+      // The same two money rules every other parser in this file applies: a
+      // non-negative whole number of minor units, and an upper-case ISO code.
+      // The catalog skipped both, so a negative price or a lower-case currency
+      // reached the customer's booking form.
+      const price = item.price;
       if (
-        typeof item.price !== "object" ||
-        item.price === null ||
-        typeof (item.price as Record<string, unknown>).currency !== "string" ||
-        typeof (item.price as Record<string, unknown>).minorUnits !== "number" ||
-        !Number.isSafeInteger((item.price as Record<string, unknown>).minorUnits)
+        !isRecord(price) ||
+        typeof price.currency !== "string" ||
+        !/^[A-Z]{3}$/u.test(price.currency) ||
+        typeof price.minorUnits !== "number" ||
+        !Number.isSafeInteger(price.minorUnits) ||
+        price.minorUnits < 0
       )
         throw new Error("Public catalog price is invalid");
       if (

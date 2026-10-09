@@ -41,7 +41,7 @@ reported as passing.
 | **pnpm 11.25.0 workspaces** | Package manager and workspace linking | The root manifest pins it; installs are frozen in verification and CI |
 | **Turborepo 2.10.12** | Task orchestration and caching across workspaces | `turbo.json` defines the task graph |
 | **TypeScript 6.0.3** | Language for all three applications and every package | Pinned below 6.1 for the supported TypeScript ESLint peer range |
-| **Next.js 16.3.4 / React 19.2.8** | Client, Dashboard, and Platform Admin | App Router; Server Components by default |
+| **Next.js 16.3.8 / React 19.2.8** | Client, Dashboard, and Platform Admin | App Router; Server Components by default |
 | **Supabase CLI 2.116.0** | Local Postgres + Auth + REST + Edge Functions stack, migrations, `supabase test db` | Pinned as a root development dependency; Storage/Realtime wait for their owning tested features; requires Docker and Node 20+ |
 | **Docker Desktop** (or compatible engine) | Runs the local Supabase containers | Prerequisite for the CLI stack |
 | **Playwright** | E2E and accessibility runs | §24.1 |

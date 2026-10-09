@@ -19,6 +19,10 @@ import {
 } from "./booking-fixtures";
 import { completionOrigin, signInCompletion } from "./dashboard-completion-fixtures";
 
+// This file includes authenticated cases; artifact options are worker-scoped
+// and must be declared at file level to keep account material out of captures.
+test.use({ screenshot: "off", trace: "off", video: "off" });
+
 for (const profile of responsiveProfiles) {
   test.describe(`${profile.name} tenant accessibility`, () => {
     test.use({ viewport: profile.viewport });
@@ -300,38 +304,43 @@ for (const profile of responsiveProfiles) {
 // on-page status message owns it), and the page stays free of automated
 // WCAG A/AA violations while the toast is open. Needs a signed-in member, so
 // it runs against the dashboard completion campaign's credential fixture.
-for (const language of locales) {
-  test(`dashboard save toast ${language.locale} is announced without role=status and has no automated WCAG A/AA violations`, async ({
-    page,
-  }) => {
-    test.skip(
-      !process.env.DASHBOARD_COMPLETION_CREDENTIAL_FILE,
-      "Needs the dashboard completion campaign credential fixture.",
-    );
-    const save = language.locale === "ar" ? "حفظ تفضيلاتي" : "Save my preferences";
-    await signInCompletion(page, "admin", language.locale);
-    await page.goto(
-      `${completionOrigin}/${language.locale}/communications/preferences`,
-    );
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    // A click before hydration submits nothing.
-    await page.waitForLoadState("networkidle");
-    await page.getByRole("button", { name: save, exact: true }).click();
-
-    const toast = page.locator("[data-sonner-toaster] [data-sonner-toast]").first();
-    await expect(toast).toBeVisible({ timeout: 2_000 });
-    // Hovering pauses the toast's timer while it is scanned.
-    await toast.hover();
-    await expect(page.locator("[data-sonner-toaster]")).toHaveAttribute(
-      "dir",
-      language.locale === "ar" ? "rtl" : "ltr",
-    );
-    await expect(page.locator("[data-sonner-toaster] [role=status]")).toHaveCount(0);
-    await expect(page.locator("main [data-sonner-toaster]")).toHaveCount(0);
-
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+test.describe("authenticated Dashboard toast accessibility", () => {
+  test.beforeEach(() => {
+    process.env.PLAYWRIGHT_NO_COPY_PROMPT = "1";
   });
-}
+  for (const language of locales) {
+    test(`dashboard save toast ${language.locale} is announced without role=status and has no automated WCAG A/AA violations`, async ({
+      page,
+    }) => {
+      test.skip(
+        !process.env.DASHBOARD_COMPLETION_CREDENTIAL_FILE,
+        "Needs the dashboard completion campaign credential fixture.",
+      );
+      const save = language.locale === "ar" ? "حفظ تفضيلاتي" : "Save my preferences";
+      await signInCompletion(page, "admin", language.locale);
+      await page.goto(
+        `${completionOrigin}/${language.locale}/communications/preferences`,
+      );
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      // A click before hydration submits nothing.
+      await page.waitForLoadState("networkidle");
+      await page.getByRole("button", { name: save, exact: true }).click();
+
+      const toast = page.locator("[data-sonner-toaster] [data-sonner-toast]").first();
+      await expect(toast).toBeVisible({ timeout: 2_000 });
+      // Hovering pauses the toast's timer while it is scanned.
+      await toast.hover();
+      await expect(page.locator("[data-sonner-toaster]")).toHaveAttribute(
+        "dir",
+        language.locale === "ar" ? "rtl" : "ltr",
+      );
+      await expect(page.locator("[data-sonner-toaster] [role=status]")).toHaveCount(0);
+      await expect(page.locator("main [data-sonner-toaster]")).toHaveCount(0);
+
+      const results = await new AxeBuilder({ page })
+        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+        .analyze();
+      expect(results.violations).toEqual([]);
+    });
+  }
+});

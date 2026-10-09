@@ -20,7 +20,7 @@ afterEach(() => {
 });
 
 describe("Dashboard locale metadata", () => {
-  // Cold-imports the layout and the whole shared UI library on first run.
+  // Cold-imports the metadata helpers and the pure parser entrypoints on first run.
   it("uses the validated tenant origin for canonical and social URLs", async () => {
     vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://dashboard.booking.example");
     vi.stubEnv("WLBP_BRAND_CONFIG_JSON", serializedBrand);
@@ -47,10 +47,31 @@ describe("Dashboard locale metadata", () => {
         languages: {
           en: new URL("https://dashboard.booking.example/en"),
           ar: new URL("https://dashboard.booking.example/ar"),
-          "x-default": new URL("https://dashboard.booking.example/en"),
+          // The generated instance-locale-policy.json defaults to Arabic.
+          "x-default": new URL("https://dashboard.booking.example/ar"),
         },
       },
     });
+  }, 20_000);
+
+  it("uses English x-default when the instance configures it", async () => {
+    vi.resetModules();
+    vi.doMock("../_lib/locale-policy", () => ({
+      instanceLocalePolicy: {
+        defaultLocale: "en",
+        supportedLocales: ["ar", "en"],
+      },
+    }));
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "https://dashboard.booking.example");
+    vi.stubEnv("WLBP_BRAND_CONFIG_JSON", serializedBrand);
+
+    const { getDashboardLocaleMetadata } = await import("../_lib/site-metadata");
+    const metadata = getDashboardLocaleMetadata("ar");
+
+    expect(metadata.alternates?.languages).toMatchObject({
+      "x-default": new URL("https://dashboard.booking.example/en"),
+    });
+    vi.doUnmock("../_lib/locale-policy");
   }, 20_000);
 
   it("fails closed when a production build has no public origin", async () => {

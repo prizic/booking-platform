@@ -44,7 +44,7 @@ describe("WhatsApp configuration schema", () => {
     expect(issues({ ...valid, businessAccountId: "1234" })).toEqual([
       "businessAccountId:wa_id_invalid",
     ]);
-    for (const reference of ["EAAG-real-token", "env:RESEND_API_KEY", "vault:abc"])
+    for (const reference of ["EAAG-real-token", "env:OTHER_CHANNEL_TOKEN", "vault:abc"])
       expect(issues({ ...valid, accessTokenSecretRef: reference }), reference).toEqual([
         "accessTokenSecretRef:wa_secret_ref_invalid",
       ]);

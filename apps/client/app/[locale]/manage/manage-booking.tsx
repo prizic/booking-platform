@@ -4,7 +4,9 @@ import {
   parseManagementActionV1,
   parseManagementStepUpV1,
   parseManagementViewV1,
+  type BookingChangeActionV1,
   type ManagementActionV1,
+  type ManagementIntentV1,
   type ManagementViewV1,
 } from "@wlbp/api-contracts";
 import {
@@ -51,6 +53,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mail } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { z } from "zod";
@@ -68,6 +71,10 @@ import {
 
 interface ManageBookingProps {
   readonly copy: Readonly<Record<string, string>>;
+  /** The one intent this link was minted for (ADR-0004 decision 6). */
+  readonly intent: ManagementIntentV1;
+  /** Display-only: this page was reached from the view-link exchange. */
+  readonly justIssued: boolean;
   readonly locale: Locale;
   readonly token: string | null;
 }
@@ -100,8 +107,8 @@ async function callManage(body: unknown): Promise<unknown> {
 }
 
 /** The cache entry for one link's booking view. */
-function manageViewKey(token: string | null) {
-  return ["manage", "view", token] as const;
+function manageViewKey(token: string | null, intent: ManagementIntentV1) {
+  return ["manage", "view", token, intent] as const;
 }
 
 const noSubscription = () => () => {};
@@ -126,7 +133,13 @@ export function ManageBooking(props: ManageBookingProps) {
   );
 }
 
-function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
+function ManageBookingView({
+  copy,
+  intent,
+  justIssued,
+  locale,
+  token,
+}: ManageBookingProps) {
   const message = (key: string) => copy[key] ?? key;
   const queryClient = useQueryClient();
   const formMessages = useMemo(
@@ -138,10 +151,12 @@ function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
   );
   const viewQuery = useQuery({
     enabled: token !== null,
-    queryKey: manageViewKey(token),
+    queryKey: manageViewKey(token, intent),
     queryFn: async () =>
       parseManagementViewV1(
-        await callManage({ intent: "view", token: token! } satisfies ManageViewInput),
+        // The link's own intent, not a guessed one: the database refuses any
+        // other, and an action link may not be redeemed as a read.
+        await callManage({ intent, token: token! } satisfies ManageViewInput),
       ),
     // Redeeming the link is an audited read: only on load and after a change.
     refetchOnWindowFocus: false,
@@ -190,7 +205,8 @@ function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
     onSuccess: (result, { booking }) => {
       if (result.outcome === "applied") setApplied({ action: result, booking });
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: manageViewKey(token) }),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: manageViewKey(token, intent) }),
     retry: false,
   });
   // A refusal is indistinguishable, so the page says what is true for the
@@ -390,10 +406,17 @@ function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
             ? message("manageCancelEligible")
             : message("manageCancelIneligible")}
         </Alert>
-        <p className="text-sm text-muted-foreground">
-          {message("manageActionsPending")}
-        </p>
       </div>
+
+      {view.intent === "view" && (view.canCancel || view.canReschedule) ? (
+        <RequestActionCard
+          canCancel={view.canCancel}
+          canReschedule={view.canReschedule}
+          locale={locale}
+          message={message}
+          token={token}
+        />
+      ) : null}
 
       {actionFailed === null ? null : (
         <Alert
@@ -482,11 +505,14 @@ function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
               <Alert tone="positive">{message("manageStepUpVerified")}</Alert>
             ) : (
               <StepUp
+                justIssued={justIssued}
                 locale={locale}
                 message={message}
                 messages={formMessages}
                 onVerified={() =>
-                  queryClient.invalidateQueries({ queryKey: manageViewKey(token) })
+                  queryClient.invalidateQueries({
+                    queryKey: manageViewKey(token, intent),
+                  })
                 }
                 token={token}
               />
@@ -498,7 +524,115 @@ function ManageBookingView({ copy, locale, token }: ManageBookingProps) {
   );
 }
 
+interface RequestActionCardProps {
+  readonly canCancel: boolean;
+  readonly canReschedule: boolean;
+  readonly locale: Locale;
+  readonly message: (key: string) => string;
+  /** The live view token the action link is issued from. */
+  readonly token: string;
+}
+
+/**
+ * The issued link without its emailed code authorizes nothing, so holding it
+ * in memory and navigating to it grants no authority the view link did not
+ * already carry: the database still demands the code before either action runs.
+ */
+function issuedActionLink(value: unknown): {
+  readonly intent: BookingChangeActionV1;
+  readonly token: string;
+} | null {
+  if (typeof value !== "object" || value === null) return null;
+  const record = value as Record<string, unknown>;
+  if (record.outcome !== "issued") return null;
+  if (
+    typeof record.token !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(record.token) ||
+    (record.intent !== "cancel" && record.intent !== "reschedule")
+  ) {
+    return null;
+  }
+  return { intent: record.intent, token: record.token };
+}
+
+/**
+ * Change or cancel from the emailed view link. One click exchanges it for
+ * that intent's own single-use link and emails the step-up code to the
+ * address on the booking; the action page then verifies the code before
+ * anything may act. A refusal says only that nothing changed.
+ */
+function RequestActionCard({
+  canCancel,
+  canReschedule,
+  locale,
+  message,
+  token,
+}: RequestActionCardProps) {
+  const router = useRouter();
+  const request = useMutation({
+    mutationFn: async (intent: BookingChangeActionV1) =>
+      issuedActionLink(await callManage({ action: "request-action", intent, token })),
+    onSuccess: (issued) => {
+      if (issued !== null) {
+        router.push(
+          `/${locale}/manage?token=${issued.token}&intent=${issued.intent}&issued=1`,
+        );
+      }
+    },
+    retry: false,
+  });
+  // A refusal is indistinguishable, so the page says what is true for the
+  // customer: nothing changed, and the newest email is authoritative.
+  const requestFailed = request.isError || (request.isSuccess && request.data === null);
+
+  return (
+    <Card aria-labelledby="manage-request" role="region">
+      <CardHeader>
+        <CardTitle id="manage-request">{message("manageRequestTitle")}</CardTitle>
+        <CardDescription>{message("manageRequestSummary")}</CardDescription>
+      </CardHeader>
+      <CardFooter className="flex flex-wrap gap-3">
+        {canReschedule ? (
+          <Button
+            loading={request.isPending && request.variables === "reschedule"}
+            loadingLabel={message("manageRequestSending")}
+            onClick={() => request.mutate("reschedule")}
+            variant="outline"
+          >
+            {message("manageRescheduleAction")}
+          </Button>
+        ) : null}
+        {canCancel ? (
+          <Button
+            loading={request.isPending && request.variables === "cancel"}
+            loadingLabel={message("manageRequestSending")}
+            onClick={() => request.mutate("cancel")}
+            variant="outline"
+          >
+            {message("manageCancelAction")}
+          </Button>
+        ) : null}
+      </CardFooter>
+      {requestFailed ? (
+        <CardContent>
+          <Alert
+            className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"
+            id="manage-request-error"
+            tabIndex={-1}
+            tone="danger"
+          >
+            <AlertTitle>{message("manageActionFailed")}</AlertTitle>
+            <AlertDescription>{message("manageUnavailableBody")}</AlertDescription>
+          </Alert>
+        </CardContent>
+      ) : null}
+    </Card>
+  );
+}
+
 interface StepUpProps {
+  /** Display-only: the exchange queued a code at issuance, so say so. */
+  readonly justIssued: boolean;
   readonly locale: Locale;
   readonly message: (key: string) => string;
   readonly messages: Readonly<Record<string, string>>;
@@ -508,7 +642,14 @@ interface StepUpProps {
 }
 
 /** Email a one-time code, then confirm it before the link may act. */
-function StepUp({ locale, message, messages, onVerified, token }: StepUpProps) {
+function StepUp({
+  justIssued,
+  locale,
+  message,
+  messages,
+  onVerified,
+  token,
+}: StepUpProps) {
   const form = useZodForm(verifyStepUpSchema, {
     defaultValues: { action: "verify-step-up", code: "", token },
   });
@@ -533,6 +674,9 @@ function StepUp({ locale, message, messages, onVerified, token }: StepUpProps) {
 
   return (
     <>
+      {justIssued ? (
+        <Alert tone="info">{message("manageStepUpQueuedHint")}</Alert>
+      ) : null}
       {stepUpFailed ? (
         <Alert
           className="outline-none focus-visible:ring-[3px] focus-visible:ring-destructive/40"

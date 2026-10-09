@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const rpc = vi.fn();
@@ -18,15 +18,16 @@ vi.mock("@wlbp/supabase-client/server", () => ({
 }));
 
 function instanceContent(locale: "en" | "ar"): Record<string, string> {
-  return JSON.parse(
-    readFileSync(
-      new URL(
-        `../../../../../instance-template/instance/content/${locale}.json`,
-        import.meta.url,
-      ),
-      "utf8",
-    ),
-  ) as Record<string, string>;
+  for (const relativePath of [
+    `../../../../../instance/content/${locale}.json`,
+    `../../../../../instance-template/instance/content/${locale}.json`,
+  ]) {
+    const candidate = new URL(relativePath, import.meta.url);
+    if (existsSync(candidate)) {
+      return JSON.parse(readFileSync(candidate, "utf8")) as Record<string, string>;
+    }
+  }
+  throw new Error(`Instance content fixture is missing for ${locale}`);
 }
 
 const content = { ar: instanceContent("ar"), en: instanceContent("en") };

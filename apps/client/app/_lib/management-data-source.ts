@@ -21,6 +21,20 @@ function firstRow(value: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * What exchanging the emailed view link answers. `issued` carries that
+ * intent's own action link; the step-up code travels separately through the
+ * existing OTP email, so the link alone authorizes nothing.
+ */
+export type ManagementActionRequestV1 =
+  | {
+      readonly expiresAt: string;
+      readonly intent: BookingChangeActionV1;
+      readonly outcome: "issued";
+      readonly token: string;
+    }
+  | { readonly outcome: "unavailable" };
+
+/**
  * The guest management surface. Every refusal is the same `unavailable`
  * result, including a transport failure, so nothing about a booking's or a
  * token's existence can be inferred from this client either.
@@ -84,6 +98,47 @@ export function createManagementDataSource(api: BookingRpc, trustedHostname: str
         expiresAt: new Date(String(row.expires_at)).toISOString(),
         outcome: "sent",
       });
+    },
+
+    /**
+     * Exchange the emailed view link for that intent's own action link. The
+     * database mints the token and sends the step-up code through the existing
+     * OTP delivery path; acting still needs that code, so the issued link alone
+     * authorizes nothing. Every refusal is the same `unavailable` result.
+     */
+    async requestAction(
+      token: string,
+      intent: BookingChangeActionV1,
+    ): Promise<ManagementActionRequestV1> {
+      const result = await api.rpc("request_management_action_v1", {
+        p_application: "client",
+        p_hostname: trustedHostname,
+        p_intent: intent,
+        p_token: token,
+      });
+      const row = result.error === null ? firstRow(result.data) : null;
+      if (
+        row !== null &&
+        row.outcome === "issued" &&
+        typeof row.token === "string" &&
+        /^[a-f0-9]{64}$/.test(row.token) &&
+        (row.intent === "cancel" || row.intent === "reschedule")
+      ) {
+        try {
+          return {
+            expiresAt: new Date(String(row.expires_at)).toISOString(),
+            intent: row.intent,
+            outcome: "issued",
+            token: row.token,
+          };
+        } catch {
+          throw new ClientBookingError("availability_unavailable");
+        }
+      }
+      if (row !== null && row.outcome !== "unavailable") {
+        throw new ClientBookingError("availability_unavailable");
+      }
+      return { outcome: "unavailable" as const };
     },
 
     /**

@@ -26,6 +26,14 @@ for src in sorted(pathlib.Path('.').rglob('*.md')):
         if re.match(r'^(https?:|mailto:|tel:)', link):
             continue
         path, _, frag = link.partition('#')
+        # A leading `/` is a filesystem-absolute path, not a repository-relative
+        # one. It resolves on the workstation that wrote it and fails on every
+        # other machine, which is how a Linux runner rejected a link that passed
+        # locally. Reject it everywhere so the failure is not machine-dependent;
+        # write the path as inline code instead.
+        if path.startswith('/'):
+            print(f'  FAIL {src} -> {link} (workstation-absolute link; use a repository-relative path or inline code)')
+            bad = 1; continue
         tgt = (src.parent / path) if path else src
         if not tgt.exists():
             print(f'  FAIL {src} -> {link} (missing file)'); bad = 1; continue
