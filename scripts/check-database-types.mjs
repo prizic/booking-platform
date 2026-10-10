@@ -25,10 +25,9 @@ function normalizeNewlines(value) {
 }
 
 const generated = spawnSync(
-  "pnpm",
+  process.execPath,
   [
-    "exec",
-    "supabase",
+    path.join(repositoryRoot, "node_modules/supabase/dist/supabase.js"),
     "gen",
     "types",
     "typescript",

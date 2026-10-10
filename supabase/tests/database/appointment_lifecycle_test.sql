@@ -269,7 +269,9 @@ reset role;
 select set_config('request.jwt.claims',null,true);
 insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
 values ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001',
-  'booking.check_in_override','direct','location');
+  'booking.check_in_override','direct','location'),
+  ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001',
+  'booking.view.any','direct','location');
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 select is((select t.status from api_v1.transition_booking_v1(
@@ -347,6 +349,10 @@ rollback to savepoint lc_guest_link;
 
 -- ---------------------------------------------------------------------------
 savepoint lc_notes;
+-- This fixture reads bookings at its location but not other people's PII.
+insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
+values ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001',
+  'booking.view.any','direct','location');
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 select is((select n.visibility from api_v1.add_booking_note_v1(

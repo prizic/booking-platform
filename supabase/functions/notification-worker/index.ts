@@ -11,6 +11,7 @@
 // mid-batch loses nothing: the visibility timeout expires and the message is
 // claimed again.
 import { parseNotificationBrandRow } from "../_shared/email/brand.ts";
+import { createNotificationPreparation } from "../_shared/email/delivery.ts";
 import {
   createResendAdapter,
   runNotificationBatch,
@@ -28,6 +29,7 @@ import {
 const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
 const sender = Deno.env.get("NOTIFICATION_SENDER") ?? "";
 const replyTo = Deno.env.get("NOTIFICATION_REPLY_TO") ?? "";
+const encryptionKey = Deno.env.get("NOTIFICATION_DELIVERY_ENCRYPTION_KEY") ?? "";
 const batchSize = Number(Deno.env.get("NOTIFICATION_BATCH_SIZE") ?? "20");
 const visibilitySeconds = Number(
   Deno.env.get("NOTIFICATION_VISIBILITY_SECONDS") ?? "120",
@@ -49,7 +51,12 @@ interface ClaimedRow {
 
 Deno.serve(async (request: Request): Promise<Response> => {
   if (!isInternalInvocation(request)) return unauthorized();
-  if (!platformConfigured() || resendApiKey === "" || sender === "") {
+  if (
+    !platformConfigured() ||
+    resendApiKey === "" ||
+    sender === "" ||
+    !/^[a-f0-9]{64}$/iu.test(encryptionKey)
+  ) {
     return unconfigured();
   }
 
@@ -62,6 +69,35 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (dispatched === null) return json({ error: "dispatch_failed" }, 500);
 
   const summary = await runNotificationBatch({
+    prepare: createNotificationPreparation({
+      encryptionKey,
+      from: sender,
+      replyTo,
+      envelope: async (message, encryptedPayload) => {
+        const rows = await callRpc<{ encrypted_payload: string | null }>(
+          "prepare_notification_delivery_v1",
+          {
+            p_message_id: message.messageId,
+            p_attempt: message.attempt,
+            p_recipient_email: message.recipient,
+            p_claim_payload: message.payload,
+            p_encrypted_payload: encryptedPayload,
+          },
+        );
+        if (rows === null || rows.length !== 1)
+          throw new Error("delivery_preparation_failed");
+        return rows[0].encrypted_payload;
+      },
+      mintOtp: async (message) => {
+        const rows = await callRpc<{ code: string }>("mint_notification_otp_v1", {
+          p_message_id: message.messageId,
+          p_attempt: message.attempt,
+        });
+        if (rows === null || rows.length !== 1)
+          throw new Error("otp_preparation_failed");
+        return rows[0].code;
+      },
+    }),
     claim: async () => {
       const rows = await callRpc<ClaimedRow>("claim_notification_batch_v1", {
         p_limit: batchSize,

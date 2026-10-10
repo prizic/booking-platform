@@ -72,6 +72,18 @@ Alternatives considered:
 - Uniform error responses make legitimate customer support harder — staff cannot tell a customer why their link failed and must reissue instead.
 - Optional accounts mean two customer-identity paths (guest email and account) that both need privacy, export, and deletion handling.
 
+### Implementation clarification — retryable delivery (issues #129 and #131)
+
+Token/challenge authorization tables continue to store hashes only. A
+platform-only private rendition envelope may store authenticated ciphertext of
+the exact delivered email, with its encryption key held only in worker runtime
+secret storage. It never stores plaintext bearer material. The envelope is
+tenant/message-bound, claim-fenced, time-limited, inaccessible to tenant apps and
+purged on erasure. This makes provider input stable after a lost acknowledgement
+without regenerating a code or link under the same provider key. Production OTP
+minting happens through the current worker claim. See
+[notification delivery](../notification-delivery.md) for operations and tests.
+
 ## Revisit triggers
 
 - A proposal to make customer accounts mandatory, or a tenant contract that requires it.

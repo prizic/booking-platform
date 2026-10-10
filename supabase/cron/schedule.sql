@@ -66,6 +66,11 @@ begin
       ('wlbp-expire-holds',            '* * * * *',   $$select private.expire_holds_v1(null,500)$$),
       ('wlbp-expire-booking-requests', '* * * * *',   $$select private.expire_booking_requests_v1(null,500)$$),
       ('wlbp-expire-management-links', '*/5 * * * *', $$select private.expire_management_links_v1(null,500)$$),
+      -- Never delete a retryable envelope: that could replace content under
+      -- an existing provider key. Expired active envelopes fail closed.
+      ('wlbp-prune-delivery-envelopes', '*/15 * * * *', $$delete from private.notification_delivery_envelopes e
+        using app.notification_messages m where m.tenant_id=e.tenant_id and m.id=e.message_id
+          and e.expires_at<=statement_timestamp() and m.status not in ('queued','sending')$$),
       -- Provisioning steps 1 and 2 are pure database work, so they run here
       -- rather than in a worker that would need a host and a credential to
       -- issue SQL. is_worker_v1() passes because pg_cron carries no JWT.

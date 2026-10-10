@@ -627,6 +627,12 @@ Fleet economics — one repository plus two Vercel projects per tenant is justif
 
 ## Platform Admin control plane
 
+The notification worker uses a private, RLS-protected encrypted rendition
+envelope to preserve provider idempotency across claim retries. Runtime key,
+authorization, expiry and erasure boundaries are specified in
+[notification delivery](notification-delivery.md); the platform-only email
+package remains outside the white-label distribution.
+
 Platform Admin is a platform-only application with a persistent localized console. Server pages and actions use the end-user operator session through reviewed `api_v1` RPCs; browser code never receives privileged credentials. Six October 6 migrations extend the existing private `control_plane` tables and pass-through RPC boundary for tenant lifecycle, provisioning/jobs/domains, plans/subscriptions/entitlements, releases/rollouts and security/health/configuration. Operator authorization, AAL2, expiry, recent authentication, validation and audit recording run inside PostgreSQL.
 
 External work uses audited, idempotent queues and service-role-only worker RPCs. Desired configuration and deployment versions are separate from observations; unobserved infrastructure cannot be marked matching or healthy. Rollback remains queued until worker evidence confirms each target's prior release. Tenant closure requires a different active administrator's approval. Payload fingerprints, locks and expected-version checks protect retries and concurrent mutations. Tenant sessions retain no direct control-plane table access.

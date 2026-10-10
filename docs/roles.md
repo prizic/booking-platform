@@ -20,6 +20,12 @@ Roles are **tenant-local**: defined and used in one tenant's Dashboard, invisibl
 
 ## Built-in roles
 
+Booking reads require a direct booking-view grant, not just membership.
+Every read and digest intersects that grant with effective membership location
+restrictions; tenant scope cannot widen an explicitly restricted membership.
+`own` additionally requires the booking assignment. See
+[notification delivery](notification-delivery.md).
+
 Every tenant has four built-in roles, installed from platform templates when the tenant is created: **Tenant admin**, **Location manager**, **Scheduler**, and **Staff**, with exactly the grants of the ADR-0007 matrix (Tenant admin also holds `role.manage`). They are locked: nobody can edit or archive them. **Duplicate** one to start a custom role from its grants.
 
 ## Custom roles

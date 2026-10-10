@@ -32,6 +32,15 @@ Deno.serve(async (request: Request): Promise<Response> => {
   if (!platformConfigured()) return json({ error: "unconfigured" }, 500);
 
   const summary = await runWhatsAppBatch({
+    authorize: async (row) => {
+      const authorized = await callRpc<boolean>("authorize_whatsapp_delivery_v1", {
+        p_message_id: row.message_id,
+        p_attempt: row.attempt,
+        p_phone_e164: row.recipient_phone_e164,
+      });
+      if (authorized === null) throw new Error("recipient_authorization_failed");
+      return authorized[0] === true;
+    },
     claim: async () =>
       (await callRpc<ClaimedWhatsAppRow>("claim_whatsapp_batch_v1", {
         p_limit: batchSize,

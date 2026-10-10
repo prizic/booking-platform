@@ -296,6 +296,11 @@ Source links for all of the above live in [references](./references.md); they ar
 
 ### 12.2 Review status table
 
+Notification scope enforcement and personal-data deletion also cover encrypted
+email retry envelopes and WhatsApp consent phone numbers. See
+[notification delivery](notification-delivery.md) for authority rechecks,
+runtime-only key custody, expiry, erasure and the external-provider race boundary.
+
 | Item | Status |
 | --- | --- |
 | US/USD first-release baseline | In scope. Payment, tax, and consumer-notice review still required before general availability. |

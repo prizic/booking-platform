@@ -31,13 +31,21 @@ export interface NotificationPorts {
   readonly claim: () => Promise<readonly ClaimedNotification[]>;
   readonly deliver: (input: {
     readonly correlationId: string;
+    readonly from?: string;
     readonly html: string;
     readonly idempotencyKey: string;
     readonly isTest?: boolean;
+    readonly replyTo?: string;
     readonly subject: string;
     readonly text: string;
     readonly to: string;
   }) => Promise<DeliveryReport>;
+  readonly prepare?: (
+    message: ClaimedNotification,
+    render: (
+      variables?: Readonly<Record<string, string>>,
+    ) => Promise<NotificationDelivery>,
+  ) => Promise<NotificationDelivery>;
   /** Records the attempt durably. Only this decides whether sending is over. */
   readonly record: (input: {
     readonly attempt: number;
@@ -57,6 +65,10 @@ export interface BatchSummary {
   readonly failed: number;
   readonly retried: number;
 }
+
+export type NotificationDelivery = Parameters<NotificationPorts["deliver"]>[0];
+
+export class NotificationPreparationError extends Error {}
 
 /**
  * Drains one claimed batch. Everything durable is a port call, so this is the
@@ -85,15 +97,15 @@ export async function runNotificationBatch(
   for (const message of claimed) {
     const startedAt = new Date().toISOString();
     let report: DeliveryReport;
-    const brand = await brandOf(message.tenantId);
-    const brandName = brand === null ? null : brandNameFor(brand, message.locale);
-    if (brand === null || brandName === null) {
-      // Never a platform default. An email signed with our name instead of the
-      // tenant's is the one mistake a white-label product cannot make, so a
-      // brand that cannot be read leaves the message for the next attempt.
-      report = { errorCode: "brand_unresolved", outcome: "retryable_error" };
-    } else {
-      try {
+    try {
+      const render = async (
+        variables: Readonly<Record<string, string>> = {},
+      ): Promise<NotificationDelivery> => {
+        const brand = await brandOf(message.tenantId);
+        const brandName = brand === null ? null : brandNameFor(brand, message.locale);
+        if (brand === null || brandName === null) {
+          throw new NotificationPreparationError("brand_unresolved");
+        }
         const input = normalizeNotificationPayload(message.payload, message.locale);
         // A test send has no booking behind it, so it wears the same fixed,
         // clearly synthetic sample the Dashboard preview shows; anything the
@@ -109,9 +121,9 @@ export async function runNotificationBatch(
           ...(digest === undefined ? {} : { digest }),
           ...(message.isTest === true ? { isTest: true } : {}),
           locale: message.locale,
-          variables: { ...sample?.variables, ...input.variables },
+          variables: { ...sample?.variables, ...input.variables, ...variables },
         });
-        report = await ports.deliver({
+        return {
           html: rendered.html,
           correlationId: message.correlationId,
           // A visibility-timeout reclaim increments `attempt`; that must not
@@ -122,14 +134,18 @@ export async function runNotificationBatch(
           subject: rendered.subject,
           text: rendered.text,
           to: message.recipient,
-        });
-      } catch (error) {
-        // A template that cannot render will never render, so it is permanent.
-        report = {
-          errorCode: error instanceof Error ? "render_failed" : "unknown_error",
-          outcome: "permanent_error",
         };
-      }
+      };
+      const delivery =
+        ports.prepare === undefined
+          ? await render()
+          : await ports.prepare(message, render);
+      report = await ports.deliver(delivery);
+    } catch (error) {
+      report =
+        error instanceof NotificationPreparationError
+          ? { errorCode: error.message, outcome: "retryable_error" }
+          : { errorCode: "render_failed", outcome: "permanent_error" };
     }
 
     await ports.record({
@@ -167,9 +183,11 @@ export function createResendAdapter(
     try {
       const response = await call("https://api.resend.com/emails", {
         body: JSON.stringify({
-          from: options.from,
+          from: input.from ?? options.from,
           html: input.html,
-          ...(options.replyTo === undefined ? {} : { reply_to: options.replyTo }),
+          ...((input.replyTo ?? options.replyTo ?? "") === ""
+            ? {}
+            : { reply_to: input.replyTo ?? options.replyTo }),
           subject: input.subject,
           tags: [
             { name: "correlation_id", value: input.correlationId },

@@ -5,6 +5,9 @@
 // imported a file the bundler never wrote. These cases pin the closure walk that
 // replaced the hand-written list.
 import assert from "node:assert/strict";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 import {
@@ -41,7 +44,7 @@ test("the closure reaches an indirectly imported helper", () => {
     "intl-locale.ts": "export const l = 1;\n",
   };
   const read = (target) => {
-    const name = target.split("/").pop();
+    const name = path.basename(target);
     assert.ok(sources[name], `unexpected read of ${target}`);
     return Promise.resolve(sources[name]);
   };
@@ -58,7 +61,7 @@ test("the closure terminates on a cycle", () => {
     "a.ts": 'import "./b.js";',
     "b.ts": 'import "./a.js";',
   };
-  const read = (target) => Promise.resolve(sources[target.split("/").pop()]);
+  const read = (target) => Promise.resolve(sources[path.basename(target)]);
   return moduleClosure(
     { directory: "x", modules: ["a.ts"], package: "packages/x" },
     read,
@@ -72,6 +75,13 @@ test("Node specifiers become the paths Deno opens", () => {
     ),
     'import { a } from "./a.ts";\nimport t from "./contracts.ts";',
   );
+});
+
+test("the CLI entry point runs on native filesystem paths", () => {
+  const script = fileURLToPath(new URL("./bundle-edge-shared.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [script, "--check"], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /edge shared bundle matches its packages/u);
 });
 
 test("a type declaration is taken verbatim, or the build fails", () => {

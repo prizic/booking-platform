@@ -397,6 +397,35 @@ rollback to savepoint cp_export;
 -- ---------------------------------------------------------------------------
 -- Deletion: restartable, subsystem-by-subsystem, and total where it is total.
 savepoint cp_deletion;
+insert into app.booking_whatsapp_consents(tenant_id,booking_id,phone_e164,consent_text,
+  consent_version,locale,consented_at)
+values ('a0000000-0000-0000-0000-000000000001',current_setting('test.cp_booking_one')::uuid,
+  '+12025550123','Synthetic WhatsApp opt-in','1','en',statement_timestamp());
+select * from private.dispatch_notifications_v1();
+insert into app.notification_messages(tenant_id,booking_id,outbox_event_id,template_key,
+  template_locale,template_version,booking_revision,recipient_hash,correlation_id,channel,
+  status,attempts,locked_until)
+select tenant_id,booking_id,outbox_event_id,template_key,template_locale,template_version,
+  booking_revision,recipient_hash,correlation_id,'whatsapp','sending',1,
+  statement_timestamp()+interval '2 minutes'
+from app.notification_messages where booking_id=current_setting('test.cp_booking_one')::uuid
+  and channel='email' limit 1;
+insert into private.notification_delivery_envelopes(tenant_id,message_id,encrypted_payload,authority_hash)
+select tenant_id,id,repeat('x',64),repeat('a',64) from app.notification_messages
+where booking_id=current_setting('test.cp_booking_one')::uuid and channel='email';
+with inserted as (
+  insert into app.notification_messages(tenant_id,template_key,template_locale,template_version,
+    recipient_hash,correlation_id,recipient_kind,recipient_membership_id,dedupe_key,payload)
+  values ('a0000000-0000-0000-0000-000000000001','staff.daily_digest','en',1,
+    repeat('a',64),gen_random_uuid(),'staff','a3000000-0000-0000-0000-000000000003',
+    'synthetic-erasure-digest','{}'::jsonb) returning id
+)
+select set_config('test.cp_digest',(select id::text from inserted),true);
+insert into private.notification_delivery_envelopes(tenant_id,message_id,encrypted_payload,authority_hash)
+values ('a0000000-0000-0000-0000-000000000001',current_setting('test.cp_digest')::uuid,repeat('x',64),repeat('a',64));
+select ok((select private.authorize_whatsapp_delivery_v1(m.id,1,'+12025550123')
+  from app.notification_messages m where m.booking_id=current_setting('test.cp_booking_one')::uuid
+    and m.channel='whatsapp'), 'a current consenting claim is authorized before erasure');
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 
@@ -418,6 +447,44 @@ select set_config('request.jwt.claims',null,true);
 select is((select count(*)::integer from app.booking_intake_answers
   where booking_id=current_setting('test.cp_booking_one')::uuid),0,
   'sensitive intake is hard-deleted on the sensitive-data clock');
+select is((select count(*)::integer from app.booking_whatsapp_consents
+  where booking_id=current_setting('test.cp_booking_one')::uuid
+    and (phone_e164 is not null or consent_text is not null)),0,
+  'erasure removes the WhatsApp phone and consent text');
+select ok((select consent_version='1' and consented_at is not null
+  and consent_text_hash=encode(sha256(convert_to('Synthetic WhatsApp opt-in','UTF8')),'hex')
+  from app.booking_whatsapp_consents where booking_id=current_setting('test.cp_booking_one')::uuid),
+  'minimal consent version, time and hash survive without personal payload');
+select is((select count(*)::integer from app.notification_messages
+  where booking_id=current_setting('test.cp_booking_one')::uuid and status in ('queued','sending')),0,
+  'queued and already-claimed customer deliveries are cancelled');
+select is((select count(*)::integer from private.notification_delivery_envelopes e
+  join app.notification_messages m on m.tenant_id=e.tenant_id and m.id=e.message_id
+  where m.booking_id=current_setting('test.cp_booking_one')::uuid),0,
+  'erasure purges encrypted recipient, body and bearer material too');
+select is((select count(*)::integer from private.notification_delivery_envelopes
+  where message_id=current_setting('test.cp_digest')::uuid),0,
+  'erasure also purges a multi-booking staff digest without a booking_id');
+select is((select status from app.notification_messages where id=current_setting('test.cp_digest')::uuid),
+  'failed','an erased digest cannot regenerate different content under its old key');
+savepoint erased_digest_replay;
+update app.notification_messages set status='sending',attempts=1,dead_lettered_at=null,
+  last_error_code=null,locked_until=statement_timestamp()+interval '2 minutes'
+where id=current_setting('test.cp_digest')::uuid;
+select set_config('test.cp_digest_email',(select email from auth.users
+  where id='a1000000-0000-0000-0000-000000000003'),true);
+select set_config('test.cp_digest_payload',(select private.notification_claim_payload_v1(m,null)::text
+  from app.notification_messages m where m.id=current_setting('test.cp_digest')::uuid),true);
+set local role service_role;
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.cp_digest')::uuid,1,current_setting('test.cp_digest_email'),
+  current_setting('test.cp_digest_payload')::jsonb,repeat('y',64))$$,
+  '42501','notification_delivery_unavailable','a manual replay cannot regenerate an erased digest key');
+reset role;
+rollback to savepoint erased_digest_replay;
+select ok(not (select private.authorize_whatsapp_delivery_v1(m.id,1,'+12025550123')
+  from app.notification_messages m where m.booking_id=current_setting('test.cp_booking_one')::uuid
+    and m.channel='whatsapp'), 'a worker holding the old claim cannot send after erasure');
 select is((select count(*)::integer from app.booking_notes
   where id=current_setting('test.cp_note')::uuid),0,
   'so is a sensitive note');
@@ -471,6 +538,10 @@ rollback to savepoint cp_deletion;
 -- ---------------------------------------------------------------------------
 -- Legal hold outranks deletion, and releasing it resumes the same request.
 savepoint cp_hold;
+insert into app.booking_whatsapp_consents(tenant_id,booking_id,phone_e164,consent_text,
+  consent_version,locale,consented_at)
+values ('a0000000-0000-0000-0000-000000000001',current_setting('test.cp_booking_one')::uuid,
+  '+12025550123','Held synthetic consent','1','en',statement_timestamp());
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 
@@ -488,6 +559,9 @@ select set_config('request.jwt.claims',null,true);
 select ok((select c.erased_at is null from app.customers c
   where c.id=current_setting('test.cp_customer')::uuid),
   'and the record is still there');
+select is((select phone_e164 from app.booking_whatsapp_consents
+  where booking_id=current_setting('test.cp_booking_one')::uuid),'+12025550123',
+  'the legal hold preserves WhatsApp personal payload too');
 select is((select count(*)::integer from app.privacy_request_steps
   where request_id=current_setting('test.cp_held')::uuid and status='blocked'),8,
   'every step records that it was blocked rather than silently skipped');
