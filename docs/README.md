@@ -40,6 +40,9 @@ Agents: read [`../AGENTS.md`](../AGENTS.md) first. It is the contract.
 
 ## Decisions at a glance
 
+Notification authorization, production OTP delivery, encrypted retry storage,
+key rollout and erasure are documented in [notification delivery](notification-delivery.md).
+
 Full table in specification §2. The load-bearing ones:
 
 | Area | Decision |

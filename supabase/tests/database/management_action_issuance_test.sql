@@ -104,14 +104,74 @@ select ok(exists(select 1 from app.outbox_events o
 select ok(not exists(select 1 from app.outbox_events o
   where o.booking_id=current_setting('test.booking')::uuid and o.payload ? 'code'),
   'the delivery intent references the challenge and never carries a code');
-select set_config('test.code',(select m.code from private.mint_management_otp_code_v1(
-  (select o.id from app.management_otps o
-   join app.management_tokens t on t.id=o.token_id
-   where t.booking_id=current_setting('test.booking')::uuid and t.intent='cancel'
-     and o.verified_at is null
-   -- The single exchange above created the one pending challenge on the
-   -- live token the test keeps using.
-   order by o.created_at desc limit 1)) m),true);
+-- Exercise the production worker API, not the private test-only shortcut.
+select * from private.dispatch_notifications_v1();
+-- Claim only the OTP here: claiming the confirmation would issue a newer view
+-- link and intentionally supersede the view token the rest of this test uses.
+update app.notification_messages set next_attempt_at=statement_timestamp()+interval '1 hour'
+where booking_id=current_setting('test.booking')::uuid and template_key<>'management.otp_requested';
+create temp table production_claim as select * from private.claim_notification_batch_v1();
+select set_config('test.otp_message',(select message_id::text from production_claim
+  where template_key='management.otp_requested'),true);
+select set_config('test.otp_attempt',(select attempt::text from production_claim
+  where template_key='management.otp_requested'),true);
+set local role service_role;
+select set_config('test.code',(select m.code from api_v1.mint_notification_otp_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer) m),true);
+select matches(current_setting('test.code'),'^[0-9]{6}$','production delivery mints a six-digit OTP');
+select is((select e.encrypted_payload from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer,
+  'guest.d@example.invalid','{}'::jsonb,null) e),
+  null::text,'the current worker claim may check for its not-yet-prepared envelope');
+select is((select e.encrypted_payload from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer,
+  'guest.d@example.invalid','{}'::jsonb,repeat('x',64)) e),
+  repeat('x',64),'the worker stores ciphertext for its current message');
+select is((select e.encrypted_payload from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer,
+  'guest.d@example.invalid','{}'::jsonb,repeat('y',64)) e),
+  repeat('x',64),'a second write cannot change content under the same provider key');
+select throws_ok($$select * from api_v1.mint_notification_otp_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer)$$,
+  '42501','notification_delivery_unavailable','a prepared OTP is never regenerated');
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer+1,
+  'guest.d@example.invalid','{}'::jsonb,null)$$,
+  '42501','notification_delivery_unavailable','an unclaimed attempt cannot read ciphertext');
+reset role;
+select ok((select relrowsecurity from pg_class where oid='private.notification_delivery_envelopes'::regclass),
+  'the private delivery table has RLS enabled');
+select ok(not has_table_privilege('service_role','private.notification_delivery_envelopes','select')
+  and not has_table_privilege('authenticated','private.notification_delivery_envelopes','select')
+  and not has_table_privilege('anon','private.notification_delivery_envelopes','select'),
+  'neither app callers nor the worker can bypass the narrow envelope RPC');
+savepoint delivery_reclaim;
+update app.notification_messages set attempts=attempts+1
+where id=current_setting('test.otp_message')::uuid;
+set local role service_role;
+select is((select e.encrypted_payload from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer+1,
+  'guest.d@example.invalid','{}'::jsonb,null) e),repeat('x',64),
+  'a reclaimed attempt loads the same encrypted provider input');
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer+1,
+  'other@example.invalid','{}'::jsonb,null)$$,'42501','notification_delivery_unavailable',
+  'an old or different recipient cannot use the envelope');
+reset role;
+update private.notification_delivery_envelopes set expires_at=statement_timestamp()-interval '1 second'
+where message_id=current_setting('test.otp_message')::uuid;
+set local role service_role;
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,current_setting('test.otp_attempt')::integer+1,
+  'guest.d@example.invalid','{}'::jsonb,repeat('z',64))$$,'42501','notification_delivery_unavailable',
+  'expiry fails closed instead of replacing content under an old key');
+reset role;
+rollback to savepoint delivery_reclaim;
+set local role authenticated;
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.otp_message')::uuid,1,'guest.d@example.invalid','{}'::jsonb,null)$$,'42501',null,
+  'an authenticated app caller cannot read delivery ciphertext');
+reset role;
 select is((select v.verified from api_v1.verify_management_otp_v1('client.tenant-a.example.invalid',
   'client',current_setting('test.cancel_token'),current_setting('test.code')) v),true,
   'the code the worker mints for the issued challenge verifies');

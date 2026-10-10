@@ -484,7 +484,101 @@ where template_key='staff.daily_digest';
 select is((select jsonb_array_length(c.payload->'bookings')
   from private.claim_notification_batch_v1() c where c.template_key='staff.daily_digest'),1,
   'the agenda is built at send time from bookings the member may see');
+select set_config('test.digest_message',(select id::text from app.notification_messages
+  where template_key='staff.daily_digest'),true);
+select set_config('test.digest_email',(select u.email from auth.users u
+  where u.id='a1000000-0000-0000-0000-000000000003'),true);
+select set_config('test.digest_payload',(select private.notification_claim_payload_v1(m,null)::text
+  from app.notification_messages m where m.id=current_setting('test.digest_message')::uuid),true);
+set local role service_role;
+select is((select e.encrypted_payload from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.digest_message')::uuid,1,current_setting('test.digest_email'),
+  current_setting('test.digest_payload')::jsonb,repeat('d',64)) e),repeat('d',64),
+  'the worker may prepare a currently authorized digest');
+reset role;
+update app.membership_location_scopes set location_id='a5000000-0000-0000-0000-000000000002'
+where membership_id='a3000000-0000-0000-0000-000000000003';
+set local role service_role;
+select throws_ok($$select * from api_v1.prepare_notification_delivery_v1(
+  current_setting('test.digest_message')::uuid,1,current_setting('test.digest_email'),
+  current_setting('test.digest_payload')::jsonb,null)$$,'42501','notification_delivery_unavailable',
+  'scope revocation after claim refuses cached digest content');
+reset role;
 rollback to savepoint ns_digest;
+
+-- A tenant-scoped scheduler may still be pinned to one membership location.
+savepoint ns_restricted_scheduler;
+insert into app.membership_location_scopes(tenant_id,membership_id,location_id)
+values ('a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000005',
+  'a5000000-0000-0000-0000-000000000001') on conflict do nothing;
+delete from app.membership_location_scopes where membership_id='a3000000-0000-0000-0000-000000000005'
+  and location_id<>'a5000000-0000-0000-0000-000000000001';
+select ok(private.member_scope_covers_booking_v1('tenant',
+  'a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000005',
+  'a5000000-0000-0000-0000-000000000001',current_setting('test.ns_hold')::uuid),
+  'a tenant capability still covers a booking at the permitted location');
+select ok(not private.member_scope_covers_booking_v1('tenant',
+  'a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000005',
+  'a5000000-0000-0000-0000-000000000002',current_setting('test.ns_hold')::uuid),
+  'a tenant capability never widens the member location restriction');
+select is(jsonb_array_length(private.notification_digest_bookings_v1(
+  'a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000005',
+  current_setting('test.ns_day')::date,'America/New_York')),1,
+  'a permitted booking is included in the scheduler digest');
+update app.membership_location_scopes set location_id='a5000000-0000-0000-0000-000000000002'
+where membership_id='a3000000-0000-0000-0000-000000000005';
+select is(jsonb_array_length(private.notification_digest_bookings_v1(
+  'a0000000-0000-0000-0000-000000000001','a3000000-0000-0000-0000-000000000005',
+  current_setting('test.ns_day')::date,'America/New_York')),0,
+  'a tenant-scoped digest cannot include bookings or names outside membership locations');
+rollback to savepoint ns_restricted_scheduler;
+
+-- Removing booking-read capability denies the row and its contact children.
+savepoint ns_no_booking_permission;
+insert into app.roles(id,tenant_id,key,location_scope_mode,name_en,name_ar)
+values ('a2900000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+  'custom_aa11000000000001','tenant','Brand reader','قارئ العلامة');
+insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
+values ('a0000000-0000-0000-0000-000000000001','a2900000-0000-0000-0000-000000000001','brand.manage','direct','tenant'),
+  ('a0000000-0000-0000-0000-000000000001','a2900000-0000-0000-0000-000000000001','booking.view.any','direct','tenant');
+update app.memberships set role_id='a2900000-0000-0000-0000-000000000001'
+where id='a3000000-0000-0000-0000-000000000003';
+select set_config('request.jwt.claims',current_setting('test.manager'),true);
+set local role authenticated;
+select is((select count(*)::integer from api_v1.list_calendar_v1(
+  'a0000000-0000-0000-0000-000000000001',pg_temp.ns_time('00:00'),pg_temp.ns_time('23:59'))),1,
+  'a custom role with direct booking-view capability reads its permitted calendar');
+reset role;
+delete from app.role_permissions where role_id='a2900000-0000-0000-0000-000000000001'
+  and permission_key='booking.view.any';
+set local role authenticated;
+select is((select count(*)::integer from app.bookings where id=current_setting('test.ns_booking')::uuid),0,
+  'membership and location alone cannot read a booking without a view capability');
+select is((select count(*)::integer from app.booking_contacts where booking_id=current_setting('test.ns_booking')::uuid),0,
+  'contact child reads inherit the booking capability denial');
+select is((select count(*)::integer from api_v1.list_calendar_v1(
+  'a0000000-0000-0000-0000-000000000001',pg_temp.ns_time('00:00'),pg_temp.ns_time('23:59'))),0,
+  'a brand-only custom role cannot bypass booking RLS through Calendar');
+select is((select count(*)::integer from api_v1.get_today_workspace_v1(
+  'a0000000-0000-0000-0000-000000000001',pg_temp.ns_time('00:00'),pg_temp.ns_time('23:59'))),0,
+  'a brand-only custom role cannot bypass booking RLS through Today');
+reset role;
+rollback to savepoint ns_no_booking_permission;
+
+savepoint ns_own_read;
+update app.staff_profiles set membership_id='a3000000-0000-0000-0000-000000000001'
+where id='ab000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claims',current_setting('test.staff'),true);
+set local role authenticated;
+select is((select count(*)::integer from app.bookings where id=current_setting('test.ns_booking')::uuid),1,
+  'an own-view grant reads an appointment assigned to that member');
+reset role;
+update app.staff_profiles set membership_id=null where id='ab000000-0000-0000-0000-000000000001';
+set local role authenticated;
+select is((select count(*)::integer from app.bookings where id=current_setting('test.ns_booking')::uuid),0,
+  'the same own-view grant cannot read an unrelated appointment');
+reset role;
+rollback to savepoint ns_own_read;
 
 select _set('curr_test',(select last_value::integer from __tresults___numb_seq));
 select * from finish();

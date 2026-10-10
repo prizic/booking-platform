@@ -42,6 +42,8 @@ export interface RecordedAttempt {
 }
 
 export interface WhatsAppWorkerPorts {
+  /** Current claim, consent and customer identity must still be live. */
+  readonly authorize: (row: ClaimedWhatsAppRow) => Promise<boolean>;
   readonly claim: () => Promise<readonly ClaimedWhatsAppRow[]>;
   /** Only this decides whether sending is over. */
   readonly record: (attempt: RecordedAttempt) => Promise<void>;
@@ -129,6 +131,8 @@ async function deliver(
     }
     variables["brandName"] = brandName;
   }
+
+  if (!(await ports.authorize(row))) return permanent("recipient_unavailable");
 
   return sendWhatsAppTemplate(
     {

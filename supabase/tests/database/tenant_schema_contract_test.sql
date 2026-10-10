@@ -83,7 +83,7 @@ select ok(
       and not (
         procedure.prolang = (select oid from pg_language where lanname = 'sql')
         and 'search_path=""' = any(procedure.proconfig)
-        and pg_catalog.btrim(procedure.prosrc, E' \n\t')
+        and pg_catalog.btrim(procedure.prosrc, E' \n\t\r')
           ~ ('^select (\* from )?control_plane\.' || procedure.proname || '\([^()]*\)\s*;?$')
         and exists (
           select 1 from pg_proc as inner_procedure
@@ -185,6 +185,7 @@ select is(
     'private.archive_role_v1(uuid,uuid,uuid,bigint)',
     'private.attach_checkout_reference_v1(uuid,uuid,text)',
     'private.authorize_payment_onboarding_v1(uuid,text,text,uuid)',
+    'private.authorize_whatsapp_delivery_v1(uuid,integer,text)',
     'private.begin_checkout_v1(text,text,uuid,text,text,jsonb,text,text,jsonb,text)',
     'private.build_customer_export_v1(uuid,uuid)',
     'private.bump_availability_revision()',
@@ -194,6 +195,7 @@ select is(
     'private.can_manage_policy_scope(uuid,uuid,uuid,uuid)',
     'private.can_manage_schedule_scope(uuid,uuid,uuid,uuid)',
     'private.can_manage_staff(uuid,uuid)',
+    'private.can_read_booking_v1(uuid,uuid,uuid)',
     'private.cancel_booking_v1(uuid,uuid,bigint,text,text,text,uuid,text)',
     'private.catalog_entity_document_v1(uuid,text,uuid)',
     'private.change_staff_access_v1(uuid,uuid,text,uuid,bigint,uuid,uuid[],text)',
@@ -266,11 +268,14 @@ select is(
     'private.list_roles_v1(uuid)',
     'private.list_staff_notification_preferences_v1(uuid)',
     'private.mint_management_otp_code_v1(uuid)',
+    'private.mint_notification_otp_v1(uuid,integer)',
     'private.offered_minutes_v1(uuid,timestamp with time zone,timestamp with time zone,uuid,uuid)',
     'private.open_privacy_request_v1(uuid,uuid,text)',
     'private.persist_report_export_v1(uuid,text,jsonb,jsonb)',
+    'private.prepare_notification_delivery_v1(uuid,integer,text,jsonb,text)',
     'private.publish_brand_revision_v1(uuid,uuid,text)',
     'private.publish_catalog_workspace_v1(uuid,uuid,jsonb)',
+    'private.purge_erased_notification_envelopes_v1()',
     'private.raise_payment_exception_v1(uuid,text,text,uuid,text,uuid,bigint,character,text,text)',
     'private.reconcile_commerce_v1(uuid,integer)',
     'private.record_commerce_event_v1(uuid,text,text,text,text,text,text,bigint,text,timestamp with time zone,text)',

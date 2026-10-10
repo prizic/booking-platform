@@ -19,6 +19,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { pathExists, relativePath, repositoryRoot } from "./workspace.mjs";
 
@@ -41,7 +42,14 @@ const contractsSource = path.join(
 const bundles = [
   {
     directory: "email",
-    modules: ["brand.ts", "samples.ts", "templates.ts", "webhook.ts", "worker.ts"],
+    modules: [
+      "brand.ts",
+      "delivery.ts",
+      "samples.ts",
+      "templates.ts",
+      "webhook.ts",
+      "worker.ts",
+    ],
     package: "packages/email",
   },
   {
@@ -278,6 +286,9 @@ async function main() {
   );
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   await main();
 }

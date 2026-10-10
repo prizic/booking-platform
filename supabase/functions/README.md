@@ -1,5 +1,10 @@
 # Platform-owned Edge Functions
 
+The production email worker additionally requires runtime-only
+`NOTIFICATION_DELIVERY_ENCRYPTION_KEY`. Migrations and key storage must precede
+worker deployment. See [notification delivery](../../docs/notification-delivery.md)
+for retry-envelope, OTP, erasure and key rotation contracts.
+
 This directory is the central source surface for verified provider webhooks,
 short provider calls, queue workers, and the Supabase Auth email hook.
 

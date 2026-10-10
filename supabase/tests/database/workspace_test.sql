@@ -116,6 +116,11 @@ select set_config('request.jwt.claims',null,true);
 rollback to savepoint workspace_admin;
 
 savepoint workspace_scope;
+-- Give this calendar-only fixture an explicit location read grant. The
+-- seeded own-only staff grant must not read somebody else's assignments.
+insert into app.role_permissions(tenant_id,role_id,permission_key,grant_kind,scope_kind)
+values ('a0000000-0000-0000-0000-000000000001','a2000000-0000-0000-0000-000000000001',
+  'booking.view.any','direct','location');
 select set_config('request.jwt.claims','{"sub":"a1000000-0000-0000-0000-000000000001","role":"authenticated","aal":"aal2"}',true);
 set local role authenticated;
 select is((select count(*)::integer from api_v1.get_today_workspace_v1(

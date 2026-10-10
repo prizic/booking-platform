@@ -148,6 +148,10 @@ export type Database = {
         };
         Returns: string;
       };
+      authorize_whatsapp_delivery_v1: {
+        Args: { p_attempt: number; p_message_id: string; p_phone_e164: string };
+        Returns: boolean;
+      };
       begin_checkout_v1: {
         Args: {
           p_application: string;
@@ -1843,6 +1847,13 @@ export type Database = {
           updated_at: string;
         }[];
       };
+      mint_notification_otp_v1: {
+        Args: { p_attempt: number; p_message_id: string };
+        Returns: {
+          code: string;
+          expires_at: string;
+        }[];
+      };
       open_privacy_request_v1: {
         Args: { p_customer_id: string; p_kind: string; p_tenant_id: string };
         Returns: string;
@@ -1853,6 +1864,18 @@ export type Database = {
           rollout_id: string;
           status: string;
           unqueued: number;
+        }[];
+      };
+      prepare_notification_delivery_v1: {
+        Args: {
+          p_attempt: number;
+          p_claim_payload: Json;
+          p_encrypted_payload?: string;
+          p_message_id: string;
+          p_recipient_email: string;
+        };
+        Returns: {
+          encrypted_payload: string;
         }[];
       };
       publish_brand_revision_v1: {

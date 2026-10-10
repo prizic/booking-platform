@@ -54,6 +54,7 @@ function harness(
     });
   };
   const ports = {
+    authorize: () => Promise.resolve(true),
     claim: () => Promise.resolve(rows),
     readSecret: (name: string) => secrets[name],
     record: (attempt: RecordedAttempt) => {
@@ -66,6 +67,22 @@ function harness(
   };
   return { ports, recorded, sent };
 }
+
+Deno.test("erasure after claim prevents provider handoff", async () => {
+  const h = harness([row()]);
+  const summary = await runWhatsAppBatch({
+    ...h.ports,
+    authorize: () => Promise.resolve(false),
+  });
+  assert(
+    summary.failed === 1 && h.sent.length === 0,
+    "an erased recipient is not sent",
+  );
+  assert(
+    h.recorded[0]?.report.errorCode === "recipient_unavailable",
+    "refusal has no PII",
+  );
+});
 
 Deno.test(
   "sends the approved template with the tenant's token and records the wamid",

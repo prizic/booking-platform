@@ -91,6 +91,11 @@ The default locale is configuration, not an environment variable. Read it from t
 
 ### Phase 2 only — do NOT set these in v1
 
+The platform notification worker additionally requires
+`NOTIFICATION_DELIVERY_ENCRYPTION_KEY` in runtime secret storage. This is not a
+Client/Dashboard environment variable. Follow the ordered migration/key/worker
+rollout and rotation constraints in [notification delivery](notification-delivery.md).
+
 v1 ships **one-way add-to-calendar (`.ics`) only**. It never reads or writes an external calendar, and [ADR-0010](./adr/0010-deferred-scope.md) puts OAuth connection storage, webhook channels, and sync cursors under "must NOT build". The variables below belong to two-way sync (issues #46 / #47) and are listed only so nobody re-invents a different name for them later. **Do not add them to any v1 env file; a v1 code path that reads one is a defect.**
 
 | Variable | Purpose | Status |

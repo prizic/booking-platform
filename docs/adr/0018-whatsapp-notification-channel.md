@@ -37,6 +37,14 @@ We add WhatsApp as an **optional, off-by-default** notification channel through 
 
 ### Alternatives rejected
 
+Implementation clarification for issue #130: append-only consent snapshots
+remain immune to tenant edits. Verified erasure under ADR-0008 clears their
+phone and rendered text, retaining only version, locale, timestamp and text hash
+as minimal evidence. It cancels pending customer deliveries; the worker rechecks
+the current claim, consent and non-erased identity before provider handoff.
+See [notification delivery](../notification-delivery.md) for the external-provider
+race and verification boundary.
+
 - **Keep WhatsApp deferred until #51.** Rejected by owner decision on 2026-10-07; the deferral reasons are addressed by gates 1–3 and the legal statement instead.
 - **A Business Solution Provider (BSP) such as Twilio or 360dialog.** Rejected for now: a second processor of customer phone numbers, a second bill, and no capability we need beyond Meta's own API. Revisit if a market requires a BSP.
 - **Free-form session messages.** Rejected: outside the 24-hour window Meta refuses them (error 131047), and inside it they would let tenant-authored text reach customers without template review.
