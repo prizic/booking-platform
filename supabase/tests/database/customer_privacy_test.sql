@@ -166,6 +166,12 @@ set local role authenticated;
 select is((select count(*)::integer from api_v1.search_customers_v1(
   'a0000000-0000-0000-0000-000000000001')),2,
   'an admin sees the tenant directory');
+select is((select count(distinct customer_id)::integer from (
+  select customer_id from api_v1.search_customers_v1('a0000000-0000-0000-0000-000000000001',null,false,1,0)
+  union all
+  select customer_id from api_v1.search_customers_v1('a0000000-0000-0000-0000-000000000001',null,false,1,1)
+) p),2,
+  'stable id tie-breaker makes size-1 pages disjoint and complete');
 select is((select s.full_name from api_v1.search_customers_v1(
   'a0000000-0000-0000-0000-000000000001','dana') s),'Dana Halim',
   'search matches on name');

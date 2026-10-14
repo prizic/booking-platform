@@ -1,9 +1,7 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import { Button, PaginationBar } from "@wlbp/ui-foundation";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import Link from "next/link";
+import { DataPagination } from "@wlbp/ui-foundation";
 import { fill, formCopy, say } from "../copy";
-
+import { renderOperatorLink } from "./navigation-link";
 export function Pagination({
   locale,
   page,
@@ -19,36 +17,20 @@ export function Pagination({
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return (
-    <PaginationBar
+    <DataPagination
       label={say(locale, formCopy.pagination)}
-      summary={`${fill(locale, formCopy.results, { total: formatNumber(total, locale) })} · ${fill(
-        locale,
-        formCopy.pageOf,
-        {
-          page: formatNumber(Math.min(page, pages), locale),
-          pages: formatNumber(pages, locale),
-        },
-      )}`}
-      previous={
-        page > 1 ? (
-          <Button asChild variant="outline">
-            <Link rel="prev" href={href(page - 1)}>
-              <ChevronLeft aria-hidden="true" />
-              {say(locale, formCopy.previous)}
-            </Link>
-          </Button>
-        ) : null
-      }
-      next={
-        page < pages ? (
-          <Button asChild variant="outline">
-            <Link rel="next" href={href(page + 1)}>
-              {say(locale, formCopy.next)}
-              <ChevronRight aria-hidden="true" />
-            </Link>
-          </Button>
-        ) : null
-      }
+      summary={fill(locale, formCopy.results, { total: formatNumber(total, locale) })}
+      pageLabel={fill(locale, formCopy.pageOf, {
+        page: formatNumber(page, locale),
+        pages: formatNumber(pages, locale),
+      })}
+      page={page}
+      pageCount={pages}
+      previousLabel={say(locale, formCopy.previous)}
+      nextLabel={say(locale, formCopy.next)}
+      {...(page > 1 ? { previousHref: href(page - 1) } : {})}
+      {...(page < pages ? { nextHref: href(page + 1) } : {})}
+      renderLink={renderOperatorLink}
     />
   );
 }

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { parsePublicRuntimeConfig, type RuntimeEnvironment } from "@wlbp/config";
 import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server";
 import { extractRequestHostname } from "@wlbp/tenant-resolution";
@@ -30,11 +31,15 @@ export function getDashboardRuntimeConfiguration() {
   const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !publishableKey) return null;
 
-  return parsePublicRuntimeConfig({
-    environment: runtimeEnvironment(),
-    supabasePublishableKey: publishableKey,
-    supabaseUrl: url,
-  });
+  try {
+    return parsePublicRuntimeConfig({
+      environment: runtimeEnvironment(),
+      supabasePublishableKey: publishableKey,
+      supabaseUrl: url,
+    });
+  } catch {
+    return null;
+  }
 }
 
 export async function createDashboardRequestDataSource() {
@@ -61,30 +66,31 @@ export type DashboardRequestAccess =
       readonly state: DashboardAccessState;
     };
 
-export async function loadDashboardRequestAccess(
-  locale: Locale,
-): Promise<DashboardRequestAccess> {
-  const source = await createDashboardRequestDataSource();
-  if (source === null) {
-    return { source: null, state: { kind: "configuration-missing" } };
-  }
+// React cache deduplicates this render only; authority is never cached across requests.
+export const loadDashboardRequestAccess = cache(
+  async (locale: Locale): Promise<DashboardRequestAccess> => {
+    const source = await createDashboardRequestDataSource();
+    if (source === null) {
+      return { source: null, state: { kind: "configuration-missing" } };
+    }
 
-  let hostname: string;
-  try {
-    const localFallback = process.env.LOCAL_TENANT_HOST;
-    hostname = extractRequestHostname(await headers(), {
-      ...(localFallback === undefined ? {} : { localFallback }),
-      runtimeEnvironment: runtimeEnvironment(),
-    });
-  } catch {
+    let hostname: string;
+    try {
+      const localFallback = process.env.LOCAL_TENANT_HOST;
+      hostname = extractRequestHostname(await headers(), {
+        ...(localFallback === undefined ? {} : { localFallback }),
+        runtimeEnvironment: runtimeEnvironment(),
+      });
+    } catch {
+      return {
+        source,
+        state: { kind: "denied", reason: "invalid_host" },
+      };
+    }
+
     return {
       source,
-      state: { kind: "denied", reason: "invalid_host" },
+      state: await loadDashboardAccess({ hostname, locale }, source),
     };
-  }
-
-  return {
-    source,
-    state: await loadDashboardAccess({ hostname, locale }, source),
-  };
-}
+  },
+);

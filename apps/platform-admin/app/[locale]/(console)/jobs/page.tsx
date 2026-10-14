@@ -6,7 +6,7 @@ import { callOperator } from "../../../_lib/operator-api";
 import { getOperator } from "../../../_lib/operator-page";
 import { operationsCopy } from "../../../_lib/operations-copy";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
@@ -58,34 +58,46 @@ export default async function JobsPage({
     say(locale, operationsCopy.kinds[k as keyof typeof operationsCopy.kinds] ?? [k, k]);
 
   return (
-    <>
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-      />
-      <FilterBar locale={locale} path={path}>
-        <SelectFilter
-          name="status"
-          label={say(locale, c.status)}
-          value={list.filters.status}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.status.map(
-            (s) => [s, copyFor(statusCopy, s, locale)] as const,
-          )}
-        />
-        <SelectFilter
-          name="kind"
-          label={say(locale, c.kind)}
-          value={list.filters.kind}
-          allLabel={say(locale, formCopy.all)}
-          options={kinds.map((k) => [k, kindLabel(k)] as const)}
-        />
-        {list.filters.tenant ? (
-          <input type="hidden" name="tenant" value={list.filters.tenant} />
-        ) : null}
-      </FilterBar>
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      toolbar={
+        <FilterBar locale={locale} path={path}>
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.status.map(
+              (s) => [s, copyFor(statusCopy, s, locale)] as const,
+            )}
+          />
+          <SelectFilter
+            name="kind"
+            label={say(locale, c.kind)}
+            value={list.filters.kind}
+            allLabel={say(locale, formCopy.all)}
+            options={kinds.map((k) => [k, kindLabel(k)] as const)}
+          />
+          {list.filters.tenant ? (
+            <input type="hidden" name="tenant" value={list.filters.tenant} />
+          ) : null}
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -134,15 +146,8 @@ export default async function JobsPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </>
+    </DataPage>
   );
 }

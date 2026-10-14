@@ -88,13 +88,46 @@ test("strips live-runner variables before starting an app server", () => {
     "dashboard.live-booking.example.invalid",
   );
 
-  assert.deepEqual(environment, {
+  const { DASHBOARD_RECOVERY_COOKIE_SECRET: recoverySecret, ...stripped } = environment;
+  assert.deepEqual(stripped, {
     KEEP_ME: "yes",
     LOCAL_TENANT_HOST: "dashboard.live-booking.example.invalid",
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "local-publishable-key",
     NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
     WLBP_RUNTIME_ENV: "test",
   });
+  assert.equal(typeof recoverySecret, "string");
+  assert.ok(recoverySecret.length >= 32);
+});
+
+test("keeps a supplied recovery secret and reuses one process-local fallback", () => {
+  const local = {
+    apiUrl: "http://127.0.0.1:54321",
+    databaseUrl: "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
+    publishableKey: "local-publishable-key",
+  };
+  const supplied = "supplied-local-recovery-secret-0123456789abcdef";
+  const provided = createLiveBookingApplicationEnvironment(
+    { DASHBOARD_RECOVERY_COOKIE_SECRET: supplied },
+    local,
+    "dashboard.live-booking.example.invalid",
+  );
+  assert.equal(provided.DASHBOARD_RECOVERY_COOKIE_SECRET, supplied);
+
+  const first = createLiveBookingApplicationEnvironment(
+    { DASHBOARD_RECOVERY_COOKIE_SECRET: "too-short" },
+    local,
+    "dashboard.live-booking.example.invalid",
+  ).DASHBOARD_RECOVERY_COOKIE_SECRET;
+  const second = createLiveBookingApplicationEnvironment(
+    {},
+    local,
+    "dashboard.live-booking.example.invalid",
+  ).DASHBOARD_RECOVERY_COOKIE_SECRET;
+  assert.equal(typeof first, "string");
+  assert.ok(first.length >= 32);
+  assert.equal(first, second, "One process reuses a single generated key");
+  assert.notEqual(first, supplied);
 });
 
 test("rejects non-UUID fixture control input before reading local Supabase", () => {

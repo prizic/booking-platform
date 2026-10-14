@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "name": "Laya Client Empty Tenant"
+  },
+  "scenarios": [
+    {
+      "id": "home-empty-catalog-arabic",
+      "path": "/ar",
+      "assertions": [
+        { "type": "url", "value": "/ar$" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" },
+        {
+          "type": "text",
+          "selector": "div[data-slot=\"empty-state\"] p:first-of-type",
+          "value": "لا توجد خدمات متاحة للحجز حاليًا"
+        },
+        { "type": "hidden", "selector": "[data-slot=\"alert\"]" }
+      ]
+    },
+    {
+      "id": "services-empty-catalog-arabic",
+      "path": "/ar/services",
+      "assertions": [
+        { "type": "url", "value": "/services$" },
+        { "type": "text", "selector": "h1", "value": "الخدمات" },
+        {
+          "type": "text",
+          "selector": "div[data-slot=\"empty-state\"] p:first-of-type",
+          "value": "لا توجد خدمات متاحة للحجز حاليًا"
+        },
+        { "type": "hidden", "selector": "[data-slot=\"alert\"]" }
+      ]
+    },
+    {
+      "id": "about-empty-state",
+      "path": "/ar/about",
+      "assertions": [
+        { "type": "url", "value": "/about$" },
+        {
+          "type": "text",
+          "selector": "div[data-slot=\"empty-state\"] p:first-of-type",
+          "value": "لم تُنشر معلومات عن المنشأة بعد"
+        },
+        { "type": "hidden", "selector": "[data-slot=\"alert\"]" }
+      ]
+    },
+    {
+      "id": "contact-channels-present-arabic",
+      "path": "/ar/contact",
+      "assertions": [
+        { "type": "url", "value": "/contact$" },
+        { "type": "text", "selector": "h1", "value": "تواصل معنا" },
+        {
+          "type": "visible",
+          "selector": "main a[href=\"mailto:hello@tenant-a.example.invalid\"]"
+        },
+        { "type": "hidden", "selector": "div[data-slot=\"empty-state\"]" }
+      ]
+    }
+  ]
+}

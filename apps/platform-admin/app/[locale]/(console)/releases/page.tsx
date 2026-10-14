@@ -8,7 +8,7 @@ import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
 import { releaseCopy } from "../../../_lib/release-copy";
 import { releaseChannels } from "../../../_lib/schemas/releases";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
@@ -85,131 +85,143 @@ export default async function ReleasesPage({
   const n = (value: number) => formatNumber(value, locale);
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          atLeast(operator.role, "admin") ? (
-            <ActionDialog
-              locale={locale}
-              operation="registerRelease"
-              trigger={say(locale, c.register)}
-              triggerVariant="primary"
-              title={say(locale, c.registerTitle)}
-              description={say(locale, c.registerBody)}
-              submit={say(locale, c.register)}
-              successMessage={say(locale, c.registered)}
-              values={{
-                version: "",
-                channel: "candidate",
-                gitCommit: "",
-                configSchemaVersion: "",
-                backendMin: "",
-                backendMax: "",
-                migrationIds: "",
-                featureNotes: "",
-                upgradeNotes: "",
-                reversible: true,
-              }}
-            >
-              <FieldGroup columns={2}>
-                <TextFormField
-                  id="r-version"
-                  name="version"
-                  label={say(locale, c.version)}
-                  required
-                  maxLength={40}
-                  autoComplete="off"
-                  dir="ltr"
-                />
-                <SelectFormField
-                  name="channel"
-                  label={say(locale, c.channel)}
-                  options={channels.map((ch) => [ch, status(ch)] as const)}
-                />
-                <TextFormField
-                  id="r-commit"
-                  name="gitCommit"
-                  label={say(locale, c.commit)}
-                  required
-                  minLength={40}
-                  maxLength={64}
-                  autoComplete="off"
-                  dir="ltr"
-                  className="md:col-span-2"
-                />
-                <TextFormField
-                  id="r-schema"
-                  name="configSchemaVersion"
-                  label={say(locale, c.configSchema)}
-                  type="number"
-                  required
-                  className="md:col-span-2"
-                />
-                <TextFormField
-                  id="r-min"
-                  name="backendMin"
-                  label={say(locale, c.backendMin)}
-                  type="number"
-                  required
-                />
-                <TextFormField
-                  id="r-max"
-                  name="backendMax"
-                  label={say(locale, c.backendMax)}
-                  type="number"
-                  required
-                />
-              </FieldGroup>
-              <NotesField
-                id="r-migrations"
-                name="migrationIds"
-                label={say(locale, c.migrations)}
-                hint={say(locale, c.migrationsHint)}
-                ltr
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        atLeast(operator.role, "admin") ? (
+          <ActionDialog
+            locale={locale}
+            operation="registerRelease"
+            trigger={say(locale, c.register)}
+            triggerVariant="primary"
+            title={say(locale, c.registerTitle)}
+            description={say(locale, c.registerBody)}
+            submit={say(locale, c.register)}
+            successMessage={say(locale, c.registered)}
+            values={{
+              version: "",
+              channel: "candidate",
+              gitCommit: "",
+              configSchemaVersion: "",
+              backendMin: "",
+              backendMax: "",
+              migrationIds: "",
+              featureNotes: "",
+              upgradeNotes: "",
+              reversible: true,
+            }}
+          >
+            <FieldGroup columns={2}>
+              <TextFormField
+                id="r-version"
+                name="version"
+                label={say(locale, c.version)}
+                required
+                maxLength={40}
+                autoComplete="off"
+                dir="ltr"
               />
-              <NotesField
-                id="r-feature-notes"
-                name="featureNotes"
-                label={say(locale, c.featureNotes)}
-                hint={say(locale, c.notesHint)}
+              <SelectFormField
+                name="channel"
+                label={say(locale, c.channel)}
+                options={channels.map((ch) => [ch, status(ch)] as const)}
+              />
+              <TextFormField
+                id="r-commit"
+                name="gitCommit"
+                label={say(locale, c.commit)}
+                required
+                minLength={40}
+                maxLength={64}
+                autoComplete="off"
+                dir="ltr"
+                className="md:col-span-2"
+              />
+              <TextFormField
+                id="r-schema"
+                name="configSchemaVersion"
+                label={say(locale, c.configSchema)}
+                type="number"
+                required
+                className="md:col-span-2"
+              />
+              <TextFormField
+                id="r-min"
+                name="backendMin"
+                label={say(locale, c.backendMin)}
+                type="number"
                 required
               />
-              <NotesField
-                id="r-upgrade-notes"
-                name="upgradeNotes"
-                label={say(locale, c.upgradeNotes)}
-                hint={say(locale, c.notesHint)}
+              <TextFormField
+                id="r-max"
+                name="backendMax"
+                label={say(locale, c.backendMax)}
+                type="number"
                 required
               />
-              <CheckboxFormField
-                id="r-reversible"
-                name="reversible"
-                label={say(locale, c.reversible)}
-              />
-            </ActionDialog>
-          ) : null
-        }
-      />
-      <FilterBar locale={locale} path={path}>
-        <SelectFilter
-          name="channel"
-          label={say(locale, c.channel)}
-          value={list.filters.channel}
-          allLabel={say(locale, formCopy.all)}
-          options={channels.map((ch) => [ch, status(ch)] as const)}
-        />
-        <SelectFilter
-          name="status"
-          label={say(locale, c.status)}
-          value={list.filters.status}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.status.map((s) => [s, status(s)] as const)}
-        />
-      </FilterBar>
+            </FieldGroup>
+            <NotesField
+              id="r-migrations"
+              name="migrationIds"
+              label={say(locale, c.migrations)}
+              hint={say(locale, c.migrationsHint)}
+              ltr
+            />
+            <NotesField
+              id="r-feature-notes"
+              name="featureNotes"
+              label={say(locale, c.featureNotes)}
+              hint={say(locale, c.notesHint)}
+              required
+            />
+            <NotesField
+              id="r-upgrade-notes"
+              name="upgradeNotes"
+              label={say(locale, c.upgradeNotes)}
+              hint={say(locale, c.notesHint)}
+              required
+            />
+            <CheckboxFormField
+              id="r-reversible"
+              name="reversible"
+              label={say(locale, c.reversible)}
+            />
+          </ActionDialog>
+        ) : null
+      }
+      toolbar={
+        <FilterBar locale={locale} path={path}>
+          <SelectFilter
+            name="channel"
+            label={say(locale, c.channel)}
+            value={list.filters.channel}
+            allLabel={say(locale, formCopy.all)}
+            options={channels.map((ch) => [ch, status(ch)] as const)}
+          />
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.status.map((s) => [s, status(s)] as const)}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -279,15 +291,8 @@ export default async function ReleasesPage({
               };
             })}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </div>
+    </DataPage>
   );
 }

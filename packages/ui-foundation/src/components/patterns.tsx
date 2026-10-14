@@ -304,12 +304,14 @@ export function PaginationBar({
   summary,
   previous,
   next,
+  current,
   label,
   className,
 }: {
   summary?: ReactNode;
   previous?: ReactNode;
   next?: ReactNode;
+  current?: ReactNode;
   label: string;
   className?: string;
 }) {
@@ -321,8 +323,9 @@ export function PaginationBar({
       <p className="text-sm text-muted-foreground [font-variant-numeric:tabular-nums]">
         {summary}
       </p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {previous}
+        {current}
         {next}
       </div>
     </nav>

@@ -1,110 +1,160 @@
-import { calendarRange, civilDate } from "../calendar/calendar-range";
 import { workspaceStatus } from "../../_lib/workspace-status";
 import type { Locale } from "@wlbp/i18n";
 import {
-  Alert,
-  AlertDescription,
   Badge,
   Button,
+  DataPage,
   EmptyState,
-  PageHeader,
+  ErrorState,
   ReferenceCode,
   ScheduleBands,
   Section,
   StatusStamp,
+  Toolbar,
 } from "@wlbp/ui-foundation";
 import { CalendarCheck, CalendarPlus, Inbox } from "lucide-react";
 import Link from "next/link";
-
 import { getDashboardMessage } from "../../_lib/copy";
 import type { TodayItemV1 } from "../../_lib/dashboard-access";
-import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
-import type { OperationalChoices } from "../../_lib/operational-choices";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { buildDayBands, uniqueBookings } from "../../_lib/booking-bands";
-import { formatTimeRange, sameZone, stampStateFor } from "../../_lib/booking-display";
+import { formatTimeRange, stampStateFor } from "../../_lib/booking-display";
 import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
 import { BookingAgenda } from "../../_lib/ui/booking-agenda";
 import { textLinkClass } from "../../_lib/ui/text-link";
-import { Money } from "../../_lib/ui/money";
 import { ServiceDye } from "../../_lib/ui/service-dye";
 import { When } from "../../_lib/ui/when";
-
+import { ReadRetry } from "../../_lib/ui/read-retry";
+import { loadToday } from "./today-data";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
-type TodayPageProps = {
-  readonly params: Promise<{ locale: Locale }>;
-};
-
-// Order is operational, not alphabetical: what expires soonest comes first.
-// Requests sit beside the schedule; the rest follow it in this order.
-const queues = [
-  { key: "requests", label: "todayQueueRequests", tone: "warning" },
-  { key: "exceptions", label: "todayQueueExceptions", tone: "warning" },
-  { key: "payments", label: "todayQueuePayments", tone: "warning" },
-  { key: "arrivals", label: "todayQueueArrivals", tone: "positive" },
-  { key: "cancellations", label: "todayQueueCancellations", tone: "neutral" },
-  { key: "upcoming", label: "todayQueueUpcoming", tone: "neutral" },
-] as const;
-
-async function loadToday(locale: Locale): Promise<{
+function QueueRows({
+  items,
+  locale,
+  timeZone,
+  review = false,
+}: {
   items: readonly TodayItemV1[];
-  date: string;
+  locale: Locale;
   timeZone: string;
-  range: { from: string; to: string };
-  canCreate: boolean;
-  choices: OperationalChoices | null;
-} | null> {
-  const request = await loadDashboardRequestAccess(locale);
-  if (
-    request.source === null ||
-    request.state.kind !== "ready" ||
-    request.source.getTodayWorkspace === undefined
-  ) {
-    return null;
-  }
-  const choices = await request.source
-    .getOperationalChoices?.(request.state.context.tenantId, locale)
-    .catch(() => null);
-  const timeZone = choices?.offers[0]?.timeZone ?? "Asia/Riyadh";
-  const range = calendarRange(civilDate(new Date(), timeZone), timeZone);
-  // A failed read shows the unavailable copy rather than an empty day, so
-  // nobody reads "nothing waiting" as "nothing to do".
-  const items = await request.source
-    .getTodayWorkspace({
-      from: range.from,
-      tenantId: request.state.context.tenantId,
-      to: range.to,
-    })
-    .catch(() => null);
-  return items === null
-    ? null
-    : {
-        items,
-        date: civilDate(new Date(), timeZone),
-        timeZone,
-        range,
-        canCreate: choices?.offers.some((o) => o.canCreate) ?? false,
-        choices: choices ?? null,
-      };
+  review?: boolean;
+}) {
+  const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
+    getDashboardMessage(locale, key);
+  return (
+    <ul className="divide-y rounded-lg border bg-card">
+      {items.map((item) => (
+        <li key={item.bookingId}>
+          <article
+            aria-label={`${item.publicReference} · ${item.serviceName}`}
+            className="grid gap-3 p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+          >
+            <div className="grid gap-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <h3 className="font-semibold">
+                  <ServiceDye name={item.serviceName} />
+                </h3>
+                <ReferenceCode>{item.publicReference}</ReferenceCode>
+                <StatusStamp state={stampStateFor(item.status)}>
+                  {workspaceStatus(locale, item.status)}
+                </StatusStamp>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {item.customerDisplayName ?? message("requestsCustomerHidden")} ·{" "}
+                <When
+                  instant={item.startAt}
+                  locale={locale}
+                  timeZone={item.locationTimeZone}
+                  viewTimeZone={timeZone}
+                />
+              </p>
+              {review && item.approvalDeadline ? (
+                <p className="text-sm font-semibold">
+                  {message("requestsDeadlineLabel")}:{" "}
+                  <When
+                    instant={item.approvalDeadline}
+                    locale={locale}
+                    timeZone={item.locationTimeZone}
+                    viewTimeZone={timeZone}
+                  />
+                </p>
+              ) : null}
+              {!review && item.queue === "exceptions" ? (
+                <p className="text-sm">
+                  {message("bookingsDeliveryLabel")}:{" "}
+                  {workspaceStatus(locale, item.notificationStatus)}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {review ? (
+                <Button asChild>
+                  <Link href={`/${locale}/requests#request-${item.bookingId}`}>
+                    {workspaceMessage(locale, "reviewRequest")}
+                  </Link>
+                </Button>
+              ) : null}
+              <Link
+                className={textLinkClass}
+                href={`/${locale}/bookings/${item.bookingId}`}
+              >
+                {message("calendarOpenBooking")}
+              </Link>
+            </div>
+          </article>
+        </li>
+      ))}
+    </ul>
+  );
 }
-
-export default async function TodayPage({ params }: TodayPageProps) {
+export default async function TodayPage({
+  params,
+}: {
+  params: Promise<{ locale: Locale }>;
+}) {
   const { locale } = await params;
-  const loaded = await loadToday(locale);
-  const items = loaded?.items ?? null;
+  const result = await loadToday(locale);
+  const loaded = result.kind === "ready" ? result : null;
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const now = new Date();
-
-  const queueRows = (key: (typeof queues)[number]["key"]) =>
-    (items ?? []).filter((item) => item.queue === key);
-
+  const rows = (queue: TodayItemV1["queue"]) =>
+    loaded?.items.filter((item) => item.queue === queue) ?? [];
+  const todayItems = loaded
+    ? uniqueBookings(loaded.items).filter(
+        (item) =>
+          Date.parse(item.startAt) >= Date.parse(loaded.range.from) &&
+          Date.parse(item.startAt) < Date.parse(loaded.range.to),
+      )
+    : [];
+  const bands = loaded
+    ? buildDayBands({
+        items: todayItems,
+        ...loaded.range,
+        locale,
+        timeZone: loaded.timeZone,
+        now,
+        laneBy: "staff",
+        staff: loaded.choices.staff,
+        resources: loaded.choices.resources,
+        bookingHref: (id) => `/${locale}/bookings/${id}`,
+        customerHidden: message("requestsCustomerHidden"),
+        showEmptyLanes: true,
+      })
+    : null;
+  const nowText = loaded
+    ? formatTimeRange(now.toISOString(), now.toISOString(), locale, loaded.timeZone)
+    : "";
+  const remaining = [
+    { key: "payments", label: "todayQueuePayments", tone: "warning" },
+    { key: "cancellations", label: "todayQueueCancellations", tone: "neutral" },
+    { key: "upcoming", label: "todayQueueUpcoming", tone: "neutral" },
+  ] as const;
   return (
     <WorkspaceShell current="today" labelledBy="today-title" locale={locale}>
-      <PageHeader
+      <DataPage
         titleId="today-title"
         title={message("todayTitle")}
         description={message("todayIntro")}
@@ -114,13 +164,8 @@ export default async function TodayPage({ params }: TodayPageProps) {
             {loaded ? (
               <>
                 {" "}
-                <time dateTime={loaded.date} className="sr-only">
-                  {loaded.date}
-                </time>
-                <span className="whitespace-nowrap">
-                  {workspaceMessage(locale, "timeZoneLabel")}:{" "}
-                  <bdi>{loaded.timeZone}</bdi>
-                </span>
+                · {workspaceMessage(locale, "timeZoneLabel")}:{" "}
+                <bdi>{loaded.timeZone}</bdi>
               </>
             ) : null}
           </p>
@@ -135,322 +180,153 @@ export default async function TodayPage({ params }: TodayPageProps) {
             </Button>
           ) : null
         }
-      />
-
-      {items === null || loaded === null ? (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {message("todayUnavailable")}
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <>
-          <div className="grid items-start gap-8 xl:grid-cols-[minmax(0,1fr)_21rem]">
-            {(() => {
-              // Only bookings that start inside today's window belong on the
-              // day's bands; other queues (later, recently cancelled) list below.
-              const dayStart = Date.parse(loaded.range.from);
-              const dayEnd = Date.parse(loaded.range.to);
-              const todayItems = uniqueBookings(items).filter((item) => {
-                const start = Date.parse(item.startAt);
-                return start >= dayStart && start < dayEnd;
-              });
-              const bands = buildDayBands({
-                items: todayItems,
-                from: loaded.range.from,
-                to: loaded.range.to,
-                locale,
-                timeZone: loaded.timeZone,
-                now,
-                laneBy: "staff",
-                staff: loaded.choices?.staff ?? [],
-                resources: loaded.choices?.resources ?? [],
-                bookingHref: (id) => `/${locale}/bookings/${id}`,
-                customerHidden: message("requestsCustomerHidden"),
-                showEmptyLanes: true,
-              });
-              const nowIso = now.toISOString();
-              const nowText = formatTimeRange(nowIso, nowIso, locale, loaded.timeZone);
-              return (
-                <Section
-                  id="today-schedule"
-                  title={workspaceMessage(locale, "scheduleTitle")}
-                  description={`${message("todayNowLabel")}: ${nowText}`}
-                >
-                  <ScheduleBands
-                    lanes={bands.lanes}
-                    segments={bands.segments}
-                    startMinute={bands.startMinute}
-                    endMinute={bands.endMinute}
-                    hourLabel={bands.hourLabel}
-                    {...(bands.nowMinute === undefined
-                      ? {}
-                      : {
-                          nowMinute: bands.nowMinute,
-                          nowLabel: workspaceMessage(locale, "nowAt", {
-                            time: nowText,
-                          }),
-                        })}
-                    label={workspaceMessage(locale, "scheduleLabel", {
-                      date: new Intl.DateTimeFormat(locale, {
-                        dateStyle: "full",
-                        timeZone: loaded.timeZone,
-                      }).format(now),
-                    })}
-                    emptyLaneLabel={workspaceMessage(locale, "scheduleEmptyLane")}
-                    listAlternative={
-                      todayItems.length === 0 ? (
-                        <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <CalendarCheck
-                            aria-hidden="true"
-                            className="size-4 shrink-0"
-                          />
-                          {items.length === 0
-                            ? message("todayEmpty")
-                            : workspaceMessage(locale, "scheduleEmptyDay")}
-                        </p>
-                      ) : (
-                        <BookingAgenda
-                          items={todayItems}
-                          locale={locale}
-                          label={workspaceMessage(locale, "agendaLabel")}
-                          displayTimeZone={loaded.timeZone}
-                          customerHidden={message("requestsCustomerHidden")}
-                          openLabel={message("calendarOpenBooking")}
-                        />
-                      )
-                    }
-                  />
-                </Section>
-              );
-            })()}
-
+        feedback={
+          result.kind === "failure" && "correlation" in result ? (
+            <p className="text-xs text-muted-foreground">
+              {locale === "ar" ? "مرجع القراءة" : "Read reference"}:{" "}
+              <bdi>{result.correlation}</bdi>
+            </p>
+          ) : null
+        }
+        toolbar={
+          <Toolbar role="toolbar" aria-label={locale === "ar" ? "التصفية" : "Filters"}>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/${locale}/calendar`}>{message("calendarTitle")}</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/${locale}/requests`}>{message("requestsTitle")}</Link>
+            </Button>
+          </Toolbar>
+        }
+      >
+        {!loaded || !bands ? (
+          <ErrorState
+            title={message("todayUnavailable")}
+            description={
+              result.kind === "failure" && result.outcome === "tenant_setup"
+                ? locale === "ar"
+                  ? "تحقق من إعدادات نطاق المنشأة والموقع والمنطقة الزمنية."
+                  : "Check the workspace domain, location and timezone setup."
+                : result.kind === "failure" && result.outcome === "access_denied"
+                  ? locale === "ar"
+                    ? "سجّل الدخول بحساب لديه صلاحية لهذه المنشأة."
+                    : "Sign in with current access to this workspace."
+                  : locale === "ar"
+                    ? "تعذّر تحميل بيانات اليوم. أعد المحاولة."
+                    : "Today could not load. Retry the read."
+            }
+            retry={<ReadRetry locale={locale} />}
+          />
+        ) : (
+          <>
             <Section
               id="queue-requests"
               title={message("todayQueueRequests")}
               actions={
                 <Badge tone="warning">
-                  {countLabel(locale, "items", queueRows("requests").length)}
+                  {countLabel(locale, "items", rows("requests").length)}
                 </Badge>
               }
             >
-              {queueRows("requests").length === 0 ? (
+              {rows("requests").length ? (
+                <QueueRows
+                  items={rows("requests")}
+                  locale={locale}
+                  timeZone={loaded.timeZone}
+                  review
+                />
+              ) : (
                 <EmptyState
                   icon={<Inbox aria-hidden="true" />}
                   title={workspaceMessage(locale, "requestsColumnEmpty")}
                 />
-              ) : (
-                <ul className="grid gap-3">
-                  {queueRows("requests").map((item) => (
-                    <li key={`requests:${item.bookingId}`}>
-                      <article
-                        aria-labelledby={`item-requests-${item.bookingId}`}
-                        className="grid gap-3 rounded-lg border border-dashed border-warning/60 bg-card p-4"
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <ReferenceCode>{item.publicReference}</ReferenceCode>
-                          <StatusStamp state={stampStateFor(item.status)}>
-                            {workspaceStatus(locale, item.status)}
-                          </StatusStamp>
-                        </div>
-                        <div className="grid gap-0.5">
-                          <h3
-                            id={`item-requests-${item.bookingId}`}
-                            className="font-semibold text-foreground"
-                          >
-                            <ServiceDye name={item.serviceName} />
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {item.customerDisplayName ??
-                              message("requestsCustomerHidden")}
-                          </p>
-                        </div>
-                        <dl className="grid gap-1.5 text-sm">
-                          <div className="flex flex-wrap justify-between gap-x-3">
-                            <dt className="text-muted-foreground">
-                              {message("bookingsWhenLabel")}
-                            </dt>
-                            <dd className="font-medium">
-                              <When
-                                instant={item.startAt}
-                                locale={locale}
-                                timeZone={item.locationTimeZone}
-                                viewTimeZone={loaded.timeZone}
-                              />
-                            </dd>
-                          </div>
-                          {item.approvalDeadline === null ? null : (
-                            <div className="flex flex-wrap justify-between gap-x-3">
-                              <dt className="text-muted-foreground">
-                                {message("requestsDeadlineLabel")}
-                              </dt>
-                              <dd className="font-semibold text-warning">
-                                <When
-                                  instant={item.approvalDeadline}
-                                  locale={locale}
-                                  timeZone={item.locationTimeZone}
-                                  viewTimeZone={loaded.timeZone}
-                                />
-                              </dd>
-                            </div>
-                          )}
-                          <div className="flex flex-wrap justify-between gap-x-3">
-                            <dt className="text-muted-foreground">
-                              {message("requestsPriceLabel")}
-                            </dt>
-                            <dd className="font-medium">
-                              <Money
-                                minor={item.priceMinor}
-                                currency={item.currency}
-                                locale={locale}
-                              />
-                            </dd>
-                          </div>
-                        </dl>
-                        {/* Decisions are taken on the requests surface that
-                            owns them, so this queue never becomes a second way
-                            to act on a booking. */}
-                        <div className="flex flex-wrap gap-2">
-                          <Button asChild>
-                            <Link href={`/${locale}/requests`}>
-                              {workspaceMessage(locale, "reviewRequest")}
-                            </Link>
-                          </Button>
-                          <Button asChild variant="ghost">
-                            <Link href={`/${locale}/bookings/${item.bookingId}`}>
-                              {message("calendarOpenBooking")}
-                            </Link>
-                          </Button>
-                        </div>
-                      </article>
-                    </li>
-                  ))}
-                </ul>
               )}
             </Section>
-          </div>
-
-          {queues
-            .filter((queue) => queue.key !== "requests")
-            .map((queue) => {
-              const rows = queueRows(queue.key);
-              if (rows.length === 0) return null;
-              return (
+            {rows("exceptions").length ? (
+              <Section
+                id="today-urgent-exceptions"
+                title={message("todayQueueExceptions")}
+                actions={
+                  <Badge tone="warning">
+                    {countLabel(locale, "items", rows("exceptions").length)}
+                  </Badge>
+                }
+              >
+                <QueueRows
+                  items={rows("exceptions")}
+                  locale={locale}
+                  timeZone={loaded.timeZone}
+                />
+              </Section>
+            ) : null}
+            <Section
+              id="today-schedule"
+              title={workspaceMessage(locale, "scheduleTitle")}
+              description={`${message("todayNowLabel")}: ${nowText}`}
+            >
+              <ScheduleBands
+                lanes={bands.lanes}
+                segments={bands.segments}
+                startMinute={bands.startMinute}
+                endMinute={bands.endMinute}
+                hourLabel={bands.hourLabel}
+                {...(bands.nowMinute === undefined
+                  ? {}
+                  : {
+                      nowMinute: bands.nowMinute,
+                      nowLabel: workspaceMessage(locale, "nowAt", { time: nowText }),
+                    })}
+                label={workspaceMessage(locale, "scheduleLabel", {
+                  date: new Intl.DateTimeFormat(locale, {
+                    dateStyle: "full",
+                    timeZone: loaded.timeZone,
+                  }).format(now),
+                })}
+                emptyLaneLabel={workspaceMessage(locale, "scheduleEmptyLane")}
+                listAlternative={
+                  todayItems.length ? (
+                    <BookingAgenda
+                      items={todayItems}
+                      locale={locale}
+                      label={workspaceMessage(locale, "agendaLabel")}
+                      displayTimeZone={loaded.timeZone}
+                      customerHidden={message("requestsCustomerHidden")}
+                      openLabel={message("calendarOpenBooking")}
+                    />
+                  ) : (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CalendarCheck aria-hidden="true" className="size-4" />
+                      {loaded.items.length
+                        ? workspaceMessage(locale, "scheduleEmptyDay")
+                        : message("todayEmpty")}
+                    </p>
+                  )
+                }
+              />
+            </Section>
+            {remaining.map((queue) =>
+              rows(queue.key).length ? (
                 <Section
                   key={queue.key}
                   id={`queue-${queue.key}`}
                   title={message(queue.label)}
                   actions={
                     <Badge tone={queue.tone}>
-                      {countLabel(locale, "items", rows.length)}
+                      {countLabel(locale, "items", rows(queue.key).length)}
                     </Badge>
                   }
                 >
-                  <ul className="divide-y rounded-lg border bg-card">
-                    {rows.map((item) => (
-                      <li key={`${queue.key}:${item.bookingId}`}>
-                        <article
-                          aria-labelledby={`item-${queue.key}-${item.bookingId}`}
-                          className="grid gap-x-6 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
-                        >
-                          <div className="grid min-w-0 gap-1">
-                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <h3
-                                id={`item-${queue.key}-${item.bookingId}`}
-                                className="font-semibold text-foreground"
-                              >
-                                <ServiceDye name={item.serviceName} />
-                              </h3>
-                              <ReferenceCode>{item.publicReference}</ReferenceCode>
-                              {/* Status is words, never colour alone. */}
-                              <StatusStamp state={stampStateFor(item.status)}>
-                                {workspaceStatus(locale, item.status)}
-                              </StatusStamp>
-                            </div>
-                            <dl className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
-                              <div className="flex gap-1.5">
-                                <dt className="sr-only">
-                                  {message("bookingsWhenLabel")}
-                                </dt>
-                                <dd className="[font-variant-numeric:tabular-nums]">
-                                  <time dateTime={item.startAt}>
-                                    {formatTimeRange(
-                                      item.startAt,
-                                      item.endAt,
-                                      locale,
-                                      item.locationTimeZone,
-                                    )}
-                                  </time>
-                                  {sameZone(
-                                    item.locationTimeZone,
-                                    loaded.timeZone,
-                                  ) ? null : (
-                                    <>
-                                      {" "}
-                                      <bdi className="text-xs">
-                                        {item.locationTimeZone}
-                                      </bdi>
-                                    </>
-                                  )}
-                                </dd>
-                              </div>
-                              <div className="flex gap-1.5">
-                                <dt className="sr-only">
-                                  {message("requestsCustomerLabel")}
-                                </dt>
-                                <dd>
-                                  {item.customerDisplayName ??
-                                    message("requestsCustomerHidden")}
-                                </dd>
-                              </div>
-                              <div className="flex gap-1.5">
-                                <dt>{message("bookingsDeliveryLabel")}:</dt>
-                                <dd className="text-foreground">
-                                  {workspaceStatus(locale, item.notificationStatus)}
-                                </dd>
-                              </div>
-                              {item.approvalDeadline === null ? null : (
-                                <div className="flex gap-1.5">
-                                  <dt>{message("requestsDeadlineLabel")}:</dt>
-                                  <dd className="text-foreground">
-                                    <When
-                                      instant={item.approvalDeadline}
-                                      locale={locale}
-                                      timeZone={item.locationTimeZone}
-                                      viewTimeZone={loaded.timeZone}
-                                    />
-                                  </dd>
-                                </div>
-                              )}
-                              <div className="flex gap-1.5">
-                                <dt>{message("requestsPriceLabel")}:</dt>
-                                <dd className="text-foreground">
-                                  <Money
-                                    minor={item.priceMinor}
-                                    currency={item.currency}
-                                    locale={locale}
-                                  />
-                                </dd>
-                              </div>
-                            </dl>
-                          </div>
-                          {/* Every action lives on the surface that owns it, so
-                              this queue never becomes a second way to act. */}
-                          <Link
-                            className={textLinkClass}
-                            href={`/${locale}/bookings/${item.bookingId}`}
-                          >
-                            {message("calendarOpenBooking")}
-                          </Link>
-                        </article>
-                      </li>
-                    ))}
-                  </ul>
+                  <QueueRows
+                    items={rows(queue.key)}
+                    locale={locale}
+                    timeZone={loaded.timeZone}
+                  />
                 </Section>
-              );
-            })}
-        </>
-      )}
+              ) : null,
+            )}
+          </>
+        )}
+      </DataPage>
     </WorkspaceShell>
   );
 }

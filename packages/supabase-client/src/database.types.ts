@@ -521,6 +521,15 @@ export type Database = {
           tenant_id: string;
         }[];
       };
+      deactivate_instance_by_id_v1: {
+        Args: {
+          p_expected_state: string;
+          p_idempotency_key: string;
+          p_instance_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
+      };
       deactivate_provisioned_instance_v1: {
         Args: { p_reason: string; p_run_id: string };
         Returns: {
@@ -578,6 +587,16 @@ export type Database = {
           proposal_expires_at: string;
           status: string;
         }[];
+      };
+      decide_operator_review_v1: {
+        Args: {
+          p_decision: string;
+          p_id: string;
+          p_idempotency_key: string;
+          p_kind: string;
+          p_reason: string;
+        };
+        Returns: Json;
       };
       disable_operator_v1: {
         Args: { p_operator_id: string; p_reason: string };
@@ -684,6 +703,10 @@ export type Database = {
           staff_id: string;
           utc_offset_seconds: number;
         }[];
+      };
+      get_booking_context_v1: {
+        Args: { p_booking_id: string; p_tenant_id: string };
+        Returns: Json;
       };
       get_booking_customer_v1: {
         Args: { p_booking_id: string; p_tenant_id: string };
@@ -911,6 +934,10 @@ export type Database = {
           tax_rate_bps: number;
         }[];
       };
+      get_instance_configuration_v1: {
+        Args: { p_instance_id: string };
+        Returns: Json;
+      };
       get_instance_v1: { Args: { p_instance_id: string }; Returns: Json };
       get_job_v1: { Args: { p_job_id: string }; Returns: Json };
       get_lifecycle_analytics_v1: {
@@ -963,6 +990,10 @@ export type Database = {
           role: string;
           step_up_seconds: number;
         }[];
+      };
+      get_operator_review_v1: {
+        Args: { p_id: string; p_kind: string };
+        Returns: Json;
       };
       get_overview_v1: { Args: never; Returns: Json };
       get_payment_account_status_v1: {
@@ -1471,6 +1502,9 @@ export type Database = {
           instance_id: string;
           kind: string;
           pending_job_id: string;
+          pending_retirement_job_id: string;
+          replacement_domain_id: string;
+          retired_at: string;
           tenant_id: string;
           tenant_name: string;
           total_count: number;
@@ -1566,6 +1600,15 @@ export type Database = {
           total_count: number;
           updated_at: string;
         }[];
+      };
+      list_operator_reviews_v1: {
+        Args: {
+          p_kind?: string;
+          p_limit?: number;
+          p_offset?: number;
+          p_status?: string;
+        };
+        Returns: Json;
       };
       list_operators_v1: {
         Args: never;
@@ -2158,11 +2201,38 @@ export type Database = {
           target_status: string;
         }[];
       };
+      request_booking_recovery_v1: {
+        Args: {
+          p_application: string;
+          p_email: string;
+          p_hostname: string;
+          p_request_id: string;
+        };
+        Returns: Json;
+      };
+      request_domain_retirement_v1: {
+        Args: {
+          p_domain_id: string;
+          p_idempotency_key: string;
+          p_reason: string;
+          p_replacement_domain_id: string;
+        };
+        Returns: Json;
+      };
       request_domain_verification_v1: {
         Args: { p_domain_id: string };
         Returns: {
           job_id: string;
         }[];
+      };
+      request_instance_closure_v1: {
+        Args: {
+          p_confirmation: string;
+          p_idempotency_key: string;
+          p_instance_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
       };
       request_integration_check_v1: {
         Args: { p_provider: string };
@@ -2787,6 +2857,16 @@ export type Database = {
           replayed: boolean;
           status: string;
         }[];
+      };
+      update_instance_configuration_v1: {
+        Args: {
+          p_display_name: string;
+          p_expected_revision: number;
+          p_idempotency_key: string;
+          p_instance_id: string;
+          p_reason: string;
+        };
+        Returns: Json;
       };
       update_subscription_v1: {
         Args: {

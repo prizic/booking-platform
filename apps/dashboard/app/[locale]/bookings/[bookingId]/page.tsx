@@ -1,3 +1,4 @@
+import { canDisplayBookingContact, intakeLabel } from "./booking-context-display";
 import { workspaceStatus } from "../../../_lib/workspace-status";
 import type { Locale } from "@wlbp/i18n";
 import {
@@ -77,6 +78,22 @@ export default async function BookingDetailPage({
           ?.getBookingCustomer?.(access.state.context.tenantId, bookingId)
           .catch(() => null)
       : null;
+  const [context, customer] =
+    booking && access.state.kind === "ready" && access.source
+      ? await Promise.all([
+          access.source
+            .getBookingContext?.(access.state.context.tenantId, bookingId)
+            .catch(() => null) ?? null,
+          customerId
+            ? (access.source
+                .getCustomerDetail?.({
+                  customerId,
+                  tenantId: access.state.context.tenantId,
+                })
+                .catch(() => null) ?? null)
+            : null,
+        ])
+      : [null, null];
   const message = (key: Parameters<typeof getDashboardMessage>[1]) =>
     getDashboardMessage(locale, key);
   const result = typeof query.result === "string" ? query.result : null;
@@ -85,6 +102,7 @@ export default async function BookingDetailPage({
       ? detailResultKeys[result as keyof typeof detailResultKeys]
       : null;
   const hidden = message("detailContactHidden");
+  const allowContact = canDisplayBookingContact(context, customer);
 
   return (
     <WorkspaceShell current="bookings" labelledBy="detail-title" locale={locale}>
@@ -263,13 +281,13 @@ export default async function BookingDetailPage({
                 key: "customer",
                 label: message("detailCustomerLabel"),
                 // Absent, not blanked: the read never carried it.
-                value: booking.customerFullName ?? hidden,
+                value: allowContact ? (booking.customerFullName ?? hidden) : hidden,
               },
               {
                 key: "email",
                 label: message("detailEmailLabel"),
                 value:
-                  booking.customerEmail === null ? (
+                  !allowContact || booking.customerEmail === null ? (
                     hidden
                   ) : (
                     <bdi>{booking.customerEmail}</bdi>
@@ -279,7 +297,7 @@ export default async function BookingDetailPage({
                 key: "phone",
                 label: message("detailPhoneLabel"),
                 value:
-                  booking.customerPhone === null ? (
+                  !allowContact || booking.customerPhone === null ? (
                     hidden
                   ) : (
                     <bdi dir="ltr">{booking.customerPhone}</bdi>
@@ -295,6 +313,167 @@ export default async function BookingDetailPage({
             ]}
           />
 
+          <Section
+            id="detail-intake"
+            title={
+              locale === "ar"
+                ? "بيانات الطلب المحفوظة"
+                : "Snapshotted intake and request"
+            }
+          >
+            {!context ? (
+              <p role="status">
+                {locale === "ar"
+                  ? "تفاصيل الطلب غير متاحة. أعد محاولة القراءة."
+                  : "Request details are unavailable. Retry the read."}
+              </p>
+            ) : (
+              <>
+                <Facts
+                  items={[
+                    {
+                      key: "approval",
+                      label: locale === "ar" ? "حالة الموافقة" : "Approval status",
+                      value: workspaceStatus(locale, context.request.approvalStatus),
+                    },
+                    {
+                      key: "submitted",
+                      label: locale === "ar" ? "وقت تقديم الطلب" : "Submitted",
+                      value: (
+                        <When
+                          instant={context.request.submittedAt}
+                          locale={locale}
+                          timeZone={booking.locationTimeZone}
+                        />
+                      ),
+                    },
+                    ...(context.request.approvalDeadline
+                      ? [
+                          {
+                            key: "deadline",
+                            label: message("requestsDeadlineLabel"),
+                            value: (
+                              <When
+                                instant={context.request.approvalDeadline}
+                                locale={locale}
+                                timeZone={booking.locationTimeZone}
+                              />
+                            ),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+                {allowContact && context.request.publicReason ? (
+                  <p className="whitespace-pre-line">{context.request.publicReason}</p>
+                ) : null}
+                {!allowContact || context.intake.access === "restricted" ? (
+                  <p>
+                    {locale === "ar"
+                      ? "بيانات الاستبيان مقيّدة لهذه الصلاحية أو لحالة خصوصية العميل."
+                      : "Intake is restricted by your permissions or the customer's privacy state."}
+                  </p>
+                ) : Object.keys(context.intake.answers).length ? (
+                  <dl className="grid gap-3 rounded-lg border bg-card p-4">
+                    {Object.entries(context.intake.answers).map(([key, value]) => (
+                      <div key={key}>
+                        <dt className="font-semibold">
+                          {context.intake.access === "allowed"
+                            ? intakeLabel(context.intake.schema, key, locale)
+                            : key}
+                        </dt>
+                        <dd className="whitespace-pre-wrap break-words">
+                          {typeof value === "string" ||
+                          typeof value === "number" ||
+                          typeof value === "boolean"
+                            ? String(value)
+                            : JSON.stringify(value)}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                ) : (
+                  <p>
+                    {locale === "ar"
+                      ? "لا توجد إجابات محفوظة."
+                      : "No snapshotted intake answers."}
+                  </p>
+                )}
+                {context.contactAccess === "restricted" ? <p>{hidden}</p> : null}
+              </>
+            )}
+          </Section>
+          {customer?.erased ? (
+            <Badge tone="neutral">{message("customersBadgeErased")}</Badge>
+          ) : customer?.restricted ? (
+            <Badge tone="warning">{message("customersBadgeRestricted")}</Badge>
+          ) : null}
+          <Section
+            id="detail-customer-history"
+            title={
+              allowContact &&
+              context?.customer.access === "allowed" &&
+              context.customer.state === "active"
+                ? locale === "ar"
+                  ? "سجل حجوزات العميل"
+                  : "Customer history"
+                : locale === "ar"
+                  ? "الوصول المحدود لبيانات العميل"
+                  : "Limited customer access"
+            }
+          >
+            {allowContact &&
+            context?.customer.access === "allowed" &&
+            context.customer.state === "active" ? (
+              context.customer.history.length ? (
+                <ul
+                  aria-label={
+                    locale === "ar" ? "سجل حجوزات العميل" : "Customer history"
+                  }
+                  className="divide-y rounded-lg border bg-card"
+                >
+                  {context.customer.history.map((item) => (
+                    <li
+                      key={item.bookingId}
+                      className="flex flex-wrap items-center justify-between gap-3 p-4"
+                    >
+                      <span>
+                        {item.serviceName} ·{" "}
+                        <When
+                          instant={item.startAt}
+                          locale={locale}
+                          timeZone={booking.locationTimeZone}
+                        />
+                      </span>
+                      <StatusStamp state={stampStateFor(item.status)}>
+                        {workspaceStatus(locale, item.status)}
+                      </StatusStamp>
+                      <Link
+                        href={`/${locale}/bookings/${item.bookingId}`}
+                        className={textLinkClass}
+                      >
+                        <ReferenceCode>{item.publicReference}</ReferenceCode>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <EmptyState
+                  title={
+                    locale === "ar"
+                      ? "لا توجد حجوزات أخرى في نطاقك."
+                      : "No other bookings in your scope."
+                  }
+                />
+              )
+            ) : (
+              <p>
+                {locale === "ar"
+                  ? "سجل العميل محدود الوصول أو مقيّد أو ممحو. تظهر فقط البيانات المصرّح بها."
+                  : "Customer history has limited access, is restricted, or is erased. Only permitted data is shown."}
+              </p>
+            )}
+          </Section>
           <Section
             id="detail-actions"
             title={message("detailLifecycleTitle")}
@@ -357,27 +536,31 @@ export default async function BookingDetailPage({
             </Section>
 
             <Section id="detail-notes" title={message("detailNotesTitle")}>
-              {booking.notes.length === 0 ? (
+              {booking.notes.filter(
+                (note) => allowContact || note.visibility !== "sensitive",
+              ).length === 0 ? (
                 <EmptyState
                   icon={<StickyNote aria-hidden="true" />}
                   title={message("detailNotesEmpty")}
                 />
               ) : (
                 <ul className="divide-y rounded-lg border bg-card">
-                  {booking.notes.map((note) => (
-                    <li key={note.noteId} className="grid gap-2 px-4 py-3">
-                      <Badge
-                        tone={note.visibility === "sensitive" ? "warning" : "neutral"}
-                      >
-                        {message(
-                          note.visibility === "sensitive"
-                            ? "detailNoteSensitive"
-                            : "detailNoteOperational",
-                        )}
-                      </Badge>
-                      <p className="text-sm whitespace-pre-line">{note.body}</p>
-                    </li>
-                  ))}
+                  {booking.notes
+                    .filter((note) => allowContact || note.visibility !== "sensitive")
+                    .map((note) => (
+                      <li key={note.noteId} className="grid gap-2 px-4 py-3">
+                        <Badge
+                          tone={note.visibility === "sensitive" ? "warning" : "neutral"}
+                        >
+                          {message(
+                            note.visibility === "sensitive"
+                              ? "detailNoteSensitive"
+                              : "detailNoteOperational",
+                          )}
+                        </Badge>
+                        <p className="text-sm whitespace-pre-line">{note.body}</p>
+                      </li>
+                    ))}
                 </ul>
               )}
 

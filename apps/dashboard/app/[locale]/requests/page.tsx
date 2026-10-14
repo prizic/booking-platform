@@ -1,3 +1,5 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
+import { RequestFocus } from "./request-focus";
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
 import {
@@ -6,9 +8,12 @@ import {
   Badge,
   EmptyState,
   Facts,
-  PageHeader,
+  DataPage,
+  Button,
+  Toolbar,
   ReferenceCode,
   StatusStamp,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { Inbox } from "lucide-react";
 import type { BookingRequestV1 } from "@wlbp/api-contracts";
@@ -87,7 +92,7 @@ export default async function RequestsPage({
 
   return (
     <WorkspaceShell current="requests" labelledBy="requests-title" locale={locale}>
-      <PageHeader
+      <DataPage
         titleId="requests-title"
         title={message("requestsTitle")}
         description={message("requestsSummary")}
@@ -101,140 +106,159 @@ export default async function RequestsPage({
             </>
           ) : null
         }
-      />
-      {resultKey === null ? null : (
-        <ResultAlert
-          positive={
-            result === "accepted" || result === "proposed" || result === "rejected"
-          }
-        >
-          {message(resultKey)}
-        </ResultAlert>
-      )}
-      {requests === null ? (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {message("requestsUnavailable")}
-          </AlertDescription>
-        </Alert>
-      ) : requests.length === 0 ? (
-        <EmptyState
-          icon={<Inbox aria-hidden="true" />}
-          title={message("requestsEmpty")}
+        toolbar={
+          <Toolbar role="toolbar" aria-label={locale === "ar" ? "التصفية" : "Filters"}>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/${locale}/today`}>
+                {locale === "ar" ? "اليوم" : "Today"}
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/${locale}/bookings`}>
+                {locale === "ar" ? "الحجوزات" : "Bookings"}
+              </Link>
+            </Button>
+          </Toolbar>
+        }
+      >
+        {resultKey === null ? null : (
+          <ResultAlert
+            positive={
+              result === "accepted" || result === "proposed" || result === "rejected"
+            }
+          >
+            {message(resultKey)}
+          </ResultAlert>
+        )}
+        <RequestFocus
+          bookingIds={(requests ?? []).map((booking) => booking.bookingId)}
         />
-      ) : (
-        <ul
-          aria-label={message("requestsQueueLabel")}
-          className="grid gap-4 2xl:grid-cols-2"
-        >
-          {requests.map((booking) => (
-            <li key={booking.bookingId}>
-              <article
-                aria-labelledby={`request-${booking.bookingId}`}
-                className="grid gap-5 rounded-lg border bg-card p-5"
-              >
-                <header className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="grid gap-1">
-                    <ReferenceCode>{booking.publicReference}</ReferenceCode>
-                    <h2
-                      id={`request-${booking.bookingId}`}
-                      className="text-lg leading-snug font-semibold"
-                    >
-                      <ServiceDye name={booking.serviceName} />
-                    </h2>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <StatusStamp state="requested">
-                      {workspaceStatus(locale, "requested")}
-                    </StatusStamp>
-                    <Link
-                      className={textLinkClass}
-                      href={`/${locale}/bookings/${booking.bookingId}`}
-                    >
-                      {message("calendarOpenBooking")}
-                    </Link>
-                  </div>
-                </header>
-                <Facts
-                  columns={3}
-                  items={[
-                    {
-                      key: "when",
-                      label: message("requestsRequestedAtLabel"),
-                      value: (
+        {requests === null ? (
+          <ErrorState
+            title={<>{message("requestsUnavailable")}</>}
+            retry={<ReadRetry locale={locale} />}
+          />
+        ) : requests.length === 0 ? (
+          <EmptyState
+            icon={<Inbox aria-hidden="true" />}
+            title={message("requestsEmpty")}
+          />
+        ) : (
+          <ul
+            aria-label={message("requestsQueueLabel")}
+            className="grid gap-4 2xl:grid-cols-2"
+          >
+            {requests.map((booking) => (
+              <li key={booking.bookingId}>
+                <article
+                  id={`request-${booking.bookingId}`}
+                  tabIndex={-1}
+                  aria-labelledby={`request-title-${booking.bookingId}`}
+                  className="grid scroll-mt-24 gap-5 rounded-lg border bg-card p-5 outline-none focus:ring-[3px] focus:ring-ring/60"
+                >
+                  <header className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="grid gap-1">
+                      <ReferenceCode>{booking.publicReference}</ReferenceCode>
+                      <h2
+                        id={`request-title-${booking.bookingId}`}
+                        className="text-lg leading-snug font-semibold"
+                      >
+                        <ServiceDye name={booking.serviceName} />
+                      </h2>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <StatusStamp state="requested">
+                        {workspaceStatus(locale, "requested")}
+                      </StatusStamp>
+                      <Link
+                        className={textLinkClass}
+                        href={`/${locale}/bookings/${booking.bookingId}`}
+                      >
+                        {message("calendarOpenBooking")}
+                      </Link>
+                    </div>
+                  </header>
+                  <Facts
+                    columns={3}
+                    items={[
+                      {
+                        key: "when",
+                        label: message("requestsRequestedAtLabel"),
+                        value: (
+                          <When
+                            instant={booking.startAt}
+                            locale={locale}
+                            timeZone={booking.locationTimeZone}
+                            viewTimeZone={viewZone}
+                          />
+                        ),
+                      },
+                      {
+                        key: "deadline",
+                        label: message("requestsDeadlineLabel"),
+                        value: (
+                          <When
+                            className="text-warning"
+                            instant={booking.approvalDeadline}
+                            locale={locale}
+                            timeZone={booking.locationTimeZone}
+                            viewTimeZone={viewZone}
+                          />
+                        ),
+                      },
+                      {
+                        key: "customer",
+                        label: message("requestsCustomerLabel"),
+                        value:
+                          booking.customerDisplayName ??
+                          message("requestsCustomerHidden"),
+                      },
+                      {
+                        key: "intake",
+                        label: message("requestsIntakeLabel"),
+                        value: booking.hasIntake
+                          ? message("requestsIntakePresent")
+                          : message("requestsIntakeAbsent"),
+                      },
+                      {
+                        key: "price",
+                        label: message("requestsPriceLabel"),
+                        value: (
+                          <Money
+                            minor={booking.price.minorUnits}
+                            currency={booking.price.currency}
+                            locale={locale}
+                          />
+                        ),
+                      },
+                    ]}
+                  />
+                  {booking.proposal === null ? null : (
+                    <Alert tone="warning">
+                      <AlertDescription className="text-foreground">
+                        {message("requestsProposalLabel")}:{" "}
                         <When
-                          instant={booking.startAt}
+                          instant={booking.proposal.startAt}
                           locale={locale}
                           timeZone={booking.locationTimeZone}
                           viewTimeZone={viewZone}
                         />
-                      ),
-                    },
-                    {
-                      key: "deadline",
-                      label: message("requestsDeadlineLabel"),
-                      value: (
-                        <When
-                          className="text-warning"
-                          instant={booking.approvalDeadline}
-                          locale={locale}
-                          timeZone={booking.locationTimeZone}
-                          viewTimeZone={viewZone}
-                        />
-                      ),
-                    },
-                    {
-                      key: "customer",
-                      label: message("requestsCustomerLabel"),
-                      value:
-                        booking.customerDisplayName ??
-                        message("requestsCustomerHidden"),
-                    },
-                    {
-                      key: "intake",
-                      label: message("requestsIntakeLabel"),
-                      value: booking.hasIntake
-                        ? message("requestsIntakePresent")
-                        : message("requestsIntakeAbsent"),
-                    },
-                    {
-                      key: "price",
-                      label: message("requestsPriceLabel"),
-                      value: (
-                        <Money
-                          minor={booking.price.minorUnits}
-                          currency={booking.price.currency}
-                          locale={locale}
-                        />
-                      ),
-                    },
-                  ]}
-                />
-                {booking.proposal === null ? null : (
-                  <Alert tone="warning">
-                    <AlertDescription className="text-foreground">
-                      {message("requestsProposalLabel")}:{" "}
-                      <When
-                        instant={booking.proposal.startAt}
-                        locale={locale}
-                        timeZone={booking.locationTimeZone}
-                        viewTimeZone={viewZone}
-                      />
-                    </AlertDescription>
-                  </Alert>
-                )}
+                      </AlertDescription>
+                    </Alert>
+                  )}
 
-                <RequestDecisionForm
-                  locale={locale}
-                  bookingId={booking.bookingId}
-                  bookingRevision={booking.bookingRevision}
-                  locationTimeZone={booking.locationTimeZone}
-                />
-              </article>
-            </li>
-          ))}
-        </ul>
-      )}
+                  <RequestDecisionForm
+                    locale={locale}
+                    bookingId={booking.bookingId}
+                    bookingRevision={booking.bookingRevision}
+                    locationTimeZone={booking.locationTimeZone}
+                  />
+                </article>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DataPage>
     </WorkspaceShell>
   );
 }

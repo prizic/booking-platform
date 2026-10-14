@@ -134,13 +134,28 @@ export function brandEditorDefaults(
 ): BrandEditorInput {
   const title = brandObject(content.title ?? {}),
     contact = brandObject(content.contact ?? {}),
-    legal = brandObject(content.legal ?? {});
+    legal = brandObject(content.legal ?? {}),
+    about = brandObject(content.about ?? {}),
+    appStores = brandObject(content.appStores ?? {});
+  const localized = (key: string, language: string) =>
+    String(brandObject(about[key] ?? {})[language] ?? "");
   return {
     locale,
     brandKey,
     contentHash: contentHash ?? "",
     name: config.name,
     email: String(contact.email ?? ""),
+    phone: String(contact.phone ?? ""),
+    whatsapp: String(contact.whatsapp ?? ""),
+    experienceEn: localized("experience", "en"),
+    experienceAr: localized("experience", "ar"),
+    whyChooseUsEn: localized("whyChooseUs", "en"),
+    whyChooseUsAr: localized("whyChooseUs", "ar"),
+    addressEn: localized("address", "en"),
+    addressAr: localized("address", "ar"),
+    mapUrl: String(about.mapUrl ?? ""),
+    appStoreUrl: String(appStores.appStoreUrl ?? ""),
+    googlePlayUrl: String(appStores.googlePlayUrl ?? ""),
     titleEn: String(title.en ?? config.name),
     titleAr: String(title.ar ?? ""),
     privacyUrl: String(legal.privacyUrl ?? ""),
@@ -252,6 +267,88 @@ export function BrandForm({
               required
               type="url"
               dir="ltr"
+            />
+          </FieldGroup>
+        </FieldSet>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>{m("Contact and About", "التواصل ومن نحن")}</FieldLegend>
+          <FieldDescription>
+            {m(
+              "Optional fields are hidden on the public site when empty. Add both languages for each About section. Phone and WhatsApp use international numbers beginning with +.",
+              "تُخفى الحقول الاختيارية الفارغة من الموقع. أضف اللغتين لكل قسم من نحن. استخدم أرقامًا دولية تبدأ بعلامة + للهاتف وواتساب.",
+            )}
+          </FieldDescription>
+          <FieldGroup columns={2}>
+            <TextField
+              control={control}
+              name="phone"
+              label={m("Contact phone", "هاتف التواصل")}
+              type="tel"
+              dir="ltr"
+              maxLength={16}
+            />
+            <TextField
+              control={control}
+              name="whatsapp"
+              label={m("WhatsApp number", "رقم واتساب")}
+              type="tel"
+              dir="ltr"
+              maxLength={16}
+            />
+            {(
+              [
+                ["experience", "Experience", "الخبرة"],
+                ["whyChooseUs", "Why choose us", "لماذا تختارنا"],
+                ["address", "Address", "العنوان"],
+              ] as const
+            ).flatMap(([key, en, ar]) =>
+              (["En", "Ar"] as const).map((language) => (
+                <TextField
+                  key={`${key}${language}`}
+                  control={control}
+                  name={`${key}${language}`}
+                  multiline
+                  label={`${m(en, ar)} · ${language === "En" ? m("English", "الإنجليزية") : m("Arabic", "العربية")}`}
+                  dir={language === "Ar" ? "rtl" : "ltr"}
+                  lang={language === "Ar" ? "ar" : "en"}
+                  maxLength={key === "address" ? 1000 : 4000}
+                />
+              )),
+            )}
+            <TextField
+              control={control}
+              name="mapUrl"
+              label={m("Map URL (HTTPS)", "رابط الخريطة (HTTPS)")}
+              type="url"
+              dir="ltr"
+              maxLength={2048}
+            />
+          </FieldGroup>
+        </FieldSet>
+        <FieldSet disabled={pending} className={panel}>
+          <FieldLegend>{m("App stores", "متاجر التطبيقات")}</FieldLegend>
+          <FieldDescription>
+            {m(
+              "Optional HTTPS links for your tenant's apps. Clear a field to hide its public button.",
+              "روابط HTTPS اختيارية لتطبيقات منشأتك. امسح الحقل لإخفاء الزر من الموقع.",
+            )}
+          </FieldDescription>
+          <FieldGroup columns={2}>
+            <TextField
+              control={control}
+              name="appStoreUrl"
+              label={m("App Store URL", "رابط App Store")}
+              type="url"
+              dir="ltr"
+              maxLength={2048}
+            />
+            <TextField
+              control={control}
+              name="googlePlayUrl"
+              label={m("Google Play URL", "رابط Google Play")}
+              type="url"
+              dir="ltr"
+              maxLength={2048}
             />
           </FieldGroup>
         </FieldSet>

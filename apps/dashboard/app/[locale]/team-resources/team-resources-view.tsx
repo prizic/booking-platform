@@ -1,3 +1,6 @@
+import { paginateRows, type PageQuery } from "../../_lib/data-page-query";
+import { WorkspacePagination } from "../../_lib/ui/workspace-pagination";
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import type {
   CapabilityName,
   DashboardContextV1,
@@ -13,10 +16,12 @@ import {
   Button,
   EmptyState,
   Facts,
-  PageHeader,
+  DataPage,
+  Toolbar,
   Section,
   StatusStamp,
   type StampState,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { ChevronDown, ShieldCheck } from "lucide-react";
 import Link from "next/link";
@@ -63,6 +68,7 @@ export interface TeamResourcesActions {
 }
 
 interface TeamResourcesViewProps {
+  readonly query?: PageQuery;
   readonly members?: readonly StaffAccessMemberV1[];
   readonly actions: TeamResourcesActions;
   readonly locale: Locale;
@@ -126,11 +132,10 @@ function UnavailableState({
     getTeamResourcesMessage(locale, key);
   if (state.kind === "backend-unavailable") {
     return (
-      <Alert tone="danger">
-        <AlertDescription className="text-foreground">
-          {message("backendUnavailable")}
-        </AlertDescription>
-      </Alert>
+      <ErrorState
+        title={<>{message("backendUnavailable")}</>}
+        retry={<ReadRetry locale={locale} />}
+      />
     );
   }
   if (state.kind !== "access-unavailable") return null;
@@ -164,11 +169,10 @@ function UnavailableState({
     );
   }
   return (
-    <Alert tone="danger">
-      <AlertDescription className="text-foreground">
-        {message("backendUnavailable")}
-      </AlertDescription>
-    </Alert>
+    <ErrorState
+      title={<>{message("backendUnavailable")}</>}
+      retry={<ReadRetry locale={locale} />}
+    />
   );
 }
 
@@ -399,6 +403,7 @@ const positiveResults: ReadonlySet<string> = new Set([
 ]);
 
 export function TeamResourcesView({
+  query = {},
   actions,
   locale,
   members = [],
@@ -408,29 +413,37 @@ export function TeamResourcesView({
 }: TeamResourcesViewProps) {
   const message = (key: TeamResourcesMessageKey) =>
     getTeamResourcesMessage(locale, key);
-  const intro = (
-    <PageHeader
-      titleId="team-resources-title"
-      title={message("title")}
-      description={message("summary")}
-    />
-  );
+  const pageProps = {
+    titleId: "team-resources-title",
+    title: message("title"),
+    description: message("summary"),
+    toolbar: (
+      <Toolbar role="toolbar" aria-label={locale === "ar" ? "التصفية" : "Filters"}>
+        <Button asChild variant="outline" size="sm">
+          <Link href="#staff-list">{locale === "ar" ? "الفريق" : "Team"}</Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link href="#resource-list">{locale === "ar" ? "الموارد" : "Resources"}</Link>
+        </Button>
+      </Toolbar>
+    ),
+  };
   if (state.kind !== "ready")
     return (
-      <div className="grid gap-8">
-        {intro}
+      <DataPage {...pageProps}>
         <UnavailableState locale={locale} state={state} />
-      </div>
+      </DataPage>
     );
   const staff = state.workspace.items.filter((item) => item.kind === "staff");
   const resources = state.workspace.items.filter((item) => item.kind === "resource");
+  const staffPaging = paginateRows(staff, query, 25, "staffPage");
+  const resourcePaging = paginateRows(resources, query, 25, "resourcePage");
   const canManageStaff = hasTenantCapability(state.context, "staff.manage");
   const canManageCatalog = hasTenantCapability(state.context, "catalog.edit");
   const canManageStaffEligibility = hasCapability(state.context, "staff.manage");
   const canManageResourceEligibility = hasCapability(state.context, "catalog.edit");
   return (
-    <div className="grid gap-8">
-      {intro}
+    <DataPage {...pageProps}>
       {result === undefined ? null : (
         <Alert tone={positiveResults.has(result) ? "positive" : "danger"}>
           <AlertDescription className="text-foreground">
@@ -519,13 +532,20 @@ export function TeamResourcesView({
             canEdit={canManageStaff}
             canManageEligibility={canManageStaffEligibility}
             emptyMessage="staffEmpty"
-            items={staff}
+            items={staffPaging.rows}
             members={members}
             locale={locale}
             locations={state.workspace.locations}
             resourceTypes={state.workspace.resourceTypes}
             retry={retry}
             services={state.workspace.services}
+          />
+          <WorkspacePagination
+            locale={locale}
+            path={`/${locale}/team-resources`}
+            query={query}
+            pageKey="staffPage"
+            {...staffPaging}
           />
         </Section>
         <Section id="resource-list" title={message("resourcesTitle")}>
@@ -535,15 +555,22 @@ export function TeamResourcesView({
             canEdit={canManageCatalog}
             canManageEligibility={canManageResourceEligibility}
             emptyMessage="resourcesEmpty"
-            items={resources}
+            items={resourcePaging.rows}
             locale={locale}
             locations={state.workspace.locations}
             resourceTypes={state.workspace.resourceTypes}
             retry={retry}
             services={state.workspace.services}
           />
+          <WorkspacePagination
+            locale={locale}
+            path={`/${locale}/team-resources`}
+            query={query}
+            pageKey="resourcePage"
+            {...resourcePaging}
+          />
         </Section>
       </div>
-    </div>
+    </DataPage>
   );
 }

@@ -8,12 +8,20 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { chmod, mkdir, rename, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const sqlPath = join(root, "supabase/demo/arabic-demo.sql");
-const outputDirectory = join(root, ".artifacts/demo");
+export function demoOutputDirectory(value = ".artifacts/demo") {
+  const candidate = resolve(root, value);
+  if (!candidate.startsWith(join(root, ".artifacts") + sep))
+    throw new Error(
+      "Demo output must remain inside this repository's ignored .artifacts directory.",
+    );
+  return candidate;
+}
+const outputDirectory = demoOutputDirectory(process.env.WLBP_DEMO_OUTPUT);
 const credentialsPath = join(outputDirectory, "credentials.json");
 
 export const demoOwner = Object.freeze({
@@ -126,10 +134,9 @@ function applySql(databaseUrl) {
         timeout: 120_000,
       },
     );
-  } catch (error) {
-    const detail = typeof error.stderr === "string" ? error.stderr.trim() : "";
+  } catch {
     throw new Error(
-      `Applying the Arabic demo SQL failed.${detail ? `\n${detail}` : ""}`,
+      "Applying the Arabic demo SQL failed. Credential-bearing SQL diagnostics suppressed; check the named local stack and migrations.",
     );
   }
 }
@@ -177,7 +184,7 @@ async function setOwnerPassword(status) {
   return password;
 }
 
-async function saveCredentials(password) {
+async function saveCredentials(password, stackApiUrl) {
   await mkdir(outputDirectory, { mode: 0o700, recursive: true });
   await chmod(outputDirectory, 0o700);
   const temporary = `${credentialsPath}.${process.pid}.tmp`;
@@ -188,6 +195,7 @@ async function saveCredentials(password) {
         note: "Synthetic local demo account. Never reuse outside a local stack.",
         email: demoOwner.email,
         password,
+        stackApiUrl,
         dashboardHost: demoHostnames.dashboard,
         clientHost: demoHostnames.client,
       },
@@ -205,7 +213,7 @@ async function main() {
   const status = readStatus();
   applySql(status.databaseUrl);
   const password = await setOwnerPassword(status);
-  await saveCredentials(password);
+  await saveCredentials(password, status.apiUrl);
   const file = relative(root, credentialsPath);
   process.stdout.write(
     [

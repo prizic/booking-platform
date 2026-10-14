@@ -73,6 +73,8 @@ describe("Client service worker", () => {
     for (const [path, init] of [
       ["/api/availability?date=2026-10-07", {}],
       ["/ar/manage/secret-token", { mode: "navigate" }],
+      ["/ar/find-booking", { mode: "navigate" }],
+      ["/en/find-booking", { mode: "navigate" }],
       ["/manage/secret-token", { mode: "navigate" }],
       ["/en/auth/callback", { mode: "navigate" }],
       ["/auth/confirm", {}],

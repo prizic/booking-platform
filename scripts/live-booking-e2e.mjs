@@ -176,10 +176,27 @@ function removeLiveBookingRunnerVariables(environment) {
   return result;
 }
 
+// A process-local random signing secret so recovery is available on the local
+// isolated harness without shipping a constant that could be reused elsewhere.
+// Generated once per process and never printed.
+let localDashboardRecoverySecret;
+function localDashboardRecoveryFallback() {
+  return (localDashboardRecoverySecret ??= randomBytes(32).toString("base64url"));
+}
+
 export function createLiveBookingApplicationEnvironment(environment, local, hostname) {
+  const source = removeLiveBookingRunnerVariables(environment);
   return {
-    ...removeLiveBookingRunnerVariables(environment),
+    ...source,
     ...createLiveBookingEnvironment(local, hostname),
+    // Local Supabase web-server runs otherwise have no recovery signing secret,
+    // which makes recovery unavailable and masks unrelated auth tests. This
+    // value is synthetic, local-only, and never printed.
+    DASHBOARD_RECOVERY_COOKIE_SECRET:
+      typeof source.DASHBOARD_RECOVERY_COOKIE_SECRET === "string" &&
+      source.DASHBOARD_RECOVERY_COOKIE_SECRET.length >= 32
+        ? source.DASHBOARD_RECOVERY_COOKIE_SECRET
+        : localDashboardRecoveryFallback(),
   };
 }
 

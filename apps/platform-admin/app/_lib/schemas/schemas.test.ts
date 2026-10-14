@@ -126,8 +126,87 @@ describe("operation registry", () => {
   ][];
 
   it("covers every Platform Admin mutation", () => {
-    expect(entries).toHaveLength(37);
+    expect(entries).toHaveLength(42);
+    expect(entries.map(([name]) => name).sort()).toEqual(
+      [
+        "updateInstanceConfiguration",
+        "deactivateInstance",
+        "requestInstanceClosure",
+        "requestDomainRetirement",
+        "decideReview",
+        "exportAudit",
+        "addDomain",
+        "requestDomainVerification",
+        "requestProvisioning",
+        "retryRun",
+        "activateRun",
+        "deactivateRun",
+        "cancelJob",
+        "retryJob",
+        "approveJob",
+        "addOperator",
+        "setOperatorRole",
+        "disableOperator",
+        "enableOperator",
+        "savePlan",
+        "registerRelease",
+        "setReleaseStatus",
+        "createRollout",
+        "startRollout",
+        "pauseRollout",
+        "cancelRollout",
+        "rollbackRollout",
+        "retryRollout",
+        "saveFlag",
+        "saveReferences",
+        "requestIntegrationCheck",
+        "assignSubscription",
+        "updateSubscription",
+        "setEntitlementOverride",
+        "clearEntitlementOverride",
+        "requestSupport",
+        "approveSupport",
+        "revokeSupport",
+        "createTenant",
+        "renameTenant",
+        "setTenantStatus",
+        "requestTenantClosure",
+      ].sort(),
+    );
   });
+
+  it.each([
+    [
+      "updateInstanceConfiguration",
+      { instanceId: id, displayName: "North", expectedRevision: 0 },
+    ],
+    ["deactivateInstance", { instanceId: id, expectedState: "active" }],
+    ["requestInstanceClosure", { instanceId: id, confirmation: id }],
+    ["requestDomainRetirement", { domainId: id, replacementDomainId: "none" }],
+    ["decideReview", { kind: "job", id, decision: "approve" }],
+  ] as const)(
+    "registers %s with a bounded reason, stable key and server-validated input",
+    (name, input) => {
+      const spec = operations[name];
+      expect(spec.reason).toBe(10);
+      expect(spec.idempotent).toBe(true);
+      const valid = {
+        ...input,
+        reason: "Reviewed lifecycle request",
+        idempotencyKey: key,
+      };
+      expect(parseActionInput(spec.schema, valid).ok).toBe(true);
+      for (const badReason of ["", "x".repeat(9), "x".repeat(501)])
+        expect(parseActionInput(spec.schema, { ...valid, reason: badReason }).ok).toBe(
+          false,
+        );
+      expect(parseActionInput(spec.schema, { ...valid, idempotencyKey: "" }).ok).toBe(
+        false,
+      );
+      // Target scope comes from the live RPC, never an audit-only browser tenant.
+      expect(spec.schema.shape).not.toHaveProperty("tenantId");
+    },
+  );
 
   it("each reason minimum matches the schema the server re-validates", () => {
     for (const [name, spec] of entries) {
@@ -162,6 +241,11 @@ describe("operation registry", () => {
       "approveJob",
       "approveSupport",
       "revokeSupport",
+      "updateInstanceConfiguration",
+      "deactivateInstance",
+      "requestInstanceClosure",
+      "requestDomainRetirement",
+      "decideReview",
     ] as const) {
       expect(operations[name].schema.shape, name).not.toHaveProperty("tenantId");
     }

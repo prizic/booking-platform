@@ -2,7 +2,7 @@
 
 import type { Locale } from "@wlbp/i18n";
 import {
-  Alert,
+  SuccessState,
   Button,
   actionToastCopy,
   FieldSet,
@@ -14,7 +14,7 @@ import {
   useZodForm,
 } from "@wlbp/ui-foundation";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useWatch, type FieldErrors, type FieldValues } from "react-hook-form";
 import { copyFor, formCopy, reasonCopy, say } from "../copy";
 import { operatorFormMessages } from "../form-messages";
@@ -32,6 +32,7 @@ import {
 } from "../schemas";
 import { useActionFeedback } from "./action-feedback";
 import { operationActions } from "./operation-actions";
+import { ReadRetry } from "./read-retry";
 import { StepUpPrompt } from "./step-up-prompt";
 
 type Input = Record<string, unknown>;
@@ -68,6 +69,7 @@ export type OperatorFormProps<K extends OperationKey> = {
   /** Technical values (ids, expected revisions) sent without a control. */
   hidden?: OperationValues<K>;
   onSuccess?: () => void;
+  onPendingChange?: (pending: boolean) => void;
   /** Submit stays disabled until the `confirmation` field equals this text. */
   confirmText?: string;
   className?: string;
@@ -99,6 +101,7 @@ export function OperatorForm<K extends OperationKey>({
   values,
   hidden,
   onSuccess,
+  onPendingChange,
   confirmText,
   className,
   compact,
@@ -195,6 +198,9 @@ export function OperatorForm<K extends OperationKey>({
   }
 
   const pending = mutation.isPending;
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
   const inline = compact ?? false;
   const confirmBlocked = confirmText !== undefined && typed !== confirmText;
 
@@ -204,6 +210,14 @@ export function OperatorForm<K extends OperationKey>({
         {failure ? (
           <div className="grid gap-2">
             <FormRootError code={failure.code} />
+            {[
+              "stale_revision",
+              "transition_not_allowed",
+              "unfinished_job_conflict",
+              "idempotency_conflict",
+            ].includes(failure.code) ? (
+              <ReadRetry locale={locale} />
+            ) : null}
             {failure.reasons.length ? (
               <ul className="grid list-disc gap-1 ps-9 text-sm text-foreground">
                 {failure.reasons.map((reason) => (
@@ -219,7 +233,7 @@ export function OperatorForm<K extends OperationKey>({
           </div>
         ) : null}
         {mutation.isError ? <FormRootError code="network" /> : null}
-        {succeeded ? <Alert tone="positive">{successMessage}</Alert> : null}
+        {succeeded ? <SuccessState title={successMessage} /> : null}
         <form
           noValidate
           // The server receives the raw form values and parses them with the same schema.

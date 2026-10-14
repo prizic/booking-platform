@@ -66,6 +66,8 @@ begin
       ('wlbp-expire-holds',            '* * * * *',   $$select private.expire_holds_v1(null,500)$$),
       ('wlbp-expire-booking-requests', '* * * * *',   $$select private.expire_booking_requests_v1(null,500)$$),
       ('wlbp-expire-management-links', '*/5 * * * *', $$select private.expire_management_links_v1(null,500)$$),
+      -- Recovery digest retention is independent of email-provider availability.
+      ('wlbp-recovery-retention',      '*/5 * * * *', $$select private.prune_booking_recovery_requests_v1(1000)$$),
       -- Provisioning steps 1 and 2 are pure database work, so they run here
       -- rather than in a worker that would need a host and a credential to
       -- issue SQL. is_worker_v1() passes because pg_cron carries no JWT.

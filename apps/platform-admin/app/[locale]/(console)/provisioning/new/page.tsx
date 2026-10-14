@@ -1,4 +1,5 @@
-import { Alert, FieldGroup } from "@wlbp/ui-foundation";
+import { Alert, Button, FieldGroup } from "@wlbp/ui-foundation";
+import Link from "next/link";
 import { say, stateCopy } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../../_lib/operator-page";
@@ -72,7 +73,20 @@ export default async function RequestProvisioningPage({
     return (
       <>
         {header}
-        <EmptyState locale={locale} title={say(locale, c.noTargets)} />
+        <EmptyState
+          locale={locale}
+          title={say(locale, c.noTargets)}
+          action={
+            <Button asChild variant="outline">
+              <Link href={`/${locale}/tenants/new`}>
+                {say(locale, [
+                  "Register a tenant for its first instance",
+                  "تسجيل مستأجر لإنشاء نسخته الأولى",
+                ])}
+              </Link>
+            </Button>
+          }
+        />
       </>
     );
   if (releases.data.length === 0)
@@ -80,6 +94,21 @@ export default async function RequestProvisioningPage({
       <>
         {header}
         <EmptyState locale={locale} title={say(locale, c.noReleases)} />
+      </>
+    );
+  if (!plans.data.some((plan) => plan.active))
+    return (
+      <>
+        {header}
+        <EmptyState
+          locale={locale}
+          title={say(locale, c.noPlans)}
+          action={
+            <Button asChild variant="outline">
+              <Link href={`/${locale}/plans`}>{say(locale, c.plan)}</Link>
+            </Button>
+          }
+        />
       </>
     );
 

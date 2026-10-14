@@ -10,6 +10,8 @@ import { clientBrand } from "../_lib/brand";
 import { instanceLocalePolicy } from "../_lib/locale-policy";
 import { pwaMessage } from "../_lib/pwa-copy";
 import { PwaRegistration } from "../_lib/pwa-registration";
+import { journeyMessage } from "../_lib/journey-copy";
+import { loadPublishedSiteContent } from "../_lib/published-site-content";
 import { getClientLocaleMetadata } from "../_lib/site-metadata";
 import "../globals.css";
 
@@ -48,7 +50,17 @@ export async function generateMetadata({
   params,
 }: LocaleLayoutProps): Promise<Metadata> {
   const locale = requireLocale((await params).locale);
-  return getClientLocaleMetadata(locale);
+  const base = getClientLocaleMetadata(locale);
+  const published = await loadPublishedSiteContent();
+  const name =
+    published.outcome === "ready" ? published.content.title?.[locale] : undefined;
+  const title = name ?? journeyMessage(locale, "brandFallback");
+  return {
+    ...base,
+    title,
+    description: journeyMessage(locale, "servicesIntro"),
+    openGraph: { ...base.openGraph, title, siteName: title },
+  };
 }
 
 export default async function LocaleLayout({ children, params }: LocaleLayoutProps) {

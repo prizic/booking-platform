@@ -5,6 +5,7 @@ import { say } from "../../../../_lib/copy";
 import { callOperator } from "../../../../_lib/operator-api";
 import { getOperator } from "../../../../_lib/operator-page";
 import { pageLocale } from "../../../../_lib/page-locale";
+import { readPages } from "../../../../_lib/read-pages";
 import { PageHeader } from "../../../../_lib/shell/page-header";
 import { UnavailableState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
@@ -35,9 +36,19 @@ export default async function TenantPage({
   const operator = await getOperator(locale);
   if (!operator) return null;
   if (!/^[0-9a-f-]{36}$/u.test(tenantId)) notFound();
-  const [result, plans] = await Promise.all([
+  const [result, plans, closureJobs] = await Promise.all([
     callOperator("get_tenant_v1", { p_tenant_id: tenantId }),
     callOperator("list_plans_v1"),
+    // The tenant snapshot includes only the twenty latest jobs. Older unfinished
+    // closure work must still prevent a misleading reactivation/closure control.
+    readPages((p_offset, p_limit) =>
+      callOperator("list_jobs_v1", {
+        p_tenant_id: tenantId,
+        p_kind: "close_instance",
+        p_offset,
+        p_limit,
+      }),
+    ),
   ]);
   if (!result.ok && result.code === "not_found") notFound();
   const crumbs = [[say(locale, c.title), `/${locale}/tenants`]] as const;
@@ -78,8 +89,24 @@ export default async function TenantPage({
         ))}
       </nav>
       <IdentitySection {...props} />
-      <LifecycleSection {...props} />
-      <SubscriptionSection {...props} plans={plans.ok ? plans.data : []} />
+      <LifecycleSection
+        {...props}
+        closureJobs={
+          closureJobs.ok
+            ? closureJobs.data.map((job) => ({
+                id: job.job_id,
+                status: job.status,
+                needs_approval: job.needs_approval,
+              }))
+            : undefined
+        }
+        closureErrorCode={!closureJobs.ok ? closureJobs.code : undefined}
+      />
+      <SubscriptionSection
+        {...props}
+        plans={plans.ok ? plans.data : undefined}
+        planErrorCode={!plans.ok ? plans.code : undefined}
+      />
       <EntitlementsSection {...props} />
       <DomainsSection {...props} />
       <InstancesSection locale={locale} detail={detail} />

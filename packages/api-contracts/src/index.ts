@@ -3,9 +3,21 @@ import {
   type CapabilityName,
   type CapabilityScope,
 } from "./capabilities.js";
+import type { BookingStatusDto } from "./booking-status.js";
+export type { BookingStatusDto } from "./booking-status.js";
 
 /** Version carried by the api_v1 DTOs in this module, not the deployed range. */
 export const apiV1ContractVersion = 1 as const;
+export { parseBookingContextV1, type BookingContextV1 } from "./booking-context.js";
+export {
+  isSafeBrandHttpsUrlV1,
+  parsePublishedBrandContentV1,
+  parseBookingRecoveryV1Response,
+  type LocalizedBrandTextV1,
+  type PublishedBrandContentV1,
+  type BookingRecoveryV1Request,
+  type BookingRecoveryV1Response,
+} from "./brand-content.js";
 export {
   parseCatalogWorkspaceV1,
   type CatalogKindV1,
@@ -175,17 +187,6 @@ export type ContractResult<T> =
   | { readonly ok: true; readonly data: T; readonly contractVersion: 1 }
   | { readonly ok: false; readonly error: ContractError; readonly contractVersion: 1 };
 
-export type BookingStatusDto =
-  | "held"
-  | "requested"
-  | "pending_payment"
-  | "confirmed"
-  | "checked_in"
-  | "completed"
-  | "cancelled"
-  | "no_show"
-  | "rejected"
-  | "expired";
 export type PaymentStatusDto =
   | "not_required"
   | "requires_payment"

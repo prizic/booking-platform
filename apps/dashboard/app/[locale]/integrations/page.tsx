@@ -1,3 +1,4 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
 import {
@@ -6,9 +7,11 @@ import {
   Button,
   EmptyState,
   Facts,
-  PageHeader,
+  DataPage,
+  Toolbar,
   Section,
   StatusStamp,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { CreditCard, ShieldCheck } from "lucide-react";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
@@ -240,14 +243,17 @@ export default async function IntegrationsPage({
     } else {
       body = (
         <>
-          <Alert tone="danger">
-            <AlertDescription className="text-foreground">
-              {m(
-                "Integration status is unavailable. Retry the read.",
-                "حالة التكامل غير متاحة. أعد محاولة القراءة.",
-              )}
-            </AlertDescription>
-          </Alert>
+          <ErrorState
+            title={
+              <>
+                {m(
+                  "Integration status is unavailable. Retry the read.",
+                  "حالة التكامل غير متاحة. أعد محاولة القراءة.",
+                )}
+              </>
+            }
+            retry={<ReadRetry locale={locale} />}
+          />
           {whatsappSection}
         </>
       );
@@ -260,11 +266,29 @@ export default async function IntegrationsPage({
       labelledBy="integrations-title"
     >
       <div className="grid gap-8">
-        <PageHeader
+        <DataPage
           titleId="integrations-title"
           title={m("Integrations", "التكاملات")}
-        />
-        {body}
+          toolbar={
+            <Toolbar
+              role="toolbar"
+              aria-label={locale === "ar" ? "التصفية" : "Filters"}
+            >
+              <Button asChild variant="outline" size="sm">
+                <Link href={"#integrations-payments"}>
+                  {locale === "ar" ? "المدفوعات" : "Payments"}
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/${locale}/communications`}>
+                  {locale === "ar" ? "التواصل" : "Communications"}
+                </Link>
+              </Button>
+            </Toolbar>
+          }
+        >
+          {body}
+        </DataPage>
       </div>
     </WorkspaceShell>
   );

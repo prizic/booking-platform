@@ -32,6 +32,7 @@ function ClientMock({
   privacyUrl,
   termsUrl,
   heading,
+  content,
 }: {
   config: BrandConfig;
   theme: "light" | "dark";
@@ -41,9 +42,30 @@ function ClientMock({
   privacyUrl: string | null;
   termsUrl: string | null;
   heading: "h1" | "p";
+  content: Readonly<Record<string, unknown>>;
 }) {
   const m = (en: string, ar: string) => (locale === "ar" ? ar : en);
   const Title = heading;
+  const about = brandObject(content.about ?? {});
+  const contact = brandObject(content.contact ?? {});
+  const stores = brandObject(content.appStores ?? {});
+  const safeUrl = (value: unknown) => {
+    if (typeof value !== "string") return null;
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password ? value : null;
+    } catch {
+      return null;
+    }
+  };
+  const phone =
+    typeof contact.phone === "string" && /^\+[1-9]\d{1,14}$/u.test(contact.phone)
+      ? contact.phone
+      : null;
+  const whatsapp =
+    typeof contact.whatsapp === "string" && /^\+[1-9]\d{1,14}$/u.test(contact.whatsapp)
+      ? contact.whatsapp
+      : null;
   const logo = resolveBrandAssets(config.assets, theme).logo;
   return (
     <BrandScope
@@ -90,8 +112,61 @@ function ClientMock({
             <StatusStamp state="confirmed">{m("Confirmed", "مؤكد")}</StatusStamp>
           </CardContent>
         </Card>
+        <section aria-label={m("Contact", "تواصل معنا")} className="grid gap-3">
+          <h2 className="text-lg font-semibold">{m("Contact", "تواصل معنا")}</h2>
+          <div className="flex flex-wrap gap-3">
+            {email ? (
+              <Button asChild variant="outline">
+                <a href={`mailto:${email}`}>{m("Email", "البريد الإلكتروني")}</a>
+              </Button>
+            ) : null}
+            {phone ? (
+              <Button asChild variant="outline">
+                <a href={`tel:${phone}`}>{m("Call", "اتصل بنا")}</a>
+              </Button>
+            ) : null}
+            {whatsapp ? (
+              <Button asChild variant="outline">
+                <a href={`https://wa.me/${whatsapp.slice(1)}`}>WhatsApp</a>
+              </Button>
+            ) : null}
+          </div>
+        </section>
+        {(
+          [
+            ["experience", "Experience", "الخبرة"],
+            ["whyChooseUs", "Why choose us", "لماذا تختارنا"],
+            ["address", "Address", "العنوان"],
+          ] as const
+        ).map(([key, en, ar]) => {
+          const value = brandObject(about[key] ?? {})[locale];
+          return typeof value === "string" && value ? (
+            <section key={key} className="grid gap-2">
+              <h2 className="text-lg font-semibold">{m(en, ar)}</h2>
+              <p className="whitespace-pre-line">{value}</p>
+            </section>
+          ) : null;
+        })}
+        {safeUrl(about.mapUrl) ? (
+          <a
+            href={safeUrl(about.mapUrl)!}
+            className="font-semibold text-primary underline"
+          >
+            {m("Open map", "افتح الخريطة")}
+          </a>
+        ) : null}
       </div>
       <div className="flex flex-wrap gap-x-5 gap-y-2 border-t bg-card px-5 py-4 text-sm">
+        {safeUrl(stores.appStoreUrl) ? (
+          <Button asChild variant="outline">
+            <a href={safeUrl(stores.appStoreUrl)!}>App Store</a>
+          </Button>
+        ) : null}
+        {safeUrl(stores.googlePlayUrl) ? (
+          <Button asChild variant="outline">
+            <a href={safeUrl(stores.googlePlayUrl)!}>Google Play</a>
+          </Button>
+        ) : null}
         {privacyUrl ? (
           <Link
             className="font-semibold text-primary underline-offset-4 hover:underline"
@@ -164,6 +239,7 @@ export async function DraftBrandPreview({
     legal = brandObject(content.legal ?? {});
   const mock = {
     config,
+    content,
     locale,
     title: String(title[locale] ?? config.name),
     email: String(contact.email ?? ""),

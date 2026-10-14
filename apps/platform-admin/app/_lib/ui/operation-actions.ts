@@ -1,3 +1,10 @@
+import {
+  updateInstanceConfigurationAction,
+  deactivateInstanceAction,
+  requestInstanceClosureAction,
+  requestDomainRetirementAction,
+  decideReviewAction,
+} from "../actions/lifecycles";
 import { exportAuditAction } from "../actions/audit";
 import { addDomainAction, requestDomainVerificationAction } from "../actions/domains";
 import {
@@ -58,6 +65,11 @@ import type { OperationInput, OperationKey } from "../schemas";
 export const operationActions: {
   [K in OperationKey]: (input: OperationInput<K>) => Promise<OperatorActionResult>;
 } = {
+  updateInstanceConfiguration: updateInstanceConfigurationAction,
+  deactivateInstance: deactivateInstanceAction,
+  requestInstanceClosure: requestInstanceClosureAction,
+  requestDomainRetirement: requestDomainRetirementAction,
+  decideReview: decideReviewAction,
   exportAudit: exportAuditAction,
   addDomain: addDomainAction,
   requestDomainVerification: requestDomainVerificationAction,

@@ -78,6 +78,37 @@ export function brandDraft(
     ar: values.titleAr,
   };
   content.contact = { ...brandObject(content.contact ?? {}), email: values.email };
+  const contact = brandObject(content.contact);
+  const about = brandObject(content.about ?? {});
+  const appStores = brandObject(content.appStores ?? {});
+  const setOptional = (
+    object: Record<string, unknown>,
+    key: string,
+    value: string | undefined,
+  ) => {
+    if (value === undefined) return; // N-1 input preserves newly introduced fields.
+    if (value) object[key] = value;
+    else delete object[key];
+  };
+  setOptional(contact, "phone", values.phone);
+  setOptional(contact, "whatsapp", values.whatsapp);
+  for (const [key, en, ar] of [
+    ["experience", values.experienceEn, values.experienceAr],
+    ["whyChooseUs", values.whyChooseUsEn, values.whyChooseUsAr],
+    ["address", values.addressEn, values.addressAr],
+  ] as const) {
+    if (en === undefined && ar === undefined) continue;
+    if (en && ar) about[key] = { ...brandObject(about[key] ?? {}), en, ar };
+    else delete about[key];
+  }
+  setOptional(about, "mapUrl", values.mapUrl);
+  setOptional(appStores, "appStoreUrl", values.appStoreUrl);
+  setOptional(appStores, "googlePlayUrl", values.googlePlayUrl);
+  content.contact = contact;
+  if (Object.keys(about).length) content.about = about;
+  else delete content.about;
+  if (Object.keys(appStores).length) content.appStores = appStores;
+  else delete content.appStores;
   content.legal = {
     ...brandObject(content.legal ?? {}),
     privacyUrl: values.privacyUrl,

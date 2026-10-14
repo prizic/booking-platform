@@ -1,12 +1,14 @@
-import { formatNumber, type Locale } from "@wlbp/i18n";
-import { Button, EmptyState, Section } from "@wlbp/ui-foundation";
-import { ArrowRight, CalendarDays, MapPin, Timer } from "lucide-react";
+import type { Locale } from "@wlbp/i18n";
+import { Button, Section } from "@wlbp/ui-foundation";
+import { CalendarDays } from "lucide-react";
 import Link from "next/link";
 
-import { availabilityPickerCopy, getClientMessage } from "../_lib/copy";
+import { availabilityPickerCopy } from "../_lib/copy";
 import { loadPublishedCatalog } from "../_lib/catalog-data-source";
 import { instanceText } from "../_lib/instance-text";
-import { ServiceDye } from "../_lib/ui/service-dye";
+import { CatalogEmpty, PublicReadError } from "../_lib/ui/public-read-state";
+import { ServiceList } from "../_lib/ui/service-list";
+import { journeyMessage } from "../_lib/journey-copy";
 import { SiteFrame, siteContainerClass } from "../_lib/ui/site-frame";
 import { AvailabilityPicker } from "./availability-picker";
 
@@ -16,11 +18,10 @@ type ClientPageProps = {
 
 export default async function ClientPage({ params }: ClientPageProps) {
   const { locale } = await params;
-  const message = (key: Parameters<typeof getClientMessage>[1]) =>
-    getClientMessage(locale, key);
   const text = instanceText(locale);
   const timeZone = "Asia/Riyadh";
   const catalog = await loadPublishedCatalog(locale);
+  const first = catalog.outcome === "ready" ? catalog.items[0] : undefined;
 
   return (
     <SiteFrame locale={locale}>
@@ -51,7 +52,7 @@ export default async function ClientPage({ params }: ClientPageProps) {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href={`/${locale}#services`}>
+                <Link href={`/${locale}/services`}>
                   {text("home.hero.secondaryAction")}
                 </Link>
               </Button>
@@ -67,84 +68,42 @@ export default async function ClientPage({ params }: ClientPageProps) {
           description={text("home.services.intro")}
           className="scroll-mt-6"
         >
-          {catalog.length === 0 ? (
-            <EmptyState
-              icon={<CalendarDays aria-hidden="true" />}
-              title={message("catalogEmptyTitle")}
-              description={message("catalogEmptyBody")}
-            />
+          {catalog.outcome === "error" ? (
+            <PublicReadError locale={locale} kind="catalog" />
+          ) : catalog.outcome === "empty" ? (
+            <CatalogEmpty locale={locale} />
           ) : (
-            <ul className="divide-y rounded-lg border bg-card">
-              {catalog.map((item) => (
-                <li
-                  key={`${item.serviceId}:${item.locationId}`}
-                  className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between md:px-6"
-                >
-                  <div className="grid min-w-0 gap-1.5">
-                    <h3
-                      id={`service-${item.serviceId}-${item.locationId}`}
-                      className="flex items-center gap-2.5 text-base font-semibold text-balance"
-                    >
-                      <ServiceDye serviceKey={item.serviceName} />
-                      {item.serviceName}
-                    </h3>
-                    {item.serviceDescription.trim() === "" ? null : (
-                      <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                        {item.serviceDescription}
-                      </p>
-                    )}
-                    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                      <span className="inline-flex items-center gap-1.5">
-                        <MapPin aria-hidden="true" className="size-4" />
-                        {item.locationName}
-                      </span>
-                      <span className="inline-flex items-center gap-1.5">
-                        <Timer aria-hidden="true" className="size-4" />
-                        {formatNumber(item.durationMinutes, locale, {
-                          style: "unit",
-                          unit: "minute",
-                          unitDisplay: "long",
-                        })}
-                      </span>
-                    </p>
-                  </div>
-                  <Button
-                    asChild
-                    variant="secondary"
-                    className="self-start sm:self-center"
-                  >
-                    <Link
-                      aria-describedby={`service-${item.serviceId}-${item.locationId}`}
-                      href={`/${locale}/book?service=${item.serviceId}&location=${item.locationId}`}
-                    >
-                      {text("home.services.bookAction")}
-                      <ArrowRight aria-hidden="true" />
-                    </Link>
-                  </Button>
-                </li>
-              ))}
-            </ul>
+            <ServiceList items={catalog.items} locale={locale} />
           )}
         </Section>
 
-        <div id="availability" className="scroll-mt-6">
-          <AvailabilityPicker
-            copy={{
-              ...availabilityPickerCopy(locale),
-              summary: text("home.availability.intro"),
-              title: text("home.availability.title"),
-            }}
-            locale={locale}
-            locationId={catalog[0]?.locationId ?? null}
-            locationTimeZone={catalog[0]?.locationTimeZone ?? timeZone}
-            serviceId={catalog[0]?.serviceId ?? null}
-          />
-        </div>
+        {first ? (
+          <div id="availability" className="scroll-mt-6">
+            <AvailabilityPicker
+              copy={{
+                ...availabilityPickerCopy(locale),
+                summary: text("home.availability.intro"),
+                title: text("home.availability.title"),
+              }}
+              locale={locale}
+              locationId={first.locationId}
+              locationTimeZone={first.locationTimeZone ?? timeZone}
+              serviceId={first.serviceId}
+            />
+          </div>
+        ) : null}
 
         <Section id="manage" title={text("home.manage.title")} className="scroll-mt-6">
           <p className="max-w-2xl text-[0.9375rem] leading-relaxed text-muted-foreground">
             {text("home.manage.body")}
           </p>
+          <div>
+            <Button asChild variant="outline">
+              <Link href={`/${locale}/find-booking`}>
+                {journeyMessage(locale, "findBooking")}
+              </Link>
+            </Button>
+          </div>
         </Section>
       </div>
     </SiteFrame>

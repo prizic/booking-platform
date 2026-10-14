@@ -7,7 +7,7 @@ import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
@@ -54,36 +54,49 @@ export default async function SubscriptionsPage({
     : [];
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-      />
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, c.search), value: list.q }}
+        >
+          <SelectFilter
+            name="state"
+            label={say(locale, c.status)}
+            value={list.filters.state}
+            allLabel={say(locale, formCopy.all)}
+            options={states.map((s) => [s, status(s)] as const)}
+          />
+          <SelectFilter
+            name="plan"
+            label={say(locale, c.plan)}
+            value={list.filters.plan}
+            allLabel={say(locale, formCopy.all)}
+            options={plans.ok ? plans.data.map((p) => [p.key, p.name] as const) : []}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       <Alert>
         <AlertDescription>{say(locale, c.billingNote)}</AlertDescription>
       </Alert>
-      <FilterBar
-        locale={locale}
-        path={path}
-        search={{ label: say(locale, c.search), value: list.q }}
-      >
-        <SelectFilter
-          name="state"
-          label={say(locale, c.status)}
-          value={list.filters.state}
-          allLabel={say(locale, formCopy.all)}
-          options={states.map((s) => [s, status(s)] as const)}
-        />
-        <SelectFilter
-          name="plan"
-          label={say(locale, c.plan)}
-          value={list.filters.plan}
-          allLabel={say(locale, formCopy.all)}
-          options={plans.ok ? plans.data.map((p) => [p.key, p.name] as const) : []}
-        />
-      </FilterBar>
+
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -105,7 +118,7 @@ export default async function SubscriptionsPage({
               { label: say(locale, c.started) },
               { label: say(locale, c.ends) },
               { label: say(locale, c.updated) },
-              { label: say(locale, c.actions) },
+              { label: say(locale, c.actions), kind: "actions" },
             ]}
             rows={result.data.map((row) => ({
               key: row.tenant_id,
@@ -216,15 +229,8 @@ export default async function SubscriptionsPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </div>
+    </DataPage>
   );
 }

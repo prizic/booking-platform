@@ -126,3 +126,91 @@ describe("brand publication, rollback and preview", () => {
     ).toBe(false);
   });
 });
+
+describe("optional tenant Contact About and store content", () => {
+  it("persists the exact optional contract and preserves unrelated content", () => {
+    const values = brandEditorSchema.parse(
+      input({
+        phone: "+966500000001",
+        whatsapp: "+966500000002",
+        experienceEn: "Experience",
+        experienceAr: "الخبرة",
+        whyChooseUsEn: "Choose us",
+        whyChooseUsAr: "اخترنا",
+        addressEn: "Address",
+        addressAr: "العنوان",
+        mapUrl: "https://example.invalid/map",
+        appStoreUrl: "https://example.invalid/app",
+        googlePlayUrl: "https://example.invalid/play",
+      }),
+    );
+    const draft = brandDraft({ config, content }, values);
+    expect(draft.content.contact).toMatchObject({
+      email: content.contact.email,
+      phone: values.phone,
+      whatsapp: values.whatsapp,
+    });
+    expect(draft.content.about).toEqual({
+      experience: { en: "Experience", ar: "الخبرة" },
+      whyChooseUs: { en: "Choose us", ar: "اخترنا" },
+      address: { en: "Address", ar: "العنوان" },
+      mapUrl: values.mapUrl,
+    });
+    expect(draft.content.appStores).toEqual({
+      appStoreUrl: values.appStoreUrl,
+      googlePlayUrl: values.googlePlayUrl,
+    });
+    expect(draft.content.advanced).toEqual(content.advanced);
+  });
+  it("clears optional fields while old inputs preserve fields they do not represent", () => {
+    const base = {
+      ...content,
+      about: { experience: { en: "Experience", ar: "الخبرة" } },
+      appStores: { appStoreUrl: "https://example.invalid/app" },
+    };
+    const legacyInput = brandEditorSchema.parse(input());
+    const preserved = brandDraft({ config, content: base }, legacyInput).content;
+    expect(preserved.title).toEqual({
+      en: legacyInput.titleEn,
+      ar: legacyInput.titleAr,
+      fr: base.title.fr,
+    });
+    expect(preserved.contact).toEqual(base.contact);
+    expect(preserved.about).toEqual(base.about);
+    expect(preserved.appStores).toEqual(base.appStores);
+    expect(preserved.advanced).toEqual(base.advanced);
+    expect(preserved.legal).toEqual(base.legal);
+    const cleared = brandDraft(
+      { config, content: base },
+      brandEditorSchema.parse(
+        input({ phone: "", experienceEn: "", experienceAr: "", appStoreUrl: "" }),
+      ),
+    ).content;
+    expect(cleared).not.toHaveProperty("about");
+    expect(cleared).not.toHaveProperty("appStores");
+    expect(cleared.contact).not.toHaveProperty("phone");
+  });
+  it("refuses locale gaps markup long address unsafe URL schemes credentials and non-E164 numbers", () => {
+    expect(issues(input({ experienceEn: "Experience", experienceAr: "" }))).toContain(
+      "experienceAr:brand_locale_pair",
+    );
+    expect(
+      issues(input({ addressEn: "x".repeat(1001), addressAr: "العنوان" })),
+    ).toContain("addressEn:too_long");
+    expect(
+      issues(input({ experienceEn: "<script>", experienceAr: "الخبرة" })),
+    ).toContain("experienceEn:unsafe-content");
+    for (const mapUrl of [
+      "javascript:alert(1)",
+      "http://example.invalid/map",
+      "https://user:pw@example.invalid/map",
+    ])
+      expect(brandEditorSchema.safeParse(input({ mapUrl })).success).toBe(false);
+    expect(issues(input({ phone: "0500000001" }))).toContain(
+      "phone:brand_phone_invalid",
+    );
+    expect(issues(input({ whatsapp: "https://wa.me/966500000001" }))).toContain(
+      "whatsapp:too_long",
+    );
+  });
+});

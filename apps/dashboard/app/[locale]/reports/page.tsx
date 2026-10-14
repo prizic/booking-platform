@@ -1,3 +1,7 @@
+import { paginateRows } from "../../_lib/data-page-query";
+import { WorkspacePagination } from "../../_lib/ui/workspace-pagination";
+import { ReadRetry } from "../../_lib/ui/read-retry";
+
 import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
@@ -9,38 +13,29 @@ import {
   Facts,
   Field,
   Label,
-  PageHeader,
+  DataPage,
+  FilterBar,
+  DataTable,
   Section,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   Textarea,
-  Toolbar,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { ChartColumn } from "lucide-react";
 
 import { getDashboardMessage } from "../../_lib/copy";
 import { columnsOf, renderCsv } from "../../_lib/csv";
-import type {
-  BookingReportV1,
-  ReportExportV1,
-  RevenueReportV1,
-  UtilizationRowV1,
-} from "../../_lib/dashboard-access";
+
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { formatCount, intlLocale } from "../../_lib/booking-display";
 import { countLabel, workspaceMessage } from "../../_lib/workspace-copy";
 import { Money } from "../../_lib/ui/money";
-import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+
 import { ResultAlert } from "../../_lib/ui/result-alert";
 import { ReportExportForm } from "./report-export-form";
 import { positiveReportResults, reportResultKeys } from "./results";
@@ -110,26 +105,24 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
   // Each read is independent: a member who may run the day but not see the
   // money gets the operational panels and no revenue panel, rather than an
   // error page or a panel full of zeroes.
-  const booking: BookingReportV1 | null =
+  const [booking, allUtilization, revenue, exported] = await Promise.all([
     ready && tenantId !== null
-      ? ((await request.source?.getBookingReport?.(scope).catch(() => null)) ?? null)
-      : null;
-  const utilization: readonly UtilizationRowV1[] | null =
+      ? (request.source?.getBookingReport?.(scope).catch(() => null) ?? null)
+      : null,
     ready && tenantId !== null
-      ? ((await request.source?.getUtilizationReport?.(scope).catch(() => null)) ??
-        null)
-      : null;
-  const revenue: RevenueReportV1 | null =
+      ? (request.source?.getUtilizationReport?.(scope).catch(() => null) ?? null)
+      : null,
     ready && tenantId !== null
-      ? ((await request.source?.getRevenueReport?.(scope).catch(() => null)) ?? null)
-      : null;
-  const exported: ReportExportV1 | null =
+      ? (request.source?.getRevenueReport?.(scope).catch(() => null) ?? null)
+      : null,
     ready && tenantId !== null && exportId !== null
-      ? ((await request.source
-          ?.getReportExport?.({ exportId, tenantId })
-          .catch(() => null)) ?? null)
-      : null;
+      ? (request.source?.getReportExport?.({ exportId, tenantId }).catch(() => null) ??
+        null)
+      : null,
+  ]);
 
+  const utilizationPaging = paginateRows(allUtilization ?? [], query);
+  const utilization = allUtilization === null ? null : utilizationPaging.rows;
   const result = single(query.result);
   const resultKey =
     result !== null && result in reportResultKeys
@@ -145,334 +138,299 @@ export default async function ReportsPage({ params, searchParams }: ReportsPageP
 
   return (
     <WorkspaceShell current="reports" labelledBy="reports-title" locale={locale}>
-      <PageHeader
+      <DataPage
+        pagination={
+          allUtilization !== null ? (
+            <WorkspacePagination
+              locale={locale}
+              path={`/${locale}/reports`}
+              query={query}
+              {...utilizationPaging}
+            />
+          ) : null
+        }
         titleId="reports-title"
         title={message("reportsTitle")}
         description={message("reportsSummary")}
-      />
-      {resultKey === null ? null : (
-        <ResultAlert positive={positiveReportResults.has(result ?? "")}>
-          {message(resultKey)}
-        </ResultAlert>
-      )}
-
-      <form action={`/${locale}/reports`} method="get">
-        <Toolbar>
-          <Field>
-            <Label htmlFor="reports-from">{message("reportsFromLabel")}</Label>
-            <DatePicker
-              defaultValue={from}
-              id="reports-from"
-              name="from"
-              locale={locale}
-              placeholder={workspaceMessage(locale, "datePlaceholder")}
-            />
-          </Field>
-          <Field>
-            <Label htmlFor="reports-to">{message("reportsToLabel")}</Label>
-            <DatePicker
-              defaultValue={to}
-              id="reports-to"
-              name="to"
-              locale={locale}
-              placeholder={workspaceMessage(locale, "datePlaceholder")}
-            />
-          </Field>
-          <Field>
-            <Label htmlFor="reports-location">
-              {workspaceMessage(locale, "reportsLocation")}
-            </Label>
-            {/* "all" stands in for the empty choice Radix cannot carry; only a
+        toolbar={
+          <FilterBar
+            label={locale === "ar" ? "التصفية" : "Filters"}
+            action={`/${locale}/reports`}
+            method="get"
+          >
+            <Field>
+              <Label htmlFor="reports-from">{message("reportsFromLabel")}</Label>
+              <DatePicker
+                defaultValue={from}
+                id="reports-from"
+                name="from"
+                locale={locale}
+                placeholder={workspaceMessage(locale, "datePlaceholder")}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="reports-to">{message("reportsToLabel")}</Label>
+              <DatePicker
+                defaultValue={to}
+                id="reports-to"
+                name="to"
+                locale={locale}
+                placeholder={workspaceMessage(locale, "datePlaceholder")}
+              />
+            </Field>
+            <Field>
+              <Label htmlFor="reports-location">
+                {workspaceMessage(locale, "reportsLocation")}
+              </Label>
+              {/* "all" stands in for the empty choice Radix cannot carry; only a
                 permitted location id is ever read back, so it means no filter. */}
-            <Select name="location" defaultValue={locationId ?? "all"}>
-              <SelectTrigger id="reports-location">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">
-                  {workspaceMessage(locale, "reportsAllLocations")}
-                </SelectItem>
-                {locations.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
+              <Select name="location" defaultValue={locationId ?? "all"}>
+                <SelectTrigger id="reports-location">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {workspaceMessage(locale, "reportsAllLocations")}
                   </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field>
-            <Label htmlFor="reports-tz">{message("reportsTimeZoneLabel")}</Label>
-            <Input
-              defaultValue={timeZone}
-              dir="ltr"
-              id="reports-tz"
-              name="tz"
-              type="text"
-            />
-          </Field>
-          <Button type="submit" variant="secondary">
-            {message("reportsApplyAction")}
-          </Button>
-        </Toolbar>
-      </form>
-
-      {booking === null ? (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {message("reportsUnavailable")}
-          </AlertDescription>
-        </Alert>
-      ) : (
-        <Section
-          id="reports-bookings"
-          title={message("reportsBookingsTitle")}
-          // The denominator is shown, not implied. A rate whose denominator is
-          // ambiguous is a number two people read two ways.
-          description={`${message("reportsDenominatorNote")} ${formatCount(
-            booking.outcomeDenominator,
-            locale,
-          )}`}
-        >
-          {booking.outcomeDenominator === 0 ? (
-            <Alert tone="info">
-              <AlertDescription>{message("reportsEmptyWindow")}</AlertDescription>
-            </Alert>
-          ) : null}
-          <Facts
-            columns={3}
-            className="rounded-lg border bg-card p-5"
-            items={[
-              {
-                key: "created",
-                label: message("reportsCreatedLabel"),
-                value: formatCount(booking.bookingsCreated, locale),
-              },
-              {
-                key: "completed",
-                label: message("reportsCompletedLabel"),
-                value: formatCount(booking.bookingsCompleted, locale),
-              },
-              {
-                key: "noshow",
-                label: message("reportsNoShowLabel"),
-                value: formatCount(booking.bookingsNoShow, locale),
-              },
-              {
-                key: "cancelled",
-                label: message("reportsCancelledLabel"),
-                value: formatCount(booking.bookingsCancelled, locale),
-              },
-              {
-                key: "noshow-rate",
-                label: message("reportsNoShowRateLabel"),
-                value: percent(booking.noShowRateBps, locale),
-              },
-              {
-                key: "completion-rate",
-                label: message("reportsCompletionRateLabel"),
-                value: percent(booking.completionRateBps, locale),
-              },
-              {
-                key: "lead",
-                label: message("reportsMedianLeadLabel"),
-                value: formatCount(booking.medianLeadTimeMinutes, locale),
-              },
-              {
-                key: "definition",
-                label: message("reportsDefinitionLabel"),
-                value: (
-                  <span dir="ltr" className="font-latin">
-                    v{booking.reportDefinitionVersion}
-                  </span>
-                ),
-              },
-            ]}
-          />
-        </Section>
-      )}
-
-      <Section
-        id="reports-utilization"
-        title={message("reportsUtilizationTitle")}
-        description={message("reportsUtilizationNote")}
+                  {locations.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <Label htmlFor="reports-tz">{message("reportsTimeZoneLabel")}</Label>
+              <Input
+                defaultValue={timeZone}
+                dir="ltr"
+                id="reports-tz"
+                name="tz"
+                type="text"
+              />
+            </Field>
+            <Button type="submit" variant="secondary">
+              {message("reportsApplyAction")}
+            </Button>
+          </FilterBar>
+        }
       >
-        {utilization === null ? (
-          <Alert tone="danger">
-            <AlertDescription className="text-foreground">
-              {message("reportsUnavailable")}
-            </AlertDescription>
-          </Alert>
-        ) : utilization.length === 0 ? (
-          <EmptyState
-            icon={<ChartColumn aria-hidden="true" />}
-            title={message("reportsUtilizationEmpty")}
+        {resultKey === null ? null : (
+          <ResultAlert positive={positiveReportResults.has(result ?? "")}>
+            {message(resultKey)}
+          </ResultAlert>
+        )}
+
+        {booking === null ? (
+          <ErrorState
+            title={<>{message("reportsUnavailable")}</>}
+            retry={<ReadRetry locale={locale} />}
           />
         ) : (
-          <>
-            <TableFrame>
-              <Table label={message("reportsUtilizationTitle")}>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      {workspaceMessage(locale, "utilizationMember")}
-                    </TableHead>
-                    <TableHead className="text-end">
-                      {message("reportsUtilizationTitle")}
-                    </TableHead>
-                    <TableHead className="text-end">
-                      {workspaceMessage(locale, "utilizationMinutes")}
-                    </TableHead>
-                    <TableHead className="text-end">
-                      {message("reportsBookingsTitle")}
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {utilization.map((row) => (
-                    <TableRow key={row.staffId}>
-                      <TableCell className="font-medium">
-                        {row.staffName ?? (
-                          <bdi className="font-latin text-xs">{row.staffId}</bdi>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-end font-semibold">
-                        {percent(row.utilizationBps, locale)}
-                      </TableCell>
-                      <TableCell className="text-end">
-                        <bdi>
-                          {formatCount(row.bookedMinutes, locale)} /{" "}
-                          {formatCount(row.offeredMinutes, locale)}
-                        </bdi>
-                      </TableCell>
-                      <TableCell className="text-end">
-                        {countLabel(locale, "bookings", row.bookingCount)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableFrame>
-            <RecordCards label={message("reportsUtilizationTitle")}>
-              {utilization.map((row) => (
-                <RecordCard
-                  key={row.staffId}
-                  title={
-                    <span className="font-semibold">
-                      {row.staffName ?? (
-                        <bdi className="font-latin text-xs break-all">
-                          {row.staffId}
-                        </bdi>
-                      )}
+          <Section
+            id="reports-bookings"
+            title={message("reportsBookingsTitle")}
+            // The denominator is shown, not implied. A rate whose denominator is
+            // ambiguous is a number two people read two ways.
+            description={`${message("reportsDenominatorNote")} ${formatCount(
+              booking.outcomeDenominator,
+              locale,
+            )}`}
+          >
+            {booking.outcomeDenominator === 0 ? (
+              <Alert tone="info">
+                <AlertDescription>{message("reportsEmptyWindow")}</AlertDescription>
+              </Alert>
+            ) : null}
+            <Facts
+              columns={3}
+              className="rounded-lg border bg-card p-5"
+              items={[
+                {
+                  key: "created",
+                  label: message("reportsCreatedLabel"),
+                  value: formatCount(booking.bookingsCreated, locale),
+                },
+                {
+                  key: "completed",
+                  label: message("reportsCompletedLabel"),
+                  value: formatCount(booking.bookingsCompleted, locale),
+                },
+                {
+                  key: "noshow",
+                  label: message("reportsNoShowLabel"),
+                  value: formatCount(booking.bookingsNoShow, locale),
+                },
+                {
+                  key: "cancelled",
+                  label: message("reportsCancelledLabel"),
+                  value: formatCount(booking.bookingsCancelled, locale),
+                },
+                {
+                  key: "noshow-rate",
+                  label: message("reportsNoShowRateLabel"),
+                  value: percent(booking.noShowRateBps, locale),
+                },
+                {
+                  key: "completion-rate",
+                  label: message("reportsCompletionRateLabel"),
+                  value: percent(booking.completionRateBps, locale),
+                },
+                {
+                  key: "lead",
+                  label: message("reportsMedianLeadLabel"),
+                  value: formatCount(booking.medianLeadTimeMinutes, locale),
+                },
+                {
+                  key: "definition",
+                  label: message("reportsDefinitionLabel"),
+                  value: (
+                    <span dir="ltr" className="font-latin">
+                      v{booking.reportDefinitionVersion}
                     </span>
-                  }
-                  aside={
-                    <span className="text-lg font-semibold [font-variant-numeric:tabular-nums]">
-                      {percent(row.utilizationBps, locale)}
-                    </span>
-                  }
-                  facts={[
-                    {
-                      key: "minutes",
-                      label: workspaceMessage(locale, "utilizationMinutes"),
-                      value: (
-                        <bdi>
-                          {formatCount(row.bookedMinutes, locale)} /{" "}
-                          {formatCount(row.offeredMinutes, locale)}
-                        </bdi>
-                      ),
-                    },
-                    {
-                      key: "bookings",
-                      label: message("reportsBookingsTitle"),
-                      value: countLabel(locale, "bookings", row.bookingCount),
-                    },
-                  ]}
-                />
-              ))}
-            </RecordCards>
-          </>
+                  ),
+                },
+              ]}
+            />
+          </Section>
         )}
-      </Section>
 
-      {revenue === null ? null : (
-        <Section id="reports-revenue" title={message("reportsRevenueTitle")}>
-          {revenue.unsettledPayments > 0 ? (
-            // A total that is still moving says so, instead of being read
-            // as final and quoted somewhere it cannot be taken back.
-            <Alert tone="warning">
-              <AlertDescription className="text-foreground">
-                {message("reportsUnsettledNote")}{" "}
-                {formatCount(revenue.unsettledPayments, locale)}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          <Facts
-            columns={3}
-            className="rounded-lg border bg-card p-5"
-            items={[
-              {
-                key: "charged",
-                label: message("reportsChargedLabel"),
-                value: money(revenue.chargedMinor),
-              },
-              {
-                key: "refunded",
-                label: message("reportsRefundedLabel"),
-                value: money(revenue.refundedMinor),
-              },
-              {
-                key: "net",
-                label: message("reportsNetLabel"),
-                value: money(revenue.netMinor),
-              },
-              {
-                key: "aov",
-                label: message("reportsAovLabel"),
-                value: money(revenue.averageOrderValueMinor),
-              },
-              {
-                key: "outstanding",
-                label: message("reportsOutstandingLabel"),
-                value: money(revenue.outstandingMinor),
-              },
-            ]}
-          />
+        <Section
+          id="reports-utilization"
+          title={message("reportsUtilizationTitle")}
+          description={message("reportsUtilizationNote")}
+        >
+          {utilization === null ? (
+            <ErrorState
+              title={<>{message("reportsUnavailable")}</>}
+              retry={<ReadRetry locale={locale} />}
+            />
+          ) : utilization.length === 0 ? (
+            <EmptyState
+              icon={<ChartColumn aria-hidden="true" />}
+              title={message("reportsUtilizationEmpty")}
+            />
+          ) : (
+            <>
+              <DataTable
+                id="reports-records"
+                caption={message("reportsUtilizationTitle")}
+                columns={[
+                  {
+                    key: "column-0",
+                    label: workspaceMessage(locale, "utilizationMember"),
+                  },
+                  { key: "column-1", label: message("reportsUtilizationTitle") },
+                  {
+                    key: "column-2",
+                    label: workspaceMessage(locale, "utilizationMinutes"),
+                  },
+                  { key: "column-3", label: message("reportsBookingsTitle") },
+                ]}
+                rows={utilization.map((row) => ({
+                  key: row.staffId,
+                  cells: [
+                    <>
+                      {row.staffName ?? (
+                        <bdi className="font-latin text-xs">{row.staffId}</bdi>
+                      )}
+                    </>,
+                    <>{percent(row.utilizationBps, locale)}</>,
+                    <>
+                      <bdi>
+                        {formatCount(row.bookedMinutes, locale)} /{" "}
+                        {formatCount(row.offeredMinutes, locale)}
+                      </bdi>
+                    </>,
+                    <>{countLabel(locale, "bookings", row.bookingCount)}</>,
+                  ],
+                }))}
+              />
+            </>
+          )}
         </Section>
-      )}
 
-      <Section id="reports-export" title={message("reportsExportTitle")}>
-        <ReportExportForm
-          locale={locale}
-          from={from}
-          to={to}
-          timeZone={timeZone}
-          locationId={locationId ?? ""}
-        />
+        {revenue === null ? null : (
+          <Section id="reports-revenue" title={message("reportsRevenueTitle")}>
+            {revenue.unsettledPayments > 0 ? (
+              // A total that is still moving says so, instead of being read
+              // as final and quoted somewhere it cannot be taken back.
+              <Alert tone="warning">
+                <AlertDescription className="text-foreground">
+                  {message("reportsUnsettledNote")}{" "}
+                  {formatCount(revenue.unsettledPayments, locale)}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            <Facts
+              columns={3}
+              className="rounded-lg border bg-card p-5"
+              items={[
+                {
+                  key: "charged",
+                  label: message("reportsChargedLabel"),
+                  value: money(revenue.chargedMinor),
+                },
+                {
+                  key: "refunded",
+                  label: message("reportsRefundedLabel"),
+                  value: money(revenue.refundedMinor),
+                },
+                {
+                  key: "net",
+                  label: message("reportsNetLabel"),
+                  value: money(revenue.netMinor),
+                },
+                {
+                  key: "aov",
+                  label: message("reportsAovLabel"),
+                  value: money(revenue.averageOrderValueMinor),
+                },
+                {
+                  key: "outstanding",
+                  label: message("reportsOutstandingLabel"),
+                  value: money(revenue.outstandingMinor),
+                },
+              ]}
+            />
+          </Section>
+        )}
 
-        {exported === null || exported.rows.length === 0 ? null : (
-          <Field>
-            {/* ponytail: the CSV is rendered here rather than served as a
+        <Section id="reports-export" title={message("reportsExportTitle")}>
+          <ReportExportForm
+            locale={locale}
+            from={from}
+            to={to}
+            timeZone={timeZone}
+            locationId={locationId ?? ""}
+          />
+
+          {exported === null || exported.rows.length === 0 ? null : (
+            <Field>
+              {/* ponytail: the CSV is rendered here rather than served as a
                 download, because there is nowhere durable to put a file yet —
                 the same recoverability gate that keeps exports out of Storage
                 until issue #39. Escaping and formula-injection safety live in
                 `_lib/csv.ts` and are unit tested. */}
-            <Label htmlFor="reports-export-csv">
-              {message("reportsExportCsv")}
-              <span className="font-normal text-muted-foreground">
-                · {countLabel(locale, "rows", exported.rowCount)}
-              </span>
-            </Label>
-            <Textarea
-              dir="ltr"
-              id="reports-export-csv"
-              readOnly
-              rows={8}
-              className="font-latin text-xs"
-              value={renderCsv(columnsOf(exported.rows), exported.rows)}
-            />
-          </Field>
-        )}
-      </Section>
+              <Label htmlFor="reports-export-csv">
+                {message("reportsExportCsv")}
+                <span className="font-normal text-muted-foreground">
+                  · {countLabel(locale, "rows", exported.rowCount)}
+                </span>
+              </Label>
+              <Textarea
+                dir="ltr"
+                id="reports-export-csv"
+                readOnly
+                rows={8}
+                className="font-latin text-xs"
+                value={renderCsv(columnsOf(exported.rows), exported.rows)}
+              />
+            </Field>
+          )}
+        </Section>
+      </DataPage>
     </WorkspaceShell>
   );
 }

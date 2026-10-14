@@ -9,7 +9,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Toolbar,
+  FilterBar,
   cn,
 } from "@wlbp/ui-foundation";
 import Link from "next/link";
@@ -93,76 +93,72 @@ export function CalendarFilters({
           ))}
         </ul>
       </nav>
-      <form method="get" aria-label={workspaceMessage(locale, "filtersLabel")}>
+      <FilterBar method="get" label={workspaceMessage(locale, "filtersLabel")}>
         <input name="view" type="hidden" value={view} />
-        <Toolbar>
-          <Field>
-            <Label htmlFor="calendar-date">{m("calendarDateLabel")}</Label>
-            <DatePicker
-              id="calendar-date"
-              name="date"
-              locale={locale}
-              defaultValue={date}
-              placeholder={workspaceMessage(locale, "datePlaceholder")}
-              required
-            />
-          </Field>
-          {(["location", "staff", "service"] as const).map((kind) => (
-            <Field key={kind}>
-              <Label htmlFor={`calendar-${kind}`}>
-                {m(
-                  kind === "location"
-                    ? "calendarFilterLocation"
-                    : kind === "staff"
-                      ? "calendarFilterStaff"
-                      : "calendarFilterService",
-                )}
-              </Label>
-              <Select
-                name={kind}
-                defaultValue={filters[`${kind}Id`] ?? allChoicesValue}
-              >
-                <SelectTrigger id={`calendar-${kind}`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={allChoicesValue}>
-                    {m("calendarFilterAll")}
-                  </SelectItem>
-                  {(kind === "staff"
-                    ? [...new Map(choices.staff.map((c) => [c.id, c])).values()]
-                    : unique(kind)
-                  ).map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Field>
-          ))}
-          <Field>
-            <Label htmlFor="calendar-time-zone">
-              {workspaceMessage(locale, "timeZoneLabel")}
+
+        <Field>
+          <Label htmlFor="calendar-date">{m("calendarDateLabel")}</Label>
+          <DatePicker
+            id="calendar-date"
+            name="date"
+            locale={locale}
+            defaultValue={date}
+            placeholder={workspaceMessage(locale, "datePlaceholder")}
+            required
+          />
+        </Field>
+        {(["location", "staff", "service"] as const).map((kind) => (
+          <Field key={kind}>
+            <Label htmlFor={`calendar-${kind}`}>
+              {m(
+                kind === "location"
+                  ? "calendarFilterLocation"
+                  : kind === "staff"
+                    ? "calendarFilterStaff"
+                    : "calendarFilterService",
+              )}
             </Label>
-            <Select name="timeZone" defaultValue={timeZone}>
-              <SelectTrigger id="calendar-time-zone">
+            <Select name={kind} defaultValue={filters[`${kind}Id`] ?? allChoicesValue}>
+              <SelectTrigger id={`calendar-${kind}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {[...new Set([timeZone, ...choices.offers.map((o) => o.timeZone)])].map(
-                  (zone) => (
-                    <SelectItem key={zone} value={zone}>
-                      <bdi>{zone}</bdi>
-                    </SelectItem>
-                  ),
-                )}
+                <SelectItem value={allChoicesValue}>
+                  {m("calendarFilterAll")}
+                </SelectItem>
+                {(kind === "staff"
+                  ? [...new Map(choices.staff.map((c) => [c.id, c])).values()]
+                  : unique(kind)
+                ).map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
-          <Button type="submit">{m("calendarFilterApply")}</Button>
-        </Toolbar>
-      </form>
+        ))}
+        <Field>
+          <Label htmlFor="calendar-time-zone">
+            {workspaceMessage(locale, "timeZoneLabel")}
+          </Label>
+          <Select name="timeZone" defaultValue={timeZone}>
+            <SelectTrigger id="calendar-time-zone">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[...new Set([timeZone, ...choices.offers.map((o) => o.timeZone)])].map(
+                (zone) => (
+                  <SelectItem key={zone} value={zone}>
+                    <bdi>{zone}</bdi>
+                  </SelectItem>
+                ),
+              )}
+            </SelectContent>
+          </Select>
+        </Field>
+        <Button type="submit">{m("calendarFilterApply")}</Button>
+      </FilterBar>
     </div>
   );
 }

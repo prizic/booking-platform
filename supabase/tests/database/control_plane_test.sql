@@ -222,6 +222,7 @@ rollback to savepoint cp_drift;
 -- ---------------------------------------------------------------------------
 -- Privileged work is a job, and destructive work needs two people.
 savepoint cp_jobs;
+update app.tenants set status='suspended' where id='a0000000-0000-0000-0000-000000000001';
 insert into control_plane.operators(auth_user_id,email,role) values
   ('a1000000-0000-0000-0000-000000000002','admin-a@example.invalid','admin'),
   ('a1000000-0000-0000-0000-000000000003','manager-a@example.invalid','admin');

@@ -8,7 +8,7 @@ import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { operationsCopy } from "../../../_lib/operations-copy";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
@@ -51,36 +51,48 @@ export default async function ProvisioningPage({
         : copyFor(statusCopy, s, locale);
 
   return (
-    <>
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          atLeast(operator.role, "operator") ? (
-            <Button asChild>
-              <Link href={`${path}/new`}>
-                <Plus aria-hidden="true" />
-                {say(locale, c.request)}
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
-      <FilterBar
-        locale={locale}
-        path={path}
-        search={{ label: say(locale, c.search), value: list.q }}
-      >
-        <SelectFilter
-          name="state"
-          label={say(locale, c.state)}
-          value={list.filters.state}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.state.map((s) => [s, stateLabel(s)] as const)}
-        />
-      </FilterBar>
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        atLeast(operator.role, "operator") ? (
+          <Button asChild>
+            <Link href={`${path}/new`}>
+              <Plus aria-hidden="true" />
+              {say(locale, c.request)}
+            </Link>
+          </Button>
+        ) : null
+      }
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, c.search), value: list.q }}
+        >
+          <SelectFilter
+            name="state"
+            label={say(locale, c.state)}
+            value={list.filters.state}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.state.map((s) => [s, stateLabel(s)] as const)}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -132,15 +144,8 @@ export default async function ProvisioningPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </>
+    </DataPage>
   );
 }

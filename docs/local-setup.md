@@ -347,3 +347,267 @@ Use Node 22.13–22.x and run `node scripts/platform-admin-local.mjs start`, the
 Open `http://localhost:3002/en` or `/ar`. Real synthetic Auth accounts and verified authenticator factors are recorded in ignored, owner-readable `.artifacts/platform-admin/credentials.json`. Use the admin account's email/password, then its six-digit authenticator code. `node scripts/platform-admin-local.mjs code admin` prints the current local code. The helper also creates viewer, operator and second-admin accounts for permission and two-person approval testing. Keep these files local. There is no authentication bypass.
 
 The repeatable seed creates explicitly synthetic control-plane records and retains existing local data. External resources are recorded as unverified or pending until an actual worker reports evidence. Run browser checks with `PLATFORM_ADMIN_E2E=1 pnpm exec playwright test --project=platform-admin --workers=1`; artifacts containing credentials and sessions are disabled. Do not run native sign-in concurrently with tests using the same authenticator factor.
+
+
+## Arabic demo development (issue #136)
+
+Use `rtk pnpm demo:dev` at the source root with Node >=22.13 <23, pnpm,
+Docker Desktop running and `psql` on PATH. It checks Docker and the PostgreSQL
+client, performs a frozen install, creates or reuses only
+`booking-demo-dev-20261013` under `.artifacts/demo-dev/isolated` (589xx and
+inspector 8293), seeds the opt-in synthetic Arabic business, builds the shared
+Client/Dashboard dependencies, and launches those two apps. It never starts
+Platform Admin, stops another stack, resets any database or edits `.env.local`.
+
+The process environment overrides both app connections and tenant selectors:
+`client.arabic-demo.example.invalid` and
+`dashboard.arabic-demo.example.invalid`, with the actual selected localhost
+ports in `NEXT_PUBLIC_SITE_URL`. `/ar` is the printed starting route. No OS DNS
+or hosts-file change is needed: `LOCAL_TENANT_HOST` is the documented local
+routing selector. Occupied app ports are skipped. Occupied Supabase ports fail
+with an actionable port number; the launcher never kills their owner. A changed
+retained demo configuration is refused for deliberate local review, rather than
+silently replacing it. Ctrl-C stops only the child app processes and retains the
+stack/data. Synthetic owner credentials stay in the ignored owner-readable
+`.artifacts/demo-dev/credentials.json`; do not copy them into logs, screenshots or
+app environment variables.
+
+Seed profiles are distinct: base seed domains are `*.tenant-a.example.invalid`,
+`demo:local` only seeds `*.arabic-demo.example.invalid`, and live E2E fixtures
+use `*.live-booking.example.invalid`. An unrelated `.env.local` selecting the
+live fixture does not mean the Arabic demo catalog is empty. `demo:dev` pairs
+the selected stack and hostnames explicitly. Published data-read failures must
+still produce the app's error/retry state; a successful empty catalog is a
+separate product state.
+
+On the October 13 machine an isolated, SHA-256 checked official Node 22.22.0
+runtime is available without changing global defaults. Use this PATH only in
+the working shell (restore or close it afterward):
+
+```sh
+export PATH="/tmp/booking-node22-20261013/node-v22.22.0-darwin-arm64/bin:$PWD/node_modules/.bin:/Users/ahmed/Library/pnpm/bin:/Users/ahmed/homebrew/opt/libpq/bin:/Users/ahmed/homebrew/bin:$PATH"
+rtk node --version
+rtk pnpm demo:dev
+```
+
+The `/tmp` runtime is machine-local and may be removed by the OS. Other machines
+should use their own isolated Node22 installation with the same version for
+both sides of a performance comparison. Do not repoint the user's global Node.
+
+## Complete booking journey verification (authored, unrun)
+
+**Wait until every implementation stream has finished before running any gate,
+browser suite or navigation measurement.** The verification stream authored
+the commands and assertions below; it did not run them. The parent coordinates
+ordered gates, failure classification, corrections and visual acceptance.
+
+Choose a new campaign project, output directory and free port block. The example
+uses 578xx, distinct from the retained 543xx/553xx/565xx/577xx stacks. The
+`WLBP_CAMPAIGN_OUTPUT` override is restricted to a separate directory under this
+repository's `.artifacts`; default Platform Admin behavior is unchanged. Do not
+point it at an existing unrelated campaign. Never reset a retained stack.
+
+```sh
+export PATH="/tmp/booking-node22-20261013/node-v22.22.0-darwin-arm64/bin:$PWD/node_modules/.bin:$PATH"
+export WLBP_CAMPAIGN=booking-journey-20261013
+export WLBP_CAMPAIGN_OUTPUT=.artifacts/booking-journey-20261013
+export WLBP_CAMPAIGN_PORT_PREFIX=578
+export WLBP_CAMPAIGN_INSPECTOR_PORT=8295
+export WLBP_SUPABASE_WORKDIR="$PWD/.artifacts/booking-journey-20261013/isolated"
+export WLBP_JOURNEY_OUTPUT="$PWD/.artifacts/booking-journey-20261013/reports"
+export WLBP_JOURNEY_CLOCK_FILE="$PWD/.artifacts/booking-journey-20261013/fixture-clock.json"
+export PLATFORM_ADMIN_CREDENTIAL_FILE="$PWD/.artifacts/booking-journey-20261013/credentials.json"
+export DASHBOARD_COMPLETION_CREDENTIAL_FILE="$PWD/.artifacts/booking-journey-20261013/dashboard-completion-credentials.json"
+export WLBP_JOURNEY_MAILBOX=http://127.0.0.1:57824
+export WLBP_JOURNEY_E2E=1
+rtk node scripts/verify-journey.mjs --phase setup -- pnpm install --frozen-lockfile
+rtk node scripts/platform-admin-local.mjs start
+```
+
+Run the parent-approved source gates first, then fresh database replay/lint/pgTAP
+on **this new campaign only**, before application fixtures change deterministic
+base counts. The existing `platform-admin-local.mjs replay` checks the named
+project and ports; authorize it only for a newly created acceptance campaign,
+never for the original retained stack. Wrap each gate with
+`rtk node scripts/verify-journey.mjs --phase suite -- <command> <arguments>` to
+record exact process wall time without saving raw output. Non-Playwright gates
+have `counts: null`; they never invent test counts.
+
+For this campaign the mandatory gate order is **check:fast → test:db →
+dashboard-completion → platform-admin → e2e → a11y**. Run no gate until all
+implementation/correction streams finish. The isolated Node 22 toolchain is
+`/tmp/node-v22.22.0-darwin-arm64/bin`; use
+`export PATH="/tmp/booking-node22-20261013/node-v22.22.0-darwin-arm64/bin:$PWD/node_modules/.bin:$PATH"` in this terminal only.
+Do not change the user's global Node default.
+
+`check:fast` normally selects workspaces from committed base/head differences;
+this can omit uncommitted campaign changes. Equal resolved refs disable its
+affected filter and check the full workspace, while retaining all ordinary
+root gates. Use the following campaign override without changing the script:
+
+```sh
+rtk env FAST_BASE_SHA=HEAD FAST_HEAD_SHA=HEAD node scripts/verify-journey.mjs -- pnpm check:fast
+rtk node scripts/verify-journey.mjs --phase setup -- node scripts/platform-admin-local.mjs replay
+rtk node scripts/verify-journey.mjs -- pnpm test:db
+```
+
+The replay is exclusively for the newly created campaign selected above.
+`pnpm test:db` forwards the absolute `WLBP_SUPABASE_WORKDIR` to the local CLI;
+it must still point to this campaign, never the retained/default database.
+Do not apply journey fixtures before this DB gate: they alter base test counts.
+
+After the database suites, prepare the synthetic users/catalogs and production
+package exports:
+
+```sh
+rtk node scripts/platform-admin-local.mjs seed
+rtk node scripts/platform-admin-local.mjs dashboard-fixture
+rtk node scripts/platform-admin-local.mjs realtime-policy
+rtk node scripts/prepare-booking-journey.mjs
+rtk node scripts/prepare-admin-journey.mjs
+rtk pnpm exec turbo run build --filter=@wlbp/client^... --filter=@wlbp/dashboard^... --filter=@wlbp/platform-admin^... --filter=@wlbp/email --concurrency=2
+```
+
+The appended SQL fixtures are local-only synthetic setup, not migrations or
+ordinary-user authorization proof. They reserve issue-136 IDs, leave original
+fixture rows intact and retain execution/audit history. Lifecycle fixture records
+are consumed by mutations: use a fresh isolated acceptance campaign for another
+full lifecycle run. Do not reset the original retained stack to make tests pass.
+Today dates use the server's New York civil day; `fixture-clock.json` records the
+seed instant. Do not cross that midnight within a campaign run. Browser clock
+freezing alone cannot change authoritative server time.
+
+Execute the existing projects separately in this order so shared accounts,
+publication state, ports and seeded lifecycle transitions cannot overlap:
+
+```sh
+export DASHBOARD_COMPLETION_E2E=1
+export WLBP_JOURNEY_E2E=1
+rtk node scripts/verify-journey.mjs -- pnpm exec playwright test --project=dashboard-completion --workers=1
+unset DASHBOARD_COMPLETION_E2E
+export PLATFORM_ADMIN_E2E=1
+rtk node scripts/verify-journey.mjs -- pnpm exec playwright test --project=platform-admin --workers=1
+unset PLATFORM_ADMIN_E2E
+export DASHBOARD_COMPLETION_E2E=1
+rtk node scripts/verify-journey.mjs -- pnpm exec playwright test --project=e2e --workers=1
+export PLATFORM_ADMIN_E2E=1
+export WLBP_JOURNEY_A11Y=1
+rtk node scripts/verify-journey.mjs -- pnpm exec playwright test --project=a11y --workers=1
+unset WLBP_JOURNEY_A11Y PLATFORM_ADMIN_E2E DASHBOARD_COMPLETION_E2E
+```
+
+The final a11y profile starts both tenant brand profiles, the public Admin
+smoke surface on 41732 and the isolated authenticated Admin on 41742; it does
+not reuse an unrelated listening server. Both workspace flags are required.
+The new Admin accessibility cases match `a11y` and exercise EN/AR × light/dark ×
+desktop/mobile, persisted collapse, keyboard focus, sheet dismissal and axe.
+The existing Dashboard completion rollback restores the publication that was
+active at test entry, preserving journey content for the later Client suite.
+Admin lifecycles use separate d1/d3/d5/d8-prefixed fixtures; Client cancellation
+uses booking 139, leaving Today's bookings 136/137 intact for final a11y.
+Publication restoration uses the real editor/publisher. Never reseed mutated
+lifecycle records between gates or interpret a skipped journey as a pass.
+
+The journey files actually match these projects: `client-journey`,
+`dashboard-journey`, `journey-accessibility`, `admin-journey-accessibility` and
+`admin-journey`. Existing specs
+remain. Credential-bearing projects exclude traces, video and screenshots.
+`verify-journey` chooses the sanitized reporter, disables copy prompts and drops
+raw child stdout/stderr. Each JSON report contains pass/fail/skip/interrupted
+counts, exact wall time and JSON-safe failures `{title,error,firstStackFrame,url}`.
+URLs lose query strings, fragments, userinfo and identifying path segments;
+assertion DOM and code frames are discarded. Each retry failure remains available.
+Raw Playwright output goes to a run-owned private temporary directory and is
+purged at completion, including automatic `error-context.md` files. Only the
+sanitized report is retained. A forcibly killed runner may leave its owner-only
+temporary directory; remove only that run directory before sharing artifacts.
+
+Sanitizer regression tests include full and relative credential-bearing URLs in
+title, error, first stack frame and URL fields. They are authored, unrun; the
+parent's check:fast configuration test gate executes them. Do not share raw
+error contexts or mailbox bodies to diagnose failures.
+
+After **each** run, the parent submits that run's failure array to one Laya batch
+with labels `product_bug`, `test_bug_selector`, `flaky_timing`, `environment`.
+Environment includes Docker/Supabase/tenant-host/port/Node failures. Inspect
+`product_bug` first and every confidence below 0.7 directly. These advisory
+classifications never replace required checks. Keep wall reports distinct from
+setup, server startup and production build timings.
+
+R5 tests send actual messages to the isolated Mailpit through the production
+notification claim/render/attempt-recording code, using
+`scripts/deliver-journey-mail.mjs` as a local test transport. It refuses remote
+or retained connection profiles and non-synthetic recipients. Tokens and OTP
+email contents stay in memory. Mailpit acceptance is local delivery evidence,
+not Resend sandbox/provider webhook evidence. Its HTTP send schema is documented
+by [Mailpit's API](https://mailpit.axllent.org/docs/api-v1/). Build `@wlbp/email`
+first. No hosted email provider or production DB is contacted.
+
+## Comparable navigation measurements (run later)
+
+Keep `/tmp/booking-platform-before-20261013` at original
+`a94bad638b0eaf49de0bc62c1b3ed5965b28308e`. Do not apply current app changes there.
+Install its frozen dependencies after implementation finishes, then invoke the
+**current checkout's** harness against either source. The harness verifies the
+before revision and refuses changed source. Build outputs use distinct Next
+cache directories; servers use distinct ports and start only their own child.
+The two builds must use the same Node/pnpm/machine/settings and equivalent
+isolated synthetic DB contents. Run them sequentially against the same unchanged
+campaign dataset or explicitly equivalent independent fixtures. Avoid concurrent
+verification or external background load during measurements.
+
+For Dashboard, run the following from the current checkout. The serve commands
+stay open in a separate terminal; wait for `Server ready` before the timed run:
+
+```sh
+rtk pnpm --dir /tmp/booking-platform-before-20261013 install --frozen-lockfile
+rtk node scripts/navigation-target.mjs before dashboard /tmp/booking-platform-before-20261013 build 41831
+rtk node scripts/navigation-target.mjs before dashboard /tmp/booking-platform-before-20261013 serve 41831
+```
+
+In the measuring terminal:
+
+```sh
+export WLBP_EXTERNAL_SERVERS=1
+export WLBP_NAV_APP=dashboard
+export WLBP_NAV_LABEL=before
+export WLBP_NAV_ORIGIN=http://localhost:41831
+export WLBP_NAV_BUILD_META="$PWD/.artifacts/booking-journey/build-before-dashboard.json"
+export WLBP_NAV_REPETITIONS=9
+rtk node scripts/verify-journey.mjs --phase navigation -- pnpm exec playwright test --project=navigation-metrics --workers=1
+```
+
+Stop that harness-owned server with Ctrl-C. Repeat `navigation-target` with
+`after dashboard "$PWD" build 41841`, then `serve 41841`; set label `after`,
+origin `http://localhost:41841`, and build metadata `build-after-dashboard.json`.
+For Admin repeat both sides with application `admin`, ports 41842/41852 and
+metadata `build-before-admin.json` / `build-after-admin.json`. The Admin harness
+uses its real viewer MFA session; Dashboard uses the completion admin account.
+Session state remains in private memory and never enters traces or metadata.
+
+```sh
+rtk node scripts/compare-navigation.mjs .artifacts/booking-journey/navigation-before-dashboard.json .artifacts/booking-journey/navigation-after-dashboard.json .artifacts/booking-journey/comparison-dashboard.json
+rtk node scripts/compare-navigation.mjs .artifacts/booking-journey/navigation-before-admin.json .artifacts/booking-journey/navigation-after-admin.json .artifacts/booking-journey/comparison-admin.json
+```
+
+Each app measures four routes (Dashboard: Today/Bookings/Customers/Services;
+Admin: Tenants/Instances/Jobs/Plans) with at least five repetitions per mode
+(default nine), raw samples, median/p95, document replacement, request counts,
+response bytes and error counts. Completion waits for the correct heading,
+meaningful route content, no busy/error state, fonts and a paint opportunity.
+Auth and route prewarming are excluded from samples. Build and spawn-to-sign-in
+startup wall times are separate artifacts.
+
+Cold means a fresh browser context per route with empty HTTP/router cache and
+blocked service workers. The production build and server persist and all four
+routes are prewarmed identically; this is **not** a claim of cold server/build
+cache measurements. Warm means navigation via actual sidebar links after all
+four routes have been visited in the same context. The original full-document
+navigation is measured and recorded instead of pretending it had a warm router.
+The comparison refuses mismatched environment/fixture/build/cache definitions
+or repetition counts. Default acceptance budgets are median <=1500 ms and p95
+<=3000 ms with <=10% regression and zero warm document replacements; override
+budgets explicitly with `WLBP_NAV_MEDIAN_BUDGET_MS` and
+`WLBP_NAV_P95_BUDGET_MS`. An `investigate` decision requires diagnosis, never
+an invented passing baseline. No navigation numbers exist until these commands
+have actually run.

@@ -25,6 +25,8 @@ export const outcomeCopy = {
 /** Action families for filtering; prefixes of the action code. */
 export const auditFamilies = {
   tenant: ["Tenants", "المستأجرون"],
+  instance: ["Instances", "النسخ"],
+  review: ["Operator review", "مراجعة المشغّلين"],
   subscription: ["Subscriptions", "الاشتراكات"],
   plan: ["Plans", "الخطط"],
   entitlement: ["Entitlements", "الميزات"],
@@ -41,6 +43,25 @@ export const auditFamilies = {
 } as const satisfies Record<string, Copy>;
 
 export const auditActionCopy: Record<string, Copy> = {
+  "instance.configuration.update": [
+    "Update instance configuration",
+    "تعديل إعدادات النسخة",
+  ],
+  "instance.configuration_updated": [
+    "Instance configuration updated",
+    "تم تعديل إعدادات النسخة",
+  ],
+  "instance.deactivate": ["Deactivate instance", "إلغاء تفعيل النسخة"],
+  "instance.deactivated": ["Instance deactivated", "أُلغي تفعيل النسخة"],
+  "instance.closure.request": ["Request instance closure", "طلب إغلاق النسخة"],
+  "instance.closure_requested": ["Instance closure requested", "طُلب إغلاق النسخة"],
+  "domain.retirement.request": ["Request domain retirement", "طلب إيقاف النطاق"],
+  "domain.retirement_requested": ["Domain retirement requested", "طُلب إيقاف النطاق"],
+  "domain.retired": ["Domain route retired", "أُوقف مسار النطاق"],
+  "review.approve": ["Approve operator request", "الموافقة على طلب المشغّل"],
+  "review.reject": ["Reject operator request", "رفض طلب المشغّل"],
+  "review.approved": ["Operator request approved", "تمت الموافقة على طلب المشغّل"],
+  "review.rejected": ["Operator request rejected", "رُفض طلب المشغّل"],
   // Failed attempts retain the requested operation, before a past-tense event exists.
   "tenant.create": ["Register a tenant", "تسجيل مستأجر"],
   "tenant.rename": ["Rename a tenant", "إعادة تسمية مستأجر"],

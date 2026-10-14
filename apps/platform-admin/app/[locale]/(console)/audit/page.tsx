@@ -13,7 +13,7 @@ import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DetailSummary } from "../../../_lib/ui/audit-list";
 import { DataTable } from "../../../_lib/ui/data-table";
@@ -65,29 +65,84 @@ export default async function AuditPage({
   const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          atLeast(operator.role, "admin") ? (
-            <ActionDialog
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        atLeast(operator.role, "admin") ? (
+          <ActionDialog
+            locale={locale}
+            operation="exportAudit"
+            trigger={say(locale, c.export)}
+            title={say(locale, c.exportTitle)}
+            description={say(locale, c.exportBody)}
+            submit={say(locale, c.export)}
+            successMessage={say(locale, c.exported)}
+            hidden={Object.fromEntries(
+              Object.entries(exportFields).filter(([, v]) => v),
+            )}
+          />
+        ) : null
+      }
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, c.search), value: list.q }}
+        >
+          <SelectFilter
+            name="family"
+            label={say(locale, c.family)}
+            value={list.filters.family}
+            allLabel={say(locale, formCopy.all)}
+            options={families.map((f) => [f, say(locale, auditFamilies[f])] as const)}
+          />
+          <SelectFilter
+            name="outcome"
+            label={say(locale, c.outcome)}
+            value={list.filters.outcome}
+            allLabel={say(locale, formCopy.all)}
+            options={outcomes.map((o) => [o, say(locale, outcomeCopy[o])] as const)}
+          />
+          <Field className="md:w-60">
+            <Label htmlFor="audit-from">{say(locale, c.from)}</Label>
+            <DatePicker
+              id="audit-from"
+              name="from"
               locale={locale}
-              operation="exportAudit"
-              trigger={say(locale, c.export)}
-              title={say(locale, c.exportTitle)}
-              description={say(locale, c.exportBody)}
-              submit={say(locale, c.export)}
-              successMessage={say(locale, c.exported)}
-              hidden={Object.fromEntries(
-                Object.entries(exportFields).filter(([, v]) => v),
-              )}
+              placeholder={say(locale, formCopy.pickDate)}
+              {...(list.filters.from ? { defaultValue: list.filters.from } : {})}
             />
-          ) : null
-        }
-      />
+          </Field>
+          <Field className="md:w-60">
+            <Label htmlFor="audit-to">{say(locale, c.to)}</Label>
+            <DatePicker
+              id="audit-to"
+              name="to"
+              locale={locale}
+              placeholder={say(locale, formCopy.pickDate)}
+              {...(list.filters.to ? { defaultValue: list.filters.to } : {})}
+            />
+          </Field>
+          {list.filters.tenant ? (
+            <input type="hidden" name="tenant" value={list.filters.tenant} />
+          ) : null}
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {list.filters.tenant ? (
         <Alert>
           <AlertDescription>
@@ -101,49 +156,7 @@ export default async function AuditPage({
           </AlertDescription>
         </Alert>
       ) : null}
-      <FilterBar
-        locale={locale}
-        path={path}
-        search={{ label: say(locale, c.search), value: list.q }}
-      >
-        <SelectFilter
-          name="family"
-          label={say(locale, c.family)}
-          value={list.filters.family}
-          allLabel={say(locale, formCopy.all)}
-          options={families.map((f) => [f, say(locale, auditFamilies[f])] as const)}
-        />
-        <SelectFilter
-          name="outcome"
-          label={say(locale, c.outcome)}
-          value={list.filters.outcome}
-          allLabel={say(locale, formCopy.all)}
-          options={outcomes.map((o) => [o, say(locale, outcomeCopy[o])] as const)}
-        />
-        <Field className="md:w-60">
-          <Label htmlFor="audit-from">{say(locale, c.from)}</Label>
-          <DatePicker
-            id="audit-from"
-            name="from"
-            locale={locale}
-            placeholder={say(locale, formCopy.pickDate)}
-            {...(list.filters.from ? { defaultValue: list.filters.from } : {})}
-          />
-        </Field>
-        <Field className="md:w-60">
-          <Label htmlFor="audit-to">{say(locale, c.to)}</Label>
-          <DatePicker
-            id="audit-to"
-            name="to"
-            locale={locale}
-            placeholder={say(locale, formCopy.pickDate)}
-            {...(list.filters.to ? { defaultValue: list.filters.to } : {})}
-          />
-        </Field>
-        {list.filters.tenant ? (
-          <input type="hidden" name="tenant" value={list.filters.tenant} />
-        ) : null}
-      </FilterBar>
+
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -203,15 +216,8 @@ export default async function AuditPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </div>
+    </DataPage>
   );
 }

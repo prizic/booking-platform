@@ -1,3 +1,6 @@
+import { paginateRows } from "../../_lib/data-page-query";
+import { WorkspacePagination } from "../../_lib/ui/workspace-pagination";
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Plus, Search } from "lucide-react";
@@ -10,19 +13,15 @@ import {
   AlertDescription,
   Button,
   EmptyState,
-  Field,
   Input,
-  Label,
+  DataPage,
+  DataTable,
+  FilterBar,
+  FilterField,
+  ErrorState,
   PageHeader,
   Section,
   StatusStamp,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Toolbar,
   type StampState,
 } from "@wlbp/ui-foundation";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
@@ -64,7 +63,7 @@ export async function CatalogListPage({
     ["draft", "published", "retired"].includes(query.status)
       ? query.status
       : "";
-  const rows =
+  const allRows =
     state.kind === "ready"
       ? state.workspace.entities.filter(
           (row) =>
@@ -76,157 +75,164 @@ export async function CatalogListPage({
                 .includes(search.toLocaleLowerCase())),
         )
       : [];
+  const page = paginateRows(allRows, query);
+  const columns = [
+    { key: "name", label: message(locale === "ar" ? "nameAr" : "nameEn") },
+    { key: "status", label: message("status") },
+    ...(kind === "service"
+      ? [
+          { key: "duration", label: message("duration") },
+          { key: "price", label: message("price") },
+        ]
+      : [{ key: "other", label: message(kind === "location" ? "timeZone" : "sort") }]),
+    { key: "revision", label: message("revision") },
+    { key: "actions", label: message("edit"), kind: "actions" as const },
+  ];
   return (
     <WorkspaceShell locale={locale} current={current} labelledBy="catalog-title">
-      <div className="grid gap-8">
-        <PageHeader
-          titleId="catalog-title"
-          title={message(current)}
-          description={message("intro")}
-          actions={
-            state.kind === "ready" && state.workspace.canPublish ? (
-              <Button asChild>
-                <Link href={`/${locale}/${current}/new`}>
-                  <Plus aria-hidden="true" />
-                  {message("new")}
+      <DataPage
+        titleId="catalog-title"
+        title={message(current)}
+        description={message("intro")}
+        actions={
+          state.kind === "ready" && state.workspace.canPublish ? (
+            <Button asChild>
+              <Link href={`/${locale}/${current}/new`}>
+                <Plus aria-hidden="true" />
+                {message("new")}
+              </Link>
+            </Button>
+          ) : null
+        }
+        toolbar={
+          <FilterBar label={locale === "ar" ? "التصفية" : "Filters"}>
+            <FilterField label={message("search")} htmlFor="catalog-search">
+              <Input
+                id="catalog-search"
+                name="q"
+                type="search"
+                defaultValue={search}
+                maxLength={100}
+              />
+            </FilterField>
+            <FilterField label={message("status")} htmlFor="catalog-status">
+              <ChoiceSelect
+                id="catalog-status"
+                name="status"
+                defaultValue={status || ALL_STATES}
+                options={[
+                  { value: ALL_STATES, label: message("all") },
+                  ...(["draft", "published", "retired"] as const).map((value) => ({
+                    value,
+                    label: message(stateStamp(value)[1]),
+                  })),
+                ]}
+              />
+            </FilterField>
+            <Button type="submit" variant="outline">
+              <Search aria-hidden="true" />
+              {message("filter")}
+            </Button>
+            {search || status ? (
+              <Button asChild variant="ghost">
+                <Link href={`/${locale}/${current}`}>
+                  {locale === "ar" ? "مسح التصفية" : "Clear filters"}
                 </Link>
               </Button>
-            ) : null
-          }
-        />
+            ) : null}
+          </FilterBar>
+        }
+        pagination={
+          state.kind === "ready" ? (
+            <WorkspacePagination
+              locale={locale}
+              path={`/${locale}/${current}`}
+              query={query}
+              {...page}
+            />
+          ) : null
+        }
+      >
         {state.kind !== "ready" ? (
-          <Alert tone="danger">
-            <AlertDescription className="text-foreground">
-              {message(state.kind)}
-            </AlertDescription>
-          </Alert>
+          <ErrorState
+            title={message(state.kind)}
+            retry={<ReadRetry locale={locale} />}
+          />
         ) : (
           <>
-            <form method="get">
-              <Toolbar>
-                <Field className="md:min-w-64">
-                  <Label htmlFor="catalog-search">{message("search")}</Label>
-                  <Input
-                    id="catalog-search"
-                    name="q"
-                    type="search"
-                    defaultValue={search}
-                    maxLength={100}
-                  />
-                </Field>
-                <Field className="md:min-w-48">
-                  <Label htmlFor="catalog-status">{message("status")}</Label>
-                  <ChoiceSelect
-                    id="catalog-status"
-                    name="status"
-                    defaultValue={status || ALL_STATES}
-                    options={[
-                      { value: ALL_STATES, label: message("all") },
-                      ...(["draft", "published", "retired"] as const).map((value) => ({
-                        value,
-                        label: message(stateStamp(value)[1]),
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Button type="submit" variant="outline">
-                  <Search aria-hidden="true" />
-                  {message("filter")}
-                </Button>
-              </Toolbar>
-            </form>
-            {rows.length ? (
-              <Table label={message(current)}>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      {message(locale === "ar" ? "nameAr" : "nameEn")}
-                    </TableHead>
-                    <TableHead>{message("status")}</TableHead>
-                    {kind === "service" ? (
-                      <>
-                        <TableHead className="text-end">
-                          {message("duration")}
-                        </TableHead>
-                        <TableHead className="text-end">{message("price")}</TableHead>
-                      </>
-                    ) : kind === "location" ? (
-                      <TableHead>{message("timeZone")}</TableHead>
-                    ) : (
-                      <TableHead className="text-end">{message("sort")}</TableHead>
-                    )}
-                    <TableHead className="text-end">{message("revision")}</TableHead>
-                    <TableHead className="text-end">
-                      <span className="sr-only">{message("edit")}</span>
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((row) => {
-                    const [stamp, label] = stateStamp(row.state);
-                    const name = locale === "ar" ? row.name_ar : row.name_en;
-                    return (
-                      <TableRow key={row.id}>
-                        <TableHead
-                          scope="row"
-                          className="h-auto py-3 text-sm font-semibold whitespace-normal text-foreground"
-                        >
-                          {/* A service carries the dye it wears on the bands. */}
-                          {kind === "service" ? <ServiceDye name={name} /> : name}
-                          <span className="block text-xs font-normal text-muted-foreground">
-                            <bdi>{row.metadata.key}</bdi>
-                          </span>
-                        </TableHead>
-                        <TableCell>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <StatusStamp state={stamp}>{message(label)}</StatusStamp>
-                            {row.metadata.retire && row.state === "draft" ? (
-                              <StatusStamp state="cancelled">
-                                {message("pendingRetirement")}
-                              </StatusStamp>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        {kind === "service" ? (
-                          <>
-                            <TableCell className="text-end">
-                              {formatNumber(row.duration_minutes, locale)}
-                            </TableCell>
-                            <TableCell className="text-end">
-                              <Money
-                                minor={row.price_minor}
-                                currency={row.currency}
-                                locale={locale}
-                              />
-                            </TableCell>
-                          </>
-                        ) : kind === "location" ? (
-                          <TableCell>
-                            <bdi>{row.metadata.time_zone}</bdi>
-                          </TableCell>
-                        ) : (
-                          <TableCell className="text-end">
-                            {formatNumber(row.metadata.sort_order ?? 0, locale)}
-                          </TableCell>
-                        )}
-                        <TableCell className="text-end">
-                          {formatNumber(row.revision, locale)}
-                        </TableCell>
-                        <TableCell className="text-end">
-                          <Button asChild variant="outline" size="sm">
-                            <Link href={`/${locale}/${current}/${row.id}`}>
-                              {message("edit")}
-                              <span className="sr-only"> {name}</span>
-                            </Link>
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            {allRows.length ? (
+              <DataTable
+                id="catalog-records"
+                caption={message(current)}
+                columns={columns}
+                rows={page.rows.map((row) => {
+                  const [stamp, label] = stateStamp(row.state);
+                  const name = locale === "ar" ? row.name_ar : row.name_en;
+                  return {
+                    key: row.id,
+                    cells: [
+                      <div key="name" className="grid gap-1">
+                        {kind === "service" ? <ServiceDye name={name} /> : name}
+                        <bdi className="text-xs text-muted-foreground">
+                          {row.metadata.key}
+                        </bdi>
+                      </div>,
+                      <div key="state" className="flex flex-wrap gap-2">
+                        <StatusStamp state={stamp}>{message(label)}</StatusStamp>
+                        {row.metadata.retire && row.state === "draft" ? (
+                          <StatusStamp state="cancelled">
+                            {message("pendingRetirement")}
+                          </StatusStamp>
+                        ) : null}
+                      </div>,
+                      ...(kind === "service"
+                        ? [
+                            formatNumber(row.duration_minutes, locale),
+                            <Money
+                              key="price"
+                              minor={row.price_minor}
+                              currency={row.currency}
+                              locale={locale}
+                            />,
+                          ]
+                        : [
+                            kind === "location" ? (
+                              <bdi key="zone">{row.metadata.time_zone}</bdi>
+                            ) : (
+                              formatNumber(row.metadata.sort_order ?? 0, locale)
+                            ),
+                          ]),
+                      formatNumber(row.revision, locale),
+                      <Button key="edit" asChild variant="outline" size="sm">
+                        <Link href={`/${locale}/${current}/${row.id}`}>
+                          {message("edit")}
+                          <span className="sr-only"> {name}</span>
+                        </Link>
+                      </Button>,
+                    ],
+                  };
+                })}
+              />
             ) : (
-              <EmptyState title={message("empty")} description={message("emptyHint")} />
+              <EmptyState
+                title={
+                  search || status
+                    ? locale === "ar"
+                      ? "لا توجد نتائج تطابق التصفية."
+                      : `No matching ${current}.`
+                    : message("empty")
+                }
+                description={message("emptyHint")}
+                action={
+                  search || status ? (
+                    <Button asChild variant="outline">
+                      <Link href={`/${locale}/${current}`}>
+                        {locale === "ar" ? "مسح التصفية" : "Clear filters"}
+                      </Link>
+                    </Button>
+                  ) : undefined
+                }
+              />
             )}
             <CatalogPublicationForm
               locale={locale}
@@ -235,7 +241,7 @@ export async function CatalogListPage({
             />
           </>
         )}
-      </div>
+      </DataPage>
     </WorkspaceShell>
   );
 }

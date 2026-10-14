@@ -1,12 +1,11 @@
+import { WorkspaceShellClient } from "./workspace-shell-client";
 import type { Locale } from "@wlbp/i18n";
+import { Button, DualDate, ThemeToggle, type ShellNavGroup } from "@wlbp/ui-foundation";
 import {
-  AppShell,
-  Button,
-  DualDate,
-  ThemeToggle,
-  type ShellNavGroup,
-} from "@wlbp/ui-foundation";
-import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
+  THEME_COOKIE,
+  resolveTheme,
+  resolveSidebarCollapsed,
+} from "@wlbp/ui-foundation/preferences";
 import {
   BellRing,
   CalendarClock,
@@ -120,8 +119,7 @@ export async function WorkspaceShell({
   const navigation = getWorkspaceNavigation({ locale, current, enabledSections });
   const tenantId = state.kind === "ready" ? state.context.tenantId : null;
 
-  // Both reads are optional decoration: a failure leaves the badge off and the
-  // date in the platform default zone, never an error in the frame.
+  // Optional decoration never invents a workspace date when its zone is unavailable.
   const [choices, pendingRequests] =
     tenantId !== null && request.source !== null
       ? await Promise.all([
@@ -130,12 +128,16 @@ export async function WorkspaceShell({
           request.source.listBookingRequests?.(tenantId).catch(() => null) ?? null,
         ])
       : [null, null];
-  const timeZone = choices?.offers[0]?.timeZone ?? "Asia/Riyadh";
+  const timeZone = choices?.offers[0]?.timeZone;
   const pendingCount = pendingRequests?.length ?? 0;
 
   const darkAvailable = dashboardBrand.tokens.colorDark !== undefined;
+  const preferences = await cookies();
+  const initialCollapsed = resolveSidebarCollapsed(
+    preferences.get("wlbp-dashboard-sidebar")?.value,
+  );
   const theme = resolveTheme(
-    (await cookies()).get(THEME_COOKIE)?.value,
+    preferences.get(THEME_COOKIE)?.value,
     dashboardBrand.appearance.defaultTheme,
     darkAvailable,
   );
@@ -179,7 +181,7 @@ export async function WorkspaceShell({
         height={32}
         src={dashboardBrand.assets.icon}
         width={32}
-        className="size-8 shrink-0 rounded-md"
+        className="size-8 shrink-0 rounded-md border bg-background p-1"
       />
       <span className="grid min-w-0 leading-tight">
         <span className="truncate text-[0.9375rem] font-bold">{brandName}</span>
@@ -224,7 +226,15 @@ export async function WorkspaceShell({
           dateTime={now.toISOString()}
           className="truncate text-xs text-muted-foreground"
         >
-          {shortDate()} · {shortDate("islamic-umalqura")}
+          {timeZone ? (
+            <>
+              {shortDate()} · {shortDate("islamic-umalqura")}
+            </>
+          ) : locale === "ar" ? (
+            "المنطقة الزمنية غير متاحة"
+          ) : (
+            "Timezone unavailable"
+          )}
         </time>
       </span>
     </Link>
@@ -279,12 +289,18 @@ export async function WorkspaceShell({
 
   const topbar = (
     <>
-      <DualDate
-        date={now}
-        locale={locale}
-        timeZone={timeZone}
-        className="me-auto hidden min-w-0 lg:flex"
-      />
+      {timeZone ? (
+        <DualDate
+          date={now}
+          locale={locale}
+          timeZone={timeZone}
+          className="me-auto hidden min-w-0 lg:flex"
+        />
+      ) : (
+        <span className="me-auto hidden text-sm text-muted-foreground lg:block">
+          {locale === "ar" ? "المنطقة الزمنية غير متاحة" : "Timezone unavailable"}
+        </span>
+      )}
       {state.kind === "ready" ? (
         <div className="hidden md:block">
           <DashboardAccessPanel locale={locale} state={state} />
@@ -338,7 +354,24 @@ export async function WorkspaceShell({
   );
 
   const frame = (
-    <AppShell
+    <WorkspaceShellClient
+      sidebar={{
+        initialCollapsed,
+        cookieName: "wlbp-dashboard-sidebar",
+        collapseLabel: locale === "ar" ? "طي التنقل" : "Collapse navigation",
+        expandLabel: locale === "ar" ? "توسيع التنقل" : "Expand navigation",
+        collapsedBrand: (
+          <Link href={`/${locale}/today`} aria-label={brandName}>
+            <Image
+              alt=""
+              height={32}
+              width={32}
+              src={dashboardBrand.assets.icon}
+              className="size-8 rounded-md border bg-background p-1"
+            />
+          </Link>
+        ),
+      }}
       brand={brand}
       groups={groups}
       sheetFooter={railFooter}
@@ -360,7 +393,7 @@ export async function WorkspaceShell({
       >
         <WorkspaceLiveGate>{children}</WorkspaceLiveGate>
       </section>
-    </AppShell>
+    </WorkspaceShellClient>
   );
 
   return state.kind === "ready" && configuration && liveSections.includes(current) ? (

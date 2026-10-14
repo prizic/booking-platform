@@ -1,7 +1,12 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { AppShell, type AppShellLabels, type ShellNavGroup } from "@wlbp/ui-foundation";
+import {
+  AppShell,
+  type AppShellLabels,
+  type AppShellSidebarOptions,
+  type ShellNavGroup,
+} from "@wlbp/ui-foundation";
 import {
   Activity,
   Boxes,
@@ -22,8 +27,10 @@ import {
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { isActive, type NavItemKey } from "../navigation";
+import { renderOperatorLink } from "../ui/navigation-link";
 
 const icons: Record<NavItemKey, ReactNode> = {
+  review: <ListChecks aria-hidden="true" />,
   overview: <LayoutDashboard aria-hidden="true" />,
   tenants: <Building2 aria-hidden="true" />,
   instances: <Boxes aria-hidden="true" />,
@@ -59,6 +66,7 @@ export function ConsoleShell({
   groups,
   topbar,
   labels,
+  sidebar,
   children,
 }: {
   locale: Locale;
@@ -70,6 +78,7 @@ export function ConsoleShell({
   groups: ConsoleNavGroup[];
   topbar: ReactNode;
   labels: AppShellLabels;
+  sidebar: AppShellSidebarOptions;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -91,6 +100,8 @@ export function ConsoleShell({
       groups={shellGroups}
       topbar={topbar}
       labels={labels}
+      sidebar={sidebar}
+      renderLink={renderOperatorLink}
     >
       {children}
     </AppShell>

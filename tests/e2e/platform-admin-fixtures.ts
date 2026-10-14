@@ -51,9 +51,10 @@ export async function signIn(
   page: Page,
   who: DemoOperator,
   locale: "en" | "ar" = "en",
+  origin = adminOrigin,
 ) {
   const c = credential(who);
-  await page.goto(`${adminOrigin}/${locale}/login`);
+  await page.goto(`${origin}/${locale}/login`);
   await page.locator("#email").fill(c.email);
   await page.locator("#password").fill(c.password);
   await page.locator('form button[type="submit"]').click();
@@ -185,4 +186,10 @@ export function watchConsole(page: Page): () => string[] {
     if (message.type() === "error") problems.push(message.text());
   });
   return () => problems;
+}
+
+/** A real Auth logout, for stale-session refusal tests. Token stays in memory. */
+export async function revokeApiToken(token: string) {
+  await auth("/logout?scope=local", { method: "POST", token });
+  apiSessions.delete(token);
 }

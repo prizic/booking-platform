@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -213,5 +214,51 @@ describe("semantic brand tokens", () => {
       "--brand-motion-reduced-slow": "0ms",
       "--brand-motion-easing-standard": "cubic-bezier(0.2, 0.8, 0.2, 1)",
     });
+  });
+
+  it("keeps workspace rail ink and focus on publish-validated light and dark grounds (R11)", () => {
+    const dark: BrandTokens["color"] = {
+      background: "#0c0a09",
+      surface: "#1c1917",
+      text: "#f5f5f4",
+      muted: "#a8a29e",
+      border: "#78716c",
+      primary: "#f26b6b",
+      onPrimary: "#1c0a0a",
+      success: "#4ade80",
+      onSuccess: "#052e16",
+      warning: "#facc15",
+      onWarning: "#1c1917",
+      danger: "#f87171",
+      onDanger: "#1c0a0a",
+      focus: "#fb923c",
+    };
+    const tokens = parseBrandTokens({ ...validTokens, colorDark: dark });
+    for (const colors of [tokens.color, tokens.colorDark!]) {
+      for (const ground of [colors.surface, colors.background]) {
+        expect(contrastRatio(colors.text, ground)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(colors.muted, ground)).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    const css = readFileSync(
+      new URL("../../ui-foundation/src/theme.css", import.meta.url),
+      "utf8",
+    );
+    // Guard the actual bridge: neither the light rail nor its ink may invert/mix
+    // the validated pairs and silently turn the rail back into a charcoal field.
+    for (const selector of [":root", ":root.dark"]) {
+      const block = css.slice(css.indexOf(`${selector} {`)).split("}")[0]!;
+      expect(block).toContain("--rail: var(--card);");
+      expect(block).toContain("--rail-foreground: var(--foreground);");
+      expect(block).toContain("--rail-muted: var(--muted-foreground);");
+      expect(block).toContain("--rail-accent: var(--background);");
+      expect(block).toContain("--rail-ring: var(--foreground);");
+    }
+    expect(
+      validateBrandTokens({
+        ...validTokens,
+        colorDark: { ...dark, muted: dark.surface },
+      }).join("\n"),
+    ).toContain("colorDark.muted on colorDark.surface");
   });
 });

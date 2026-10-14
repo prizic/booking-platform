@@ -7,7 +7,7 @@ import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
@@ -52,66 +52,79 @@ export default async function SupportPage({
   ]);
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          operatorRole && tenants?.ok && tenants.data.length ? (
-            <ActionDialog
-              locale={locale}
-              operation="requestSupport"
-              trigger={say(locale, a.requestSupport.trigger)}
-              triggerVariant="primary"
-              title={say(locale, a.requestSupport.title)}
-              description={say(locale, a.requestSupport.body)}
-              submit={say(locale, a.requestSupport.submit)}
-              successMessage={say(locale, a.requestSupport.done)}
-              values={{ tenantId: list.filters.tenant, ticket: "", minutes: "60" }}
-            >
-              <SelectFormField
-                name="tenantId"
-                label={say(locale, c.tenantField)}
-                options={tenants.data.map((t) => [t.tenant_id, t.name] as const)}
-              />
-              <TextFormField
-                id="support-ticket"
-                name="ticket"
-                label={say(locale, a.fields.ticket)}
-                required
-                maxLength={120}
-              />
-              <TextFormField
-                id="support-minutes"
-                name="minutes"
-                type="number"
-                label={say(locale, a.fields.minutes)}
-                description={say(locale, a.fields.minutesHint)}
-                min={5}
-                max={480}
-                required
-              />
-            </ActionDialog>
-          ) : null
-        }
-      />
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        operatorRole && tenants?.ok && tenants.data.length ? (
+          <ActionDialog
+            locale={locale}
+            operation="requestSupport"
+            trigger={say(locale, a.requestSupport.trigger)}
+            triggerVariant="primary"
+            title={say(locale, a.requestSupport.title)}
+            description={say(locale, a.requestSupport.body)}
+            submit={say(locale, a.requestSupport.submit)}
+            successMessage={say(locale, a.requestSupport.done)}
+            values={{ tenantId: list.filters.tenant, ticket: "", minutes: "60" }}
+          >
+            <SelectFormField
+              name="tenantId"
+              label={say(locale, c.tenantField)}
+              options={tenants.data.map((t) => [t.tenant_id, t.name] as const)}
+            />
+            <TextFormField
+              id="support-ticket"
+              name="ticket"
+              label={say(locale, a.fields.ticket)}
+              required
+              maxLength={120}
+            />
+            <TextFormField
+              id="support-minutes"
+              name="minutes"
+              type="number"
+              label={say(locale, a.fields.minutes)}
+              description={say(locale, a.fields.minutesHint)}
+              min={5}
+              max={480}
+              required
+            />
+          </ActionDialog>
+        ) : null
+      }
+      toolbar={
+        <FilterBar locale={locale} path={path}>
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={statuses.map((s) => [s, copyFor(statusCopy, s, locale)] as const)}
+          />
+          {list.filters.tenant ? (
+            <input type="hidden" name="tenant" value={list.filters.tenant} />
+          ) : null}
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       <Alert>
         <AlertDescription>{say(locale, c.rules)}</AlertDescription>
       </Alert>
-      <FilterBar locale={locale} path={path}>
-        <SelectFilter
-          name="status"
-          label={say(locale, c.status)}
-          value={list.filters.status}
-          allLabel={say(locale, formCopy.all)}
-          options={statuses.map((s) => [s, copyFor(statusCopy, s, locale)] as const)}
-        />
-        {list.filters.tenant ? (
-          <input type="hidden" name="tenant" value={list.filters.tenant} />
-        ) : null}
-      </FilterBar>
+
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -130,7 +143,7 @@ export default async function SupportPage({
               { label: say(locale, c.approvedBy) },
               { label: say(locale, c.scope) },
               { label: say(locale, c.expires) },
-              { label: say(locale, c.actions) },
+              { label: say(locale, c.actions), kind: "actions" },
             ]}
             rows={result.data.map((g) => ({
               key: g.grant_id,
@@ -156,29 +169,13 @@ export default async function SupportPage({
                 say(locale, c.readOnly),
                 <TimeValue key="e" locale={locale} value={g.expires_at} empty="none" />,
                 <div key="x" className="flex flex-wrap items-center gap-2">
-                  {g.status === "pending" && atLeast(operator.role, "admin") ? (
-                    <ActionDialog
-                      locale={locale}
-                      operation="approveSupport"
-                      trigger={say(locale, c.approve)}
-                      triggerVariant="quiet"
-                      title={say(locale, c.approveTitle)}
-                      description={say(locale, c.approveBody)}
-                      submit={say(locale, c.approve)}
-                      successMessage={say(locale, c.approved)}
-                      hidden={{ grantId: g.grant_id }}
-                      values={{ minutes: "60" }}
+                  {g.status === "pending" ? (
+                    <Link
+                      href={`/${locale}/review/support/${g.grant_id}`}
+                      className="font-semibold text-primary underline-offset-4 hover:underline"
                     >
-                      <TextFormField
-                        id={`approve-minutes-${g.grant_id}`}
-                        name="minutes"
-                        type="number"
-                        label={say(locale, c.duration)}
-                        min={5}
-                        max={480}
-                        required
-                      />
-                    </ActionDialog>
+                      {say(locale, c.approve)}
+                    </Link>
                   ) : null}
                   {(g.status === "pending" || g.status === "active") && operatorRole ? (
                     <ActionDialog
@@ -197,15 +194,8 @@ export default async function SupportPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </div>
+    </DataPage>
   );
 }

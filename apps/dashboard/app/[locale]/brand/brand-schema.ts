@@ -57,42 +57,84 @@ const legalLink = z
     { error: "brand_link_invalid" },
   );
 
+const optionalLink = z.union([z.literal(""), legalLink]).optional();
+const optionalPhone = z
+  .string()
+  .trim()
+  .max(16, { error: "too_long" })
+  .refine((value) => value === "" || /^\+[1-9]\d{1,14}$/u.test(value), {
+    error: "brand_phone_invalid",
+  })
+  .optional();
+const optionalCopy = (max = 4000) =>
+  z
+    .string()
+    .trim()
+    .max(max, { error: "too_long" })
+    .refine((value) => !/[<>]/u.test(value), { error: "unsafe-content" })
+    .optional();
 const hexColor = z
   .string()
   .trim()
   .regex(/^#[0-9a-fA-F]{6}$/u, { error: "brand_color_invalid" });
 
-export const brandEditorSchema = z.object({
-  locale: localeField,
-  brandKey: z.string().regex(KEY_PATTERN, { error: "invalid" }),
-  /** The content hash the editor was rendered from ("" for a first draft). */
-  contentHash: z.union([
-    z.literal(""),
-    z.string().regex(/^[a-f0-9]{64}$/u, { error: "invalid" }),
-  ]),
-  name: requiredText(160),
-  email: z
-    .string()
-    .trim()
-    .min(1, { error: "required" })
-    .regex(EMAIL_PATTERN, { error: "invalid_email" }),
-  titleEn: requiredText(160),
-  titleAr: requiredText(160),
-  privacyUrl: legalLink,
-  termsUrl: legalLink,
-  colors: z.object(
-    Object.fromEntries(brandColorKeys.map((key) => [key, hexColor])) as Record<
-      BrandColorKey,
-      typeof hexColor
-    >,
-  ),
-  fonts: z.object(
-    Object.fromEntries(brandFontKeys.map((key) => [key, requiredText(200)])) as Record<
-      BrandFontKey,
-      ReturnType<typeof requiredText>
-    >,
-  ),
-});
+export const brandEditorSchema = z
+  .object({
+    locale: localeField,
+    brandKey: z.string().regex(KEY_PATTERN, { error: "invalid" }),
+    /** The content hash the editor was rendered from ("" for a first draft). */
+    contentHash: z.union([
+      z.literal(""),
+      z.string().regex(/^[a-f0-9]{64}$/u, { error: "invalid" }),
+    ]),
+    name: requiredText(160),
+    email: z
+      .string()
+      .trim()
+      .min(1, { error: "required" })
+      .max(320, { error: "too_long" })
+      .regex(EMAIL_PATTERN, { error: "invalid_email" }),
+    phone: optionalPhone,
+    whatsapp: optionalPhone,
+    experienceEn: optionalCopy(),
+    experienceAr: optionalCopy(),
+    whyChooseUsEn: optionalCopy(),
+    whyChooseUsAr: optionalCopy(),
+    addressEn: optionalCopy(1000),
+    addressAr: optionalCopy(1000),
+    mapUrl: optionalLink,
+    appStoreUrl: optionalLink,
+    googlePlayUrl: optionalLink,
+    titleEn: requiredText(160),
+    titleAr: requiredText(160),
+    privacyUrl: legalLink,
+    termsUrl: legalLink,
+    colors: z.object(
+      Object.fromEntries(brandColorKeys.map((key) => [key, hexColor])) as Record<
+        BrandColorKey,
+        typeof hexColor
+      >,
+    ),
+    fonts: z.object(
+      Object.fromEntries(
+        brandFontKeys.map((key) => [key, requiredText(200)]),
+      ) as Record<BrandFontKey, ReturnType<typeof requiredText>>,
+    ),
+  })
+  .superRefine((values, ctx) => {
+    for (const [en, ar] of [
+      ["experienceEn", "experienceAr"],
+      ["whyChooseUsEn", "whyChooseUsAr"],
+      ["addressEn", "addressAr"],
+    ] as const) {
+      if (Boolean(values[en]) !== Boolean(values[ar]))
+        ctx.addIssue({
+          code: "custom",
+          path: [values[en] ? ar : en],
+          message: "brand_locale_pair",
+        });
+    }
+  });
 export type BrandEditorInput = z.input<typeof brandEditorSchema>;
 export type BrandEditorValues = z.output<typeof brandEditorSchema>;
 

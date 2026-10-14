@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { randomBytes } from "node:crypto";
-import { expect, test } from "@playwright/test";
+import { expect, ready, test } from "./journey-fixtures";
 import AxeBuilder from "@axe-core/playwright";
 import { chooseDate } from "./booking-fixtures";
 import {
@@ -23,6 +23,49 @@ test.beforeEach(() => {
 });
 const field = (page: Page, name: string) =>
   page.locator(`[name="${name}"]`).filter({ visible: true });
+/**
+ * Each workspace route's own level-1 heading, as the page renders it today.
+ * Literals on purpose: a refused page or a streamed not-found also carries a
+ * visible heading on the same URL, so importing the production translation
+ * would let a guard meant to catch that regression accept it.
+ */
+const routeHeadings: Record<string, { en: string; ar: string }> = {
+  today: { en: "Today", ar: "اليوم" },
+  calendar: { en: "Calendar", ar: "التقويم" },
+  bookings: { en: "Upcoming bookings", ar: "الحجوزات القادمة" },
+  services: { en: "Services", ar: "الخدمات" },
+  availability: { en: "Availability", ar: "التوافر" },
+  settings: { en: "Settings", ar: "الإعدادات" },
+  brand: { en: "Brand & site", ar: "الهوية والموقع" },
+  communications: { en: "Communications", ar: "التواصل" },
+  integrations: { en: "Integrations", ar: "التكاملات" },
+  audit: { en: "Audit", ar: "سجل التدقيق" },
+  "auth/mfa": { en: "Account security", ar: "أمان الحساب" },
+  payments: { en: "Payments", ar: "المدفوعات" },
+  reports: { en: "Reports", ar: "التقارير" },
+};
+/**
+ * A settled workspace page: the requested route, its own accessible level-1
+ * heading and no refusal, loading or error state. `ready` already excludes
+ * Next's hidden SSR streaming fallback. A refusal keeps the page's own heading
+ * beside the access panel, and a streamed not-found keeps a heading at the same
+ * URL, so this pins the route's real heading, rejects the panel, and still
+ * fails on a second *displayed* heading anywhere in the document.
+ */
+async function settledPage(page: Page, path: string) {
+  const [, locale, ...route] = path.split("/");
+  await ready(page);
+  expect(new URL(page.url()).pathname).toBe(path);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { level: 1 })).toHaveCount(1);
+  const expected = routeHeadings[route.join("/")]?.[locale as "en" | "ar"];
+  if (!expected) throw new Error(`No expected heading for ${path}`);
+  await expect(page.locator("#access-title")).toHaveCount(0);
+  await expect(
+    main.getByRole("heading", { level: 1, name: expected, exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("h1").filter({ visible: true })).toHaveCount(1);
+}
 async function submitMutation(page: Page, button: Locator) {
   const origin = new URL(page.url()).origin;
   await Promise.all([
@@ -188,6 +231,10 @@ test.describe("persisted workflows", () => {
     evidence.originalBrand = completionSql(
       `select published_brand_revision_id from app.instances where tenant_id='${completionTenant}'`,
     );
+    const originalBrandRevision = completionSql(
+      `select revision from app.brand_revisions where id='${evidence.originalBrand}'`,
+    );
+    expect(originalBrandRevision).toMatch(/^\d+$/u);
     for (const [route, key, en, ar] of [
       ["categories", "completion-category", "Completion category", "فئة الإنجاز"],
       ["locations", "completion-location", "Completion location", "موقع الإنجاز"],
@@ -423,8 +470,11 @@ test.describe("persisted workflows", () => {
       "payments",
       "reports",
     ]) {
-      await page.goto(`${completionOrigin}/en/${route}`);
-      await expect(page.locator("h1")).toBeVisible();
+      const response = await page.goto(`${completionOrigin}/en/${route}`);
+      expect(response?.status(), `${route} must serve a document`).toBeLessThan(400);
+      await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await settledPage(page, `/en/${route}`);
     }
     await page.goto(`${completionOrigin}/en/settings`);
     await field(page, "replyToEmail").fill("reply@example.invalid");
@@ -459,9 +509,14 @@ test.describe("persisted workflows", () => {
         `select count(*) from app.brand_revisions r join app.instances i on i.published_brand_revision_id=r.id where r.tenant_id='${completionTenant}' and r.state='published' and r.config->>'name'='Completion revised identity'`,
       ),
     ).toBe("1");
+    // DataTable renders one mobile list and one desktop table from the same
+    // cells, so only the visible copy of this control may be actionable.
     const rollback = page
-      .locator('[data-brand-action="rollback"][data-to-revision="1"]')
-      .first();
+      .locator(
+        `[data-brand-action="rollback"][data-to-revision="${originalBrandRevision}"]`,
+      )
+      .filter({ visible: true });
+    await expect(rollback).toHaveCount(1);
     await confirmDangerous(page, rollback, "Roll back to this", "Roll back to this");
     await expect(page).toHaveURL(/result=rolled-back/u);
     expect(
@@ -627,15 +682,31 @@ test.describe("persisted workflows", () => {
         changeDays,
         email(action),
       );
-      await page.goto(`${completionOrigin}/en/bookings`);
-      // Each row opens its change form in a dialog named by the booking reference.
+      // Paging can bury a retained booking, so search by its unique reference.
+      const changedReference = completionSql(
+        `select public_reference from app.bookings where id='${changedId}' and tenant_id='${completionTenant}'`,
+      );
+      await page.goto(
+        `${completionOrigin}/en/bookings?q=${encodeURIComponent(changedReference)}`,
+      );
+      // One visible desktop row owns this booking, found by its detail link.
+      const changedRow = page
+        .getByRole("row")
+        .filter({ has: page.locator(`a[href$="/bookings/${changedId}"]`) })
+        .filter({ visible: true });
+      await expect(changedRow).toHaveCount(1);
+      // The row's single change trigger opens the dialog named by the booking.
+      const changeTrigger = changedRow.getByRole("button", {
+        name: "Reschedule, cancel or resend",
+        exact: true,
+      });
+      await expect(changeTrigger).toHaveCount(1);
       const change = page
         .getByRole("dialog")
         .locator(`form[data-booking-id="${changedId}"]`);
       // A click that lands before hydration opens nothing; repeat until it does.
       await expect(async () => {
-        if ((await change.count()) === 0)
-          await page.locator(`button[aria-describedby="booking-${changedId}"]`).click();
+        if ((await change.count()) === 0) await changeTrigger.click();
         await expect(change).toBeVisible({ timeout: 2_000 });
       }).toPass({ timeout: 60_000 });
       await change.locator('[name="publicReason"]').fill("Synthetic booking change");
@@ -657,7 +728,7 @@ test.describe("persisted workflows", () => {
         ),
       ).toBe(action === "cancel" ? "cancelled" : "13:00");
       await page.goto(`${completionOrigin}/en/bookings/${changedId}`);
-      await expect(page.locator("h1")).toBeVisible();
+      await ready(page);
     }
     const id = await createOperatorBooking(
       page,
@@ -712,7 +783,19 @@ test.describe("persisted workflows", () => {
     await page.goto(`${completionOrigin}/en/communications`);
     // The lifecycle customer is privacy-restricted above. Retry a separate,
     // unrestricted booking so this flow preserves the suppression contract.
-    const retry = page.locator(`[data-communication-retry="${noShowId}"]`).first();
+    // The shared DataTable renders every row twice: a mobile list and the
+    // desktop table, and only one layout is visible at this viewport. This
+    // booking's only queued message was remitted as failed, so exactly one
+    // retry control is eligible; the count is read from the ledger, not the DOM.
+    expect(
+      completionSql(
+        `select count(*) from app.notification_messages where tenant_id='${completionTenant}' and booking_id='${noShowId}' and status='failed'`,
+      ),
+    ).toBe("1");
+    const retry = page
+      .locator(`[data-communication-retry="${noShowId}"]`)
+      .filter({ visible: true });
+    await expect(retry).toHaveCount(1);
     await confirmDangerous(page, retry, "Retry email", "Retry email");
     await expect(page).toHaveURL(/result=queued/u);
     await expect(page.locator("main").getByRole("status")).toContainText(
@@ -731,6 +814,7 @@ test.describe("persisted workflows", () => {
     await expect(page).toHaveURL(/result=exported/u);
     await page.goto(`${completionOrigin}/ar/calendar?view=list`);
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await page.locator('form[action*="sign-out"]').getByRole("button").click();
     await page.goto(`${completionOrigin}/en/bookings/${id}`);
     await expect(page.locator("main")).not.toContainText("Completion corrected guest");
@@ -826,6 +910,21 @@ for (const actor of ["scheduler", "staff", "manager", "revoked", "foreign"] as c
       await expect(
         page.getByRole("heading", { name: "Access unavailable" }).first(),
       ).toBeVisible();
+      if (actor === "revoked") {
+        // Negative verification for the settled-page guard, on the predefined
+        // revoked actor with no state change: at a mapped route the refusal
+        // keeps the page's own level-1 heading, so the access panel, which the
+        // guard asserts absent, is the only signal that rejects it.
+        await page.goto(`${completionOrigin}/en/calendar`);
+        await expect(
+          page.getByRole("main").getByRole("heading", {
+            level: 1,
+            name: "Calendar",
+            exact: true,
+          }),
+        ).toBeVisible();
+        await expect(page.locator("#access-title")).toBeVisible();
+      }
       return;
     }
     await expect(
@@ -870,15 +969,46 @@ for (const locale of ["en", "ar"] as const)
           "audit",
           "auth/mfa",
         ]) {
-          await page.goto(`${origin}/${locale}/${route}`);
+          const response = await page.goto(`${origin}/${locale}/${route}`);
+          expect(
+            response?.status(),
+            `${brand} ${locale} ${width}px: ${route} must serve a document`,
+          ).toBeLessThan(400);
           await expect(page.locator("html")).toHaveAttribute(
             "dir",
             locale === "ar" ? "rtl" : "ltr",
           );
-          await expect(page.locator("h1")).toBeVisible();
+          await expect(page.locator("html")).toHaveAttribute("lang", locale);
+          await settledPage(page, `/${locale}/${route}`);
           await page.keyboard.press("Tab");
+          // The first keyboard stop is a real, displayed control with a
+          // keyboard focus indicator, whichever shell renders it first.
+          const focused = await page.evaluate(() => {
+            const active = document.activeElement;
+            if (!(active instanceof HTMLElement) || active === document.body)
+              return { offBody: false, visible: false, focusVisible: false };
+            const box = active.getBoundingClientRect();
+            let visible = box.width > 0 && box.height > 0;
+            for (
+              let node: HTMLElement | null = active;
+              node && visible;
+              node = node.parentElement
+            ) {
+              const style = getComputedStyle(node);
+              if (style.display === "none" || style.visibility === "hidden")
+                visible = false;
+            }
+            return {
+              offBody: true,
+              visible,
+              focusVisible: active.matches(":focus-visible"),
+            };
+          });
+          expect(focused.offBody, `${route} must move focus off the body`).toBe(true);
+          expect(focused.visible, `${route} must focus a displayed control`).toBe(true);
           expect(
-            await page.evaluate(() => document.activeElement !== document.body),
+            focused.focusVisible,
+            `${route} must show a keyboard focus indicator`,
           ).toBe(true);
           expect(
             await page.evaluate(
@@ -887,7 +1017,7 @@ for (const locale of ["en", "ar"] as const)
             `${brand} ${locale} ${width}px: ${route} must reflow`,
           ).toBe(true);
           const results = await new AxeBuilder({ page })
-            .withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"])
+            .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
             .analyze();
           expect(
             results.violations.map((v) => ({
@@ -897,24 +1027,28 @@ for (const locale of ["en", "ar"] as const)
           ).toEqual([]);
         }
         await page.goto(`${origin}/${locale}/calendar?date=bad&view=bad&location=bad`);
-        await expect(page.locator("h1")).toBeVisible();
+        await settledPage(page, `/${locale}/calendar`);
         // 1280px at 200% browser zoom has the same 640 CSS-pixel layout viewport.
         await page.setViewportSize({ width: 640, height: 900 });
         await page.goto(`${origin}/${locale}/availability`);
+        await ready(page);
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth + 1,
           ),
         ).toBe(true);
-        await page.locator("h1").evaluate(
-          (heading, text) => {
-            heading.textContent = text;
-          },
-          (locale === "ar"
-            ? "عنوان عربي طويل لاختبار إعادة تدفق النص "
-            : "A long workspace title that remains readable "
-          ).repeat(8),
-        );
+        await page
+          .getByRole("main")
+          .getByRole("heading", { level: 1 })
+          .evaluate(
+            (heading, text) => {
+              heading.textContent = text;
+            },
+            (locale === "ar"
+              ? "عنوان عربي طويل لاختبار إعادة تدفق النص "
+              : "A long workspace title that remains readable "
+            ).repeat(8),
+          );
         expect(
           await page.evaluate(
             () => document.documentElement.scrollWidth <= innerWidth + 1,
@@ -1035,6 +1169,7 @@ test.describe("notification configuration", () => {
         "dir",
         locale === "ar" ? "rtl" : "ltr",
       );
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
       await expect(
         page.getByRole("heading", { level: 1, name: copy.settings, exact: true }),
       ).toBeVisible();
@@ -1274,27 +1409,27 @@ test.describe("tenant roles", () => {
       page,
       archive.getByRole("button", { name: "Archive", exact: true }),
     );
-    await expect(copy.getByText("Archived", { exact: true })).toBeVisible();
+    await expect
+      .poll(
+        () =>
+          completionSql(
+            `select count(*) from app.roles where id='${copyId}' and archived_at is not null`,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe("1");
     await expect(copy.locator('details[data-role-action="archive"]')).toHaveCount(0);
-    expect(
-      completionSql(
-        `select count(*) from app.roles where id='${copyId}' and archived_at is not null`,
-      ),
-    ).toBe("1");
-    await page.reload();
-    await expect(page.locator(`article[data-role-id="${copyId}"]`)).toContainText(
-      "Archived",
+    await page.goto(`${completionOrigin}/en/roles?archived=yes`);
+    const archivedCopy = page.locator(`article[data-role-id="${copyId}"]`);
+    await expect(archivedCopy).toContainText("Archived");
+    await expect(archivedCopy.locator('details[data-role-action="edit"]')).toHaveCount(
+      0,
     );
     await expect(
-      page
-        .locator(`article[data-role-id="${copyId}"]`)
-        .locator('details[data-role-action="edit"]'),
+      archivedCopy.locator('details[data-role-action="archive"]'),
     ).toHaveCount(0);
-    await expect(
-      page
-        .locator(`article[data-role-id="${copyId}"]`)
-        .locator('details[data-role-action="archive"]'),
-    ).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(page.locator(`article[data-role-id="${copyId}"]`)).toHaveCount(0);
     // Leave the workspace tidy for the next campaign run.
     const original = page.locator(`article[data-role-id="${roleId}"]`);
     await original.locator('details[data-role-action="archive"] > summary').click();
@@ -1304,10 +1439,26 @@ test.describe("tenant roles", () => {
         .locator('details[data-role-action="archive"] form')
         .getByRole("button", { name: "Archive", exact: true }),
     );
-    await expect(original.getByText("Archived", { exact: true })).toBeVisible();
-    await expect(original.locator('details[data-role-action="archive"]')).toHaveCount(
-      0,
-    );
+    await expect
+      .poll(
+        () =>
+          completionSql(
+            `select count(*) from app.roles where id='${roleId}' and archived_at is not null`,
+          ),
+        { timeout: 10_000 },
+      )
+      .toBe("1");
+    await page.goto(`${completionOrigin}/en/roles?archived=yes`);
+    const archivedOriginal = page.locator(`article[data-role-id="${roleId}"]`);
+    await expect(archivedOriginal).toContainText("Archived");
+    await expect(
+      archivedOriginal.locator('details[data-role-action="edit"]'),
+    ).toHaveCount(0);
+    await expect(
+      archivedOriginal.locator('details[data-role-action="archive"]'),
+    ).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(page.locator(`article[data-role-id="${roleId}"]`)).toHaveCount(0);
   });
 
   test("administrator creates an assigned-mode role with descriptions and exact scopes", async ({
@@ -1416,8 +1567,17 @@ test.describe("tenant roles", () => {
         .locator('details[data-role-action="archive"] form')
         .getByRole("button", { name: "Archive", exact: true }),
     );
-    await expect(card.getByText("Archived", { exact: true })).toBeVisible();
-    await expect(card.locator('details[data-role-action="archive"]')).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles?archived=yes`);
+    const archivedCard = page.locator(`article[data-role-id="${roleId}"]`);
+    await expect(archivedCard.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(archivedCard.locator('details[data-role-action="edit"]')).toHaveCount(
+      0,
+    );
+    await expect(
+      archivedCard.locator('details[data-role-action="archive"]'),
+    ).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(page.locator(`article[data-role-id="${roleId}"]`)).toHaveCount(0);
   });
 
   test("a workspace-wide grant switched to assigned locations is refused, not dropped", async ({
@@ -1535,8 +1695,17 @@ test.describe("tenant roles", () => {
         .locator('details[data-role-action="archive"] form')
         .getByRole("button", { name: "Archive", exact: true }),
     );
-    await expect(fresh.getByText("Archived", { exact: true })).toBeVisible();
-    await expect(fresh.locator('details[data-role-action="archive"]')).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles?archived=yes`);
+    const archivedFresh = page.locator(`article[data-role-id="${roleId}"]`);
+    await expect(archivedFresh.getByText("Archived", { exact: true })).toBeVisible();
+    await expect(archivedFresh.locator('details[data-role-action="edit"]')).toHaveCount(
+      0,
+    );
+    await expect(
+      archivedFresh.locator('details[data-role-action="archive"]'),
+    ).toHaveCount(0);
+    await page.goto(`${completionOrigin}/en/roles`);
+    await expect(page.locator(`article[data-role-id="${roleId}"]`)).toHaveCount(0);
   });
 
   test("saving with no permissions prompts instead of failing generically", async ({
@@ -1674,6 +1843,7 @@ test.describe("tenant roles", () => {
     await signInCompletion(page, "admin", "ar");
     await page.goto(`${completionOrigin}/ar/roles`);
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+    await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await expect(
       page.getByRole("heading", { name: "الأدوار والصلاحيات", exact: true }),
     ).toBeVisible();

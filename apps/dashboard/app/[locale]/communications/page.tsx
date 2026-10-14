@@ -1,3 +1,6 @@
+import { paginateRows } from "../../_lib/data-page-query";
+import { WorkspacePagination } from "../../_lib/ui/workspace-pagination";
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import Link from "next/link";
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import {
@@ -8,17 +11,13 @@ import {
   Facts,
   Field,
   Label,
-  PageHeader,
+  DataPage,
+  FilterBar,
+  DataTable,
   ReferenceCode,
   Section,
   StatusStamp,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Toolbar,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { Filter, MailX } from "lucide-react";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
@@ -29,7 +28,7 @@ import { ChoiceSelect } from "../services/form-kit";
 import { CommunicationRetry } from "./communication-retry";
 import { workspaceStamp } from "./status-stamp";
 import { formatWhen } from "../../_lib/booking-display";
-import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+
 import { ServiceDye } from "../../_lib/ui/service-dye";
 import { ZoneNote } from "../../_lib/ui/zone-note";
 import { CommunicationsNav } from "../../_lib/communications-nav";
@@ -74,6 +73,7 @@ export default async function CommunicationsPage({
       ? query.status
       : null;
   let body;
+  let pagination;
   if (request.state.kind !== "ready")
     body = <DashboardAccessPanel locale={locale} state={request.state} />;
   else {
@@ -98,7 +98,17 @@ export default async function CommunicationsPage({
       }
     })();
     if (loaded) {
-      const { health, rows } = loaded;
+      const { health } = loaded;
+      const paging = paginateRows(loaded.rows, query);
+      const rows = paging.rows;
+      pagination = (
+        <WorkspacePagination
+          locale={locale}
+          path={`/${locale}/communications`}
+          query={query}
+          {...paging}
+        />
+      );
       body = (
         <>
           {query.result === "queued" ? (
@@ -143,129 +153,57 @@ export default async function CommunicationsPage({
             </div>
           </Section>
           <Section id="communications-queue" title={m("Messages", "الرسائل")}>
-            <form method="get">
-              <Toolbar>
-                <Field className="md:min-w-56">
-                  <Label htmlFor="communications-status">
-                    {m("Message status", "حالة الرسالة")}
-                  </Label>
-                  <ChoiceSelect
-                    id="communications-status"
-                    name="status"
-                    defaultValue={status ?? ALL_STATUSES}
-                    options={[
-                      { value: ALL_STATUSES, label: m("All statuses", "جميع الحالات") },
-                      ...statuses.map((value) => ({
-                        value,
-                        label: workspaceStatus(locale, value),
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Button type="submit" variant="outline">
-                  <Filter aria-hidden="true" />
-                  {m("Filter", "تصفية")}
-                </Button>
-              </Toolbar>
-            </form>
             {rows.length ? (
               <>
-                <TableFrame>
-                  <Table label={m("Messages", "الرسائل")}>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>{m("Booking", "الحجز")}</TableHead>
-                        <TableHead>{m("Status", "الحالة")}</TableHead>
-                        <TableHead>
-                          {m("Created (UTC)", "تاريخ الإنشاء (UTC)")}
-                        </TableHead>
-                        <TableHead className="text-end">
-                          {m("Recovery", "المعالجة")}
-                        </TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {rows.map((row) => (
-                        <TableRow key={row.id}>
-                          <TableHead
-                            scope="row"
-                            className="h-auto py-3 text-sm font-medium whitespace-normal text-foreground"
-                          >
-                            <Link
-                              className="grid gap-0.5 underline-offset-4 hover:underline"
-                              href={`/${locale}/bookings/${row.bookingId}`}
-                            >
-                              <ReferenceCode className="text-primary">
-                                {row.publicReference}
-                              </ReferenceCode>
-                              <span className="text-muted-foreground">
-                                <ServiceDye name={row.serviceName} />
-                              </span>
-                            </Link>
-                          </TableHead>
-                          <TableCell>
-                            <StatusStamp state={workspaceStamp(row.status)}>
-                              {workspaceStatus(locale, row.status)}
-                            </StatusStamp>
-                          </TableCell>
-                          <TableCell>
-                            {formatWhen(row.createdAt, locale, "UTC")}
-                          </TableCell>
-                          <TableCell className="text-end">
-                            {row.status === "failed" ? (
-                              <CommunicationRetry
-                                locale={locale}
-                                bookingId={row.bookingId}
-                              />
-                            ) : null}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableFrame>
-                <RecordCards label={m("Messages", "الرسائل")}>
-                  {rows.map((row) => (
-                    <RecordCard
-                      key={row.id}
-                      title={
-                        <>
-                          <Link
-                            className="w-fit underline-offset-4 hover:underline"
-                            href={`/${locale}/bookings/${row.bookingId}`}
-                          >
-                            <ReferenceCode className="text-primary">
-                              {row.publicReference}
-                            </ReferenceCode>
-                          </Link>
-                          <span className="text-sm text-muted-foreground">
+                <DataTable
+                  id="communications-records"
+                  caption={m("Messages", "الرسائل")}
+                  columns={[
+                    { key: "column-0", label: m("Booking", "الحجز") },
+                    { key: "column-1", label: m("Status", "الحالة") },
+                    {
+                      key: "column-2",
+                      label: m("Created (UTC)", "تاريخ الإنشاء (UTC)"),
+                    },
+                    {
+                      key: "column-3",
+                      label: m("Recovery", "المعالجة"),
+                      kind: "actions",
+                    },
+                  ]}
+                  rows={rows.map((row) => ({
+                    key: row.id,
+                    cells: [
+                      <>
+                        <Link
+                          className="grid gap-0.5 underline-offset-4 hover:underline"
+                          href={`/${locale}/bookings/${row.bookingId}`}
+                        >
+                          <ReferenceCode className="text-primary">
+                            {row.publicReference}
+                          </ReferenceCode>
+                          <span className="text-muted-foreground">
                             <ServiceDye name={row.serviceName} />
                           </span>
-                        </>
-                      }
-                      aside={
+                        </Link>
+                      </>,
+                      <>
                         <StatusStamp state={workspaceStamp(row.status)}>
                           {workspaceStatus(locale, row.status)}
                         </StatusStamp>
-                      }
-                      facts={[
-                        {
-                          key: "created",
-                          label: m("Created (UTC)", "تاريخ الإنشاء (UTC)"),
-                          value: formatWhen(row.createdAt, locale, "UTC"),
-                        },
-                      ]}
-                      actions={
-                        row.status === "failed" ? (
+                      </>,
+                      <>{formatWhen(row.createdAt, locale, "UTC")}</>,
+                      <>
+                        {row.status === "failed" ? (
                           <CommunicationRetry
                             locale={locale}
                             bookingId={row.bookingId}
                           />
-                        ) : null
-                      }
-                    />
-                  ))}
-                </RecordCards>
+                        ) : null}
+                      </>,
+                    ],
+                  }))}
+                />
               </>
             ) : (
               <EmptyState
@@ -295,14 +233,17 @@ export default async function CommunicationsPage({
       );
     } else {
       body = (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {m(
-              "Communication health is unavailable. Retry the read.",
-              "حالة التواصل غير متاحة. أعد محاولة القراءة.",
-            )}
-          </AlertDescription>
-        </Alert>
+        <ErrorState
+          title={
+            <>
+              {m(
+                "Communication health is unavailable. Retry the read.",
+                "حالة التواصل غير متاحة. أعد محاولة القراءة.",
+              )}
+            </>
+          }
+          retry={<ReadRetry locale={locale} />}
+        />
       );
     }
   }
@@ -313,20 +254,47 @@ export default async function CommunicationsPage({
       labelledBy="communications-title"
     >
       <div className="grid gap-8">
-        <PageHeader
+        <DataPage
+          pagination={pagination}
           titleId="communications-title"
           title={m("Communications", "التواصل")}
           meta={<ZoneNote locale={locale} timeZone="UTC" />}
-        />
-        <CommunicationsNav
-          locale={locale}
-          current="messages"
-          showSettings={
-            request.state.kind === "ready" &&
-            hasDirectCapability(request.state.context, "policy.edit")
+          toolbar={
+            <FilterBar label={locale === "ar" ? "التصفية" : "Filters"} method="get">
+              <Field className="md:min-w-56">
+                <Label htmlFor="communications-status">
+                  {m("Message status", "حالة الرسالة")}
+                </Label>
+                <ChoiceSelect
+                  id="communications-status"
+                  name="status"
+                  defaultValue={status ?? ALL_STATUSES}
+                  options={[
+                    { value: ALL_STATUSES, label: m("All statuses", "جميع الحالات") },
+                    ...statuses.map((value) => ({
+                      value,
+                      label: workspaceStatus(locale, value),
+                    })),
+                  ]}
+                />
+              </Field>
+              <Button type="submit" variant="outline">
+                <Filter aria-hidden="true" />
+                {m("Filter", "تصفية")}
+              </Button>
+            </FilterBar>
           }
-        />
-        {body}
+        >
+          <CommunicationsNav
+            locale={locale}
+            current="messages"
+            showSettings={
+              request.state.kind === "ready" &&
+              hasDirectCapability(request.state.context, "policy.edit")
+            }
+          />
+          {body}
+        </DataPage>
       </div>
     </WorkspaceShell>
   );

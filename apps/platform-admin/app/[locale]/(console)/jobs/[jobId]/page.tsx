@@ -97,18 +97,10 @@ export default async function JobPage({
               locale={locale}
               status={job.needs_approval ? "awaiting_approval" : job.status}
             />
-            {job.needs_approval && atLeast(operator.role, "admin") ? (
-              <ActionDialog
-                locale={locale}
-                operation="approveJob"
-                trigger={say(locale, c.approve)}
-                triggerVariant="primary"
-                title={say(locale, c.approveTitle)}
-                description={say(locale, c.approveBody)}
-                submit={say(locale, c.approve)}
-                successMessage={say(locale, c.approved)}
-                hidden={hidden}
-              />
+            {job.needs_approval ? (
+              <TextLink href={`/${locale}/review/job/${job.id}`}>
+                {say(locale, c.approve)}
+              </TextLink>
             ) : null}
             {canOperate && job.status === "failed" ? (
               <ActionDialog

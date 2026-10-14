@@ -1,3 +1,4 @@
+import { classifyReadFailure, recordReadFailure } from "./read-diagnostics";
 import type { OperationalChoices } from "./operational-choices";
 import {
   parseDashboardContextV1,
@@ -6,6 +7,7 @@ import {
   type AvailabilityV1Response,
   type BookingDecisionV1Request,
   type BookingDecisionV1Response,
+  type BookingContextV1,
   type BookingRequestV1,
   type DashboardContextV1,
   type ResolvePublicTenantV1Response,
@@ -39,6 +41,10 @@ export interface ScheduleChoice {
   readonly timeZone: string;
 }
 export interface DashboardDataSource {
+  getBookingContext?: (
+    tenantId: string,
+    bookingId: string,
+  ) => Promise<BookingContextV1>;
   listCommunicationQueue?: (
     tenantId: string,
     status: string | null,
@@ -191,6 +197,8 @@ export interface DashboardDataSource {
   }) => Promise<void>;
   searchCustomers?: (request: {
     includeErased: boolean;
+    limit?: number;
+    offset?: number;
     query: string | null;
     tenantId: string;
   }) => Promise<readonly CustomerRowV1[]>;
@@ -785,7 +793,13 @@ export async function loadDashboardAccess(
       identity,
       kind: "ready",
     };
-  } catch {
-    return { kind: "denied", reason: "backend_unavailable" };
+  } catch (error) {
+    const outcome = classifyReadFailure(error);
+    recordReadFailure("dashboard_access", outcome, error);
+    return {
+      kind: "denied",
+      reason:
+        outcome === "access_denied" ? "membership_inactive" : "backend_unavailable",
+    };
   }
 }

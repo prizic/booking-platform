@@ -6,7 +6,7 @@ const groups = [
   ["fleet", ["tenants", "instances", "domains", "provisioning", "jobs"]],
   ["commercial", ["plans", "subscriptions"]],
   ["releases", ["releases", "rollouts"]],
-  ["operations", ["health", "support"]],
+  ["operations", ["review", "health", "support"]],
   ["administration", ["operators", "audit", "settings"]],
 ] as const;
 

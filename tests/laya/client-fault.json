@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "name": "Laya Client Fault Server"
+  },
+  "scenarios": [
+    {
+      "id": "services-read-error",
+      "path": "/en/services",
+      "assertions": [
+        { "type": "url", "value": "/services$" },
+        {
+          "type": "text",
+          "selector": "p[data-slot=\"alert-title\"]",
+          "value": "Services are unavailable"
+        },
+        {
+          "type": "visible",
+          "selector": "[data-slot=\"alert-description\"] button"
+        },
+        { "type": "hidden", "selector": "div[data-slot=\"empty-state\"]" }
+      ]
+    }
+  ]
+}

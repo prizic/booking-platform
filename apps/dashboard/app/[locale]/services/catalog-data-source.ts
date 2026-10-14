@@ -1,3 +1,4 @@
+import { classifyReadFailure, recordReadFailure } from "../../_lib/read-diagnostics";
 import type { Locale } from "@wlbp/i18n";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { DashboardRpcError } from "../../_lib/dashboard-data-source";
@@ -13,6 +14,7 @@ export async function loadCatalogWorkspace(locale: Locale) {
       return { kind: "unavailable" as const };
     return { kind: "ready" as const, workspace, request };
   } catch (error) {
+    recordReadFailure("catalog", classifyReadFailure(error), error);
     if (error instanceof DashboardRpcError && error.stableMessage === "not_authorized")
       return { kind: "denied" as const };
     return { kind: "unavailable" as const };

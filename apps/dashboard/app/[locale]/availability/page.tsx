@@ -1,3 +1,5 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
+import Link from "next/link";
 import { parseScheduleWorkspaceV1 } from "@wlbp/api-contracts";
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import { formatWhen } from "../../_lib/booking-display";
@@ -5,9 +7,12 @@ import {
   Alert,
   AlertDescription,
   EmptyState,
-  PageHeader,
+  DataPage,
+  Button,
+  Toolbar,
   Section,
   StatusStamp,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { CalendarClock, ChevronDown } from "lucide-react";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
@@ -33,11 +38,10 @@ export default async function AvailabilityPage({
   const message = (key: Parameters<typeof scheduleMessage>[1]) =>
     scheduleMessage(locale, key);
   const unavailable = (
-    <Alert tone="danger">
-      <AlertDescription className="text-foreground">
-        {message("unavailable")}
-      </AlertDescription>
-    </Alert>
+    <ErrorState
+      title={<>{message("unavailable")}</>}
+      retry={<ReadRetry locale={locale} />}
+    />
   );
   const request = await loadDashboardRequestAccess(locale);
   let body;
@@ -183,12 +187,30 @@ export default async function AvailabilityPage({
       labelledBy="availability-title"
     >
       <div className="grid gap-8">
-        <PageHeader
+        <DataPage
           titleId="availability-title"
           title={message("title")}
           description={message("summary")}
-        />
-        {body}
+          toolbar={
+            <Toolbar
+              role="toolbar"
+              aria-label={locale === "ar" ? "التصفية" : "Filters"}
+            >
+              <Button asChild variant="outline" size="sm">
+                <Link href={"#schedule-current"}>
+                  {locale === "ar" ? "الجداول" : "Schedules"}
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href={"#schedule-create"}>
+                  {locale === "ar" ? "إضافة قاعدة" : "Add rule"}
+                </Link>
+              </Button>
+            </Toolbar>
+          }
+        >
+          {body}
+        </DataPage>
       </div>
     </WorkspaceShell>
   );

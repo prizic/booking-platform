@@ -1,5 +1,5 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
-import { LocaleSwitch, ThemeToggle } from "@wlbp/ui-foundation";
+import { Button, LocaleSwitch, ThemeToggle } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { cookies } from "next/headers";
 import Image from "next/image";
@@ -9,6 +9,9 @@ import type { ReactNode } from "react";
 import { clientBrand } from "../brand";
 import { getClientMessage } from "../copy";
 import { instanceText } from "../instance-text";
+import { journeyMessage } from "../journey-copy";
+import { loadPublishedSiteContent } from "../published-site-content";
+import { publicChannelLinks } from "../public-channel-links";
 
 /** Each language is named in itself, so a visitor can always find their own. */
 const localeNames: Readonly<Record<Locale, string>> = {
@@ -36,8 +39,8 @@ interface SiteFrameProps {
 
 /**
  * The public Client chrome: brand header, the page's
- * main landmark, and the tenant footer. Every tenant-facing word comes from
- * the instance content files.
+ * main landmark, and footer. Optional tenant identity/channels/store links
+ * come only from the routed brand's current published revision.
  */
 export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrameProps) {
   const text = instanceText(locale);
@@ -48,7 +51,16 @@ export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrame
     clientBrand.appearance.defaultTheme,
     darkAvailable,
   );
-  const brandName = text("brand.name");
+  const published = await loadPublishedSiteContent();
+  const content = published.outcome === "ready" ? published.content : undefined;
+  const brandName = content?.title?.[locale] ?? journeyMessage(locale, "brandFallback");
+  const channels = publicChannelLinks(content?.contact);
+  const navItems = [
+    { path: "/services", key: "services" as const },
+    { path: "/about", key: "about" as const },
+    { path: "/contact", key: "contact" as const },
+    { path: "/find-booking", key: "findBooking" as const },
+  ];
   const year = formatNumber(new Date().getUTCFullYear(), locale, {
     useGrouping: false,
   });
@@ -69,8 +81,7 @@ export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrame
             href={`/${locale}`}
             className="me-auto flex min-w-0 items-center gap-3 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
-            {/* The brand mark (instance/assets/icon.png) beside the localized name
-                from instance/content: one source for every tenant. */}
+            {/* The deployed validated brand mark; published identity is read per request. */}
             <Image
               alt=""
               className="size-9 shrink-0 rounded-md"
@@ -83,20 +94,18 @@ export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrame
           </Link>
           <nav
             aria-label={message("siteNavigation")}
-            className="hidden items-center gap-1 md:flex"
+            className="order-last flex w-full flex-wrap items-center gap-1 md:order-none md:w-auto"
           >
-            <Link
-              href={`/${locale}#services`}
-              className="rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {text("navigation.services")}
-            </Link>
-            <Link
-              href={`/${locale}#contact`}
-              className="rounded-md px-3 py-2 text-sm font-semibold text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {text("navigation.contact")}
-            </Link>
+            {navItems.map((item) => (
+              <Button key={item.path} asChild variant="ghost" size="sm">
+                <Link
+                  href={`/${locale}${item.path}`}
+                  aria-current={switchPath === item.path ? "page" : undefined}
+                >
+                  {journeyMessage(locale, item.key)}
+                </Link>
+              </Button>
+            ))}
           </nav>
           <div className="flex items-center gap-2">
             <LocaleSwitch
@@ -130,14 +139,75 @@ export async function SiteFrame({ children, locale, switchPath = "" }: SiteFrame
           <div className="grid content-start gap-2">
             <p className="text-base font-bold">{brandName}</p>
             <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
-              {text("brand.tagline")}
+              {journeyMessage(locale, "footerIntro")}
             </p>
           </div>
-          <div className="grid content-start gap-2">
-            <h2 className="text-sm font-semibold">{text("footer.contact.title")}</h2>
-            <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-              {text("footer.contact.body")}
-            </p>
+          <div className="grid content-start gap-3">
+            <h2 className="text-sm font-semibold">
+              {journeyMessage(locale, "contact")}
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {channels.email ? (
+                <Button asChild variant="outline" size="sm">
+                  <a href={channels.email} rel="noreferrer">
+                    {journeyMessage(locale, "emailAction")}
+                  </a>
+                </Button>
+              ) : null}
+              {channels.phone ? (
+                <Button asChild variant="outline" size="sm">
+                  <a href={channels.phone} rel="noreferrer">
+                    {journeyMessage(locale, "call")}
+                  </a>
+                </Button>
+              ) : null}
+              {channels.whatsapp ? (
+                <Button asChild variant="outline" size="sm">
+                  <a href={channels.whatsapp} rel="noreferrer">
+                    {journeyMessage(locale, "whatsappAction")}
+                  </a>
+                </Button>
+              ) : null}
+              <Button asChild variant="ghost" size="sm">
+                <Link href={`/${locale}/contact`}>
+                  {journeyMessage(locale, "contactBusiness")}
+                </Link>
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {content?.appStores?.appStoreUrl ? (
+                <Button asChild variant="outline">
+                  <a href={content.appStores.appStoreUrl} rel="noreferrer">
+                    {journeyMessage(locale, "appStore")}
+                  </a>
+                </Button>
+              ) : null}
+              {content?.appStores?.googlePlayUrl ? (
+                <Button asChild variant="outline">
+                  <a href={content.appStores.googlePlayUrl} rel="noreferrer">
+                    {journeyMessage(locale, "googlePlay")}
+                  </a>
+                </Button>
+              ) : null}
+            </div>
+            {content?.legal?.privacyUrl || content?.legal?.termsUrl ? (
+              <div className="flex flex-wrap gap-2">
+                {content.legal.privacyUrl ? (
+                  <Button asChild variant="link">
+                    <a href={content.legal.privacyUrl} rel="noreferrer">
+                      {journeyMessage(locale, "privacy")}
+                    </a>
+                  </Button>
+                ) : null}
+                {content.legal.termsUrl ? (
+                  <Button asChild variant="link">
+                    <a href={content.legal.termsUrl} rel="noreferrer">
+                      {journeyMessage(locale, "terms")}
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="border-t">

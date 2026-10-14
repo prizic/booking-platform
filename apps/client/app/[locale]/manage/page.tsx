@@ -14,7 +14,10 @@ export const dynamic = "force-dynamic";
 
 // The manage surface is never indexed and never leaks its URL to a third party
 // (ADR-0004 decision 13).
-export const metadata = { robots: { follow: false, index: false } };
+export const metadata = {
+  robots: { follow: false, index: false },
+  referrer: "no-referrer" as const,
+};
 
 export default async function ManagePage({ params, searchParams }: ManagePageProps) {
   const { locale } = await params;

@@ -1,11 +1,11 @@
 import { formatNumber, type Locale } from "@wlbp/i18n";
 import { Alert, AlertDescription, Badge, ReferenceCode } from "@wlbp/ui-foundation";
 import { commercialCopy } from "../../../_lib/commercial-copy";
-import { fill, say, stateCopy } from "../../../_lib/copy";
+import { fill, formCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import {
@@ -17,6 +17,11 @@ import { EmptyState, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
 
+import { lifecycleCopy as lifecycle } from "../../../_lib/lifecycle-copy";
+import { localList } from "../../../_lib/local-list";
+import { listHref, parseListParams } from "../../../_lib/list-params";
+import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import { Pagination } from "../../../_lib/ui/pagination";
 export const dynamic = "force-dynamic";
 
 const c = commercialCopy.plans;
@@ -75,43 +80,86 @@ function PlanFields({ locale, plan }: { locale: Locale; plan?: PlanRow }) {
 
 export default async function PlansPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await pageLocale(params);
   const operator = await getOperator(locale);
   if (!operator) return null;
   const result = await callOperator("list_plans_v1");
+  const list = parseListParams(await searchParams, {
+    filters: { status: ["active", "inactive"] },
+    pageSize: 25,
+  });
+  const path = `/${locale}/plans`;
+  const page = localList(
+    result.ok ? result.data : [],
+    list,
+    (plan) => `${plan.name} ${plan.key} ${plan.entitlements.join(" ")}`,
+    (plan) =>
+      !list.filters.status || (list.filters.status === "active") === plan.active,
+  );
   const admin = atLeast(operator.role, "admin");
   const known = result.ok
     ? [...new Set(result.data.flatMap((p) => p.entitlements))].sort()
     : [];
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          admin ? (
-            <ActionDialog
-              locale={locale}
-              operation="savePlan"
-              trigger={say(locale, c.create)}
-              triggerVariant="primary"
-              title={say(locale, c.createTitle)}
-              submit={say(locale, c.create)}
-              successMessage={say(locale, c.saved)}
-              hidden={{ mode: "create" }}
-              values={planValues()}
-            >
-              <PlanFields locale={locale} />
-            </ActionDialog>
-          ) : null
-        }
-      />
+    <DataPage
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, formCopy.search), value: list.q }}
+        >
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={[
+              ["active", say(locale, c.active)],
+              ["inactive", say(locale, c.inactive)],
+            ]}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={page.total}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        admin ? (
+          <ActionDialog
+            locale={locale}
+            operation="savePlan"
+            trigger={say(locale, c.create)}
+            triggerVariant="primary"
+            title={say(locale, c.createTitle)}
+            submit={say(locale, c.create)}
+            successMessage={say(locale, c.saved)}
+            hidden={{ mode: "create" }}
+            values={planValues()}
+          >
+            <PlanFields locale={locale} />
+          </ActionDialog>
+        ) : null
+      }
+    >
+      <Alert tone="info">{say(locale, lifecycle.planImpact)}</Alert>
       {!admin ? (
         <Alert>
           <AlertDescription>{say(locale, stateCopy.roleRequired)}</AlertDescription>
@@ -124,8 +172,12 @@ export default async function PlansPage({
       ) : null}
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
-      ) : result.data.length === 0 ? (
-        <EmptyState locale={locale} title={say(locale, c.empty)} />
+      ) : page.rows.length === 0 ? (
+        <EmptyState
+          locale={locale}
+          filtered={Boolean(list.q || list.filters.status)}
+          title={say(locale, c.empty)}
+        />
       ) : (
         <DataTable
           id="plans-table"
@@ -139,7 +191,7 @@ export default async function PlansPage({
             { label: say(locale, c.created) },
             { label: "" },
           ]}
-          rows={result.data.map((plan) => ({
+          rows={page.rows.map((plan) => ({
             key: plan.key,
             cells: [
               <div key="n" className="grid gap-0.5">
@@ -161,26 +213,47 @@ export default async function PlansPage({
               ),
               <TimeValue key="t" locale={locale} value={plan.created_at} />,
               admin ? (
-                <ActionDialog
-                  key="e"
-                  locale={locale}
-                  operation="savePlan"
-                  trigger={say(locale, c.edit)}
-                  triggerVariant="quiet"
-                  title={say(locale, c.editTitle)}
-                  description={say(locale, c.editBody)}
-                  submit={say(locale, c.edit)}
-                  successMessage={say(locale, c.saved)}
-                  hidden={{ mode: "edit", key: plan.key }}
-                  values={planValues(plan)}
-                >
-                  <PlanFields locale={locale} plan={plan} />
-                </ActionDialog>
+                <div className="flex flex-wrap gap-2">
+                  <ActionDialog
+                    key="e"
+                    locale={locale}
+                    operation="savePlan"
+                    trigger={say(locale, c.edit)}
+                    triggerVariant="quiet"
+                    title={say(locale, c.editTitle)}
+                    description={say(locale, c.editBody)}
+                    submit={say(locale, c.edit)}
+                    successMessage={say(locale, c.saved)}
+                    hidden={{ mode: "edit", key: plan.key }}
+                    values={planValues(plan)}
+                  >
+                    <PlanFields locale={locale} plan={plan} />
+                  </ActionDialog>
+                  {plan.active ? (
+                    <ActionDialog
+                      locale={locale}
+                      operation="savePlan"
+                      trigger={say(locale, lifecycle.deactivate)}
+                      title={say(locale, lifecycle.deactivate)}
+                      description={say(locale, lifecycle.planImpact)}
+                      danger
+                      submit={say(locale, lifecycle.deactivate)}
+                      successMessage={say(locale, c.saved)}
+                      hidden={{
+                        mode: "edit",
+                        key: plan.key,
+                        name: plan.name,
+                        features: plan.entitlements.join("\n"),
+                        active: false,
+                      }}
+                    />
+                  ) : null}
+                </div>
               ) : null,
             ],
           }))}
         />
       )}
-    </div>
+    </DataPage>
   );
 }

@@ -146,6 +146,7 @@ select is((select status from api_v1.retry_job_v1(current_setting('test.job2')::
 reset role;
 
 -- Destructive approval needs a different admin with step-up.
+update app.tenants set status='suspended' where id=current_setting('test.t')::uuid;
 insert into control_plane.jobs(kind,tenant_id,instance_id,requested_by)
 values ('close_instance',current_setting('test.t')::uuid,current_setting('test.i')::uuid,'c0000000-0000-0000-0000-00000000000a');
 select set_config('test.close',(select id::text from control_plane.jobs where kind='close_instance' and tenant_id=current_setting('test.t')::uuid),true);
@@ -165,6 +166,7 @@ select lives_ok(format($$ select * from api_v1.approve_operator_job_v1(%L) $$,cu
 select lives_ok(format($$ select * from api_v1.cancel_job_v1(%L,'Customer renewed contract') $$,current_setting('test.close')),
   'an approved or unapproved destructive job can still be cancelled');
 reset role;
+update app.tenants set status='active' where id=current_setting('test.t')::uuid;
 
 update control_plane.instance_infrastructure set desired_state='{"installed":true}'
 where tenant_id=current_setting('test.t')::uuid;

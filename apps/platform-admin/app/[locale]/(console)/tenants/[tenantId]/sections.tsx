@@ -10,11 +10,21 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { actionCopy as a } from "../../../../_lib/action-copy";
 import type { AuditRow } from "../../../../_lib/audit-copy";
-import { copyFor, say, stateCopy, statusCopy } from "../../../../_lib/copy";
+import { copyFor, formCopy, say, stateCopy, statusCopy } from "../../../../_lib/copy";
+import {
+  canRequestDomainVerification,
+  domainRetirementState,
+  type DomainRetirementMetadata,
+} from "../../../../_lib/domain-lifecycle";
+import { lifecycleCopy } from "../../../../_lib/lifecycle-copy";
 import { atLeast, type OperatorContext } from "../../../../_lib/operator-page";
 import { ActionDialog } from "../../../../_lib/ui/action-dialog";
 import { AuditList } from "../../../../_lib/ui/audit-list";
 import { DataTable } from "../../../../_lib/ui/data-table";
+import {
+  DomainReplacement,
+  DomainRetiredAt,
+} from "../../../../_lib/ui/domain-retirement";
 import { Facts } from "../../../../_lib/ui/facts";
 import {
   DateTimeFormField,
@@ -22,7 +32,7 @@ import {
   TextFormField,
 } from "../../../../_lib/ui/form-fields";
 import { OperatorForm } from "../../../../_lib/ui/operator-form";
-import { EmptyState } from "../../../../_lib/ui/states";
+import { EmptyState, UnavailableState } from "../../../../_lib/ui/states";
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { MachineCode, SubText, TextLink } from "../../../../_lib/ui/text";
 import { TimeValue } from "../../../../_lib/ui/time";
@@ -53,7 +63,7 @@ export type TenantDetail = {
     expires_at: string | null;
     updated_at: string;
   }[];
-  domains: {
+  domains: (DomainRetirementMetadata & {
     id: string;
     instance_id: string;
     hostname: string;
@@ -62,7 +72,7 @@ export type TenantDetail = {
     verification_status: string;
     verified_at: string | null;
     active: boolean;
-  }[];
+  })[];
   instances: {
     id: string;
     deployment_state: string;
@@ -179,9 +189,24 @@ export function IdentitySection({ locale, detail, operator }: Props) {
   );
 }
 
-export function LifecycleSection({ locale, detail, operator }: Props) {
+export function LifecycleSection({
+  locale,
+  detail,
+  operator,
+  closureJobs,
+  closureErrorCode,
+}: Props & {
+  closureJobs:
+    readonly { id: string; status: string; needs_approval: boolean }[] | undefined;
+  closureErrorCode: string | undefined;
+}) {
   const { tenant } = detail;
   const admin = atLeast(operator.role, "admin");
+  const pendingClosureJobs =
+    closureJobs?.filter((job) =>
+      ["queued", "running", "failed"].includes(job.status),
+    ) ?? [];
+  const canClose = closureJobs !== undefined && pendingClosureJobs.length === 0;
   return (
     <Section
       id="lifecycle"
@@ -206,7 +231,7 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
                 }}
               />
             ) : null}
-            {tenant.status === "suspended" ? (
+            {tenant.status === "suspended" && canClose ? (
               <>
                 <ActionDialog
                   locale={locale}
@@ -222,18 +247,20 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
                     expectedStatus: tenant.status,
                   }}
                 />
-                <ActionDialog
-                  locale={locale}
-                  operation="requestTenantClosure"
-                  trigger={say(locale, c.closure)}
-                  danger
-                  title={say(locale, c.closureTitle)}
-                  description={say(locale, c.closureBody)}
-                  submit={say(locale, c.closure)}
-                  successMessage={say(locale, c.closureRequested)}
-                  confirmText={tenant.name}
-                  hidden={{ tenantId: tenant.id }}
-                />
+                {canClose ? (
+                  <ActionDialog
+                    locale={locale}
+                    operation="requestTenantClosure"
+                    trigger={say(locale, c.closure)}
+                    danger
+                    title={say(locale, c.closureTitle)}
+                    description={say(locale, c.closureBody)}
+                    submit={say(locale, c.closure)}
+                    successMessage={say(locale, c.closureRequested)}
+                    confirmText={tenant.name}
+                    hidden={{ tenantId: tenant.id }}
+                  />
+                ) : null}
               </>
             ) : null}
           </>
@@ -253,6 +280,31 @@ export function LifecycleSection({ locale, detail, operator }: Props) {
           {say(locale, c.closureNeedsSuspend)}
         </p>
       ) : null}
+      {closureJobs === undefined ? (
+        <UnavailableState locale={locale} code={closureErrorCode ?? "unavailable"} />
+      ) : null}
+      {pendingClosureJobs.length ? (
+        <Alert tone="warning">
+          {say(locale, c.closureRequested)}{" "}
+          {pendingClosureJobs.map((job) => (
+            <TextLink
+              key={job.id}
+              href={
+                job.needs_approval
+                  ? `/${locale}/review/job/${job.id}`
+                  : `/${locale}/jobs/${job.id}`
+              }
+            >
+              {say(
+                locale,
+                job.needs_approval
+                  ? lifecycleCopy.openReview
+                  : ["Inspect closure execution", "فحص تنفيذ الإغلاق"],
+              )}
+            </TextLink>
+          ))}
+        </Alert>
+      ) : null}
       {!admin ? (
         <p className="text-sm text-muted-foreground">
           {say(locale, stateCopy.roleRequired)}
@@ -267,7 +319,11 @@ export function SubscriptionSection({
   detail,
   operator,
   plans,
-}: Props & { plans: { key: string; name: string; active: boolean }[] }) {
+  planErrorCode,
+}: Props & {
+  plans: { key: string; name: string; active: boolean }[] | undefined;
+  planErrorCode: string | undefined;
+}) {
   const sub = detail.subscription;
   const admin = atLeast(operator.role, "admin");
   const ringOptions = rings.map((r) => [r, copyFor(statusCopy, r, locale)] as const);
@@ -278,33 +334,35 @@ export function SubscriptionSection({
       actions={
         admin ? (
           <>
-            <ActionDialog
-              locale={locale}
-              operation="assignSubscription"
-              trigger={say(locale, a.assignPlan.trigger)}
-              title={say(locale, a.assignPlan.title)}
-              description={say(locale, a.assignPlan.body)}
-              submit={say(locale, a.assignPlan.submit)}
-              successMessage={say(locale, a.assignPlan.done)}
-              hidden={{ tenantId: detail.tenant.id }}
-              values={{
-                planKey: sub?.plan_key,
-                ring: sub?.rollout_ring ?? "general",
-              }}
-            >
-              <SelectFormField
-                name="planKey"
-                label={say(locale, a.fields.plan)}
-                options={plans
-                  .filter((p) => p.active)
-                  .map((p) => [p.key, p.name] as const)}
-              />
-              <SelectFormField
-                name="ring"
-                label={say(locale, a.fields.ring)}
-                options={ringOptions}
-              />
-            </ActionDialog>
+            {plans?.some((plan) => plan.active) ? (
+              <ActionDialog
+                locale={locale}
+                operation="assignSubscription"
+                trigger={say(locale, a.assignPlan.trigger)}
+                title={say(locale, a.assignPlan.title)}
+                description={say(locale, a.assignPlan.body)}
+                submit={say(locale, a.assignPlan.submit)}
+                successMessage={say(locale, a.assignPlan.done)}
+                hidden={{ tenantId: detail.tenant.id }}
+                values={{
+                  planKey: sub?.plan_key,
+                  ring: sub?.rollout_ring ?? "general",
+                }}
+              >
+                <SelectFormField
+                  name="planKey"
+                  label={say(locale, a.fields.plan)}
+                  options={plans
+                    .filter((p) => p.active)
+                    .map((p) => [p.key, p.name] as const)}
+                />
+                <SelectFormField
+                  name="ring"
+                  label={say(locale, a.fields.ring)}
+                  options={ringOptions}
+                />
+              </ActionDialog>
+            ) : null}
             {sub ? (
               <ActionDialog
                 locale={locale}
@@ -349,6 +407,17 @@ export function SubscriptionSection({
       }
     >
       <Alert tone="info">{say(locale, c.billingNote)}</Alert>
+      {plans === undefined ? (
+        <UnavailableState locale={locale} code={planErrorCode ?? "unavailable"} />
+      ) : plans.every((plan) => !plan.active) ? (
+        <EmptyState
+          locale={locale}
+          title={say(locale, [
+            "No active plan is available for assignment",
+            "لا تتوفر خطة نشطة للتعيين",
+          ])}
+        />
+      ) : null}
       {sub ? (
         <Facts
           items={[
@@ -530,12 +599,19 @@ export function DomainsSection({ locale, detail, operator }: Props) {
             { label: say(locale, c.application) },
             { label: say(locale, c.verification) },
             { label: say(locale, c.active) },
-            { label: "" },
+            { label: say(locale, lifecycleCopy.retiredAt) },
+            { label: say(locale, lifecycleCopy.replacement) },
+            { label: say(locale, formCopy.actions), kind: "actions" },
           ]}
           rows={detail.domains.map((d) => ({
             key: d.id,
             cells: [
-              <bdi key="h">{d.hostname}</bdi>,
+              <TextLink
+                key="h"
+                href={`/${locale}/domains/${d.id}?tenant=${detail.tenant.id}`}
+              >
+                <bdi>{d.hostname}</bdi>
+              </TextLink>,
               say(
                 locale,
                 c.applications[d.application as keyof typeof c.applications] ??
@@ -546,7 +622,21 @@ export function DomainsSection({ locale, detail, operator }: Props) {
                 <TimeValue locale={locale} value={d.verified_at} empty="none" />
               </>,
               say(locale, d.active ? stateCopy.yes : stateCopy.no),
-              operatorRole && d.verification_status !== "verified" ? (
+              <DomainRetiredAt key="retired" locale={locale} domain={d} />,
+              <DomainReplacement
+                key="replacement"
+                locale={locale}
+                domain={d}
+                tenantId={detail.tenant.id}
+                domains={detail.domains}
+              />,
+              domainRetirementState(d) === "retired" ? (
+                <StatusBadge locale={locale} status="retired" />
+              ) : d.pending_retirement_job_id ? (
+                <TextLink href={`/${locale}/review/job/${d.pending_retirement_job_id}`}>
+                  {say(locale, lifecycleCopy.openReview)}
+                </TextLink>
+              ) : operatorRole && canRequestDomainVerification(d) ? (
                 <OperatorForm
                   key="v"
                   locale={locale}

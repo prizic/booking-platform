@@ -1,6 +1,12 @@
 /** Every stable code the operator RPCs raise, plus the two the app adds. */
 export const operatorErrorCodes = [
   "policy_denied",
+  "tenant_context_mismatch",
+  "replacement_domain_invalid",
+  "active_route_requires_replacement",
+  "review_required",
+  "unfinished_job_conflict",
+  "infrastructure_not_deactivated",
   "recent_authentication_required",
   "not_found",
   "stale_revision",

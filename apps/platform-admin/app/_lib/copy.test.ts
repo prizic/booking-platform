@@ -11,11 +11,14 @@ import * as c6 from "./health-support-copy";
 import * as c7 from "./admin-copy";
 import * as c8 from "../[locale]/(console)/copy";
 import * as c9 from "../[locale]/(console)/tenants/copy";
+import * as lifecycles from "./lifecycle-copy";
+import { operatorErrorCodes } from "./operator-errors";
 import * as c10 from "./form-messages";
 // Each route task appends its copy module here, e.g.
 // import * as tenants from "../[locale]/(console)/tenants/copy";
 const modules: Record<string, Record<string, unknown>> = {
   shared,
+  lifecycles,
   c0,
   c1,
   c2,
@@ -49,16 +52,7 @@ describe("copy parity", () => {
   });
 
   it("every error code the database can raise has copy", () => {
-    for (const code of [
-      "policy_denied",
-      "recent_authentication_required",
-      "not_found",
-      "stale_revision",
-      "reason_required",
-      "last_admin_protected",
-      "idempotency_conflict",
-      "unavailable",
-    ]) {
+    for (const code of operatorErrorCodes) {
       expect(shared.errorCopy).toHaveProperty(code);
     }
   });

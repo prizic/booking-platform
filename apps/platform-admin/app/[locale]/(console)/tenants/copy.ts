@@ -69,12 +69,12 @@ export const tenantsCopy = {
   closure: ["Request closure", "طلب الإغلاق"],
   closureTitle: ["Request permanent closure?", "طلب الإغلاق النهائي؟"],
   closureBody: [
-    "Queues a close job for each instance. A second administrator must approve each job, and nothing is deleted by this request.",
-    "يضيف مهمة إغلاق لكل نسخة. يجب أن يوافق مسؤول ثانٍ على كل مهمة، ولا يُحذف شيء بهذا الطلب.",
+    "Suspend the tenant first. A second administrator reviews each close job in Review. Execution stays queued until each instance is suspended and inactive infrastructure is verified; records are retained.",
+    "علّق المستأجر أولًا. يراجع مسؤول ثانٍ كل مهمة إغلاق في المراجعة. يظل التنفيذ في الانتظار حتى تعليق كل نسخة والتحقق من تعطيل البنية؛ تُحفظ السجلات.",
   ],
   closureRequested: [
-    "Closure requested. It waits for a second administrator's approval in Jobs.",
-    "تم طلب الإغلاق. ينتظر موافقة مسؤول ثانٍ في المهام.",
+    "Closure requested. Independent approval is available in Review; execution still needs verified inactive infrastructure.",
+    "تم طلب الإغلاق. الموافقة المستقلة متاحة في المراجعة؛ لا يزال التنفيذ يحتاج إلى التحقق من تعطيل البنية.",
   ],
   closureNeedsSuspend: [
     "Suspend the tenant before requesting closure.",

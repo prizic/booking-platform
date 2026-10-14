@@ -6,6 +6,8 @@ import { SiteFrame } from "../../_lib/ui/site-frame";
 import { loadWhatsAppAvailability } from "../../_lib/whatsapp-availability";
 import { whatsAppConsentContent } from "../../_lib/whatsapp-consent";
 import { BookingFlow } from "./booking-flow";
+import { PageHeader } from "@wlbp/ui-foundation";
+import { CatalogEmpty, PublicReadError } from "../../_lib/ui/public-read-state";
 
 type BookingPageProps = {
   params: Promise<{ locale: Locale }>;
@@ -23,6 +25,9 @@ function identifier(value: string | string[] | undefined): string | null {
 export default async function BookingPage({ params, searchParams }: BookingPageProps) {
   const { locale } = await params;
   const query = await searchParams;
+  const checkoutReturn =
+    (query.checkout === "return" || query.checkout === "cancelled") &&
+    identifier(query.hold) !== null;
   const [catalog, whatsAppAvailable] = await Promise.all([
     loadPublishedCatalog(locale),
     loadWhatsAppAvailability(),
@@ -32,34 +37,47 @@ export default async function BookingPage({ params, searchParams }: BookingPageP
   // unpublished or cross-tenant pair simply fails there.
   const requestedService = identifier(query.service);
   const requestedLocation = identifier(query.location);
+  const items = catalog.outcome === "error" ? [] : catalog.items;
   const first =
-    catalog.find(
+    items.find(
       (item) =>
         item.serviceId === requestedService && item.locationId === requestedLocation,
     ) ??
     (requestedService !== null && requestedLocation !== null
       ? {
           locationId: requestedLocation,
-          locationTimeZone: catalog[0]?.locationTimeZone ?? "Asia/Riyadh",
+          locationTimeZone: items[0]?.locationTimeZone ?? "Asia/Riyadh",
           serviceId: requestedService,
         }
-      : (catalog[0] ?? null));
+      : (items[0] ?? null));
 
   return (
     <SiteFrame locale={locale} switchPath="/book">
       <div className="mx-auto w-full max-w-3xl px-4 py-10 md:px-6 md:py-14">
-        <BookingFlow
-          copy={{
-            availability: availabilityPickerCopy(locale),
-            booking: bookingFlowCopy(locale),
-          }}
-          locale={locale}
-          locationId={first?.locationId ?? null}
-          locationTimeZone={first?.locationTimeZone ?? "Asia/Riyadh"}
-          serviceId={first?.serviceId ?? null}
-          // No WhatsApp UI at all unless the tenant offers the channel now.
-          whatsApp={whatsAppAvailable ? whatsAppConsentContent(locale) : null}
-        />
+        {!checkoutReturn &&
+        (catalog.outcome === "error" || catalog.outcome === "empty") ? (
+          <div className="grid gap-6">
+            <PageHeader title={bookingFlowCopy(locale).bookingTitle} />
+            {catalog.outcome === "error" ? (
+              <PublicReadError locale={locale} kind="catalog" />
+            ) : (
+              <CatalogEmpty locale={locale} />
+            )}
+          </div>
+        ) : (
+          <BookingFlow
+            copy={{
+              availability: availabilityPickerCopy(locale),
+              booking: bookingFlowCopy(locale),
+            }}
+            locale={locale}
+            locationId={first?.locationId ?? null}
+            locationTimeZone={first?.locationTimeZone ?? "Asia/Riyadh"}
+            serviceId={first?.serviceId ?? null}
+            // No WhatsApp UI at all unless the tenant offers the channel now.
+            whatsApp={whatsAppAvailable ? whatsAppConsentContent(locale) : null}
+          />
+        )}
       </div>
     </SiteFrame>
   );

@@ -4,13 +4,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-import {
-  expect,
-  test,
-  type Browser,
-  type BrowserContext,
-  type Page,
-} from "@playwright/test";
+import { type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test } from "./journey-fixtures";
 import {
   bookingQuery,
   chooseDate,

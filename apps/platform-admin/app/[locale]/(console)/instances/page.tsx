@@ -1,13 +1,14 @@
 import { formatNumber } from "@wlbp/i18n";
-import { Badge } from "@wlbp/ui-foundation";
+import { Badge, Button } from "@wlbp/ui-foundation";
 import { TextLink } from "../../../_lib/ui/text";
 import { copyFor, formCopy, say, stateCopy, statusCopy } from "../../../_lib/copy";
 import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
-import { getOperator } from "../../../_lib/operator-page";
+import Link from "next/link";
+import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { operationsCopy } from "../../../_lib/operations-copy";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
@@ -35,7 +36,8 @@ export default async function InstancesPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await pageLocale(params);
-  if (!(await getOperator(locale))) return null;
+  const operator = await getOperator(locale);
+  if (!operator) return null;
   const list = parseListParams(await searchParams, spec);
   const path = `/${locale}/instances`;
   const result = await callOperator("list_instances_v1", {
@@ -50,43 +52,64 @@ export default async function InstancesPage({
   const status = (s: string) => copyFor(statusCopy, s, locale);
 
   return (
-    <>
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-      />
-      <FilterBar
-        locale={locale}
-        path={path}
-        search={{ label: say(locale, c.search), value: list.q }}
-      >
-        <SelectFilter
-          name="state"
-          label={say(locale, c.state)}
-          value={list.filters.state}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.state.map((s) => [s, status(s)] as const)}
-        />
-        <SelectFilter
-          name="ring"
-          label={say(locale, c.ring)}
-          value={list.filters.ring}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.ring.map((s) => [s, status(s)] as const)}
-        />
-        <SelectFilter
-          name="drift"
-          label={say(locale, c.drift)}
-          value={list.filters.drift}
-          allLabel={say(locale, formCopy.all)}
-          options={[
-            ["yes", say(locale, c.driftOnly)],
-            ["no", say(locale, c.noDrift)],
-          ]}
-        />
-      </FilterBar>
+    <DataPage
+      locale={locale}
+      timesInUtc
+      actions={
+        atLeast(operator.role, "operator") ? (
+          <Button asChild>
+            <Link href={`/${locale}/provisioning/new`}>
+              {say(locale, operationsCopy.provisioning.request)}
+            </Link>
+          </Button>
+        ) : null
+      }
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, c.search), value: list.q }}
+        >
+          <SelectFilter
+            name="state"
+            label={say(locale, c.state)}
+            value={list.filters.state}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.state.map((s) => [s, status(s)] as const)}
+          />
+          <SelectFilter
+            name="ring"
+            label={say(locale, c.ring)}
+            value={list.filters.ring}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.ring.map((s) => [s, status(s)] as const)}
+          />
+          <SelectFilter
+            name="drift"
+            label={say(locale, c.drift)}
+            value={list.filters.drift}
+            allLabel={say(locale, formCopy.all)}
+            options={[
+              ["yes", say(locale, c.driftOnly)],
+              ["no", say(locale, c.noDrift)],
+            ]}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -152,15 +175,8 @@ export default async function InstancesPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </>
+    </DataPage>
   );
 }

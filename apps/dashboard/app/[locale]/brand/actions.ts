@@ -74,7 +74,7 @@ export async function publishBrandAction(
   } catch (error) {
     return actionError(brandOutcomeFor(error));
   }
-  revalidatePath(`/${locale}`, "layout");
+  for (const language of ["en", "ar"]) revalidatePath(`/${language}`, "layout");
   return actionOk({ destination: resultUrl(locale, "published") });
 }
 
@@ -100,7 +100,7 @@ export async function rollbackBrandAction(
   } catch (error) {
     return actionError(brandOutcomeFor(error));
   }
-  revalidatePath(`/${locale}`, "layout");
+  for (const language of ["en", "ar"]) revalidatePath(`/${language}`, "layout");
   return actionOk({ destination: resultUrl(locale, "rolled-back") });
 }
 
@@ -141,7 +141,7 @@ export async function saveStructuredBrandAction(
       expectedHash: contentHash || null,
       ...draft,
     });
-    revalidatePath(`/${locale}/brand`);
+    for (const language of ["en", "ar"]) revalidatePath(`/${language}/brand`);
     return actionOk(undefined, "drafted");
   } catch (error) {
     return actionError(brandOutcomeFor(error));

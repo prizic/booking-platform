@@ -29,7 +29,8 @@ export type CompletionActor =
   | "manager"
   | "revoked"
   | "foreign"
-  | "realtime-scheduler";
+  | "realtime-scheduler"
+  | "journey-revocable";
 export const completionActorEmail = (actor: CompletionActor) =>
   `completion-${actor}@example.invalid`;
 export async function signInCompletion(

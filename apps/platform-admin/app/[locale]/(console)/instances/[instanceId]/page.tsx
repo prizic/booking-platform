@@ -3,9 +3,15 @@ import { Badge, ReferenceCode } from "@wlbp/ui-foundation";
 import { TextLink } from "../../../../_lib/ui/text";
 import { notFound } from "next/navigation";
 import { say, stateCopy } from "../../../../_lib/copy";
+import {
+  canRequestDomainVerification,
+  domainRetirementState,
+} from "../../../../_lib/domain-lifecycle";
+import { lifecycleCopy } from "../../../../_lib/lifecycle-copy";
 import { callOperator } from "../../../../_lib/operator-api";
-import { getOperator } from "../../../../_lib/operator-page";
+import { atLeast, getOperator } from "../../../../_lib/operator-page";
 import { operationsCopy } from "../../../../_lib/operations-copy";
+import { readPages } from "../../../../_lib/read-pages";
 import { pageLocale } from "../../../../_lib/page-locale";
 import { PageHeader } from "../../../../_lib/shell/page-header";
 import { DataTable } from "../../../../_lib/ui/data-table";
@@ -14,6 +20,17 @@ import { EmptyState, Unknown, UnavailableState } from "../../../../_lib/ui/state
 import { StatusBadge } from "../../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../../_lib/ui/time";
 
+import { InstanceLifecycle } from "../../../../_lib/ui/instance-lifecycle";
+import {
+  AddDomainDialog,
+  DomainRetirementDialog,
+  VerifyDomainDialog,
+} from "../../../../_lib/ui/domain-actions";
+import {
+  DomainReplacement,
+  DomainRetiredAt,
+} from "../../../../_lib/ui/domain-retirement";
+import type { TenantDetail } from "../../tenants/[tenantId]/sections";
 export const dynamic = "force-dynamic";
 
 const c = operationsCopy.instances;
@@ -72,9 +89,13 @@ export default async function InstancePage({
 }) {
   const locale = await pageLocale(params);
   const { instanceId } = await params;
-  if (!(await getOperator(locale))) return null;
+  const operator = await getOperator(locale);
+  if (!operator) return null;
   if (!/^[0-9a-f-]{36}$/u.test(instanceId)) notFound();
-  const result = await callOperator("get_instance_v1", { p_instance_id: instanceId });
+  const [result, configuration] = await Promise.all([
+    callOperator("get_instance_v1", { p_instance_id: instanceId }),
+    callOperator("get_instance_configuration_v1", { p_instance_id: instanceId }),
+  ]);
   if (!result.ok && result.code === "not_found") notFound();
   const crumbs = [[say(locale, c.title), `/${locale}/instances`]] as const;
   if (!result.ok)
@@ -86,6 +107,21 @@ export default async function InstancePage({
     );
   const d = result.data as unknown as InstanceDetail;
   const r = d.release;
+  const [tenantResult, jobsResult] = await Promise.all([
+    callOperator("get_tenant_v1", { p_tenant_id: d.tenant_id }),
+    readPages((p_offset, p_limit) =>
+      callOperator("list_jobs_v1", { p_tenant_id: d.tenant_id, p_offset, p_limit }),
+    ),
+  ]);
+  const tenant = tenantResult.ok
+    ? (tenantResult.data as unknown as TenantDetail)
+    : null;
+  const admin = atLeast(operator.role, "admin");
+  const canQueue = atLeast(operator.role, "operator");
+  const domains = (tenant?.domains ?? []).map((domain) => ({
+    ...domain,
+    tenant_id: d.tenant_id,
+  }));
 
   return (
     <>
@@ -97,6 +133,38 @@ export default async function InstancePage({
         meta={<ReferenceCode>{d.id}</ReferenceCode>}
         actions={<StatusBadge locale={locale} status={d.deployment_state} />}
       />
+      {configuration.ok ? (
+        <InstanceLifecycle
+          locale={locale}
+          config={configuration.data}
+          operator={operator}
+          tenantStatus={tenant?.tenant.status}
+          pendingJobs={
+            jobsResult.ok
+              ? jobsResult.data
+                  .filter(
+                    (job) =>
+                      job.instance_id === d.id &&
+                      ["queued", "running", "failed"].includes(job.status),
+                  )
+                  .map((job) => ({
+                    id: job.job_id,
+                    kind: job.kind,
+                    status: job.status,
+                    needsApproval: job.needs_approval,
+                  }))
+              : undefined
+          }
+        />
+      ) : (
+        <UnavailableState locale={locale} code={configuration.code} />
+      )}
+      {!jobsResult.ok ? (
+        <UnavailableState locale={locale} code={jobsResult.code} />
+      ) : null}
+      {!tenantResult.ok ? (
+        <UnavailableState locale={locale} code={tenantResult.code} />
+      ) : null}
       <section className="grid gap-4" aria-labelledby="release-title">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <h2 id="release-title" className="text-lg leading-snug font-semibold">
@@ -318,17 +386,57 @@ export default async function InstancePage({
           <h2 id="links-title" className="text-lg leading-snug font-semibold">
             {say(locale, c.domains)} · {say(locale, c.runs)}
           </h2>
+          {canQueue && d.deployment_state !== "closed" ? (
+            <AddDomainDialog locale={locale} tenantId={d.tenant_id} instanceId={d.id} />
+          ) : null}
         </div>
         <ul className="divide-y rounded-lg border bg-card">
-          {d.domains.map((dom) => (
-            <li
-              key={dom.id}
-              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
-            >
-              <bdi>{dom.hostname}</bdi>{" "}
-              <StatusBadge locale={locale} status={dom.verification_status} />
-            </li>
-          ))}
+          {d.domains.map((dom) => {
+            // get_tenant_v1 carries additive retirement metadata; get_instance_v1 remains N-1 compatible.
+            const domain = { ...dom, ...domains.find((item) => item.id === dom.id) };
+            return (
+              <li
+                key={dom.id}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm"
+              >
+                <TextLink href={`/${locale}/domains/${dom.id}?tenant=${d.tenant_id}`}>
+                  <bdi>{dom.hostname}</bdi>
+                </TextLink>{" "}
+                <StatusBadge locale={locale} status={dom.verification_status} />
+                <span>
+                  {say(locale, lifecycleCopy.retiredAt)}:{" "}
+                  <DomainRetiredAt locale={locale} domain={domain} />
+                </span>
+                <span>
+                  {say(locale, lifecycleCopy.replacement)}:{" "}
+                  <DomainReplacement
+                    locale={locale}
+                    domain={domain}
+                    tenantId={d.tenant_id}
+                    domains={domains}
+                  />
+                </span>
+                {domainRetirementState(domain) === "retired" ? (
+                  <StatusBadge locale={locale} status="retired" />
+                ) : null}
+                {canQueue &&
+                tenantResult.ok &&
+                d.deployment_state !== "closed" &&
+                canRequestDomainVerification(domain) ? (
+                  <VerifyDomainDialog locale={locale} domainId={dom.id} />
+                ) : null}
+                {admin &&
+                d.deployment_state !== "closed" &&
+                domains.find((domain) => domain.id === dom.id) ? (
+                  <DomainRetirementDialog
+                    locale={locale}
+                    domain={domains.find((domain) => domain.id === dom.id)!}
+                    domains={domains}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
           {d.runs.map((run) => (
             <li
               key={run.id}

@@ -1,23 +1,19 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
 import {
-  Alert,
-  AlertDescription,
   Button,
   DatePicker,
   EmptyState,
   Field,
   Label,
-  PageHeader,
+  DataPage,
+  PaginationBar,
+  DataTable,
+  FilterBar,
   ReferenceCode,
   StatusStamp,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Toolbar,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { ChevronRight, Filter, History } from "lucide-react";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
@@ -29,7 +25,7 @@ import { auditFilters, auditStreams } from "./audit-filters";
 import { loadAudit } from "./audit-data-source";
 import { formatWhen } from "../../_lib/booking-display";
 import { workspaceMessage } from "../../_lib/workspace-copy";
-import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+
 export const dynamic = "force-dynamic";
 /** Filter value meaning "no restriction"; Radix selects cannot submit "". */
 const ALL = "all";
@@ -88,284 +84,258 @@ export default async function AuditPage({
       next.set(key, query[key]);
   if (state.kind === "ready" && state.cursor)
     next.set("cursor", JSON.stringify(state.cursor));
+  const firstPage = new URLSearchParams(next);
+  firstPage.delete("cursor");
   return (
     <WorkspaceShell locale={locale} current="audit" labelledBy="audit-title">
       <div className="grid gap-8">
-        <PageHeader
+        <DataPage
           titleId="audit-title"
           title={m("Audit", "سجل التدقيق")}
           description={m(
             "Read-only event history in UTC, limited to your current scope. Sensitive content is excluded.",
             "سجل أحداث للقراءة فقط بالتوقيت العالمي المنسّق (UTC)، ضمن نطاقك الحالي. تُستبعد البيانات الحساسة.",
           )}
-        />
-        {state.kind === "access" ? (
-          <DashboardAccessPanel locale={locale} state={state.state} />
-        ) : state.kind === "unavailable" ? (
-          <Alert tone="danger">
-            <AlertDescription className="text-foreground">
-              {m(
-                "Audit access is refused or unavailable.",
-                "الوصول إلى سجل التدقيق مرفوض أو غير متاح.",
-              )}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            <form method="get">
-              <Toolbar>
-                <Field className="md:min-w-52">
-                  <Label htmlFor="audit-stream">
-                    {m("Event source", "مصدر الحدث")}
-                  </Label>
-                  <ChoiceSelect
-                    id="audit-stream"
-                    name="stream"
-                    defaultValue={filters.stream ?? ALL}
-                    options={[
-                      {
-                        value: ALL,
-                        label: m("All permitted sources", "جميع المصادر المسموحة"),
-                      },
-                      ...auditStreams.map((stream) => ({
-                        value: stream,
-                        label: streamNames[stream][locale === "ar" ? 1 : 0],
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Field>
-                  <Label htmlFor="audit-from">
-                    {m("From (UTC date)", "من (تاريخ UTC)")}
-                  </Label>
-                  <DatePicker
-                    id="audit-from"
-                    name="from"
-                    locale={locale}
-                    defaultValue={filters.from?.slice(0, 10) ?? ""}
-                    placeholder={workspaceMessage(locale, "datePlaceholder")}
-                  />
-                </Field>
-                <Field>
-                  <Label htmlFor="audit-to">
-                    {m("Through (UTC date)", "حتى (تاريخ UTC)")}
-                  </Label>
-                  <DatePicker
-                    id="audit-to"
-                    name="to"
-                    locale={locale}
-                    defaultValue={typeof query.to === "string" ? query.to : ""}
-                    placeholder={workspaceMessage(locale, "datePlaceholder")}
-                  />
-                </Field>
-                <Field className="md:min-w-52">
-                  <Label htmlFor="audit-actor">
-                    {m("Actor in this page", "الفاعل في هذه الصفحة")}
-                  </Label>
-                  <ChoiceSelect
-                    id="audit-actor"
-                    name="actor"
-                    defaultValue={filters.actor ?? ALL}
-                    options={[
-                      { value: ALL, label: m("All actors", "جميع الفاعلين") },
-                      ...(filters.actor &&
-                      !actors.some((actor) => actor.id === filters.actor)
-                        ? [
-                            {
-                              value: filters.actor,
-                              label: m("Selected member", "العضو المحدد"),
-                            },
-                          ]
-                        : []),
-                      ...actors.map((actor) => ({
-                        value: actor.id,
-                        label: (
-                          <>
-                            {actor.name} · <bdi>{actor.id.slice(0, 8)}</bdi>
-                          </>
-                        ),
-                      })),
-                    ]}
-                  />
-                </Field>
-                <Button type="submit" variant="outline">
-                  <Filter aria-hidden="true" />
-                  {m("Apply filters", "تطبيق التصفية")}
-                </Button>
-              </Toolbar>
-            </form>
-            {state.rows.length ? (
-              (() => {
-                const headings = {
-                  time: m("Time (UTC)", "الوقت (UTC)"),
-                  actor: m("Actor", "الفاعل"),
-                  action: m("Action", "الإجراء"),
-                  target: m("Target", "الهدف"),
-                  outcome: m("Outcome / correlation", "النتيجة / الترابط"),
-                };
-                type AuditRow = (typeof state.rows)[number];
-                const cells = (row: AuditRow) => ({
-                  time: (
-                    <time dateTime={row.time}>
-                      {formatWhen(row.time, locale, "UTC")}
-                    </time>
-                  ),
-                  actor: (
-                    <>
-                      {row.actor_name ||
-                        m(
-                          row.actor ? "Member" : "System or guest",
-                          row.actor ? "عضو" : "النظام أو الزائر",
-                        )}
-                      {row.actor ? (
-                        <small className={secondary}>
-                          <bdi className="break-all">{row.actor}</bdi>
-                        </small>
-                      ) : null}
-                      {row.effective_actor && row.effective_actor !== row.actor ? (
-                        <small className={secondary}>
-                          {m("Effective actor", "الفاعل الفعلي")}:{" "}
-                          <bdi className="break-all">{row.effective_actor}</bdi>
-                        </small>
-                      ) : null}
-                    </>
-                  ),
-                  action: (
-                    <>
-                      {actionNames[row.action]?.[locale === "ar" ? 1 : 0] ??
-                        m("Recorded change", "تغيير مسجّل")}
-                      <small className={secondary}>
-                        <bdi className="break-all">{row.action}</bdi>
-                      </small>
-                    </>
-                  ),
-                  target:
-                    row.target_kind === "booking" ? (
-                      <Link
-                        className="underline-offset-4 hover:underline"
-                        href={`/${locale}/bookings/${row.target_id}`}
-                      >
-                        <ReferenceCode className="text-primary">
-                          {row.target_reference ?? row.target_id}
-                        </ReferenceCode>
-                      </Link>
-                    ) : (
+          toolbar={
+            <FilterBar label={locale === "ar" ? "التصفية" : "Filters"} method="get">
+              <Field className="md:min-w-52">
+                <Label htmlFor="audit-stream">{m("Event source", "مصدر الحدث")}</Label>
+                <ChoiceSelect
+                  id="audit-stream"
+                  name="stream"
+                  defaultValue={filters.stream ?? ALL}
+                  options={[
+                    {
+                      value: ALL,
+                      label: m("All permitted sources", "جميع المصادر المسموحة"),
+                    },
+                    ...auditStreams.map((stream) => ({
+                      value: stream,
+                      label: streamNames[stream][locale === "ar" ? 1 : 0],
+                    })),
+                  ]}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor="audit-from">
+                  {m("From (UTC date)", "من (تاريخ UTC)")}
+                </Label>
+                <DatePicker
+                  id="audit-from"
+                  name="from"
+                  locale={locale}
+                  defaultValue={filters.from?.slice(0, 10) ?? ""}
+                  placeholder={workspaceMessage(locale, "datePlaceholder")}
+                />
+              </Field>
+              <Field>
+                <Label htmlFor="audit-to">
+                  {m("Through (UTC date)", "حتى (تاريخ UTC)")}
+                </Label>
+                <DatePicker
+                  id="audit-to"
+                  name="to"
+                  locale={locale}
+                  defaultValue={typeof query.to === "string" ? query.to : ""}
+                  placeholder={workspaceMessage(locale, "datePlaceholder")}
+                />
+              </Field>
+              <Field className="md:min-w-52">
+                <Label htmlFor="audit-actor">
+                  {m("Actor in this page", "الفاعل في هذه الصفحة")}
+                </Label>
+                <ChoiceSelect
+                  id="audit-actor"
+                  name="actor"
+                  defaultValue={filters.actor ?? ALL}
+                  options={[
+                    { value: ALL, label: m("All actors", "جميع الفاعلين") },
+                    ...(filters.actor &&
+                    !actors.some((actor) => actor.id === filters.actor)
+                      ? [
+                          {
+                            value: filters.actor,
+                            label: m("Selected member", "العضو المحدد"),
+                          },
+                        ]
+                      : []),
+                    ...actors.map((actor) => ({
+                      value: actor.id,
+                      label: (
+                        <>
+                          {actor.name} · <bdi>{actor.id.slice(0, 8)}</bdi>
+                        </>
+                      ),
+                    })),
+                  ]}
+                />
+              </Field>
+              <Button type="submit" variant="outline">
+                <Filter aria-hidden="true" />
+                {m("Apply filters", "تطبيق التصفية")}
+              </Button>
+            </FilterBar>
+          }
+        >
+          {state.kind === "access" ? (
+            <DashboardAccessPanel locale={locale} state={state.state} />
+          ) : state.kind === "unavailable" ? (
+            <ErrorState
+              title={
+                <>
+                  {m(
+                    "Audit access is refused or unavailable.",
+                    "الوصول إلى سجل التدقيق مرفوض أو غير متاح.",
+                  )}
+                </>
+              }
+              retry={<ReadRetry locale={locale} />}
+            />
+          ) : (
+            <>
+              {state.rows.length ? (
+                (() => {
+                  const headings = {
+                    time: m("Time (UTC)", "الوقت (UTC)"),
+                    actor: m("Actor", "الفاعل"),
+                    action: m("Action", "الإجراء"),
+                    target: m("Target", "الهدف"),
+                    outcome: m("Outcome / correlation", "النتيجة / الترابط"),
+                  };
+                  type AuditRow = (typeof state.rows)[number];
+                  const cells = (row: AuditRow) => ({
+                    time: (
+                      <time dateTime={row.time}>
+                        {formatWhen(row.time, locale, "UTC")}
+                      </time>
+                    ),
+                    actor: (
                       <>
-                        <span>
-                          {streamNames[row.stream as keyof typeof streamNames]?.[
-                            locale === "ar" ? 1 : 0
-                          ] ?? m("Record", "سجل")}
-                        </span>
+                        {row.actor_name ||
+                          m(
+                            row.actor ? "Member" : "System or guest",
+                            row.actor ? "عضو" : "النظام أو الزائر",
+                          )}
+                        {row.actor ? (
+                          <small className={secondary}>
+                            <bdi className="break-all">{row.actor}</bdi>
+                          </small>
+                        ) : null}
+                        {row.effective_actor && row.effective_actor !== row.actor ? (
+                          <small className={secondary}>
+                            {m("Effective actor", "الفاعل الفعلي")}:{" "}
+                            <bdi className="break-all">{row.effective_actor}</bdi>
+                          </small>
+                        ) : null}
+                      </>
+                    ),
+                    action: (
+                      <>
+                        {actionNames[row.action]?.[locale === "ar" ? 1 : 0] ??
+                          m("Recorded change", "تغيير مسجّل")}
                         <small className={secondary}>
-                          <bdi className="break-all">
-                            {row.target_reference ?? row.target_id}
-                          </bdi>
+                          <bdi className="break-all">{row.action}</bdi>
                         </small>
                       </>
                     ),
-                  outcome: (
-                    <>
-                      <StatusStamp state={workspaceStamp(row.outcome)}>
-                        {workspaceStatus(locale, row.outcome)}
-                      </StatusStamp>
-                      {row.correlation ? (
-                        <small className={secondary}>
-                          <bdi className="break-all">{row.correlation}</bdi>
-                        </small>
-                      ) : null}
-                    </>
-                  ),
-                });
-                return (
-                  <>
-                    <TableFrame>
-                      <Table label={m("Audit events", "أحداث التدقيق")}>
-                        <TableHeader>
-                          <TableRow>
-                            {Object.values(headings).map((label) => (
-                              <TableHead key={label}>{label}</TableHead>
-                            ))}
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {state.rows.map((row) => {
-                            const cell = cells(row);
-                            return (
-                              <TableRow key={`${row.stream}:${row.id}`}>
-                                <TableCell className="align-top whitespace-nowrap">
-                                  {cell.time}
-                                </TableCell>
-                                <TableCell className="max-w-56 align-top">
-                                  {cell.actor}
-                                </TableCell>
-                                <TableCell className="max-w-56 align-top">
-                                  {cell.action}
-                                </TableCell>
-                                <TableCell className="max-w-56 align-top">
-                                  {cell.target}
-                                </TableCell>
-                                <TableCell className="max-w-56 align-top">
-                                  {cell.outcome}
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                        </TableBody>
-                      </Table>
-                    </TableFrame>
-                    <RecordCards label={m("Audit events", "أحداث التدقيق")}>
-                      {state.rows.map((row) => {
-                        const cell = cells(row);
-                        return (
-                          <RecordCard
-                            key={`${row.stream}:${row.id}`}
-                            title={<span className="font-semibold">{cell.action}</span>}
-                            facts={[
-                              { key: "time", label: headings.time, value: cell.time },
-                              {
-                                key: "actor",
-                                label: headings.actor,
-                                value: cell.actor,
-                              },
-                              {
-                                key: "target",
-                                label: headings.target,
-                                value: cell.target,
-                              },
-                              {
-                                key: "outcome",
-                                label: headings.outcome,
-                                value: cell.outcome,
-                              },
-                            ]}
-                          />
-                        );
-                      })}
-                    </RecordCards>
-                  </>
-                );
-              })()
-            ) : (
-              <EmptyState
-                icon={<History />}
-                title={m(
-                  "No permitted events match these filters.",
-                  "لا توجد أحداث مسموحة تطابق هذه التصفية.",
+                    target:
+                      row.target_kind === "booking" ? (
+                        <Link
+                          className="underline-offset-4 hover:underline"
+                          href={`/${locale}/bookings/${row.target_id}`}
+                        >
+                          <ReferenceCode className="text-primary">
+                            {row.target_reference ?? row.target_id}
+                          </ReferenceCode>
+                        </Link>
+                      ) : (
+                        <>
+                          <span>
+                            {streamNames[row.stream as keyof typeof streamNames]?.[
+                              locale === "ar" ? 1 : 0
+                            ] ?? m("Record", "سجل")}
+                          </span>
+                          <small className={secondary}>
+                            <bdi className="break-all">
+                              {row.target_reference ?? row.target_id}
+                            </bdi>
+                          </small>
+                        </>
+                      ),
+                    outcome: (
+                      <>
+                        <StatusStamp state={workspaceStamp(row.outcome)}>
+                          {workspaceStatus(locale, row.outcome)}
+                        </StatusStamp>
+                        {row.correlation ? (
+                          <small className={secondary}>
+                            <bdi className="break-all">{row.correlation}</bdi>
+                          </small>
+                        ) : null}
+                      </>
+                    ),
+                  });
+                  return (
+                    <DataTable
+                      id="audit-records"
+                      caption={m("Audit events", "أحداث التدقيق")}
+                      columns={Object.entries(headings).map(([key, label]) => ({
+                        key,
+                        label,
+                      }))}
+                      rows={state.rows.map((row) => ({
+                        key: `${row.stream}:${row.id}`,
+                        cells: Object.values(cells(row)),
+                      }))}
+                    />
+                  );
+                })()
+              ) : (
+                <EmptyState
+                  icon={<History />}
+                  title={m(
+                    "No permitted events match these filters.",
+                    "لا توجد أحداث مسموحة تطابق هذه التصفية.",
+                  )}
+                />
+              )}
+              <PaginationBar
+                label={m("Pagination", "التنقل بين الصفحات")}
+                summary={m(
+                  "Events in your permitted scope",
+                  "الأحداث ضمن نطاقك المسموح",
                 )}
+                previous={
+                  query.cursor ? (
+                    <Button asChild variant="outline">
+                      <Link href={`/${locale}/audit?${firstPage}`}>
+                        {m("First page", "الصفحة الأولى")}
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button disabled variant="outline">
+                      {m("First page", "الصفحة الأولى")}
+                    </Button>
+                  )
+                }
+                next={
+                  state.cursor ? (
+                    <Button asChild variant="outline">
+                      <Link href={`/${locale}/audit?${next}`}>
+                        {m("Older events", "الأحداث الأقدم")}
+                        <ChevronRight aria-hidden="true" />
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button disabled variant="outline">
+                      {m("Older events", "الأحداث الأقدم")}
+                    </Button>
+                  )
+                }
               />
-            )}
-            {state.cursor ? (
-              <div className="flex justify-end">
-                <Button asChild variant="outline">
-                  <Link href={`/${locale}/audit?${next}`}>
-                    {m("Older events", "الأحداث الأقدم")}
-                    <ChevronRight aria-hidden="true" />
-                  </Link>
-                </Button>
-              </div>
-            ) : null}
-          </>
-        )}
+            </>
+          )}
+        </DataPage>
       </div>
     </WorkspaceShell>
   );

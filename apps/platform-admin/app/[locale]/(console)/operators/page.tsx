@@ -1,10 +1,10 @@
 import { Alert, AlertDescription } from "@wlbp/ui-foundation";
 import { operatorsCopy as c } from "../../../_lib/admin-copy";
-import { copyFor, roleCopy, say, stateCopy } from "../../../_lib/copy";
+import { copyFor, formCopy, roleCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import {
@@ -17,19 +17,36 @@ import { RoleBadge, StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
 import { operatorRoles } from "../../../_lib/schemas/operators";
 
+import { localList } from "../../../_lib/local-list";
+import { listHref, parseListParams } from "../../../_lib/list-params";
+import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
+import { Pagination } from "../../../_lib/ui/pagination";
 export const dynamic = "force-dynamic";
 
 const roles = operatorRoles;
 
 export default async function OperatorsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await pageLocale(params);
   const operator = await getOperator(locale);
   if (!operator) return null;
   const result = await callOperator("list_operators_v1");
+  const list = parseListParams(await searchParams, {
+    filters: { role: roles },
+    pageSize: 25,
+  });
+  const path = `/${locale}/operators`;
+  const page = localList(
+    result.ok ? result.data : [],
+    list,
+    (row) => row.email,
+    (row) => !list.filters.role || row.role === list.filters.role,
+  );
   // eslint-disable-next-line react-hooks/purity -- This dynamic server page evaluates expiry once per request.
   const now = Date.now();
   const admin = atLeast(operator.role, "admin");
@@ -52,38 +69,63 @@ export default async function OperatorsPage({
   );
 
   return (
-    <div className="grid gap-6">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          admin ? (
-            <ActionDialog
-              locale={locale}
-              operation="addOperator"
-              trigger={say(locale, c.add)}
-              triggerVariant="primary"
-              title={say(locale, c.addTitle)}
-              description={say(locale, c.addBody)}
-              submit={say(locale, c.add)}
-              successMessage={say(locale, c.added)}
-              values={{ email: "", ...roleValues() }}
-            >
-              <TextFormField
-                id="op-email"
-                name="email"
-                type="email"
-                label={say(locale, c.email)}
-                required
-                autoComplete="off"
-              />
-              {roleFields("new")}
-            </ActionDialog>
-          ) : null
-        }
-      />
+    <DataPage
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, formCopy.search), value: list.q }}
+        >
+          <SelectFilter
+            name="role"
+            label={say(locale, c.role)}
+            value={list.filters.role}
+            allLabel={say(locale, formCopy.all)}
+            options={roleOptions}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={page.total}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        admin ? (
+          <ActionDialog
+            locale={locale}
+            operation="addOperator"
+            trigger={say(locale, c.add)}
+            triggerVariant="primary"
+            title={say(locale, c.addTitle)}
+            description={say(locale, c.addBody)}
+            submit={say(locale, c.add)}
+            successMessage={say(locale, c.added)}
+            values={{ email: "", ...roleValues() }}
+          >
+            <TextFormField
+              id="op-email"
+              name="email"
+              type="email"
+              label={say(locale, c.email)}
+              required
+              autoComplete="off"
+            />
+            {roleFields("new")}
+          </ActionDialog>
+        ) : null
+      }
+    >
       <Alert>
         <AlertDescription>{say(locale, c.roles)}</AlertDescription>
       </Alert>
@@ -94,8 +136,8 @@ export default async function OperatorsPage({
       ) : null}
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
-      ) : result.data.length === 0 ? (
-        <EmptyState locale={locale} />
+      ) : page.rows.length === 0 ? (
+        <EmptyState locale={locale} filtered={Boolean(list.q || list.filters.role)} />
       ) : (
         <DataTable
           id="operators-table"
@@ -108,9 +150,9 @@ export default async function OperatorsPage({
             { label: say(locale, c.status) },
             { label: say(locale, c.expires) },
             { label: say(locale, c.lastSignIn) },
-            { label: say(locale, c.actions) },
+            { label: say(locale, c.actions), kind: "actions" },
           ]}
-          rows={result.data.map((row) => {
+          rows={page.rows.map((row) => {
             const self = row.operator_id === operator.operatorId;
             const expired =
               row.expires_at !== null && new Date(row.expires_at).getTime() <= now;
@@ -191,6 +233,6 @@ export default async function OperatorsPage({
           })}
         />
       )}
-    </div>
+    </DataPage>
   );
 }

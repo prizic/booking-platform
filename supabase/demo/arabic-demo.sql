@@ -93,7 +93,13 @@ cross join lateral (
   select jsonb_set(r.config, '{name}', '"Your Business"') as config,
     jsonb_build_object(
       'title', jsonb_build_object('en', 'Your Business', 'ar', 'منشأتك'),
-      'contact', jsonb_build_object('email', 'hello@your-business.example.invalid'),
+      'contact', jsonb_build_object('email', 'hello@your-business.example.invalid',
+        'phone', '+12125550100', 'whatsapp', '+12125550100'),
+      'about', jsonb_build_object(
+        'experience', jsonb_build_object('en', 'Personal appointments with a team that listens.', 'ar', 'مواعيد شخصية مع فريق يصغي إلى احتياجاتك.'),
+        'whyChooseUs', jsonb_build_object('en', 'Clear prices, thoughtful service, and time reserved for you.', 'ar', 'أسعار واضحة وخدمة مدروسة ووقت مخصص لك.'),
+        'address', jsonb_build_object('en', '123 Example Avenue, New York', 'ar', '١٢٣ شارع المثال، نيويورك'),
+        'mapUrl', 'https://maps.google.com/?q=New+York'),
       'legal', jsonb_build_object(
         'privacyUrl', 'https://your-business.example.invalid/privacy',
         'termsUrl', 'https://your-business.example.invalid/terms')) as content

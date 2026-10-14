@@ -1,60 +1,56 @@
 import { parsePublicCatalogV1, type PublicCatalogItemV1 } from "@wlbp/api-contracts";
-import { parsePublicRuntimeConfig } from "@wlbp/config";
-import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server";
-import {
-  extractRequestHostname,
-  type RuntimeEnvironment,
-} from "@wlbp/tenant-resolution";
-import { cookies, headers } from "next/headers";
 import type { Locale } from "@wlbp/i18n";
 
-function runtimeEnvironment(): RuntimeEnvironment {
-  const value = process.env.WLBP_RUNTIME_ENV;
-  if (
-    value === "local" ||
-    value === "test" ||
-    value === "development" ||
-    value === "preview" ||
-    value === "production"
-  )
-    return value;
-  return process.env.NODE_ENV === "production" ? "production" : "development";
-}
+import {
+  createPublicReadContext,
+  publicRpcFailure,
+  reportPublicReadFailure,
+  type PublicReadFailure,
+  type PublicRpcClient,
+} from "./public-read-context";
 
-export async function loadPublishedCatalog(
+export type PublishedCatalog =
+  | { readonly outcome: "ready"; readonly items: readonly PublicCatalogItemV1[] }
+  | { readonly outcome: "empty"; readonly items: readonly PublicCatalogItemV1[] }
+  | PublicReadFailure;
+
+/** The catalog RPC returns [] for both an invalid route and a genuine empty catalog.
+ * Resolve the active verified route first so those states cannot be conflated. */
+export async function readPublishedCatalog(
+  api: PublicRpcClient,
+  hostname: string,
   locale: Locale,
-): Promise<readonly PublicCatalogItemV1[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  if (!url || !key) return [];
+): Promise<PublishedCatalog> {
+  let data: unknown;
+  let tenantId: string;
   try {
-    const configuration = parsePublicRuntimeConfig({
-      environment: runtimeEnvironment(),
-      supabaseUrl: url,
-      supabasePublishableKey: key,
+    const route = await api.rpc("resolve_public_tenant_v1", {
+      p_hostname: hostname,
+      p_application: "client",
     });
-    const hostname = extractRequestHostname(await headers(), {
-      ...(process.env.LOCAL_TENANT_HOST
-        ? { localFallback: process.env.LOCAL_TENANT_HOST }
-        : {}),
-      runtimeEnvironment: runtimeEnvironment(),
-    });
-    const cookieStore = await cookies();
-    const client = createRequestScopedSupabaseClient(
-      {
-        url: configuration.supabaseUrl,
-        publishableKey: configuration.supabasePublishableKey,
-      },
-      {
-        getAll: () => cookieStore.getAll(),
-      },
-    );
-    const { data, error } = await client.schema("api_v1").rpc("get_public_catalog_v1", {
+    if (route.error) return publicRpcFailure(route.error);
+    if (!Array.isArray(route.data)) return { outcome: "error", reason: "parse" };
+    if (route.data.length === 0) return { outcome: "error", reason: "tenant" };
+    const row = route.data[0] as Record<string, unknown> | null;
+    if (
+      route.data.length !== 1 ||
+      typeof row?.tenant_id !== "string" ||
+      !/^[0-9a-f-]{36}$/iu.test(row.tenant_id)
+    )
+      return { outcome: "error", reason: "parse" };
+    tenantId = row.tenant_id;
+    const result = await api.rpc("get_public_catalog_v1", {
       p_hostname: hostname,
       p_locale: locale,
     });
-    if (error || !Array.isArray(data)) return [];
-    return parsePublicCatalogV1(
+    if (result.error) return publicRpcFailure(result.error);
+    data = result.data;
+  } catch {
+    return { outcome: "error", reason: "read" };
+  }
+  try {
+    if (!Array.isArray(data)) return { outcome: "error", reason: "parse" };
+    const items = parsePublicCatalogV1(
       data.map((row) => {
         const item = row as Record<string, unknown>;
         return {
@@ -88,7 +84,20 @@ export async function loadPublishedCatalog(
         };
       }),
     );
+    if (items.some((item) => item.tenantId !== tenantId || item.locale !== locale))
+      return { outcome: "error", reason: "parse" };
+    return { outcome: items.length === 0 ? "empty" : "ready", items };
   } catch {
-    return [];
+    return { outcome: "error", reason: "parse" };
   }
+}
+
+export async function loadPublishedCatalog(locale: Locale): Promise<PublishedCatalog> {
+  const context = await createPublicReadContext();
+  const result =
+    context.outcome === "error"
+      ? context
+      : await readPublishedCatalog(context.api, context.hostname, locale);
+  if (result.outcome === "error") reportPublicReadFailure("catalog", result);
+  return result;
 }

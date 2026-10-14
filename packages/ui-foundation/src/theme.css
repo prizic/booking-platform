@@ -27,9 +27,12 @@
   --destructive-foreground: var(--brand-color-on-danger, #ffffff);
   --ring: var(--brand-color-focus, #c2410c);
 
-  /* The rail is the darkest field of the light theme: woven charcoal. */
-  --rail: var(--foreground);
-  --rail-foreground: var(--background);
+  /* Light rail uses the publish-validated surface/text/muted pairs. */
+  --rail: var(--card);
+  --rail-foreground: var(--foreground);
+  --rail-muted: var(--muted-foreground);
+  --rail-accent: var(--background);
+  --rail-ring: var(--foreground);
 }
 
 :root.dark {
@@ -50,6 +53,9 @@
   --ring: var(--brand-dark-color-focus, #fb923c);
   --rail: var(--card);
   --rail-foreground: var(--foreground);
+  --rail-muted: var(--muted-foreground);
+  --rail-accent: var(--background);
+  --rail-ring: var(--foreground);
 }
 
 :root,
@@ -78,11 +84,7 @@
   --success-ink: color-mix(in oklab, var(--success) 68%, var(--foreground));
   --warning-ink: color-mix(in oklab, var(--warning) 62%, var(--foreground));
   --destructive-ink: color-mix(in oklab, var(--destructive) 72%, var(--foreground));
-  --rail-muted: color-mix(in oklab, var(--rail-foreground) 72%, var(--rail));
-  --rail-accent: color-mix(in oklab, var(--rail-foreground) 12%, var(--rail));
-  /* A brand's focus colour is checked against its ground, not against the dark
-     rail; on the rail the indicator uses the rail's own ink (text contrast). */
-  --rail-ring: var(--rail-foreground);
+  /* Rail text, hover ground and focus use exact validated pairs, never mixed ink. */
   --radius: var(--brand-radius-control, 1.5rem);
   --radius-surface: var(--brand-radius-surface, 1.75rem);
   --font-latin: var(--brand-font-body, Inter, "Noto Sans Arabic", sans-serif);

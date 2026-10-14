@@ -2,16 +2,14 @@ import { isLocale } from "@wlbp/i18n";
 import { AppToaster, Badge, Button, ThemeToggle } from "@wlbp/ui-foundation";
 import { THEME_COOKIE, resolveTheme } from "@wlbp/ui-foundation/preferences";
 import { LogOut, ShieldCheck, UserRound } from "lucide-react";
+import { resolveSidebarCollapsed } from "@wlbp/ui-foundation/preferences";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { fill, roleCopy, say, shellCopy, stateCopy } from "../../_lib/copy";
 import { getNavigation } from "../../_lib/navigation";
-import {
-  ActionFeedbackProvider,
-  ActionFeedbackNotice,
-} from "../../_lib/ui/action-feedback";
+import { ActionFeedbackProvider } from "../../_lib/ui/action-feedback";
 import { loadOperatorAccess } from "../../_lib/operator-page";
 import { runtimeEnvironment } from "../../_lib/platform-admin-server";
 import { ConsoleShell } from "../../_lib/shell/console-shell";
@@ -182,6 +180,23 @@ export default async function ConsoleLayout({
             tone="rail"
           />
         }
+        sidebar={{
+          initialCollapsed: resolveSidebarCollapsed(
+            (await cookies()).get("wlbp-admin-sidebar")?.value,
+          ),
+          cookieName: "wlbp-admin-sidebar",
+          collapseLabel: say(locale, shellCopy.collapse),
+          expandLabel: say(locale, shellCopy.expand),
+          collapsedBrand: (
+            <Link
+              href={`/${locale}`}
+              aria-label={say(locale, shellCopy.brand)}
+              className="grid size-9 place-items-center rounded-md bg-primary text-primary-foreground"
+            >
+              <ShieldCheck aria-hidden="true" className="size-5" />
+            </Link>
+          ),
+        }}
         groups={getNavigation(locale)}
         topbar={topbar}
         labels={{
@@ -191,7 +206,6 @@ export default async function ConsoleLayout({
           skipToContent: say(locale, shellCopy.skip),
         }}
       >
-        <ActionFeedbackNotice />
         {children}
       </ConsoleShell>
       <AppToaster locale={locale} />

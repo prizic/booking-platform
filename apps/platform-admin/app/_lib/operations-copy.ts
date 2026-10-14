@@ -95,6 +95,10 @@ export const operationsCopy = {
       "No release is registered. Register one under Releases first.",
       "لا يوجد إصدار مسجّل. سجّل إصدارًا من صفحة الإصدارات أولًا.",
     ],
+    noPlans: [
+      "No active plan is available. Create or activate a plan before provisioning.",
+      "لا تتوفر خطة نشطة. أنشئ خطة أو فعّلها قبل التهيئة.",
+    ],
     slugHint: [
       "Names the repository and projects. 3–40 lowercase letters, digits or hyphens.",
       "يُستخدم لتسمية المستودع والمشاريع. ٣–٤٠ حرفًا صغيرًا أو أرقامًا أو شرطات.",
@@ -205,6 +209,7 @@ export const operationsCopy = {
     rotate_secret: ["Rotate secret", "تدوير سر"],
     suspend_instance: ["Suspend instance", "تعليق نسخة"],
     close_instance: ["Close instance", "إغلاق نسخة"],
+    retire_domain: ["Retire domain route", "إيقاف مسار النطاق"],
     reconcile_drift: ["Reconcile drift", "معالجة الانحراف"],
     verify_domain: ["Verify domain", "التحقق من نطاق"],
     check_integration: ["Check integration", "فحص تكامل"],
@@ -247,5 +252,6 @@ export const workerForKind: Record<string, keyof typeof operationsCopy.workers> 
   reconcile_drift: "reconciliation",
   suspend_instance: "infrastructure",
   close_instance: "infrastructure",
+  retire_domain: "infrastructure",
   rotate_secret: "infrastructure",
 };

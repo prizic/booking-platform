@@ -135,6 +135,14 @@ select is((select status from app.tenants where id=current_setting('test.t1')::u
 
 select pg_temp.claims('c0000000-0000-0000-0000-00000000000a','aal2',30);
 set local role authenticated;
+select throws_ok($$select * from api_v1.set_tenant_status_v1(current_setting('test.t1')::uuid,'active',
+  'Dispute resolved by finance','suspended')$$,'55000','unfinished_job_conflict','pending closure blocks reactivation');
+reset role;
+select set_config('test.closure_job',(select id::text from control_plane.jobs where kind='close_instance'
+  and tenant_id=current_setting('test.t1')::uuid),true);
+set local role authenticated;
+select lives_ok($$select * from api_v1.cancel_job_v1(current_setting('test.closure_job')::uuid,
+  'Customer renewed the contract')$$,'cancelled closure permits safe reactivation');
 select is((select status from api_v1.set_tenant_status_v1(current_setting('test.t1')::uuid,'active','Dispute resolved by finance','suspended')),
   'active','reactivation works');
 reset role;

@@ -60,8 +60,29 @@ export function assertCampaignPortProfile(prefix, inspector, isCampaign) {
 
 const campaign = process.env.WLBP_CAMPAIGN?.trim() ?? "";
 assertCampaignName(campaign);
+export function campaignOutputDirectory(value) {
+  const candidate = path.resolve(root, value);
+  const artifactRoot = path.join(root, ".artifacts");
+  if (
+    !candidate.startsWith(artifactRoot + path.sep) ||
+    [
+      path.join(artifactRoot, "platform-admin"),
+      path.join(artifactRoot, "dashboard-completion"),
+    ].some(
+      (retained) => candidate === retained || candidate.startsWith(retained + path.sep),
+    )
+  )
+    throw new Error(
+      "Campaign output must be a separate directory under this repository's .artifacts; retained profiles are forbidden.",
+    );
+  return candidate;
+}
+if (process.env.WLBP_CAMPAIGN_OUTPUT && !campaign)
+  throw new Error("WLBP_CAMPAIGN_OUTPUT requires an explicitly named campaign.");
 export const output = campaign
-  ? path.join(root, ".artifacts/monorepo-hardening")
+  ? process.env.WLBP_CAMPAIGN_OUTPUT
+    ? campaignOutputDirectory(process.env.WLBP_CAMPAIGN_OUTPUT)
+    : path.join(root, ".artifacts/monorepo-hardening")
   : path.join(root, ".artifacts/platform-admin");
 export const workdir = path.join(output, "isolated");
 export const projectId = campaign ? `${campaign}-20261008` : "platform-admin-20261006";

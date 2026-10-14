@@ -2,13 +2,8 @@
 
 import {
   Button,
-  Dialog,
+  ActionDialog as SharedActionDialog,
   DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
   type ButtonVariant,
 } from "@wlbp/ui-foundation";
 import { useCallback, useId, useState, type ReactNode } from "react";
@@ -62,7 +57,11 @@ export function ActionDialog<K extends OperationKey>({
 }) {
   const fieldId = useId();
   const [open, setOpen] = useState(false);
-  const onSuccess = useCallback(() => setOpen(false), []);
+  const [pending, setPending] = useState(false);
+  const onSuccess = useCallback(() => {
+    setPending(false);
+    setOpen(false);
+  }, []);
   const spec: OperationSpec = operations[operation];
   const reasonMin = spec.reason;
   const startingValues = {
@@ -72,59 +71,70 @@ export function ActionDialog<K extends OperationKey>({
   } as OperatorFormProps<K>["values"];
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
+    <SharedActionDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!pending) setOpen(next);
+      }}
+      title={title}
+      description={description ?? ""}
+      closeLabel={say(locale, formCopy.close)}
+      contentProps={{
+        onEscapeKeyDown: (event) => {
+          if (pending) event.preventDefault();
+        },
+        onInteractOutside: (event) => {
+          if (pending) event.preventDefault();
+        },
+      }}
+      trigger={
         <Button variant={triggerStyle(triggerVariant, danger ?? false)}>
           {trigger}
         </Button>
-      </DialogTrigger>
-      <DialogContent
-        closeLabel={say(locale, formCopy.close)}
-        {...(description ? {} : { "aria-describedby": undefined })}
+      }
+    >
+      <OperatorForm
+        key={`${operation}:${JSON.stringify(hidden ?? {})}`}
+        locale={locale}
+        operation={operation}
+        submit={submit}
+        successMessage={successMessage}
+        danger={danger ?? false}
+        onSuccess={onSuccess}
+        onPendingChange={setPending}
+        {...(hidden ? { hidden } : {})}
+        {...(startingValues ? { values: startingValues } : {})}
+        {...(confirmText !== undefined ? { confirmText } : {})}
+        secondaryAction={
+          <DialogClose asChild>
+            <Button variant="ghost" disabled={pending}>
+              {say(locale, formCopy.cancel)}
+            </Button>
+          </DialogClose>
+        }
       >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          {description ? <DialogDescription>{description}</DialogDescription> : null}
-        </DialogHeader>
-        <OperatorForm
-          locale={locale}
-          operation={operation}
-          submit={submit}
-          successMessage={successMessage}
-          danger={danger ?? false}
-          onSuccess={onSuccess}
-          {...(hidden ? { hidden } : {})}
-          {...(startingValues ? { values: startingValues } : {})}
-          {...(confirmText !== undefined ? { confirmText } : {})}
-          secondaryAction={
-            <DialogClose asChild>
-              <Button variant="ghost">{say(locale, formCopy.cancel)}</Button>
-            </DialogClose>
-          }
-        >
-          {children}
-          {reasonMin !== undefined ? (
-            <TextareaFormField
-              id={`${fieldId}-reason`}
-              name="reason"
-              label={say(locale, formCopy.reason)}
-              description={fill(locale, formCopy.reasonHint, { n: String(reasonMin) })}
-              required
-              minLength={reasonMin}
-              maxLength={500}
-            />
-          ) : null}
-          {confirmText !== undefined ? (
-            <TextFormField
-              id={`${fieldId}-confirm`}
-              name="confirmation"
-              label={fill(locale, formCopy.typeToConfirm, { value: confirmText })}
-              autoComplete="off"
-              required
-            />
-          ) : null}
-        </OperatorForm>
-      </DialogContent>
-    </Dialog>
+        {children}
+        {reasonMin !== undefined ? (
+          <TextareaFormField
+            id={`${fieldId}-reason`}
+            name="reason"
+            label={say(locale, formCopy.reason)}
+            description={fill(locale, formCopy.reasonHint, { n: String(reasonMin) })}
+            required
+            minLength={reasonMin}
+            maxLength={500}
+          />
+        ) : null}
+        {confirmText !== undefined ? (
+          <TextFormField
+            id={`${fieldId}-confirm`}
+            name="confirmation"
+            label={fill(locale, formCopy.typeToConfirm, { value: confirmText })}
+            autoComplete="off"
+            required
+          />
+        ) : null}
+      </OperatorForm>
+    </SharedActionDialog>
   );
 }

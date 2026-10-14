@@ -41,6 +41,14 @@ export function brandFormMessages(locale: Locale): Readonly<Record<string, strin
       "Enter a complete https:// link without a user name or password.",
       "أدخل رابطًا كاملًا يبدأ بـ https:// دون اسم مستخدم أو كلمة مرور.",
     ),
+    brand_phone_invalid: m(
+      "Use an international number beginning with +, or leave empty.",
+      "استخدم رقمًا دوليًا يبدأ بعلامة + أو اتركه فارغًا.",
+    ),
+    brand_locale_pair: m(
+      "Complete both English and Arabic, or clear both fields.",
+      "أكمل الإنجليزية والعربية أو امسح الحقلين.",
+    ),
     brand_color_invalid: m(
       "Enter a colour as # followed by six hexadecimal digits, for example #1a2b3c.",
       "أدخل اللون بالعلامة # متبوعة بستة أرقام سداسية عشرية، مثل ‎#1a2b3c.",

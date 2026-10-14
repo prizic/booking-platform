@@ -1,5 +1,7 @@
 export const locales = ["en", "ar"] as const;
 
+export { workspaceMessages } from "./workspace.js";
+
 export type Locale = (typeof locales)[number];
 export type Direction = "ltr" | "rtl";
 export type MessageValues = Readonly<Record<string, string | number>>;

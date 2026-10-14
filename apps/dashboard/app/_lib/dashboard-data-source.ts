@@ -1,6 +1,8 @@
+import { cache } from "react";
 import { parseOperationalChoices } from "./operational-choices";
 import {
   capabilityNames,
+  parseBookingContextV1,
   parseStaffAccessWorkspaceV1,
   parseRoleCatalogV1,
   parseRolesV1,
@@ -588,12 +590,22 @@ export function createDashboardDataSource(
   const api = client.schema("api_v1") as unknown as RpcSchema;
 
   return {
-    getOperationalChoices: async (tenantId, locale) =>
+    getOperationalChoices: cache(async (tenantId: string, locale: "ar" | "en") =>
       parseOperationalChoices(
         assertRpc(
           await api.rpc("get_operational_choices_v1", {
             p_tenant_id: tenantId,
             p_locale: locale,
+          }),
+        ),
+      ),
+    ),
+    getBookingContext: async (tenantId, bookingId) =>
+      parseBookingContextV1(
+        assertRpc(
+          await api.rpc("get_booking_context_v1", {
+            p_tenant_id: tenantId,
+            p_booking_id: bookingId,
           }),
         ),
       ),
@@ -1095,7 +1107,7 @@ export function createDashboardDataSource(
       );
     },
 
-    listBookingRequests: async (tenantId) => {
+    listBookingRequests: cache(async (tenantId: string) => {
       const rows = assertRpc(
         await api.rpc("list_booking_requests_v1", { p_tenant_id: tenantId }),
       );
@@ -1130,7 +1142,7 @@ export function createDashboardDataSource(
           };
         }),
       );
-    },
+    }),
 
     decideBookingRequest: async (request: BookingDecisionV1Request) => {
       const decision = parseBookingDecisionV1Request(request);
@@ -1295,13 +1307,16 @@ export function createDashboardDataSource(
     },
 
     searchCustomers: async (request) => {
-      const rows = assertRpc(
-        await api.rpc("search_customers_v1", {
-          p_include_erased: request.includeErased,
-          p_query: request.query,
-          p_tenant_id: request.tenantId,
-        }),
-      );
+      // Conditional spread preserves backend defaults for old callers while
+      // allowing server-side paging requests to pass explicit bounds.
+      const rpcRequest: Record<string, unknown> = {
+        p_include_erased: request.includeErased,
+        p_query: request.query,
+        p_tenant_id: request.tenantId,
+      };
+      if (request.limit !== undefined) rpcRequest.p_limit = request.limit;
+      if (request.offset !== undefined) rpcRequest.p_offset = request.offset;
+      const rows = assertRpc(await api.rpc("search_customers_v1", rpcRequest));
       return (Array.isArray(rows) ? rows : []).map(toCustomerRow);
     },
 

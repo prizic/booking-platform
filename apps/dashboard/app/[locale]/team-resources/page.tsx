@@ -92,6 +92,7 @@ export default async function TeamResourcesPage({
     >
       <div className="grid gap-10">
         <TeamResourcesView
+          query={query}
           actions={{
             deactivateResource: deactivateResourceAction,
             deactivateStaff: deactivateStaffAction,

@@ -157,9 +157,17 @@ rollback to savepoint suppressed_dispatch;
 
 -- Dead lettering and authorized replay.
 savepoint dead_letter;
+-- The hard-bounce suppression created above now diverts every claim to a
+-- suppressed ledger entry at claim time, so the worker would claim nothing
+-- and the dead-letter path could never be reached. Clear it inside the
+-- savepoint; the rollback below restores it for the suppression assertions,
+-- and the replay savepoint deletes it again on its own.
+delete from app.notification_suppressions;
 update app.notification_messages set status='queued', attempts=6,
   next_attempt_at=statement_timestamp();
 select set_config('test.msg2',(select c.message_id::text from private.claim_notification_batch_v1() c),true);
+select isnt(current_setting('test.msg2'),''::text,
+  'the worker claims the re-queued message for the dead-letter exercise');
 select is((select array[r.status,r.dead_lettered::text] from private.record_notification_attempt_v1(
     current_setting('test.msg2')::uuid,7,'retryable_error',statement_timestamp(),null,'provider_timeout') r),
   array['failed','true'],'a message past the attempt ceiling is dead lettered rather than retried forever');

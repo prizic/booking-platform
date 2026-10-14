@@ -6,6 +6,13 @@
  * Private to this app: schemas never move into a distributed package.
  * Server-safe and client-safe (no "use client", no server-only).
  */
+import {
+  updateInstanceConfigurationSchema,
+  deactivateInstanceSchema,
+  requestInstanceClosureSchema,
+  requestDomainRetirementSchema,
+  decideReviewSchema,
+} from "./lifecycles";
 import type { z } from "zod";
 import { exportAuditSchema } from "./audit";
 import { addDomainSchema, requestDomainVerificationSchema } from "./domains";
@@ -62,6 +69,27 @@ export type OperationSpec = {
 };
 
 export const operations = {
+  updateInstanceConfiguration: {
+    schema: updateInstanceConfigurationSchema,
+    reason: 10,
+    idempotent: true,
+  },
+  deactivateInstance: {
+    schema: deactivateInstanceSchema,
+    reason: 10,
+    idempotent: true,
+  },
+  requestInstanceClosure: {
+    schema: requestInstanceClosureSchema,
+    reason: 10,
+    idempotent: true,
+  },
+  requestDomainRetirement: {
+    schema: requestDomainRetirementSchema,
+    reason: 10,
+    idempotent: true,
+  },
+  decideReview: { schema: decideReviewSchema, reason: 10, idempotent: true },
   exportAudit: { schema: exportAuditSchema },
   addDomain: { schema: addDomainSchema, idempotent: true },
   requestDomainVerification: { schema: requestDomainVerificationSchema },

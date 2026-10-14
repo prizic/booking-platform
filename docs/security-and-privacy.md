@@ -103,6 +103,96 @@ Tenants define their own Dashboard roles under [ADR-0019](./adr/0019-tenant-cust
 - **Administrator is a capability.** The last-administrator guard and the administrator step-up rule test for `role.manage` at tenant scope, never the key `tenant_admin`.
 - **Evidence and freshness.** Role mutations lock the tenant row, are idempotent on a request id, check an expected revision, append to `app.role_change_events`, and broadcast `authorization_changed` so open Dashboard tabs re-authorize immediately.
 
+### 4.2 Email-only guest recovery and published site content
+
+`request_booking_recovery_v1` takes a verified Client route selector, an email
+address, and a request UUID. It returns exactly
+`{"contractVersion":1,"outcome":"accepted"}` for known, unknown, ineligible,
+suppressed and rate-limited email addresses. The application always says that
+if a booking exists, a link has been sent. No token, booking, list, count,
+delivery state or account session is returned. Submission performs no customer
+or booking lookup: admitted tenant-salted address digests enter a private
+RLS-protected queue, and matching runs asynchronously in the existing
+notification claim path. Separate match-independent limits apply to normalized
+email (3 per 15 minutes), network actor/action (20 per 10 minutes), and tenant/action (100 per
+hour). Missing network metadata shares a restrictive bucket rather than
+disabling limits. Server ingress must supply trusted network metadata; raw
+email/IP values never enter this queue or its audit events.
+
+Admission caps persistence as well as delivery: under one tenant/action
+transaction lock, the independent windows allow at most 100 request rows and
+100 uniform recovery audits per tenant/hour, 20 per network actor/10 minutes,
+and 3 per normalized email/15 minutes. Indexed scans stop at those bounds.
+Over-limit calls return the same accepted acknowledgment without adding a
+request, denial audit, limiter key or replay receipt. Admitted UUIDs replay
+without writes during seven-day receipt retention; a dropped UUID has no
+persisted delivery promise and may be admitted if explicitly submitted again
+after capacity returns. Malformed/oversized inputs are equally acknowledged
+without persistence. Input byte bounds precede normalization/hash work (email
+1,280 bytes, normalized email 320 characters, route selector 320 bytes);
+request metadata JSON is bounded to 4,096 bytes and network labels to 64 bytes.
+Missing/malformed/oversized metadata uses the restrictive unknown-actor bucket.
+Ingress request-body/connection limits remain necessary to bound transport
+resources before PostgreSQL receives the arguments.
+
+Each eligible booking creates its own notification intent. The existing
+worker mints a single-booking `view` link only at claim time and delivers it
+using the existing requested/confirmed email templates. Tokens remain hashed
+in their security table; notification payloads never persist bearer URLs.
+Provider failure follows the existing durable retry/settlement mechanism.
+Suppression is checked at dispatch and claim. Matching, issuance and delivery
+use the current canonical customer email, preserving historical booking
+contact snapshots. Correction, restriction and erasure revoke outstanding
+management tokens; issuance takes a customer lock so a concurrent correction
+cannot miss a newly minted token. Action issuance, email OTP, verification,
+intent checks, TTL, revocation and single-use action semantics remain on the
+existing management path. Recovery excludes terminal/expired bookings and
+restricted/erased customers. Recovery digests have a seven-day retention policy,
+with bounded scheduled SQL cleanup independent of provider availability and
+additional cleanup in the worker; work older than one day is not delivered.
+
+Published public site copy remains in the existing immutable brand-content
+JSON, with optional E.164 phone/WhatsApp fields, bilingual About text, an HTTPS
+map link, and optional HTTPS store links. Revision writes and publication
+validate these fields even when an author bypasses the Dashboard. Public reads
+project only allowed fields from the routed brand's published revision. Drafts
+and arbitrary internal JSON never become public content. See
+[backend workspace contracts](./backend-workspace-contracts.md) for exact shapes.
+
+### 4.3 Safe operator lifecycle and review
+
+Instance display metadata is private control-plane configuration, guarded by
+fresh AAL2, live operator authority, reason, expected revision and an
+idempotency key. Instance deactivation reuses the provisioning lifecycle when
+available, preserving all run and event history. Closure is an approved
+workflow-owned job: tenant/instance suspension, current independent approver,
+no conflicting work, and observed inactive infrastructure are required before
+completion. Closed instances cannot be revived, and pending closure prevents
+tenant reactivation. Neither tenant, instance, domain, plan nor workflow history
+is hard-deleted by these lifecycle RPCs.
+
+Domain retirement is a pending operator review. A second fresh administrator
+revalidates the same-tenant, same-instance, same-application verified replacement
+and atomically switches database routing. Active routes require an explicit
+replacement. Retired rows keep their replacement lineage and cannot be revived
+by old verification/activation paths. Provider resources are retained; routing
+retirement never claims that an external provider deleted a resource.
+
+The immediate one-active-production-route uniqueness constraint remains in
+force: approval retires the locked outgoing row before activating its locked
+replacement in the same transaction. Any replacement failure rolls back both
+writes and approval/history/receipt changes. Operator tenant-detail and domain
+list reads include `retired_at`, `replacement_domain_id`, and a distinct
+`pending_retirement_job_id`; retained retired rows are history and cannot be
+replacement candidates even if their prior verification status is verified.
+
+The private Review queue combines pending destructive job approvals and support
+access approvals, with inspection, reasoned approval/rejection, idempotent
+decisions and immutable audit history. Requesters cannot approve or reject their
+own destructive review. These contracts stay in `control_plane` and the private
+Platform Admin app; the shared `api-contracts` package exports only tenant/public
+contracts. Application roles have no control-plane table or schema access.
+
 ---
 
 ## 5. Secret handling

@@ -58,6 +58,7 @@ import { useMemo, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { z } from "zod";
 
+import { journeyMessage } from "../../_lib/journey-copy";
 import { formatWallDateTime } from "../../_lib/wall-time";
 import {
   manageFormCodes,
@@ -232,7 +233,19 @@ function ManageBookingView({
       <section aria-labelledby="manage-title" className="grid gap-6">
         <PageHeader title={message("manageTitle")} titleId="manage-title" />
         <Alert tone="info">{message("manageMissingToken")}</Alert>
-        <div>{homeLink}</div>
+        <div className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href={`/${locale}/find-booking`}>
+              {journeyMessage(locale, "findBooking")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/${locale}/contact`}>
+              {journeyMessage(locale, "contactBusiness")}
+            </Link>
+          </Button>
+          {homeLink}
+        </div>
       </section>
     );
   }
@@ -310,7 +323,19 @@ function ManageBookingView({
           titleId="manage-title"
           description={message("manageUnavailableBody")}
         />
-        <div>{homeLink}</div>
+        <div className="flex flex-wrap gap-3">
+          <Button asChild>
+            <Link href={`/${locale}/find-booking`}>
+              {journeyMessage(locale, "findBooking")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href={`/${locale}/contact`}>
+              {journeyMessage(locale, "contactBusiness")}
+            </Link>
+          </Button>
+          {homeLink}
+        </div>
       </section>
     );
   }

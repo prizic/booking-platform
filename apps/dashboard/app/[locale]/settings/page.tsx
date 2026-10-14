@@ -1,12 +1,17 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
+import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
 import {
   Alert,
   AlertDescription,
   EmptyState,
   Facts,
-  PageHeader,
+  DataPage,
+  Button,
+  Toolbar,
   Section,
   StatusStamp,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 
 import { getDashboardMessage } from "../../_lib/copy";
@@ -55,103 +60,120 @@ export default async function SettingsPage({
   return (
     <WorkspaceShell current="settings" labelledBy="settings-title" locale={locale}>
       <div className="grid gap-10">
-        <PageHeader
+        <DataPage
           titleId="settings-title"
           title={message("settingsTitle")}
           description={message("settingsSummary")}
-        />
-        {resultKey === null ? null : (
-          <Alert
-            tone={positiveSettingsResults.has(result ?? "") ? "positive" : "warning"}
-          >
-            <AlertDescription className="text-foreground">
-              {message(resultKey)}
-            </AlertDescription>
-          </Alert>
-        )}
+          toolbar={
+            <Toolbar
+              role="toolbar"
+              aria-label={locale === "ar" ? "التصفية" : "Filters"}
+            >
+              <Button asChild variant="outline" size="sm">
+                <Link href={"#settings-plan"}>
+                  {locale === "ar" ? "مزايا الخطة" : "Plan entitlements"}
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link href={"#settings-edit"}>
+                  {locale === "ar" ? "تعديل الإعدادات" : "Edit settings"}
+                </Link>
+              </Button>
+            </Toolbar>
+          }
+        >
+          {resultKey === null ? null : (
+            <Alert
+              tone={positiveSettingsResults.has(result ?? "") ? "positive" : "warning"}
+            >
+              <AlertDescription className="text-foreground">
+                {message(resultKey)}
+              </AlertDescription>
+            </Alert>
+          )}
 
-        {configuration === null ? (
-          <Alert tone="danger">
-            <AlertDescription className="text-foreground">
-              {message("settingsUnavailable")}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <>
-            {/* Read-only on purpose. What the plan grants is not something
+          {configuration === null ? (
+            <ErrorState
+              title={<>{message("settingsUnavailable")}</>}
+              retry={<ReadRetry locale={locale} />}
+            />
+          ) : (
+            <>
+              {/* Read-only on purpose. What the plan grants is not something
                 anybody inside the tenant can edit, and the interface should
                 not imply otherwise by offering a control. */}
-            <Section
-              id="settings-plan"
-              title={message("settingsPlanTitle")}
-              description={message("settingsPlanHint")}
-            >
-              {entitlementKeys.length === 0 ? (
-                <EmptyState title={message("settingsPlanEmpty")} />
-              ) : (
-                <ul
-                  aria-label={message("settingsPlanTitle")}
-                  className="grid divide-y rounded-lg border bg-card"
-                >
-                  {entitlementKeys.map((key) => (
-                    <li
-                      key={key}
-                      className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"
-                    >
-                      <bdi className="font-medium">{featureLabel(locale, key)}</bdi>
-                      <StatusStamp
-                        state={
-                          configuration.entitlements[key] === true
-                            ? "confirmed"
-                            : "neutral"
-                        }
+              <Section
+                id="settings-plan"
+                title={message("settingsPlanTitle")}
+                description={message("settingsPlanHint")}
+              >
+                {entitlementKeys.length === 0 ? (
+                  <EmptyState title={message("settingsPlanEmpty")} />
+                ) : (
+                  <ul
+                    aria-label={message("settingsPlanTitle")}
+                    className="grid divide-y rounded-lg border bg-card"
+                  >
+                    {entitlementKeys.map((key) => (
+                      <li
+                        key={key}
+                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"
                       >
-                        {message(
-                          configuration.entitlements[key] === true
-                            ? "settingsFeatureGranted"
-                            : "settingsFeatureUnavailable",
-                        )}
-                      </StatusStamp>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Section>
+                        <bdi className="font-medium">{featureLabel(locale, key)}</bdi>
+                        <StatusStamp
+                          state={
+                            configuration.entitlements[key] === true
+                              ? "confirmed"
+                              : "neutral"
+                          }
+                        >
+                          {message(
+                            configuration.entitlements[key] === true
+                              ? "settingsFeatureGranted"
+                              : "settingsFeatureUnavailable",
+                          )}
+                        </StatusStamp>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Section>
 
-            <Section
-              id="settings-edit"
-              title={message("settingsEditTitle")}
-              description={message("settingsEditHint")}
-            >
-              <SettingsForm locale={locale} configuration={configuration} />
-            </Section>
+              <Section
+                id="settings-edit"
+                title={message("settingsEditTitle")}
+                description={message("settingsEditHint")}
+              >
+                <SettingsForm locale={locale} configuration={configuration} />
+              </Section>
 
-            <Section id="settings-versions" title={message("settingsVersionsTitle")}>
-              <div className="rounded-lg border bg-card p-5">
-                <Facts
-                  columns={3}
-                  items={[
-                    {
-                      key: "config",
-                      label: message("settingsConfigVersion"),
-                      value: <bdi dir="ltr">{configuration.configVersion}</bdi>,
-                    },
-                    {
-                      key: "feature",
-                      label: message("settingsFeatureVersion"),
-                      value: <bdi dir="ltr">{configuration.featureVersion}</bdi>,
-                    },
-                    {
-                      key: "locale",
-                      label: message("settingsDefaultLocale"),
-                      value: <bdi dir="ltr">{configuration.defaultLocale}</bdi>,
-                    },
-                  ]}
-                />
-              </div>
-            </Section>
-          </>
-        )}
+              <Section id="settings-versions" title={message("settingsVersionsTitle")}>
+                <div className="rounded-lg border bg-card p-5">
+                  <Facts
+                    columns={3}
+                    items={[
+                      {
+                        key: "config",
+                        label: message("settingsConfigVersion"),
+                        value: <bdi dir="ltr">{configuration.configVersion}</bdi>,
+                      },
+                      {
+                        key: "feature",
+                        label: message("settingsFeatureVersion"),
+                        value: <bdi dir="ltr">{configuration.featureVersion}</bdi>,
+                      },
+                      {
+                        key: "locale",
+                        label: message("settingsDefaultLocale"),
+                        value: <bdi dir="ltr">{configuration.defaultLocale}</bdi>,
+                      },
+                    ]}
+                  />
+                </div>
+              </Section>
+            </>
+          )}
+        </DataPage>
       </div>
     </WorkspaceShell>
   );

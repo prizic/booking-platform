@@ -1,15 +1,29 @@
 import "server-only";
 
 import type { Database } from "@wlbp/supabase-client";
-import { createPlatformAdminRequestClient } from "./platform-admin-server";
+import { validateDomainRead, type DomainListRow } from "./domain-lifecycle";
+import {
+  createPlatformAdminRequestClient,
+  loadVerifiedOperatorIdentity,
+} from "./platform-admin-server";
 import { operatorErrorCode, type OperatorErrorCode } from "./operator-errors";
 import { operatorRpcEvidence, type OperatorCorrelation } from "./operator-correlation";
+
+import {
+  hasOperatorJsonContract,
+  normalizeOperatorJson,
+  type OperatorJsonFunction,
+  type OperatorJsonReturn,
+} from "./operator-json-contracts";
 
 type Functions = Database["api_v1"]["Functions"];
 export type OperatorFunction = keyof Functions;
 // Supabase-generated Args omit SQL nullability. These reviewed fields accept
 // null to clear a value; optional fields may be undefined and are omitted below.
 type NullableArgs = {
+  update_instance_configuration_v1: "p_display_name";
+  request_domain_retirement_v1: "p_replacement_domain_id";
+  list_operator_reviews_v1: "p_status" | "p_kind";
   add_operator_v1: "p_expires_at";
   set_operator_role_v1: "p_expires_at";
   update_subscription_v1: "p_ends_at";
@@ -26,7 +40,11 @@ export type RpcArgs<F extends OperatorFunction> = {
           : never
         : never);
 };
-export type RpcReturn<F extends OperatorFunction> = Functions[F]["Returns"];
+export type RpcReturn<F extends OperatorFunction> = F extends OperatorJsonFunction
+  ? OperatorJsonReturn<F>
+  : F extends "list_domains_v1"
+    ? DomainListRow[]
+    : Functions[F]["Returns"];
 export type RpcRow<F extends OperatorFunction> =
   RpcReturn<F> extends readonly (infer R)[] ? R : never;
 export type OperatorResult<T> =
@@ -72,8 +90,7 @@ export async function callOperator<F extends OperatorFunction>(
     return { ok: false, code: "configuration_missing" };
   }
   // Verified claims are telemetry only; live database operator standing authorizes the RPC.
-  const claims = await client.auth.getClaims().catch(() => null);
-  const subject = claims?.data?.claims.sub;
+  const subject = (await loadVerifiedOperatorIdentity().catch(() => null))?.accountId;
   if (typeof subject === "string") evidence.actorId = subject;
   try {
     const rpc = client.rpc.bind(client) as unknown as LooseRpc;
@@ -83,8 +100,12 @@ export async function callOperator<F extends OperatorFunction>(
       record("failed", code);
       return { ok: false, code };
     }
+    validateDomainRead(fn, data);
+    const normalized = hasOperatorJsonContract(fn)
+      ? normalizeOperatorJson(fn, data)
+      : data;
     record("succeeded");
-    return { ok: true, data: data as RpcReturn<F> };
+    return { ok: true, data: normalized as RpcReturn<F> };
   } catch {
     record("failed", "unavailable");
     return { ok: false, code: "unavailable" };

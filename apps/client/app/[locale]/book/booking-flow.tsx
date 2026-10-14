@@ -50,8 +50,10 @@ import {
 } from "@wlbp/ui-foundation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
+import { journeyMessage } from "../../_lib/journey-copy";
 import { errorCodeOf, postJson } from "../../_lib/client-api";
 import { formatWallDateTime } from "../../_lib/wall-time";
 import type { WhatsAppConsentContent } from "../../_lib/whatsapp-consent";
@@ -599,7 +601,14 @@ export function BookingFlow({
               </Alert>
             )}
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-wrap gap-3">
+            {settled ? (
+              <Button asChild variant="outline">
+                <Link href={`/${locale}/find-booking`}>
+                  {journeyMessage(locale, "findBooking")}
+                </Link>
+              </Button>
+            ) : null}
             <Button onClick={chooseAnotherTime} type="button" variant="outline">
               {message("bookingRestart")}
             </Button>
@@ -764,6 +773,13 @@ export function BookingFlow({
                 ? message("bookingRequestedNextSteps")
                 : message("bookingNextSteps")}
             </p>
+            <div>
+              <Button asChild variant="outline">
+                <Link href={`/${locale}/find-booking`}>
+                  {journeyMessage(locale, "findBooking")}
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </section>

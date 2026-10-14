@@ -1,0 +1,366 @@
+{
+  "schema_version": 1,
+  "fixtures": {
+    "name": "Laya Client Smoke",
+    "email": "laya-client-smoke@example.invalid",
+    "invalidEmail": "not-an-email"
+  },
+  "scenarios": [
+    {
+      "id": "home-english-desktop",
+      "path": "/en",
+      "viewports": ["desktop"],
+      "assertions": [
+        { "type": "url", "value": "/en$" },
+        { "type": "attribute", "selector": "html", "name": "lang", "value": "en" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "ltr" },
+        {
+          "type": "text",
+          "selector": "h1#client-title",
+          "value": "Book the right time, without the back-and-forth."
+        },
+        {
+          "type": "visible",
+          "selector": "header nav[aria-label=\"Site sections\"]"
+        },
+        {
+          "type": "visible",
+          "selector": "h3[id=\"service-d7200000-0000-0000-0000-000000000001-d5000000-0000-0000-0000-000000000001\"]"
+        },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "home-arabic-desktop",
+      "path": "/ar",
+      "viewports": ["desktop"],
+      "assertions": [
+        { "type": "url", "value": "/ar$" },
+        { "type": "attribute", "selector": "html", "name": "lang", "value": "ar" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" },
+        { "type": "css", "selector": "html", "name": "direction", "value": "rtl" },
+        {
+          "type": "text",
+          "selector": "h1#client-title",
+          "value": "احجز الموعد المناسب دون مراسلات متكررة."
+        },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "home-english-mobile",
+      "path": "/en",
+      "viewports": ["mobile"],
+      "assertions": [
+        { "type": "visible", "selector": "h1#client-title" },
+        {
+          "type": "visible",
+          "selector": "header nav[aria-label=\"Site sections\"]"
+        },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "home-arabic-mobile",
+      "path": "/ar",
+      "viewports": ["mobile"],
+      "assertions": [
+        { "type": "visible", "selector": "h1#client-title" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "switch-language-arabic-to-english",
+      "path": "/ar",
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "nav[aria-label=\"اللغة\"] a[href=\"/en\"]",
+          "operation": "CLICK",
+          "allowed_controls": [
+            {
+              "selector": "nav[aria-label=\"اللغة\"] a[href=\"/en\"]",
+              "operations": ["CLICK"]
+            }
+          ],
+          "until": [{ "type": "url", "value": "/en$" }]
+        }
+      ],
+      "assertions": [
+        { "type": "url", "value": "/en$" },
+        { "type": "attribute", "selector": "html", "name": "lang", "value": "en" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "ltr" },
+        {
+          "type": "text",
+          "selector": "h1#client-title",
+          "value": "Book the right time, without the back-and-forth."
+        }
+      ]
+    },
+    {
+      "id": "navigate-services-header-english",
+      "path": "/en",
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "header nav[aria-label=\"Site sections\"] a[href=\"/en/services\"]",
+          "operation": "CLICK",
+          "allowed_controls": [
+            {
+              "selector": "header nav[aria-label=\"Site sections\"] a[href=\"/en/services\"]",
+              "operations": ["CLICK"]
+            }
+          ],
+          "until": [{ "type": "url", "value": "/services$" }]
+        }
+      ],
+      "assertions": [
+        { "type": "url", "value": "/services$" },
+        { "type": "text", "selector": "h1", "value": "Services" },
+        {
+          "type": "visible",
+          "selector": "h2[id=\"service-d7200000-0000-0000-0000-000000000001-d5000000-0000-0000-0000-000000000001\"]"
+        },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "navigate-services-header-arabic",
+      "path": "/ar",
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "header nav[aria-label=\"أقسام الموقع\"] a[href=\"/ar/services\"]",
+          "operation": "CLICK",
+          "allowed_controls": [
+            {
+              "selector": "header nav[aria-label=\"أقسام الموقع\"] a[href=\"/ar/services\"]",
+              "operations": ["CLICK"]
+            }
+          ],
+          "until": [{ "type": "url", "value": "/services$" }]
+        }
+      ],
+      "assertions": [
+        { "type": "url", "value": "/services$" },
+        { "type": "text", "selector": "h1", "value": "الخدمات" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" }
+      ]
+    },
+    {
+      "id": "services-no-match-filter",
+      "path": "/en/services",
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "input[type=\"search\"]",
+          "operation": "TYPE_TEXT",
+          "text_fixtures": { "Search services": "invalidEmail" },
+          "allowed_controls": [
+            { "selector": "input[type=\"search\"]", "operations": ["TYPE_TEXT"] }
+          ],
+          "until": [
+            {
+              "type": "text",
+              "selector": "div[data-slot=\"empty-state\"] p:first-of-type",
+              "value": "No matching services"
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        { "type": "url", "value": "/services$" },
+        { "type": "text", "selector": "h1", "value": "Services" },
+        {
+          "type": "value",
+          "selector": "input[type=\"search\"]",
+          "value": "not-an-email"
+        },
+        {
+          "type": "text",
+          "selector": "div[data-slot=\"empty-state\"] p:first-of-type",
+          "value": "No matching services"
+        }
+      ]
+    },
+    {
+      "id": "about-fixture-english",
+      "path": "/en/about",
+      "assertions": [
+        { "type": "url", "value": "/about$" },
+        { "type": "text", "selector": "h1", "value": "About" },
+        {
+          "type": "text",
+          "selector": "section#experience p",
+          "value": "Twenty years serving our community"
+        },
+        {
+          "type": "text",
+          "selector": "section#why-choose-us p",
+          "value": "Thoughtful care and clear appointments"
+        },
+        {
+          "type": "text",
+          "selector": "section#visit address",
+          "value": "136 Synthetic Street"
+        },
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://maps.example.invalid/journey\"]"
+        },
+        { "type": "overflow" }
+      ]
+    },
+    {
+      "id": "about-fixture-arabic",
+      "path": "/ar/about",
+      "assertions": [
+        { "type": "url", "value": "/about$" },
+        { "type": "text", "selector": "h1", "value": "من نحن" },
+        {
+          "type": "text",
+          "selector": "section#experience p",
+          "value": "عشرون عامًا في خدمة مجتمعنا"
+        },
+        {
+          "type": "text",
+          "selector": "section#why-choose-us p",
+          "value": "رعاية مدروسة ومواعيد واضحة"
+        },
+        {
+          "type": "text",
+          "selector": "section#visit address",
+          "value": "١٣٦ شارع الاختبار"
+        },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" },
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://maps.example.invalid/journey\"]"
+        }
+      ]
+    },
+    {
+      "id": "contact-fixture-english",
+      "path": "/en/contact",
+      "assertions": [
+        { "type": "url", "value": "/contact$" },
+        { "type": "text", "selector": "h1", "value": "Contact" },
+        {
+          "type": "visible",
+          "selector": "main a[href=\"mailto:journey-contact@example.invalid\"]"
+        },
+        { "type": "visible", "selector": "main a[href=\"tel:+15555550136\"]" },
+        {
+          "type": "visible",
+          "selector": "main a[href=\"https://wa.me/15555550137\"]"
+        }
+      ]
+    },
+    {
+      "id": "contact-fixture-arabic",
+      "path": "/ar/contact",
+      "assertions": [
+        { "type": "url", "value": "/contact$" },
+        { "type": "text", "selector": "h1", "value": "تواصل معنا" },
+        {
+          "type": "visible",
+          "selector": "main a[href=\"mailto:journey-contact@example.invalid\"]"
+        },
+        { "type": "visible", "selector": "main a[href=\"tel:+15555550136\"]" },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" }
+      ]
+    },
+    {
+      "id": "footer-fixture-links",
+      "path": "/en/about",
+      "assertions": [
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://example.invalid/privacy\"]"
+        },
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://example.invalid/terms\"]"
+        },
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://apps.apple.com/app/journey-demo\"]"
+        },
+        {
+          "type": "visible",
+          "selector": "a[href=\"https://play.google.com/store/apps/details?id=invalid.example.journey\"]"
+        }
+      ]
+    },
+    {
+      "id": "recovery-invalid-email-no-submit",
+      "path": "/en/find-booking",
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "input[type=\"email\"]",
+          "operation": "TYPE_TEXT",
+          "text_fixtures": {
+            "Email address": "invalidEmail",
+            "Email address*": "invalidEmail"
+          },
+          "allowed_controls": [
+            { "selector": "input[type=\"email\"]", "operations": ["TYPE_TEXT"] }
+          ],
+          "until": [
+            {
+              "type": "value",
+              "selector": "input[type=\"email\"]",
+              "value": "not-an-email"
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        { "type": "url", "value": "/find-booking$" },
+        { "type": "text", "selector": "h1", "value": "Find my booking" },
+        { "type": "invalid", "selector": "input[type=\"email\"]" },
+        { "type": "visible", "selector": "input[type=\"email\"]" }
+      ]
+    },
+    {
+      "id": "recovery-form-display",
+      "path": "/ar/find-booking",
+      "assertions": [
+        { "type": "url", "value": "/find-booking$" },
+        { "type": "text", "selector": "h1", "value": "العثور على حجزي" },
+        { "type": "visible", "selector": "form" },
+        { "type": "visible", "selector": "input[type=\"email\"]" },
+        { "type": "visible", "selector": "button[type=\"submit\"]" }
+      ]
+    },
+    {
+      "id": "book-now-service-card-choice",
+      "path": "/ar",
+      "viewports": ["mobile"],
+      "steps": [
+        {
+          "mode": "deterministic",
+          "selector": "a[aria-describedby=\"service-d7200000-0000-0000-0000-000000000001-d5000000-0000-0000-0000-000000000001\"]",
+          "operation": "CLICK",
+          "allowed_controls": [
+            {
+              "selector": "a[aria-describedby=\"service-d7200000-0000-0000-0000-000000000001-d5000000-0000-0000-0000-000000000001\"]",
+              "operations": ["CLICK"]
+            }
+          ],
+          "until": [{ "type": "url", "value": "/ar/book\\?service=d7200000" }]
+        }
+      ],
+      "assertions": [
+        {
+          "type": "url",
+          "value": "/ar/book\\?service=d7200000-0000-0000-0000-000000000001"
+        },
+        { "type": "attribute", "selector": "html", "name": "dir", "value": "rtl" },
+        { "type": "text", "selector": "h1#booking-title", "value": "احجز موعدًا" }
+      ]
+    }
+  ]
+}

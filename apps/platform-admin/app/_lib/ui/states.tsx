@@ -1,13 +1,9 @@
 import type { Locale } from "@wlbp/i18n";
-import {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-  EmptyState as FoundationEmptyState,
-} from "@wlbp/ui-foundation";
+import { ErrorState, EmptyState as FoundationEmptyState } from "@wlbp/ui-foundation";
 import { Inbox, SearchX } from "lucide-react";
 import type { ReactNode } from "react";
 import { errorCopy, say, stateCopy } from "../copy";
+import { ReadRetry } from "./read-retry";
 
 export function EmptyState({
   locale,
@@ -40,12 +36,11 @@ export function EmptyState({
 export function UnavailableState({ locale, code }: { locale: Locale; code?: string }) {
   const specific = code && code !== "unavailable" ? errorCopy[code] : undefined;
   return (
-    <Alert tone="danger">
-      <AlertTitle>{say(locale, stateCopy.unavailableTitle)}</AlertTitle>
-      <AlertDescription>
-        {say(locale, specific ?? stateCopy.unavailableBody)}
-      </AlertDescription>
-    </Alert>
+    <ErrorState
+      title={say(locale, stateCopy.unavailableTitle)}
+      description={say(locale, specific ?? stateCopy.unavailableBody)}
+      retry={<ReadRetry locale={locale} />}
+    />
   );
 }
 

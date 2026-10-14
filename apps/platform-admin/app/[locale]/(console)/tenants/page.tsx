@@ -7,7 +7,7 @@ import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
@@ -52,48 +52,61 @@ export default async function TenantsPage({
   const filtered = Boolean(list.q || Object.keys(list.filters).length);
 
   return (
-    <>
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          atLeast(operator.role, "admin") ? (
-            <Button asChild>
-              <Link href={`${path}/new`}>
-                <Plus aria-hidden="true" />
-                {say(locale, c.register)}
-              </Link>
-            </Button>
-          ) : null
-        }
-      />
-      <FilterBar
-        locale={locale}
-        path={path}
-        search={{ label: say(locale, c.search), value: list.q }}
-      >
-        <SelectFilter
-          name="status"
-          label={say(locale, c.status)}
-          value={list.filters.status}
-          allLabel={say(locale, formCopy.all)}
-          options={spec.filters.status.map(
-            (s) => [s, copyFor(statusCopy, s, locale)] as const,
-          )}
-        />
-        <SelectFilter
-          name="plan"
-          label={say(locale, c.plan)}
-          value={list.filters.plan}
-          allLabel={say(locale, formCopy.all)}
-          options={[
-            ["none", say(locale, c.noPlan)] as const,
-            ...(plans.ok ? plans.data.map((p) => [p.key, p.name] as const) : []),
-          ]}
-        />
-      </FilterBar>
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        atLeast(operator.role, "admin") ? (
+          <Button asChild>
+            <Link href={`${path}/new`}>
+              <Plus aria-hidden="true" />
+              {say(locale, c.register)}
+            </Link>
+          </Button>
+        ) : null
+      }
+      toolbar={
+        <FilterBar
+          sort={list.sort}
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, c.search), value: list.q }}
+        >
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.status.map(
+              (s) => [s, copyFor(statusCopy, s, locale)] as const,
+            )}
+          />
+          <SelectFilter
+            name="plan"
+            label={say(locale, c.plan)}
+            value={list.filters.plan}
+            allLabel={say(locale, formCopy.all)}
+            options={[
+              ["none", say(locale, c.noPlan)] as const,
+              ...(plans.ok ? plans.data.map((p) => [p.key, p.name] as const) : []),
+            ]}
+          />
+        </FilterBar>
+      }
+      pagination={
+        result.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(result.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       {!result.ok ? (
         <UnavailableState locale={locale} code={result.code} />
       ) : result.data.length === 0 ? (
@@ -149,15 +162,8 @@ export default async function TenantsPage({
               ],
             }))}
           />
-          <Pagination
-            locale={locale}
-            page={list.page}
-            pageSize={list.pageSize}
-            total={Number(result.data[0]?.total_count ?? 0)}
-            href={(page) => listHref(path, list, { page })}
-          />
         </>
       )}
-    </>
+    </DataPage>
   );
 }

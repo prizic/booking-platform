@@ -1,15 +1,14 @@
 import type { Locale } from "@wlbp/i18n";
 import {
   Button,
-  Field,
   Input,
-  Label,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-  Toolbar,
+  FilterBar as SharedFilterBar,
+  FilterField,
 } from "@wlbp/ui-foundation";
 import { Search, X } from "lucide-react";
 import Link from "next/link";
@@ -26,19 +25,30 @@ export function FilterBar({
   locale,
   path,
   search,
+  sort,
   children,
 }: {
   locale: Locale;
   path: string;
   search?: { label: string; value: string };
+  sort?: string;
   children?: ReactNode;
 }) {
   return (
-    <form method="get" action={path} role="search">
-      <Toolbar className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 md:flex md:flex-wrap md:gap-3">
+    <SharedFilterBar
+      method="get"
+      action={path}
+      role="search"
+      label={say(locale, formCopy.filters)}
+    >
+      <div className="grid w-full grid-cols-1 items-end gap-4 sm:grid-cols-2 md:flex md:flex-wrap md:gap-3">
+        {sort ? <input type="hidden" name="sort" value={sort} /> : null}
         {search ? (
-          <Field className="sm:col-span-2 md:w-72">
-            <Label htmlFor="filter-q">{search.label}</Label>
+          <FilterField
+            className="sm:col-span-2 md:w-72"
+            htmlFor="filter-q"
+            label={search.label}
+          >
             <Input
               id="filter-q"
               type="search"
@@ -46,7 +56,7 @@ export function FilterBar({
               defaultValue={search.value}
               maxLength={100}
             />
-          </Field>
+          </FilterField>
         ) : null}
         {children}
         <div className="flex items-center gap-2 sm:col-span-2 md:col-auto [&>*]:flex-1 md:[&>*]:flex-none">
@@ -61,8 +71,8 @@ export function FilterBar({
             </Link>
           </Button>
         </div>
-      </Toolbar>
-    </form>
+      </div>
+    </SharedFilterBar>
   );
 }
 
@@ -85,8 +95,7 @@ export function SelectFilter({
 }) {
   const id = `filter-${name}`;
   return (
-    <Field className="md:w-52">
-      <Label htmlFor={id}>{label}</Label>
+    <FilterField className="md:w-52" htmlFor={id} label={label}>
       <Select name={name} defaultValue={value || ALL_FILTER}>
         <SelectTrigger id={id}>
           <SelectValue />
@@ -100,6 +109,6 @@ export function SelectFilter({
           ))}
         </SelectContent>
       </Select>
-    </Field>
+    </FilterField>
   );
 }

@@ -3,6 +3,7 @@ import { PageHeader as FoundationPageHeader } from "@wlbp/ui-foundation";
 import { ChevronRight, Clock } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ActionFeedbackNotice } from "../ui/action-feedback";
 import { say, shellCopy, stateCopy } from "../copy";
 
 /**
@@ -77,6 +78,7 @@ export function PageHeader({
         {...(actions ? { actions } : {})}
         {...(allMeta ? { meta: allMeta } : {})}
       />
+      <ActionFeedbackNotice />
     </div>
   );
 }

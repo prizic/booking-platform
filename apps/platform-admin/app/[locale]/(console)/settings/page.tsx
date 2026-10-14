@@ -2,11 +2,11 @@ import type { Locale } from "@wlbp/i18n";
 import { Alert, AlertDescription, FieldGroup, Section } from "@wlbp/ui-foundation";
 import Link from "next/link";
 import { settingsCopy as c } from "../../../_lib/admin-copy";
-import { say, stateCopy } from "../../../_lib/copy";
+import { formCopy, say, stateCopy } from "../../../_lib/copy";
 import { callOperator, type RpcRow } from "../../../_lib/operator-api";
 import { atLeast, getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { ActionDialog } from "../../../_lib/ui/action-dialog";
 import { DataTable } from "../../../_lib/ui/data-table";
 import {
@@ -22,6 +22,10 @@ import { EmptyState, Unknown, UnavailableState } from "../../../_lib/ui/states";
 import { StatusBadge } from "../../../_lib/ui/status-badge";
 import { TimeValue } from "../../../_lib/ui/time";
 
+import { localList } from "../../../_lib/local-list";
+import { listHref, parseListParams } from "../../../_lib/list-params";
+import { FilterBar } from "../../../_lib/ui/filter-bar";
+import { Pagination } from "../../../_lib/ui/pagination";
 export const dynamic = "force-dynamic";
 
 type Flag = RpcRow<"list_platform_flags_v1">;
@@ -102,8 +106,10 @@ function FlagFields({ locale, flag }: { locale: Locale; flag?: Flag }) {
 
 export default async function SettingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const locale = await pageLocale(params);
   const operator = await getOperator(locale);
@@ -112,17 +118,47 @@ export default async function SettingsPage({
     callOperator("list_platform_flags_v1"),
     callOperator("list_integrations_v1"),
   ]);
+  const list = parseListParams(await searchParams, { pageSize: 25 });
+  const path = `/${locale}/settings`;
+  const flagPage = localList(
+    flags.ok ? flags.data : [],
+    list,
+    (flag) =>
+      `${flag.key} ${flag.kind} ${flag.message_en ?? ""} ${flag.message_ar ?? ""}`,
+  );
+  const filteredIntegrations = integrations.ok
+    ? integrations.data.filter((row) =>
+        row.provider.toLowerCase().includes(list.q.toLowerCase()),
+      )
+    : [];
   const admin = atLeast(operator.role, "admin");
   const canQueue = atLeast(operator.role, "operator");
 
   return (
-    <div className="grid gap-8">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-      />
+    <DataPage
+      toolbar={
+        <FilterBar
+          locale={locale}
+          path={path}
+          search={{ label: say(locale, formCopy.search), value: list.q }}
+        />
+      }
+      pagination={
+        flags.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={flagPage.total}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+    >
       {!admin ? (
         <Alert>
           <AlertDescription>{say(locale, stateCopy.roleRequired)}</AlertDescription>
@@ -151,7 +187,7 @@ export default async function SettingsPage({
       >
         {!flags.ok ? (
           <UnavailableState locale={locale} code={flags.code} />
-        ) : flags.data.length === 0 ? (
+        ) : flagPage.rows.length === 0 ? (
           <EmptyState locale={locale} title={say(locale, c.noFlags)} />
         ) : (
           <DataTable
@@ -167,7 +203,7 @@ export default async function SettingsPage({
               { label: say(locale, c.updatedBy) },
               { label: "" },
             ]}
-            rows={flags.data.map((flag) => ({
+            rows={flagPage.rows.map((flag) => ({
               key: flag.key,
               cells: [
                 <bdi key="k" className="font-semibold">
@@ -224,6 +260,8 @@ export default async function SettingsPage({
         </Alert>
         {!integrations.ok ? (
           <UnavailableState locale={locale} code={integrations.code} />
+        ) : filteredIntegrations.length === 0 ? (
+          <EmptyState locale={locale} filtered={Boolean(list.q)} />
         ) : (
           <DataTable
             id="integrations-table"
@@ -237,7 +275,7 @@ export default async function SettingsPage({
               { label: say(locale, c.verifiedAt) },
               { label: "" },
             ]}
-            rows={integrations.data.map((i) => ({
+            rows={filteredIntegrations.map((i) => ({
               key: i.provider,
               cells: [
                 <bdi key="p" className="font-semibold">
@@ -312,6 +350,6 @@ export default async function SettingsPage({
           />
         )}
       </Section>
-    </div>
+    </DataPage>
   );
 }

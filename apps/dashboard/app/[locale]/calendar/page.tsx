@@ -1,12 +1,7 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
 import Link from "next/link";
 import type { Locale } from "@wlbp/i18n";
-import {
-  Alert,
-  AlertDescription,
-  Button,
-  EmptyState,
-  PageHeader,
-} from "@wlbp/ui-foundation";
+import { Button, EmptyState, DataPage, ErrorState } from "@wlbp/ui-foundation";
 import { CalendarPlus, CalendarX } from "lucide-react";
 import type { TodayItemV1 } from "../../_lib/dashboard-access";
 import type { OperationalChoices } from "../../_lib/operational-choices";
@@ -33,6 +28,7 @@ export default async function CalendarPage({
     getDashboardMessage(locale, key);
   const request = await loadDashboardRequestAccess(locale);
   let body;
+  let calendarToolbar;
   let canCreate = false;
   const value = (key: string) => (typeof query[key] === "string" ? query[key] : "");
   // The frame already explains a missing session, tenant or configuration.
@@ -100,16 +96,18 @@ export default async function CalendarPage({
     if (loaded) {
       const { choices, date, view, timeZone, filters, rows, listQuery } = loaded;
       canCreate = choices.offers.some((o) => o.canCreate);
+      calendarToolbar = (
+        <CalendarFilters
+          locale={locale}
+          choices={choices}
+          date={date}
+          view={view}
+          timeZone={timeZone}
+          filters={filters}
+        />
+      );
       body = (
         <>
-          <CalendarFilters
-            locale={locale}
-            choices={choices}
-            date={date}
-            view={view}
-            timeZone={timeZone}
-            filters={filters}
-          />
           <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
             <span>
               <time dateTime={date} className="font-semibold text-foreground">
@@ -149,17 +147,16 @@ export default async function CalendarPage({
       );
     } else {
       body = (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {m("calendarUnavailable")}
-          </AlertDescription>
-        </Alert>
+        <ErrorState
+          title={<>{m("calendarUnavailable")}</>}
+          retry={<ReadRetry locale={locale} />}
+        />
       );
     }
   }
   return (
     <WorkspaceShell locale={locale} current="calendar" labelledBy="calendar-title">
-      <PageHeader
+      <DataPage
         titleId="calendar-title"
         title={m("calendarTitle")}
         description={m("calendarSummary")}
@@ -173,8 +170,10 @@ export default async function CalendarPage({
             </Button>
           ) : null
         }
-      />
-      {body}
+        toolbar={calendarToolbar}
+      >
+        {body}
+      </DataPage>
     </WorkspaceShell>
   );
 }

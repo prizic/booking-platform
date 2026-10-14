@@ -1,0 +1,43 @@
+{
+  "base_url": "http://localhost:41730",
+  "suite_path": "/Volumes/PortableSSD/Dev/E/projects/booking-platform/booking-platform/tests/laya/client-public.json",
+  "test_suite": "booking-client-public",
+  "locale": "ar",
+  "headless": true,
+  "max_steps_per_scenario": 20,
+  "confidence_threshold": 0.6,
+  "action_retry_limit": 1,
+  "decision_retry_limit": 0,
+  "use_laya": true,
+  "capture_screenshots": true,
+  "capture_screenshots_on_failure": true,
+  "trace_capture": "all",
+  "log_console": true,
+  "log_network": true,
+  "escalation_behavior": "report",
+  "output_dir": "/Volumes/PortableSSD/Dev/E/projects/booking-platform/booking-platform/.artifacts/booking-journey-20261014-rerun3/laya",
+  "safe_test_origins": [],
+  "network_allow_patterns": [
+    "^http://localhost:41730/en/this-route-does-not-exist(?:\\?.*)?$"
+  ],
+  "allow_state_changes": false,
+  "storage_state": null,
+  "reduced_motion": "reduce",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "tablet": {
+      "width": 768,
+      "height": 1024
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "min_memory_free_percent": 25,
+  "max_process_tree_rss_mb": 5000,
+  "mlx_memory_mb": 3072
+}

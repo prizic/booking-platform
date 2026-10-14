@@ -3,6 +3,7 @@ import "server-only";
 import { parsePublicRuntimeConfig, type RuntimeEnvironment } from "@wlbp/config";
 import { createRequestScopedSupabaseClient } from "@wlbp/supabase-client/server";
 import { getVerifiedIdentity, type VerifiedIdentity } from "@wlbp/auth";
+import { cache } from "react";
 import { cookies } from "next/headers";
 
 export function runtimeEnvironment(): RuntimeEnvironment {
@@ -31,29 +32,37 @@ export function getPlatformAdminRuntimeConfiguration() {
   });
 }
 
-export async function createPlatformAdminRequestClient() {
-  const configuration = getPlatformAdminRuntimeConfiguration();
-  if (configuration === null) return null;
-  const cookieStore = await cookies();
-  return createRequestScopedSupabaseClient(
-    {
-      publishableKey: configuration.supabasePublishableKey,
-      url: configuration.supabaseUrl,
-    },
-    {
-      getAll: () => cookieStore.getAll(),
-      setAll: async (values) => {
-        for (const cookie of values) {
-          try {
-            cookieStore.set(cookie.name, cookie.value, cookie.options);
-          } catch {
-            /* Server components read; proxy refreshes the cookies. */
-          }
-        }
+export const createPlatformAdminRequestClient = cache(
+  async function createPlatformAdminRequestClient() {
+    const configuration = getPlatformAdminRuntimeConfiguration();
+    if (configuration === null) return null;
+    const cookieStore = await cookies();
+    return createRequestScopedSupabaseClient(
+      {
+        publishableKey: configuration.supabasePublishableKey,
+        url: configuration.supabaseUrl,
       },
-    },
-  );
-}
+      {
+        getAll: () => cookieStore.getAll(),
+        setAll: async (values) => {
+          for (const cookie of values) {
+            try {
+              cookieStore.set(cookie.name, cookie.value, cookie.options);
+            } catch {
+              /* Server components read; proxy refreshes the cookies. */
+            }
+          }
+        },
+      },
+    );
+  },
+);
+
+/** Verified identity is shared only within this React request. SQL authority remains live for every operation. */
+export const loadVerifiedOperatorIdentity = cache(async () => {
+  const client = await createPlatformAdminRequestClient();
+  return client === null ? null : getVerifiedIdentity(client);
+});
 
 export type OperatorSessionState =
   | { kind: "configuration-missing" }
@@ -74,7 +83,7 @@ export async function loadOperatorSession(): Promise<{
   const client = await createPlatformAdminRequestClient();
   if (client === null) return { client, state: { kind: "configuration-missing" } };
 
-  const identity = await getVerifiedIdentity(client);
+  const identity = await loadVerifiedOperatorIdentity();
   if (identity === null) return { client, state: { kind: "signed-out" } };
 
   if (identity.assuranceLevel === "aal1") {

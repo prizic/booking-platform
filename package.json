@@ -18,7 +18,7 @@
     "test": "pnpm test:unit",
     "test:unit": "turbo run test:unit --concurrency=2 -- --maxWorkers=2 --exclude '**/dist/**'",
     "test:contract": "node scripts/check-release-contracts.mjs",
-    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs scripts/dev.test.mjs scripts/platform-admin-local.test.mjs scripts/totp.test.mjs scripts/bundle-edge-shared.test.mjs",
+    "test:config": "node --test scripts/check-config.test.mjs scripts/live-booking-e2e.test.mjs scripts/dev.test.mjs scripts/platform-admin-local.test.mjs scripts/totp.test.mjs scripts/bundle-edge-shared.test.mjs scripts/demo-dev.test.mjs scripts/journey-sanitize.test.mjs scripts/journey-preflight.test.mjs scripts/booking-journey-fixture-136.test.mjs && node --experimental-strip-types --test scripts/journey-server-profile.test.ts",
     "test:component": "playwright test --project=component",
     "test:e2e": "playwright test --project=e2e",
     "test:e2e:live": "node scripts/live-booking-e2e.mjs pnpm exec playwright test --project=live-booking",
@@ -54,7 +54,13 @@
     "build:distribution": "node scripts/build-distribution.mjs",
     "test:distribution": "node --test scripts/build-distribution.test.mjs",
     "bundle:edge": "node scripts/bundle-edge-shared.mjs",
-    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs && deno test --allow-env supabase/functions/_shared/rpc.test.ts && deno test supabase/functions/payment-onboarding/provider.test.ts supabase/functions/auth-mail-hook/redirect.test.ts supabase/functions/whatsapp-worker/worker.test.ts supabase/functions/whatsapp-webhook/handler.test.ts supabase/functions/email-preview/request.test.ts"
+    "check:edge": "node scripts/bundle-edge-shared.mjs --check && node scripts/check-edge-schedule.mjs && deno test --allow-env supabase/functions/_shared/rpc.test.ts && deno test supabase/functions/payment-onboarding/provider.test.ts supabase/functions/auth-mail-hook/redirect.test.ts supabase/functions/whatsapp-worker/worker.test.ts supabase/functions/whatsapp-webhook/handler.test.ts supabase/functions/email-preview/request.test.ts",
+    "demo:dev": "node scripts/demo-dev.mjs",
+    "verify:journey": "node scripts/verify-journey.mjs",
+    "measure:navigation": "node scripts/verify-journey.mjs --phase navigation -- pnpm exec playwright test --project=navigation-metrics",
+    "compare:navigation": "node scripts/compare-navigation.mjs",
+    "fixture:journey": "node scripts/prepare-booking-journey.mjs",
+    "fixture:journey:admin": "node scripts/prepare-admin-journey.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",

@@ -6,7 +6,7 @@ import { listHref, parseListParams } from "../../../_lib/list-params";
 import { callOperator } from "../../../_lib/operator-api";
 import { getOperator } from "../../../_lib/operator-page";
 import { pageLocale } from "../../../_lib/page-locale";
-import { PageHeader } from "../../../_lib/shell/page-header";
+import { DataPage } from "../../../_lib/shell/data-page";
 import { DataTable } from "../../../_lib/ui/data-table";
 import { FilterBar, SelectFilter } from "../../../_lib/ui/filter-bar";
 import { Pagination } from "../../../_lib/ui/pagination";
@@ -49,28 +49,60 @@ export default async function HealthPage({
   const linkClass = "font-semibold text-primary underline-offset-4 hover:underline";
 
   return (
-    <div className="grid gap-8">
-      <PageHeader
-        locale={locale}
-        timesInUtc
-        title={say(locale, c.title)}
-        description={say(locale, c.description)}
-        actions={
-          <>
-            <Button asChild variant="outline" size="sm">
-              <Link href={p("jobs?status=queued")}>{say(locale, c.queuedJobs)}</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={p("jobs?status=failed")}>{say(locale, c.failedJobs)}</Link>
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={p("provisioning?state=waiting")}>
-                {say(locale, c.waitingRuns)}
-              </Link>
-            </Button>
-          </>
-        }
-      />
+    <DataPage
+      locale={locale}
+      timesInUtc
+      title={say(locale, c.title)}
+      description={say(locale, c.description)}
+      actions={
+        <>
+          <Button asChild variant="outline" size="sm">
+            <Link href={p("jobs?status=queued")}>{say(locale, c.queuedJobs)}</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={p("jobs?status=failed")}>{say(locale, c.failedJobs)}</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link href={p("provisioning?state=waiting")}>
+              {say(locale, c.waitingRuns)}
+            </Link>
+          </Button>
+        </>
+      }
+      toolbar={
+        <FilterBar locale={locale} path={path}>
+          <SelectFilter
+            name="status"
+            label={say(locale, c.status)}
+            value={list.filters.status}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.status.map(
+              (s) => [s, copyFor(statusCopy, s, locale)] as const,
+            )}
+          />
+          <SelectFilter
+            name="kind"
+            label={say(locale, c.kind)}
+            value={list.filters.kind}
+            allLabel={say(locale, formCopy.all)}
+            options={spec.filters.kind.map(
+              (k) => [k, say(locale, c.kinds[k])] as const,
+            )}
+          />
+        </FilterBar>
+      }
+      pagination={
+        health.ok ? (
+          <Pagination
+            locale={locale}
+            page={list.page}
+            pageSize={list.pageSize}
+            total={Number(health.data[0]?.total_count ?? 0)}
+            href={(page) => listHref(path, list, { page })}
+          />
+        ) : null
+      }
+    >
       <Alert>
         <AlertDescription>{say(locale, c.scope)}</AlertDescription>
       </Alert>
@@ -138,26 +170,6 @@ export default async function HealthPage({
       </Section>
 
       <Section id="obs" title={say(locale, c.observations)}>
-        <FilterBar locale={locale} path={path}>
-          <SelectFilter
-            name="status"
-            label={say(locale, c.status)}
-            value={list.filters.status}
-            allLabel={say(locale, formCopy.all)}
-            options={spec.filters.status.map(
-              (s) => [s, copyFor(statusCopy, s, locale)] as const,
-            )}
-          />
-          <SelectFilter
-            name="kind"
-            label={say(locale, c.kind)}
-            value={list.filters.kind}
-            allLabel={say(locale, formCopy.all)}
-            options={spec.filters.kind.map(
-              (k) => [k, say(locale, c.kinds[k])] as const,
-            )}
-          />
-        </FilterBar>
         {!health.ok ? (
           <UnavailableState locale={locale} code={health.code} />
         ) : health.data.length === 0 ? (
@@ -220,16 +232,9 @@ export default async function HealthPage({
                 ],
               }))}
             />
-            <Pagination
-              locale={locale}
-              page={list.page}
-              pageSize={list.pageSize}
-              total={Number(health.data[0]?.total_count ?? 0)}
-              href={(page) => listHref(path, list, { page })}
-            />
           </>
         )}
       </Section>
-    </div>
+    </DataPage>
   );
 }

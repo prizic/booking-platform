@@ -58,6 +58,8 @@ export const shellCopy = {
   brandDetail: ["Platform administration", "إدارة المنصة"],
   skip: ["Skip to content", "انتقل إلى المحتوى"],
   menu: ["Menu", "القائمة"],
+  collapse: ["Collapse sidebar", "طي الشريط الجانبي"],
+  expand: ["Expand sidebar", "توسيع الشريط الجانبي"],
   closeMenu: ["Close menu", "إغلاق القائمة"],
   toDark: ["Switch to dark theme", "التبديل إلى المظهر الداكن"],
   toLight: ["Switch to light theme", "التبديل إلى المظهر الفاتح"],
@@ -92,6 +94,7 @@ export const shellCopy = {
     domains: ["Domains", "النطاقات"],
     provisioning: ["Provisioning", "التهيئة"],
     jobs: ["Jobs", "المهام"],
+    review: ["Review", "المراجعة"],
     plans: ["Plans", "الخطط"],
     subscriptions: ["Subscriptions", "الاشتراكات"],
     releases: ["Releases", "الإصدارات"],
@@ -159,6 +162,9 @@ export const formCopy = {
   apply: ["Apply", "تطبيق"],
   clear: ["Clear filters", "مسح عوامل التصفية"],
   search: ["Search", "بحث"],
+  filters: ["Filters", "عوامل التصفية"],
+  retry: ["Try again", "حاول مرة أخرى"],
+  actions: ["Actions", "الإجراءات"],
   all: ["All", "الكل"],
   choose: ["Choose…", "اختر…"],
   pickDate: ["Choose a date", "اختر التاريخ"],
@@ -174,7 +180,7 @@ export const formCopy = {
     "Recorded in the audit log. At least {n} characters.",
     "يُسجَّل في سجل التدقيق. {n} أحرف على الأقل.",
   ],
-  typeToConfirm: ["Type {value} to confirm", "اكتب {value} للتأكيد"],
+  typeToConfirm: ["Confirm by typing {value}", "أكّد بكتابة {value}"],
   previous: ["Previous", "السابق"],
   next: ["Next", "التالي"],
   pageOf: ["Page {page} of {pages}", "الصفحة {page} من {pages}"],
@@ -201,6 +207,30 @@ export const formCopy = {
 } as const satisfies Record<string, unknown>;
 
 export const errorCopy: Record<string, Copy> = {
+  tenant_context_mismatch: [
+    "The selected records belong to different tenants.",
+    "السجلات المحددة تنتمي إلى مستأجرين مختلفين.",
+  ],
+  replacement_domain_invalid: [
+    "Choose a verified production domain for the same instance and application.",
+    "اختر نطاق إنتاج موثّقًا للنسخة والتطبيق نفسيهما.",
+  ],
+  active_route_requires_replacement: [
+    "An active route needs a verified replacement before retirement.",
+    "المسار النشط يحتاج إلى بديل موثّق قبل إيقافه.",
+  ],
+  review_required: [
+    "Open this request in Review for an independent administrator's decision.",
+    "افتح هذا الطلب في المراجعة لقرار مسؤول مستقل.",
+  ],
+  unfinished_job_conflict: [
+    "An unfinished workflow conflicts with this action. Inspect its job before continuing.",
+    "هناك مسار عمل غير مكتمل يتعارض مع هذا الإجراء. افحص مهمته قبل المتابعة.",
+  ],
+  infrastructure_not_deactivated: [
+    "External infrastructure has not reported inactive status. Closure remains queued until verified.",
+    "لم تبلغ البنية الخارجية عن حالة غير نشطة. يظل الإغلاق في الانتظار حتى التحقق.",
+  ],
   policy_denied: [
     "Your role does not allow this action, or your session is no longer verified.",
     "دورك لا يسمح بهذا الإجراء، أو لم تعد جلستك موثّقة.",
@@ -471,6 +501,8 @@ export const statusCopy: Record<string, Copy> = {
   health_checked: ["Health checked", "تم فحص الحالة"],
   failed: ["Failed", "فشل"],
   deactivated: ["Deactivated", "معطّل"],
+  retired: ["Retired", "متوقف"],
+  rejected: ["Rejected", "مرفوض"],
   pending: ["Pending", "قيد الانتظار"],
   running: ["Running", "قيد التنفيذ"],
   waiting: ["Waiting", "بانتظار"],

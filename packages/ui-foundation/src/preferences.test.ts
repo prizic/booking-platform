@@ -5,6 +5,8 @@ import {
   THEME_COOKIE,
   preferenceCookie,
   resolveTheme,
+  resolveSidebarCollapsed,
+  SIDEBAR_COOKIE,
 } from "./preferences.js";
 
 describe("resolveTheme", () => {
@@ -21,6 +23,19 @@ describe("resolveTheme", () => {
   it("ignores tampered values and brands without a dark palette", () => {
     expect(resolveTheme("purple", "light", true)).toBe("light");
     expect(resolveTheme("dark", "light", false)).toBe("light");
+  });
+});
+
+describe("desktop sidebar preference", () => {
+  it("resolves saved choices for server rendering and ignores malformed cookies", () => {
+    expect(resolveSidebarCollapsed(undefined)).toBe(false);
+    expect(resolveSidebarCollapsed("collapsed")).toBe(true);
+    expect(resolveSidebarCollapsed("expanded", true)).toBe(false);
+    expect(resolveSidebarCollapsed("unexpected")).toBe(false);
+    expect(resolveSidebarCollapsed("unexpected", true)).toBe(true);
+    expect(preferenceCookie(SIDEBAR_COOKIE, "collapsed")).toBe(
+      "wlbp-sidebar=collapsed; Path=/; Max-Age=31536000; SameSite=Lax",
+    );
   });
 });
 

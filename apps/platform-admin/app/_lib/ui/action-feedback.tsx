@@ -1,7 +1,7 @@
 "use client";
 
 import type { Locale } from "@wlbp/i18n";
-import { Alert, Button } from "@wlbp/ui-foundation";
+import { SuccessState, Button } from "@wlbp/ui-foundation";
 import { X } from "lucide-react";
 import { formCopy, say } from "../copy";
 import { usePathname } from "next/navigation";
@@ -51,14 +51,16 @@ export function ActionFeedbackNotice() {
   const path = usePathname();
   if (!context?.feedback || context.feedback.path !== path) return null;
   return (
-    <Alert tone="positive">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-        <p className="font-medium">{context.feedback.message}</p>
-        <Button variant="ghost" className="-my-2" onClick={context.dismiss}>
-          <X aria-hidden="true" />
-          {say(context.locale, formCopy.dismissMessage)}
-        </Button>
-      </div>
-    </Alert>
+    <SuccessState
+      title={context.feedback.message}
+      description={
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <Button variant="ghost" className="-my-2" onClick={context.dismiss}>
+            <X aria-hidden="true" />
+            {say(context.locale, formCopy.dismissMessage)}
+          </Button>
+        </div>
+      }
+    />
   );
 }

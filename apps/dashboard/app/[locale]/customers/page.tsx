@@ -1,7 +1,7 @@
+import { ReadRetry } from "../../_lib/ui/read-retry";
+import { WorkspacePagination } from "../../_lib/ui/workspace-pagination";
 import type { Locale } from "@wlbp/i18n";
 import {
-  Alert,
-  AlertDescription,
   Badge,
   Button,
   Checkbox,
@@ -9,14 +9,10 @@ import {
   Field,
   Input,
   Label,
-  PageHeader,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-  Toolbar,
+  DataPage,
+  FilterBar,
+  DataTable,
+  ErrorState,
 } from "@wlbp/ui-foundation";
 import { Search, UserX } from "lucide-react";
 import Link from "next/link";
@@ -26,7 +22,7 @@ import type { CustomerRowV1 } from "../../_lib/dashboard-access";
 import { loadDashboardRequestAccess } from "../../_lib/dashboard-server";
 import { WorkspaceShell } from "../../_lib/workspace-shell";
 import { formatCount, formatWhen } from "../../_lib/booking-display";
-import { RecordCard, RecordCards, TableFrame } from "../../_lib/ui/record-cards";
+
 import { ZoneNote } from "../../_lib/ui/zone-note";
 import { workspaceMessage } from "../../_lib/workspace-copy";
 import { ResultAlert } from "../../_lib/ui/result-alert";
@@ -48,9 +44,20 @@ function single(value: string | string[] | undefined): string | null {
     : null;
 }
 
+const CUSTOMERS_PAGE_SIZE = 25;
+const CUSTOMERS_LOOKAHEAD_SIZE = CUSTOMERS_PAGE_SIZE + 1;
+
+function requestedPage(raw: string | string[] | undefined): number {
+  const value = typeof raw === "string" ? raw : Array.isArray(raw) ? raw[0] : undefined;
+  return typeof value === "string" && /^\d{1,6}$/u.test(value)
+    ? Math.max(1, Number(value))
+    : 1;
+}
+
 async function loadCustomers(
   locale: Locale,
   filters: { includeErased: boolean; query: string | null },
+  page: number,
 ): Promise<readonly CustomerRowV1[] | null> {
   const request = await loadDashboardRequestAccess(locale);
   if (
@@ -65,6 +72,8 @@ async function loadCustomers(
   return request.source
     .searchCustomers({
       includeErased: filters.includeErased,
+      limit: CUSTOMERS_LOOKAHEAD_SIZE,
+      offset: (page - 1) * CUSTOMERS_PAGE_SIZE,
       query: filters.query,
       tenantId: request.state.context.tenantId,
     })
@@ -84,7 +93,32 @@ export default async function CustomersPage({
     includeErased: single(query.erased) === "1",
     query: single(query.q),
   };
-  const customers = await loadCustomers(locale, filters);
+  const requested = requestedPage(query.page);
+  let effectivePage = requested;
+  let allCustomers = await loadCustomers(locale, filters, effectivePage);
+  if (allCustomers !== null && allCustomers.length === 0 && effectivePage > 1) {
+    effectivePage = 1;
+    allCustomers = await loadCustomers(locale, filters, effectivePage);
+  }
+  // The read carries one extra row as a lookahead so the UI can decide whether
+  // a next page exists without loading the whole directory.
+  const page = effectivePage;
+  const hasMore = (allCustomers?.length ?? 0) > CUSTOMERS_PAGE_SIZE;
+  const visibleCustomers =
+    allCustomers === null
+      ? null
+      : hasMore
+        ? allCustomers.slice(0, CUSTOMERS_PAGE_SIZE)
+        : [...allCustomers];
+  const paging = {
+    page,
+    // Lookahead boundary probe for the next link only: the label shows no
+    // invented total because the read never carried one.
+    pageCount: hasMore ? page + 1 : page,
+    count: visibleCustomers?.length ?? 0,
+    rows: visibleCustomers ?? [],
+  };
+  const customers = visibleCustomers;
   const result = typeof query.result === "string" ? query.result : null;
   const resultKey =
     result !== null && result in customerResultKeys
@@ -93,233 +127,161 @@ export default async function CustomersPage({
 
   return (
     <WorkspaceShell current="customers" labelledBy="customers-title" locale={locale}>
-      <PageHeader
+      <DataPage
+        pagination={
+          allCustomers !== null ? (
+            <WorkspacePagination
+              locale={locale}
+              path={`/${locale}/customers`}
+              query={query}
+              unknownTotal
+              {...paging}
+            />
+          ) : null
+        }
         titleId="customers-title"
         title={message("customersTitle")}
         description={message("customersSummary")}
         meta={<ZoneNote locale={locale} timeZone="UTC" />}
-      />
-      {resultKey === null ? null : (
-        <ResultAlert positive={positiveCustomerResults.has(result ?? "")}>
-          {message(resultKey)}
-        </ResultAlert>
-      )}
+        toolbar={
+          <FilterBar
+            label={locale === "ar" ? "التصفية" : "Filters"}
+            action={`/${locale}/customers`}
+            method="get"
+            role="search"
+          >
+            <Field className="md:min-w-80">
+              <Label htmlFor="customers-query">{message("customersSearchLabel")}</Label>
+              <Input
+                defaultValue={filters.query ?? ""}
+                id="customers-query"
+                name="q"
+                type="search"
+              />
+            </Field>
+            <Field orientation="horizontal" className="min-h-11 self-end">
+              <Checkbox
+                defaultChecked={filters.includeErased}
+                id="customers-erased"
+                name="erased"
+                value="1"
+              />
+              <Label htmlFor="customers-erased">
+                {message("customersIncludeErased")}
+              </Label>
+            </Field>
+            <Button type="submit" variant="secondary">
+              <Search aria-hidden="true" />
+              {message("customersSearchAction")}
+            </Button>
+          </FilterBar>
+        }
+      >
+        {resultKey === null ? null : (
+          <ResultAlert positive={positiveCustomerResults.has(result ?? "")}>
+            {message(resultKey)}
+          </ResultAlert>
+        )}
 
-      <form action={`/${locale}/customers`} method="get" role="search">
-        <Toolbar>
-          <Field className="md:min-w-80">
-            <Label htmlFor="customers-query">{message("customersSearchLabel")}</Label>
-            <Input
-              defaultValue={filters.query ?? ""}
-              id="customers-query"
-              name="q"
-              type="search"
-            />
-          </Field>
-          <Field orientation="horizontal" className="min-h-11 self-end">
-            <Checkbox
-              defaultChecked={filters.includeErased}
-              id="customers-erased"
-              name="erased"
-              value="1"
-            />
-            <Label htmlFor="customers-erased">
-              {message("customersIncludeErased")}
-            </Label>
-          </Field>
-          <Button type="submit" variant="secondary">
-            <Search aria-hidden="true" />
-            {message("customersSearchAction")}
-          </Button>
-        </Toolbar>
-      </form>
-
-      {customers === null ? (
-        <Alert tone="danger">
-          <AlertDescription className="text-foreground">
-            {message("customersUnavailable")}
-          </AlertDescription>
-        </Alert>
-      ) : customers.length === 0 ? (
-        <EmptyState
-          icon={<UserX aria-hidden="true" />}
-          title={message("customersEmpty")}
-        />
-      ) : (
-        <>
-          <TableFrame>
-            <Table label={message("customersListLabel")}>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{message("customersNameLabel")}</TableHead>
-                  <TableHead>{message("customersEmailLabel")}</TableHead>
-                  <TableHead>{message("customersPhoneLabel")}</TableHead>
-                  <TableHead className="text-end">
-                    {message("customersBookingCountLabel")}
-                  </TableHead>
-                  <TableHead>{message("customersLastBookingLabel")}</TableHead>
-                  <TableHead>
-                    <span className="sr-only">
-                      {workspaceMessage(locale, "actions")}
-                    </span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customers.map((customer) => (
-                  <TableRow key={customer.customerId}>
-                    <TableCell>
-                      <div className="grid gap-1.5">
-                        <span
-                          id={`customer-${customer.customerId}`}
-                          className="font-semibold text-foreground"
-                        >
-                          {customer.fullName ?? message("customersErasedName")}
-                        </span>
-                        {/* Every state that changes how this record may be used is
+        {customers === null ? (
+          <ErrorState
+            title={<>{message("customersUnavailable")}</>}
+            retry={<ReadRetry locale={locale} />}
+          />
+        ) : customers.length === 0 ? (
+          <EmptyState
+            icon={<UserX aria-hidden="true" />}
+            title={message("customersEmpty")}
+            action={
+              <Button asChild variant="outline">
+                <Link href={`/${locale}/customers`}>
+                  {locale === "ar" ? "مسح التصفية" : "Clear filters"}
+                </Link>
+              </Button>
+            }
+          />
+        ) : (
+          <>
+            <DataTable
+              id="customers-records"
+              caption={message("customersListLabel")}
+              columns={[
+                { key: "column-0", label: message("customersNameLabel") },
+                { key: "column-1", label: message("customersEmailLabel") },
+                { key: "column-2", label: message("customersPhoneLabel") },
+                { key: "column-3", label: message("customersBookingCountLabel") },
+                { key: "column-4", label: message("customersLastBookingLabel") },
+                {
+                  key: "column-5",
+                  label: workspaceMessage(locale, "actions"),
+                  kind: "actions",
+                },
+              ]}
+              rows={customers.map((customer) => ({
+                key: customer.customerId,
+                cells: [
+                  <>
+                    <div className="grid gap-1.5">
+                      <span className="font-semibold text-foreground">
+                        {customer.fullName ?? message("customersErasedName")}
+                      </span>
+                      {/* Every state that changes how this record may be used is
                         stated on the row, because an operator who cannot see a
                         hold will ask why a deletion refused. */}
-                        {customer.erased ||
-                        customer.legalHold ||
-                        customer.restricted ||
-                        customer.suppressed ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {customer.erased ? (
-                              <Badge tone="neutral">
-                                {message("customersBadgeErased")}
-                              </Badge>
-                            ) : null}
-                            {customer.legalHold ? (
-                              <Badge tone="warning">
-                                {message("customersBadgeHold")}
-                              </Badge>
-                            ) : null}
-                            {customer.restricted ? (
-                              <Badge tone="danger">
-                                {message("customersBadgeRestricted")}
-                              </Badge>
-                            ) : null}
-                            {customer.suppressed ? (
-                              <Badge tone="neutral">
-                                {message("customersBadgeSuppressed")}
-                              </Badge>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <bdi>{customer.email ?? message("customersErasedValue")}</bdi>
-                    </TableCell>
-                    <TableCell>
-                      <bdi>{customer.phone ?? message("customersNoPhone")}</bdi>
-                    </TableCell>
-                    <TableCell className="text-end">
-                      {formatCount(customer.bookingCount, locale)}
-                    </TableCell>
-                    <TableCell className="min-w-44">
-                      {customer.lastBookingAt === null
-                        ? message("customersNeverBooked")
-                        : formatWhen(customer.lastBookingAt, locale, "UTC")}
-                    </TableCell>
-                    <TableCell className="text-end">
-                      <Button asChild variant="ghost">
-                        <Link
-                          href={`/${locale}/customers/${customer.customerId}`}
-                          aria-describedby={`customer-${customer.customerId}`}
-                        >
-                          {message("customersOpenDetail")}
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableFrame>
-          <RecordCards label={message("customersListLabel")}>
-            {customers.map((customer) => (
-              <RecordCard
-                key={customer.customerId}
-                title={
+                      {customer.erased ||
+                      customer.legalHold ||
+                      customer.restricted ||
+                      customer.suppressed ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {customer.erased ? (
+                            <Badge tone="neutral">
+                              {message("customersBadgeErased")}
+                            </Badge>
+                          ) : null}
+                          {customer.legalHold ? (
+                            <Badge tone="warning">
+                              {message("customersBadgeHold")}
+                            </Badge>
+                          ) : null}
+                          {customer.restricted ? (
+                            <Badge tone="danger">
+                              {message("customersBadgeRestricted")}
+                            </Badge>
+                          ) : null}
+                          {customer.suppressed ? (
+                            <Badge tone="neutral">
+                              {message("customersBadgeSuppressed")}
+                            </Badge>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>,
                   <>
-                    <span
-                      id={`customer-card-${customer.customerId}`}
-                      className="font-semibold text-foreground"
-                    >
-                      {customer.fullName ?? message("customersErasedName")}
-                    </span>
-                    {customer.erased ||
-                    customer.legalHold ||
-                    customer.restricted ||
-                    customer.suppressed ? (
-                      <span className="flex flex-wrap gap-1.5">
-                        {customer.erased ? (
-                          <Badge tone="neutral">
-                            {message("customersBadgeErased")}
-                          </Badge>
-                        ) : null}
-                        {customer.legalHold ? (
-                          <Badge tone="warning">{message("customersBadgeHold")}</Badge>
-                        ) : null}
-                        {customer.restricted ? (
-                          <Badge tone="danger">
-                            {message("customersBadgeRestricted")}
-                          </Badge>
-                        ) : null}
-                        {customer.suppressed ? (
-                          <Badge tone="neutral">
-                            {message("customersBadgeSuppressed")}
-                          </Badge>
-                        ) : null}
-                      </span>
-                    ) : null}
-                  </>
-                }
-                facts={[
-                  {
-                    key: "email",
-                    label: message("customersEmailLabel"),
-                    value: (
-                      <bdi className="break-all">
-                        {customer.email ?? message("customersErasedValue")}
-                      </bdi>
-                    ),
-                  },
-                  {
-                    key: "phone",
-                    label: message("customersPhoneLabel"),
-                    value: <bdi>{customer.phone ?? message("customersNoPhone")}</bdi>,
-                  },
-                  {
-                    key: "count",
-                    label: message("customersBookingCountLabel"),
-                    value: formatCount(customer.bookingCount, locale),
-                  },
-                  {
-                    key: "last",
-                    label: message("customersLastBookingLabel"),
-                    value:
-                      customer.lastBookingAt === null
-                        ? message("customersNeverBooked")
-                        : formatWhen(customer.lastBookingAt, locale, "UTC"),
-                  },
-                ]}
-                actions={
-                  <Button asChild variant="outline" size="sm">
-                    <Link
-                      href={`/${locale}/customers/${customer.customerId}`}
-                      aria-describedby={`customer-card-${customer.customerId}`}
-                    >
-                      {message("customersOpenDetail")}
-                    </Link>
-                  </Button>
-                }
-              />
-            ))}
-          </RecordCards>
-        </>
-      )}
+                    <bdi>{customer.email ?? message("customersErasedValue")}</bdi>
+                  </>,
+                  <>
+                    <bdi>{customer.phone ?? message("customersNoPhone")}</bdi>
+                  </>,
+                  <>{formatCount(customer.bookingCount, locale)}</>,
+                  <>
+                    {customer.lastBookingAt === null
+                      ? message("customersNeverBooked")
+                      : formatWhen(customer.lastBookingAt, locale, "UTC")}
+                  </>,
+                  <>
+                    <Button asChild variant="ghost">
+                      <Link href={`/${locale}/customers/${customer.customerId}`}>
+                        {message("customersOpenDetail")}
+                      </Link>
+                    </Button>
+                  </>,
+                ],
+              }))}
+            />
+          </>
+        )}
+      </DataPage>
     </WorkspaceShell>
   );
 }

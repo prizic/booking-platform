@@ -28,7 +28,7 @@ const OFFLINE_CACHE = `${APP}-offline-${VERSION}`;
 const STATIC_CACHE = `${APP}-static-${VERSION}`;
 
 const STATIC_PATH = /^\/(?:_next\/static|fonts|assets)\//;
-const NEVER_CACHED_PATH = /^\/(?:(?:ar|en)\/)?(?:api|auth|manage)(?:\/|$)/;
+const NEVER_CACHED_PATH = /^\/(?:(?:ar|en)\/)?(?:api|auth|manage|find-booking)(?:\/|$)/;
 const OFFLINE_ASSET = /\/(?:_next\/static|fonts|assets)\/[^"'\\\s<>()?#]+/g;
 
 function offlinePath(locale) {

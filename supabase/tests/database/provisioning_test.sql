@@ -45,8 +45,10 @@ begin
   insert into control_plane.operators(auth_user_id,email,role)
   values ('a1000000-0000-0000-0000-000000000002','admin-a@example.invalid',p_role)
   on conflict (auth_user_id) do update set role=excluded.role;
-  perform set_config('request.jwt.claims',
-    '{"sub":"a1000000-0000-0000-0000-000000000002","role":"authenticated","aal":"aal2"}',true);
+  perform set_config('request.jwt.claims',jsonb_build_object(
+    'sub','a1000000-0000-0000-0000-000000000002','role','authenticated','aal','aal2',
+    'amr',jsonb_build_array(jsonb_build_object('method','totp',
+      'timestamp',extract(epoch from statement_timestamp())::bigint)))::text,true);
 end $$;
 
 create function pg_temp.become_worker() returns void
